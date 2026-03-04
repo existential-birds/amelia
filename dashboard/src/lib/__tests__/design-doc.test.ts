@@ -22,6 +22,31 @@ describe('extractTitle', () => {
     expect(extractTitle(markdown)).toBe('Untitled');
   });
 
+  it('strips Plan suffix', () => {
+    const markdown = '# Queue Workflows Plan\n\n## Details';
+    expect(extractTitle(markdown)).toBe('Queue Workflows');
+  });
+
+  it('strips Spec suffix', () => {
+    const markdown = '# Auth System Spec\n\n## Details';
+    expect(extractTitle(markdown)).toBe('Auth System');
+  });
+
+  it('strips RFC suffix', () => {
+    const markdown = '# Feature RFC\n\n## Details';
+    expect(extractTitle(markdown)).toBe('Feature');
+  });
+
+  it('strips Proposal suffix', () => {
+    const markdown = '# New API Proposal\n\n## Details';
+    expect(extractTitle(markdown)).toBe('New API');
+  });
+
+  it('strips suffix case-insensitively', () => {
+    const markdown = '# My Feature DESIGN\n\nContent';
+    expect(extractTitle(markdown)).toBe('My Feature');
+  });
+
   it('handles H1 with extra whitespace', () => {
     const markdown = '#   Spaced Title Design   \n\nContent';
     expect(extractTitle(markdown)).toBe('Spaced Title');

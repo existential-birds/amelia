@@ -14,8 +14,8 @@
  * // Returns: 'Queue Workflows'
  */
 export function extractTitle(markdown: string): string {
-  // Match first H1 heading: # Title
-  const match = markdown.match(/^#\s+(.+?)(?:\s+Design)?\s*$/m);
+  // Match first H1 heading: # Title (strip common document-type suffixes)
+  const match = markdown.match(/^#\s+(.+?)(?:\s+(?:Design|Plan|Spec|RFC|Proposal))?\s*$/mi);
   if (!match || !match[1]) {
     return 'Untitled';
   }

@@ -6,12 +6,25 @@
  * Extracted preview information from a plan markdown document.
  */
 export interface PlanPreview {
+  /** Title extracted from the first H1 heading, with common suffixes stripped. */
+  title?: string;
   /** The goal/objective extracted from the plan. */
   goal: string;
   /** Number of tasks found in the plan. */
   taskCount: number;
   /** List of key files mentioned in the plan (max 5). */
   keyFiles: string[];
+}
+
+/**
+ * Extracts a title from the first H1 heading, stripping common document-type suffixes.
+ */
+function parseTitle(markdown: string): string | undefined {
+  const match = markdown.match(/^#\s+(.+?)(?:\s+(?:Design|Plan|Spec|RFC|Proposal))?\s*$/mi);
+  if (!match || !match[1]) {
+    return undefined;
+  }
+  return match[1].trim();
 }
 
 /**
@@ -159,6 +172,7 @@ function parseKeyFiles(markdown: string): string[] {
 export function parsePlanPreview(markdown: string): PlanPreview {
   if (!markdown || !markdown.trim()) {
     return {
+      title: undefined,
       goal: '',
       taskCount: 0,
       keyFiles: [],
@@ -166,6 +180,7 @@ export function parsePlanPreview(markdown: string): PlanPreview {
   }
 
   return {
+    title: parseTitle(markdown),
     goal: parseGoal(markdown),
     taskCount: countTasks(markdown),
     keyFiles: parseKeyFiles(markdown),

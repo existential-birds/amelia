@@ -40,6 +40,8 @@ export interface PlanData {
   plan_file?: string;
   /** Inline plan markdown content. */
   plan_content?: string;
+  /** Title extracted from the first H1 in the plan/design markdown. */
+  extracted_title?: string;
 }
 
 export interface PlanImportSectionProps {
@@ -126,14 +128,16 @@ export function PlanImportSection({
       onPlanChange({
         plan_file: filePath.trim() || undefined,
         plan_content: undefined,
+        extracted_title: filePreview?.title,
       });
     } else {
       onPlanChange({
         plan_file: undefined,
         plan_content: content.trim() || undefined,
+        extracted_title: preview?.title,
       });
     }
-  }, [mode, filePath, content, onPlanChange]);
+  }, [mode, filePath, content, filePreview, preview, onPlanChange]);
 
   // Fetch file list when in file mode and planOutputDir is available
   useEffect(() => {
@@ -220,7 +224,7 @@ export function PlanImportSection({
       }
 
       const parsed = parsePlanPreview(response.content);
-      if (parsed.goal || parsed.taskCount > 0 || parsed.keyFiles.length > 0) {
+      if (parsed.title || parsed.goal || parsed.taskCount > 0 || parsed.keyFiles.length > 0) {
         setFilePreview(parsed);
       } else {
         setFileError('Could not extract plan information from file');
@@ -478,7 +482,7 @@ export function PlanImportSection({
         )}
 
         {/* Plan preview */}
-        {activePreview && (
+        {activePreview && (activePreview.goal || activePreview.taskCount > 0 || activePreview.keyFiles.length > 0) && (
           <div
             data-testid="plan-preview"
             className="border border-border rounded-lg p-3 bg-muted/30 space-y-2"
