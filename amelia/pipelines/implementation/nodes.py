@@ -93,7 +93,7 @@ async def plan_validator_node(
         goal = output.goal
         plan_markdown = output.plan_markdown
         key_files = output.key_files
-    except (RuntimeError, SchemaValidationError) as e:
+    except (RuntimeError, ValueError, SchemaValidationError) as e:
         # Fallback: extract what we can from the plan content directly
         logger.warning(
             "Structured extraction failed, using fallback",

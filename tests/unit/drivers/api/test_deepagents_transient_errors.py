@@ -1,5 +1,6 @@
 """Tests for transient connection error handling in the deepagents API driver."""
 
+import json
 import os
 from collections.abc import AsyncIterator, Generator
 from typing import Any
@@ -64,6 +65,30 @@ class TestGenerateTransientErrors:
 
         assert exc_info.value.provider_name == "openai-compatible"
         assert exc_info.value.original_message == str(error)
+        assert exc_info.value.__cause__ is error
+
+
+class TestGenerateJSONDecodeError:
+    """Tests that generate wraps JSONDecodeError as ModelProviderError."""
+
+    async def test_generate_wraps_json_decode_error(
+        self, mock_deepagents: MagicMock
+    ) -> None:
+        """JSONDecodeError from invalid API response should become ModelProviderError."""
+        from amelia.drivers.api.deepagents import ApiDriver
+
+        error = json.JSONDecodeError("Expecting value", "<!DOCTYPE html>...", 0)
+        mock_agent = MagicMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=error)
+        mock_deepagents.return_value = mock_agent
+
+        driver = ApiDriver(model="test/model", provider="openrouter")
+
+        with pytest.raises(ModelProviderError) as exc_info:
+            await driver.generate(prompt="test")
+
+        assert exc_info.value.provider_name == "openai-compatible"
+        assert "invalid JSON" in str(exc_info.value)
         assert exc_info.value.__cause__ is error
 
 

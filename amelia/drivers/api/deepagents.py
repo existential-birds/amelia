@@ -1,6 +1,7 @@
 """DeepAgents-based API driver for LLM generation and agentic execution."""
 import asyncio
 import functools
+import json
 import os
 import subprocess
 import threading
@@ -439,6 +440,14 @@ class ApiDriver(DriverInterface):
 
             return (output, None)
 
+        except json.JSONDecodeError as e:
+            # JSONDecodeError (subclass of ValueError) means the API returned
+            # non-JSON (HTML error page, truncated response, etc.) — transient.
+            raise ModelProviderError(
+                f"API returned invalid JSON response: {e}",
+                provider_name="openai-compatible",
+                original_message=str(e),
+            ) from e
         except ValueError as e:
             if _is_model_provider_error(e):
                 provider_name, raw_msg = _extract_provider_info(e)
@@ -870,6 +879,12 @@ class ApiDriver(DriverInterface):
                 )
                 log_claude_result(result_type="error", content="Agent produced no output")
 
+        except json.JSONDecodeError as e:
+            raise ModelProviderError(
+                f"API returned invalid JSON response: {e}",
+                provider_name="openai-compatible",
+                original_message=str(e),
+            ) from e
         except ValueError as e:
             if _is_model_provider_error(e):
                 provider_name, raw_msg = _extract_provider_info(e)
