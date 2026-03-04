@@ -237,9 +237,9 @@ class DaytonaSandboxProvider:
 
         # Propagate any exception from the log streaming task.
         if log_task.done():
-            exc = log_task.exception()
-            if exc is not None:
-                raise exc
+            task_exc = log_task.exception()
+            if task_exc is not None:
+                raise task_exc
 
         # Check exit code after streaming completes.
         cmd_info = await sandbox.process.get_session_command(
