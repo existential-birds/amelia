@@ -26,87 +26,41 @@ class ConnectionManager:
 
     Thread-safe via asyncio.Lock.
 
-    Attributes:
-        _connections: Dict mapping WebSocket to set of subscribed workflow IDs.
-        _lock: Async lock for thread-safe connection management.
-        _repository: Optional workflow repository for event backfill.
     """
 
     def __init__(self) -> None:
-        """Initialize connection manager."""
         self._connections: dict[WebSocket, set[str]] = {}
         self._lock = asyncio.Lock()
         self._repository: WorkflowRepository | None = None
 
     def set_repository(self, repository: WorkflowRepository) -> None:
-        """Set the workflow repository for event backfill.
-
-        Args:
-            repository: WorkflowRepository instance.
-        """
         self._repository = repository
 
     def get_repository(self) -> WorkflowRepository | None:
-        """Get the workflow repository.
-
-        Returns:
-            The WorkflowRepository instance if set via set_repository(),
-            or None if not yet initialized. In normal server operation,
-            this is set during lifespan startup.
-        """
         return self._repository
 
     async def connect(self, websocket: WebSocket) -> None:
-        """Accept and register a new WebSocket connection.
-
-        Args:
-            websocket: The WebSocket to connect.
-        """
         await websocket.accept()
         async with self._lock:
-            # Empty set = subscribed to all workflows
             self._connections[websocket] = set()
 
     async def disconnect(self, websocket: WebSocket) -> None:
-        """Remove a WebSocket connection.
-
-        Args:
-            websocket: The WebSocket to disconnect.
-        """
         async with self._lock:
             self._connections.pop(websocket, None)
 
     async def subscribe(self, websocket: WebSocket, workflow_id: str) -> None:
-        """Subscribe connection to specific workflow events.
-
-        Args:
-            websocket: The WebSocket connection.
-            workflow_id: The workflow to subscribe to.
-        """
         async with self._lock:
             if websocket in self._connections:
                 self._connections[websocket].add(workflow_id)
 
     async def unsubscribe(self, websocket: WebSocket, workflow_id: str) -> None:
-        """Unsubscribe connection from specific workflow events.
-
-        Args:
-            websocket: The WebSocket connection.
-            workflow_id: The workflow to unsubscribe from.
-        """
         async with self._lock:
             if websocket in self._connections:
                 self._connections[websocket].discard(workflow_id)
 
     async def subscribe_all(self, websocket: WebSocket) -> None:
-        """Subscribe connection to all workflow events.
-
-        Args:
-            websocket: The WebSocket connection.
-        """
         async with self._lock:
             if websocket in self._connections:
-                # Empty set = subscribed to all
                 self._connections[websocket] = set()
 
 

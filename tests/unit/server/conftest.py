@@ -1,10 +1,13 @@
 """Shared fixtures for server tests."""
 
 import os
-from collections.abc import AsyncGenerator, Generator
-from unittest.mock import AsyncMock, MagicMock, patch
+from collections.abc import AsyncGenerator, AsyncIterator, Generator
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from amelia.server.database import WorkflowRepository
@@ -38,59 +41,35 @@ async def db_with_schema() -> AsyncGenerator[Database, None]:
 
 @pytest.fixture
 def mock_app_client() -> Generator[TestClient, None, None]:
-    """FastAPI test client with mocked lifespan dependencies.
+    """FastAPI test client with noop lifespan and dependency overrides.
 
-    Patches Database, Migrator, AsyncPostgresSaver, and other lifespan
-    components so the app can start without a real PostgreSQL connection.
+    Bypasses the real lifespan entirely (no database, migrator, etc.)
+    and sets only the app.state attributes that health endpoints need.
     """
-    mock_db = MagicMock()
-    mock_db.connect = AsyncMock()
-    mock_db.close = AsyncMock()
-    mock_db.pool = MagicMock()
+    from amelia.server.main import create_app
 
-    mock_migrator = MagicMock()
-    mock_migrator.run = AsyncMock()
-    mock_migrator.initialize_prompts = AsyncMock()
+    app = create_app()
 
-    mock_settings_repo = MagicMock()
-    mock_settings_repo.ensure_defaults = AsyncMock()
-    mock_settings_repo.get_server_settings = AsyncMock(
-        return_value=MagicMock(max_concurrent=5)
-    )
+    @asynccontextmanager
+    async def noop_lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        yield
 
-    mock_checkpointer = AsyncMock()
-    mock_checkpointer.setup = AsyncMock()
+    app.router.lifespan_context = noop_lifespan
 
-    with (
-        patch("amelia.server.main.Database", return_value=mock_db),
-        patch("amelia.server.main.Migrator", return_value=mock_migrator),
-        patch("amelia.server.main.SettingsRepository", return_value=mock_settings_repo),
-        patch(
-            "langgraph.checkpoint.postgres.aio.AsyncPostgresSaver",
-            return_value=mock_checkpointer,
-        ),
-        patch("amelia.server.main.LogRetentionService"),
-        patch("amelia.server.main.ServerLifecycle") as mock_lifecycle_cls,
-        patch("amelia.server.main.WorktreeHealthChecker") as mock_health_cls,
-    ):
-        mock_lifecycle = mock_lifecycle_cls.return_value
-        mock_lifecycle.startup = AsyncMock()
-        mock_lifecycle.shutdown = AsyncMock()
-        mock_lifecycle.is_shutting_down = False
-        mock_health = mock_health_cls.return_value
-        mock_health.start = AsyncMock()
-        mock_health.stop = AsyncMock()
+    # Set app.state attributes that health endpoints read directly
+    mock_lifecycle = MagicMock()
+    mock_lifecycle.is_shutting_down = False
+    app.state.lifecycle = mock_lifecycle
+    app.state.start_time = datetime.now(UTC)
 
-        from amelia.server.main import app
+    # Override get_repository for health endpoint
+    mock_repo = MagicMock(spec=WorkflowRepository)
+    mock_repo.count_active = AsyncMock(return_value=0)
+    mock_repo.db = MagicMock()
+    mock_repo.db.is_healthy = AsyncMock(return_value=True)
+    app.dependency_overrides[get_repository] = lambda: mock_repo
 
-        # Mock workflow repository for health endpoint
-        mock_repo = MagicMock(spec=WorkflowRepository)
-        mock_repo.count_active = AsyncMock(return_value=0)
-        mock_repo.db = MagicMock()
-        mock_repo.db.is_healthy = AsyncMock(return_value=True)
-        app.dependency_overrides[get_repository] = lambda: mock_repo
+    with TestClient(app) as client:
+        yield client
 
-        with TestClient(app) as client:
-            yield client
-
-        app.dependency_overrides.clear()
+    app.dependency_overrides.clear()

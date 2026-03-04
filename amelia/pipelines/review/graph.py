@@ -43,15 +43,12 @@ def create_review_graph(
     """
     workflow = StateGraph(ImplementationState)
 
-    # Add nodes
     workflow.add_node("reviewer_node", call_reviewer_node)
     workflow.add_node("evaluation_node", call_evaluation_node)
     workflow.add_node("developer_node", call_developer_node)
 
-    # Set entry point
     workflow.set_entry_point("reviewer_node")
 
-    # Add edges
     workflow.add_edge("reviewer_node", "evaluation_node")
     workflow.add_conditional_edges(
         "evaluation_node",

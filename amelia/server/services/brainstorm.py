@@ -986,27 +986,27 @@ class BrainstormService:
         if artifact is None:
             raise ValueError(f"Artifact not found: {artifact_path}")
 
-        # Generate workflow ID - either from orchestrator or fallback
-        if orchestrator is not None and worktree_path is not None:
-            # Generate short, readable issue ID
-            base_title = issue_title or session.topic or ""
-            slug = slugify(base_title, max_length=15) if base_title else ""
-            sid_prefix = str(session_id)[:8]
-            issue_id = f"{slug}-{sid_prefix}" if slug else f"brainstorm-{sid_prefix}"
-
-            # Queue workflow with orchestrator
-            request = CreateWorkflowRequest(
-                issue_id=issue_id,
-                worktree_path=worktree_path,
-                task_title=issue_title or f"Implement design from {artifact_path}",
-                task_description=issue_description,
-                start=False,  # Queue only, don't start
-                artifact_path=artifact_path,
+        if orchestrator is None or worktree_path is None:
+            raise ValueError(
+                "orchestrator and worktree_path are required for handoff_to_implementation"
             )
-            workflow_id = await orchestrator.queue_workflow(request)
-        else:
-            # Fallback for backwards compatibility (e.g., tests without orchestrator)
-            workflow_id = uuid4()
+
+        # Generate short, readable issue ID
+        base_title = issue_title or session.topic or ""
+        slug = slugify(base_title, max_length=15) if base_title else ""
+        sid_prefix = str(session_id)[:8]
+        issue_id = f"{slug}-{sid_prefix}" if slug else f"brainstorm-{sid_prefix}"
+
+        # Queue workflow with orchestrator
+        request = CreateWorkflowRequest(
+            issue_id=issue_id,
+            worktree_path=worktree_path,
+            task_title=issue_title or f"Implement design from {artifact_path}",
+            task_description=issue_description,
+            start=False,  # Queue only, don't start
+            artifact_path=artifact_path,
+        )
+        workflow_id = await orchestrator.queue_workflow(request)
 
         # Update session status to completed
         session.status = SessionStatus.COMPLETED

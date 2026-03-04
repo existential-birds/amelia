@@ -25,40 +25,21 @@ class EventBus:
         synchronously in the caller's context, blocking operations
         in subscribers will halt the orchestrator.
 
-    Attributes:
-        _subscribers: List of callback functions to notify on emit.
-        _broadcast_tasks: Set of active broadcast tasks for cleanup tracking.
     """
 
     def __init__(self) -> None:
-        """Initialize event bus with no subscribers."""
         self._subscribers: list[Callable[[WorkflowEvent], None]] = []
         self._connection_manager: ConnectionManager | None = None
         self._broadcast_tasks: set[asyncio.Task[None]] = set()
 
     def subscribe(self, callback: Callable[[WorkflowEvent], None]) -> None:
-        """Subscribe to workflow events.
-
-        Args:
-            callback: Function to call when events are emitted.
-        """
         self._subscribers.append(callback)
 
     def unsubscribe(self, callback: Callable[[WorkflowEvent], None]) -> None:
-        """Unsubscribe from workflow events.
-
-        Args:
-            callback: Previously subscribed callback to remove.
-        """
         with contextlib.suppress(ValueError):
             self._subscribers.remove(callback)
 
     def set_connection_manager(self, manager: "ConnectionManager") -> None:
-        """Set the ConnectionManager for WebSocket broadcasting.
-
-        Args:
-            manager: The ConnectionManager instance.
-        """
         self._connection_manager = manager
 
     def _handle_broadcast_done(self, task: asyncio.Task[None]) -> None:

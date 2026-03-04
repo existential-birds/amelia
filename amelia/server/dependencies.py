@@ -26,185 +26,82 @@ _orchestrator: OrchestratorService | None = None
 
 
 def set_database(db: Database) -> None:
-    """Set the global database instance.
-
-    This should be called during application startup.
-
-    Args:
-        db: Database instance to set.
-    """
     global _database
     _database = db
 
 
 def clear_database() -> None:
-    """Clear the global database instance.
-
-    This should be called during application shutdown.
-    """
     global _database
     _database = None
 
 
 def get_database() -> Database:
-    """Get the database instance.
-
-    Returns:
-        The current Database instance.
-
-    Raises:
-        RuntimeError: If database not initialized.
-    """
     if _database is None:
         raise RuntimeError("Database not initialized. Is the server running?")
     return _database
 
 
 def get_repository() -> WorkflowRepository:
-    """Get the workflow repository dependency.
-
-    Returns:
-        WorkflowRepository instance.
-
-    Raises:
-        RuntimeError: If database not initialized.
-    """
     db = get_database()
     return WorkflowRepository(db)
 
 
 def get_settings_repository() -> SettingsRepository:
-    """Get the settings repository instance.
-
-    Returns:
-        SettingsRepository instance.
-
-    Raises:
-        RuntimeError: If database not initialized.
-    """
     return SettingsRepository(get_database())
 
 
 def get_profile_repository() -> ProfileRepository:
-    """Get the profile repository instance.
-
-    Returns:
-        ProfileRepository instance.
-
-    Raises:
-        RuntimeError: If database not initialized.
-    """
     return ProfileRepository(get_database())
 
 
 def set_orchestrator(orch: OrchestratorService) -> None:
-    """Set the global orchestrator instance.
-
-    This should be called during application startup.
-
-    Args:
-        orch: OrchestratorService instance to set.
-    """
     global _orchestrator
     _orchestrator = orch
 
 
 def clear_orchestrator() -> None:
-    """Clear the global orchestrator instance.
-
-    This should be called during application shutdown.
-    """
     global _orchestrator
     _orchestrator = None
 
 
 def get_orchestrator() -> OrchestratorService:
-    """Get the orchestrator instance.
-
-    Returns:
-        The current OrchestratorService instance.
-
-    Raises:
-        RuntimeError: If orchestrator not initialized.
-    """
     if _orchestrator is None:
         raise RuntimeError("Orchestrator not initialized. Is the server running?")
     return _orchestrator
 
 
 def set_config(config: ServerConfig) -> None:
-    """Set the global config instance.
-
-    This should be called during application startup.
-
-    Args:
-        config: ServerConfig instance to set.
-    """
     global _config
     _config = config
 
 
 def clear_config() -> None:
-    """Clear the global config instance.
-
-    This should be called during application shutdown.
-    """
     global _config
     _config = None
 
 
 def get_config() -> ServerConfig:
-    """Get the config instance.
-
-    Returns:
-        The current ServerConfig instance.
-
-    Raises:
-        RuntimeError: If config not initialized.
-    """
     if _config is None:
         raise RuntimeError("Server config not initialized. Is the server running?")
     return _config
 
 
 def set_knowledge_service(service: KnowledgeService) -> None:
-    """Set the global knowledge service instance.
-
-    Args:
-        service: KnowledgeService instance to set.
-    """
     global _knowledge_service
     _knowledge_service = service
 
 
 def clear_knowledge_service() -> None:
-    """Clear the global knowledge service instance."""
     global _knowledge_service
     _knowledge_service = None
 
 
 def get_knowledge_service() -> KnowledgeService:
-    """Get the knowledge service instance.
-
-    Returns:
-        The current KnowledgeService instance.
-
-    Raises:
-        HTTPException: 503 if knowledge service not available.
-    """
     if _knowledge_service is None:
         raise HTTPException(status_code=503, detail="Knowledge service not available")
     return _knowledge_service
 
 
 def get_knowledge_repository() -> KnowledgeRepository:
-    """Get a knowledge repository instance.
-
-    Returns:
-        KnowledgeRepository using the current database.
-
-    Raises:
-        RuntimeError: If database not initialized.
-    """
     db = get_database()
     return KnowledgeRepository(db)

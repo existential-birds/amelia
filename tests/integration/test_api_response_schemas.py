@@ -19,37 +19,10 @@ import uvicorn
 from amelia.client.api import AmeliaClient
 from amelia.client.models import CreateWorkflowResponse, WorkflowResponse
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.server.database.connection import Database
-from amelia.server.database.migrator import Migrator
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.dependencies import get_orchestrator, get_repository
 from amelia.server.main import app
 from amelia.server.models.state import ServerExecutionState
-
-
-DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
-
-
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-
-@pytest.fixture
-async def test_db() -> AsyncGenerator[Database, None]:
-    """Create and initialize PostgreSQL test database."""
-    db = Database(DATABASE_URL)
-    await db.connect()
-    migrator = Migrator(db)
-    await migrator.run()
-    yield db
-    await db.close()
-
-
-@pytest.fixture
-def test_repository(test_db: Database) -> WorkflowRepository:
-    """Create repository backed by test database."""
-    return WorkflowRepository(test_db)
 
 
 async def create_test_workflow(
