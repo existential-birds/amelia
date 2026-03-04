@@ -537,6 +537,7 @@ class TestDaytonaSandboxProviderExecStream:
                 repo_url="https://github.com/org/repo.git",
             )
             await provider.ensure_running()
+            mock_sandbox.process.delete_session.reset_mock()
 
             with pytest.raises(RuntimeError):
                 async for _ in provider.exec_stream(["false"]):
@@ -561,6 +562,7 @@ class TestDaytonaSandboxProviderExecStream:
                 repo_url="https://github.com/org/repo.git",
             )
             await provider.ensure_running()
+            mock_sandbox.process.delete_session.reset_mock()
 
             async for _ in provider.exec_stream(["echo", "ok"]):
                 pass
@@ -584,6 +586,7 @@ class TestDaytonaSandboxProviderExecStream:
                 repo_url="https://github.com/org/repo.git",
             )
             await provider.ensure_running()
+            mock_sandbox.process.delete_session.reset_mock()
 
             stream = provider.exec_stream(["echo", "hello"])
             async for _ in stream:

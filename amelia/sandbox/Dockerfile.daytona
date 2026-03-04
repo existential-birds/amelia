@@ -1,0 +1,23 @@
+# Daytona sandbox container for isolated agent execution.
+# Pre-built image so the worker has amelia installed at creation time
+# (no runtime pip install needed).
+#
+# Build: ./scripts/build-daytona-image.sh
+FROM python:3.12-slim
+
+# Install git for repo operations
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install amelia package (code only, no transitive deps) and worker dependencies.
+# This gives the worker access to:
+#   amelia.drivers.base (AgenticMessage, DriverUsage)
+#   amelia.agents.schemas (EvaluationOutput, MarkdownPlanOutput, etc.)
+#   amelia.sandbox.worker (entrypoint)
+# Heavy deps (langgraph, fastapi, asyncpg, langchain) are NOT installed.
+COPY . /tmp/amelia/
+RUN pip install --no-cache-dir --no-deps /tmp/amelia \
+    && pip install --no-cache-dir deepagents pydantic loguru httpx langchain-openai \
+    && rm -rf /tmp/amelia
+
+WORKDIR /workspace

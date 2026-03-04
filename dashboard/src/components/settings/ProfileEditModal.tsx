@@ -261,7 +261,7 @@ const DEFAULT_FORM_DATA: FormData = {
   sandbox_daytona_cpu: 2,
   sandbox_daytona_memory: 4,
   sandbox_daytona_disk: 10,
-  sandbox_daytona_image: 'debian-slim:3.12',
+  sandbox_daytona_image: 'ghcr.io/existential-birds/amelia-sandbox:latest',
 };
 
 /** Zod schema for profile form validation */
@@ -334,7 +334,7 @@ const profileToFormData = (profile: Profile): FormData => {
     sandbox_daytona_cpu: profile.sandbox?.daytona_resources?.cpu ?? 2,
     sandbox_daytona_memory: profile.sandbox?.daytona_resources?.memory ?? 4,
     sandbox_daytona_disk: profile.sandbox?.daytona_resources?.disk ?? 10,
-    sandbox_daytona_image: profile.sandbox?.daytona_image ?? 'debian-slim:3.12',
+    sandbox_daytona_image: profile.sandbox?.daytona_image ?? 'ghcr.io/existential-birds/amelia-sandbox:latest',
   };
 };
 
@@ -1111,7 +1111,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                     <Input
                       value={formData.sandbox_daytona_image}
                       onChange={(e) => handleChange('sandbox_daytona_image', e.target.value)}
-                      placeholder="debian-slim:3.12"
+                      placeholder="ghcr.io/existential-birds/amelia-sandbox:latest"
                       className="bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm"
                     />
                   </div>

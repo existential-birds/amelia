@@ -48,7 +48,7 @@ class DaytonaSandboxProvider:
         repo_url: Git remote URL to clone into the sandbox.
         branch: Git branch to clone.
         resources: Optional CPU/memory/disk resource configuration.
-        image: Sandbox image identifier (e.g. "debian-slim:3.12").
+        image: Docker image for the sandbox (default: pre-built amelia image).
         timeout: Timeout in seconds for sandbox creation and git clone.
         git_token: Optional Git access token for private repo operations.
     """
@@ -61,7 +61,7 @@ class DaytonaSandboxProvider:
         repo_url: str = "",
         branch: str = "main",
         resources: DaytonaResources | None = None,
-        image: str = "debian-slim:3.12",
+        image: str = "ghcr.io/existential-birds/amelia-sandbox:latest",
         timeout: float = 120.0,
         retry_config: RetryConfig | None = None,
         git_token: str | None = None,

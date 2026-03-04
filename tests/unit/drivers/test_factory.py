@@ -153,7 +153,7 @@ class TestGetDriverDaytonaBranch:
                 target="eu",
                 repo_url="https://github.com/org/repo.git",
                 resources=None,
-                image="debian-slim:3.12",
+                image="ghcr.io/existential-birds/amelia-sandbox:latest",
                 timeout=120.0,
                 retry_config=None,
                 git_token=None,
