@@ -202,6 +202,28 @@ const getModelsForDriver = (driver: string): readonly string[] => {
   return MODEL_OPTIONS_BY_DRIVER[driver] ?? CLAUDE_MODELS;
 };
 
+/**
+ * Manages driver/model state with automatic model reset on driver change.
+ * Used by BulkApply and shared as logic reference for handleAgentChange.
+ */
+function useDriverModel(initialDriver = 'claude', initialModel = 'sonnet') {
+  const [driver, setDriverRaw] = useState(initialDriver);
+  const [model, setModel] = useState(initialModel);
+  const availableModels = useMemo(() => getModelsForDriver(driver), [driver]);
+
+  const setDriver = useCallback((newDriver: string) => {
+    setDriverRaw(newDriver);
+    if (newDriver === 'api') {
+      setModel('');
+    } else {
+      const models = getModelsForDriver(newDriver);
+      setModel((prev) => (models.includes(prev) ? prev : models[0] ?? ''));
+    }
+  }, []);
+
+  return { driver, model, availableModels, setDriver, setModel };
+}
+
 /** Build default agent configuration */
 const buildDefaultAgents = (): Record<string, AgentFormData> => {
   const agents: Record<string, AgentFormData> = {};
@@ -382,18 +404,8 @@ interface BulkApplyProps {
 }
 
 function BulkApply({ onApply }: BulkApplyProps) {
-  const [driver, setDriver] = useState('claude');
-  const [model, setModel] = useState('sonnet');
+  const { driver, model, availableModels, setDriver, setModel } = useDriverModel('claude', 'sonnet');
   const [showSuccess, setShowSuccess] = useState(false);
-
-  const availableModels = useMemo(() => getModelsForDriver(driver), [driver]);
-
-  // Reset model when driver changes if current model isn't available
-  useEffect(() => {
-    if (!availableModels.includes(model)) {
-      setModel(availableModels[0] ?? 'sonnet');
-    }
-  }, [availableModels, model]);
 
   const handleApply = (targets: 'all' | 'primary' | 'utility') => {
     onApply(driver, model, targets);
@@ -644,22 +656,19 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     setFormData((prev) => {
       const nextAgents = { ...prev.agents };
       const currentAgent = nextAgents[agentKey] ?? { driver: 'claude', model: 'opus' };
-      nextAgents[agentKey] = { ...currentAgent, [field]: value };
 
-      // When driver changes, reset model to appropriate default
       if (field === 'driver') {
-        const updatedAgent = nextAgents[agentKey]!;
+        // Same logic as useDriverModel: reset model on driver change
+        let newModel: string;
         if (value === 'api') {
-          // API models are selected dynamically via the model picker
-          // Set to empty string until user selects from picker
-          updatedAgent.model = '';
+          newModel = '';
         } else {
-          // Claude driver: reset to first available Claude model if current model is invalid
-          const availableModels = getModelsForDriver(value);
-          if (!availableModels.includes(updatedAgent.model)) {
-            updatedAgent.model = availableModels[0] ?? '';
-          }
+          const models = getModelsForDriver(value);
+          newModel = models.includes(currentAgent.model) ? currentAgent.model : (models[0] ?? '');
         }
+        nextAgents[agentKey] = { driver: value, model: newModel };
+      } else {
+        nextAgents[agentKey] = { ...currentAgent, model: value };
       }
 
       return { ...prev, agents: nextAgents };
