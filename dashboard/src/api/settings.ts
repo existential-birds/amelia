@@ -52,13 +52,27 @@ export interface AgentConfig {
 }
 
 /**
+ * Resource limits for Daytona sandboxes.
+ */
+export interface DaytonaResources {
+  cpu: number;
+  memory: number;
+  disk: number;
+}
+
+/**
  * Sandbox execution configuration for a profile.
  */
 export interface SandboxConfig {
-  mode: 'none' | 'container';
+  mode: 'none' | 'container' | 'daytona';
   image: string;
   network_allowlist_enabled: boolean;
   network_allowed_hosts: string[];
+  // Remote sandbox fields (Daytona)
+  repo_url?: string;
+  daytona_api_url?: string;
+  daytona_target?: string;
+  daytona_resources?: DaytonaResources;
 }
 
 /**
