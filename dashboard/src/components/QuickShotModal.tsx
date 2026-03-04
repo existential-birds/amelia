@@ -144,10 +144,6 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
   // External plan has content - disables Plan & Queue button
   const hasExternalPlan = !!(planData.plan_file || planData.plan_content);
 
-  const handlePlanChange = useCallback((data: PlanData) => {
-    setPlanData(data);
-  }, []);
-
   const {
     register,
     handleSubmit,
@@ -167,6 +163,14 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
       task_description: '',
     },
   });
+
+  const handlePlanChange = useCallback((data: PlanData) => {
+    setPlanData(data);
+    // Auto-populate task title from plan/design document H1
+    if (data.extracted_title && !getValues('task_title')) {
+      setValue('task_title', data.extracted_title, { shouldValidate: true });
+    }
+  }, [getValues, setValue]);
 
   // Watch worktree_path and profile for controlled inputs
   const worktreePath = watch('worktree_path');

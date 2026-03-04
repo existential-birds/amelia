@@ -5,6 +5,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { ChevronDown, FileText, ClipboardPaste, File, Eye, Loader2, AlertCircle, ChevronsUpDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { parsePlanPreview, type PlanPreview } from '@/lib/plan-parser';
+import { extractTitle } from '@/lib/design-doc';
 import { api, ApiError } from '@/api/client';
 import type { FileEntry } from '@/types';
 import {
@@ -40,6 +41,8 @@ export interface PlanData {
   plan_file?: string;
   /** Inline plan markdown content. */
   plan_content?: string;
+  /** Title extracted from the first H1 in the plan/design markdown. */
+  extracted_title?: string;
 }
 
 export interface PlanImportSectionProps {
@@ -93,6 +96,7 @@ export function PlanImportSection({
   const [preview, setPreview] = useState<PlanPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [filePreview, setFilePreview] = useState<PlanPreview | null>(null);
+  const [fileTitle, setFileTitle] = useState<string | undefined>(undefined);
   const [fileError, setFileError] = useState<string | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
@@ -126,14 +130,19 @@ export function PlanImportSection({
       onPlanChange({
         plan_file: filePath.trim() || undefined,
         plan_content: undefined,
+        extracted_title: fileTitle,
       });
     } else {
+      const trimmed = content.trim();
+      const title = trimmed ? extractTitle(trimmed) : undefined;
+      const extracted = title && title !== 'Untitled' ? title : undefined;
       onPlanChange({
         plan_file: undefined,
-        plan_content: content.trim() || undefined,
+        plan_content: trimmed || undefined,
+        extracted_title: extracted,
       });
     }
-  }, [mode, filePath, content, onPlanChange]);
+  }, [mode, filePath, content, fileTitle, onPlanChange]);
 
   // Fetch file list when in file mode and planOutputDir is available
   useEffect(() => {
@@ -178,6 +187,7 @@ export function PlanImportSection({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setFilePath(e.target.value);
       setFilePreview(null);
+      setFileTitle(undefined);
       setFileError(null);
       previewRequestId.current += 1;
       setPreviewLoading(false);
@@ -192,6 +202,7 @@ export function PlanImportSection({
       : file.relative_path;
     setFilePath(relativePath);
     setFilePreview(null);
+    setFileTitle(undefined);
     setFileError(null);
     // Defer popover close to let cmdk finish processing the click event
     requestAnimationFrame(() => setComboboxOpen(false));
@@ -205,6 +216,7 @@ export function PlanImportSection({
     setPreviewLoading(true);
     setFileError(null);
     setFilePreview(null);
+    setFileTitle(undefined);
 
     try {
       const absolutePath = trimmedPath.startsWith('/')
@@ -217,6 +229,12 @@ export function PlanImportSection({
       if (!response.content.trim()) {
         setFileError('Plan file is empty');
         return;
+      }
+
+      // Extract title from the first H1 heading
+      const title = extractTitle(response.content);
+      if (title !== 'Untitled') {
+        setFileTitle(title);
       }
 
       const parsed = parsePlanPreview(response.content);

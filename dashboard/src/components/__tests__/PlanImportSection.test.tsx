@@ -116,6 +116,7 @@ describe('PlanImportSection', () => {
         expect(onPlanChange).toHaveBeenLastCalledWith({
           plan_file: 'docs/plan.md',
           plan_content: undefined,
+          extracted_title: undefined,
         });
       });
     });
@@ -133,6 +134,7 @@ describe('PlanImportSection', () => {
         expect(onPlanChange).toHaveBeenLastCalledWith({
           plan_file: undefined,
           plan_content: undefined,
+          extracted_title: undefined,
         });
       });
     });
@@ -154,6 +156,7 @@ describe('PlanImportSection', () => {
         expect(onPlanChange).toHaveBeenLastCalledWith({
           plan_file: undefined,
           plan_content: '# Plan\n\n## Goal\nTest goal',
+          extracted_title: 'Plan',
         });
       });
     });
@@ -222,6 +225,7 @@ Implement user authentication.
         expect(onPlanChange).toHaveBeenLastCalledWith({
           plan_file: undefined,
           plan_content: content,
+          extracted_title: 'Plan',
         });
       });
     });
@@ -614,6 +618,7 @@ Add new feature.
         expect(onPlanChange).toHaveBeenLastCalledWith({
           plan_file: 'docs/plans/plan-1.md',
           plan_content: undefined,
+          extracted_title: undefined,
         });
       });
     });
