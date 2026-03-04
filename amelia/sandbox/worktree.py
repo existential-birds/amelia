@@ -66,9 +66,12 @@ class WorktreeManager:
         """
         if self._repo_initialized:
             logger.debug("Fetching latest from origin")
-            await self._run(
-                ["git", "-C", REPO_PATH, "fetch", "origin"],
-            )
+            if hasattr(self._provider, "git_fetch"):
+                await self._provider.git_fetch(REPO_PATH)
+            else:
+                await self._run(
+                    ["git", "-C", REPO_PATH, "fetch", "origin"],
+                )
             return
 
         # Check if a repo already exists (e.g. provider pre-cloned it)
@@ -83,9 +86,12 @@ class WorktreeManager:
                     path=REPO_PATH,
                     git_dir=git_dir,
                 )
-                await self._run(
-                    ["git", "-C", REPO_PATH, "fetch", "origin"],
-                )
+                if hasattr(self._provider, "git_fetch"):
+                    await self._provider.git_fetch(REPO_PATH)
+                else:
+                    await self._run(
+                        ["git", "-C", REPO_PATH, "fetch", "origin"],
+                    )
                 self._repo_initialized = True
                 return
         except RuntimeError:
@@ -137,8 +143,12 @@ class WorktreeManager:
             workflow_id: Branch name to push.
         """
         worktree_path = f"{WORKTREES_PATH}/{workflow_id}"
-        await self._run(
-            ["git", "push", "origin", workflow_id],
-            cwd=worktree_path,
-        )
-        logger.info("Pushed branch", branch=workflow_id)
+        if hasattr(self._provider, "git_push"):
+            await self._provider.git_push(worktree_path)
+            logger.info("Pushed branch via SDK", branch=workflow_id)
+        else:
+            await self._run(
+                ["git", "push", "origin", workflow_id],
+                cwd=worktree_path,
+            )
+            logger.info("Pushed branch", branch=workflow_id)

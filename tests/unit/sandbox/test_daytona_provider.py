@@ -223,6 +223,133 @@ class TestDaytonaSandboxProviderEnsureRunning:
             mock_sandbox.git.clone.assert_called_once()
 
 
+class TestDaytonaSandboxProviderGitAuth:
+    """Git credential threading."""
+
+    @pytest.mark.asyncio
+    async def test_clone_passes_credentials_when_token_set(self):
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+                git_token="ghp_test123",
+            )
+            await provider.ensure_running()
+
+            mock_sandbox.git.clone.assert_called_once_with(
+                "https://github.com/org/repo.git",
+                "/workspace/repo",
+                branch="main",
+                username="x-access-token",
+                password="ghp_test123",
+            )
+
+    @pytest.mark.asyncio
+    async def test_clone_no_credentials_when_token_absent(self):
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            mock_sandbox.git.clone.assert_called_once_with(
+                "https://github.com/org/repo.git",
+                "/workspace/repo",
+                branch="main",
+            )
+
+    @pytest.mark.asyncio
+    async def test_git_push_passes_credentials(self):
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+                git_token="ghp_test123",
+            )
+            await provider.ensure_running()
+            await provider.git_push("/workspace/repo")
+
+            mock_sandbox.git.push.assert_called_once_with(
+                "/workspace/repo",
+                username="x-access-token",
+                password="ghp_test123",
+            )
+
+    @pytest.mark.asyncio
+    async def test_git_push_raises_when_not_running(self):
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_cls.return_value = AsyncMock()
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+                git_token="ghp_test123",
+            )
+            with pytest.raises(RuntimeError, match="Sandbox not running"):
+                await provider.git_push("/workspace/repo")
+
+    @pytest.mark.asyncio
+    async def test_git_fetch_passes_credentials(self):
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+                git_token="ghp_test123",
+            )
+            await provider.ensure_running()
+            await provider.git_fetch("/workspace/repo")
+
+            mock_sandbox.git.pull.assert_called_once_with(
+                "/workspace/repo",
+                username="x-access-token",
+                password="ghp_test123",
+            )
+
+    @pytest.mark.asyncio
+    async def test_git_fetch_raises_when_not_running(self):
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_cls.return_value = AsyncMock()
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+                git_token="ghp_test123",
+            )
+            with pytest.raises(RuntimeError, match="Sandbox not running"):
+                await provider.git_fetch("/workspace/repo")
+
+
 def _make_mock_sandbox(stdout_chunks: list[str], exit_code: int = 0):
     """Create a mock sandbox with session-based streaming configured.
 

@@ -80,6 +80,8 @@ def get_driver(
                 "DAYTONA_API_KEY environment variable is required for Daytona sandbox"
             )
 
+        git_token = os.environ.get("GITHUB_TOKEN")
+
         provider = DaytonaSandboxProvider(
             api_key=api_key,
             api_url=sandbox_config.daytona_api_url,
@@ -89,6 +91,7 @@ def get_driver(
             image=sandbox_config.daytona_image,
             timeout=sandbox_config.daytona_timeout,
             retry_config=retry_config,
+            git_token=git_token,
         )
         return ContainerDriver(model=model, provider=provider)
 

@@ -50,6 +50,7 @@ class DaytonaSandboxProvider:
         resources: Optional CPU/memory/disk resource configuration.
         image: Sandbox image identifier (e.g. "debian-slim:3.12").
         timeout: Timeout in seconds for sandbox creation and git clone.
+        git_token: Optional Git access token for private repo operations.
     """
 
     def __init__(
@@ -63,6 +64,7 @@ class DaytonaSandboxProvider:
         image: str = "debian-slim:3.12",
         timeout: float = 120.0,
         retry_config: RetryConfig | None = None,
+        git_token: str | None = None,
     ) -> None:
         self._client = AsyncDaytona(DaytonaConfig(
             api_key=api_key,
@@ -76,7 +78,15 @@ class DaytonaSandboxProvider:
         self._image = image
         self._timeout = timeout
         self._retry_config = retry_config
+        self._git_token = git_token
         self._sandbox: AsyncSandbox | None = None
+
+    @property
+    def _git_auth(self) -> dict[str, str]:
+        """Git credentials for Daytona SDK git operations."""
+        if self._git_token:
+            return {"username": "x-access-token", "password": self._git_token}
+        return {}
 
     async def ensure_running(self) -> None:
         """Create Daytona sandbox and clone repo using native APIs.
@@ -132,13 +142,13 @@ class DaytonaSandboxProvider:
                     if self._retry_config:
                         await with_retry(
                             lambda: self._sandbox.git.clone(  # type: ignore[union-attr]
-                                self._repo_url, REPO_PATH, branch=self._branch
+                                self._repo_url, REPO_PATH, branch=self._branch, **self._git_auth
                             ),
                             self._retry_config,
                             retryable_exceptions=_retryable,
                         )
                     else:
-                        await self._sandbox.git.clone(self._repo_url, REPO_PATH, branch=self._branch)
+                        await self._sandbox.git.clone(self._repo_url, REPO_PATH, branch=self._branch, **self._git_auth)
         except TimeoutError:
             raise TimeoutError(
                 f"Daytona sandbox creation timed out after {self._timeout}s"
@@ -249,6 +259,18 @@ class DaytonaSandboxProvider:
             raise RuntimeError(
                 f"Command exited with code {cmd_info.exit_code}: {cmd_str}"
             )
+
+    async def git_push(self, path: str) -> None:
+        """Push via Daytona SDK with credentials."""
+        if self._sandbox is None:
+            raise RuntimeError("Sandbox not running — call ensure_running() first")
+        await self._sandbox.git.push(path, **self._git_auth)
+
+    async def git_fetch(self, path: str) -> None:
+        """Fetch via Daytona SDK with credentials."""
+        if self._sandbox is None:
+            raise RuntimeError("Sandbox not running — call ensure_running() first")
+        await self._sandbox.git.pull(path, **self._git_auth)
 
     async def teardown(self) -> None:
         """Delete the ephemeral Daytona sandbox."""

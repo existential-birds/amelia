@@ -156,6 +156,7 @@ class TestGetDriverDaytonaBranch:
                 image="debian-slim:3.12",
                 timeout=120.0,
                 retry_config=None,
+                git_token=None,
             )
             mock_driver_cls.assert_called_once_with(
                 model="test-model",
@@ -207,4 +208,18 @@ class TestGetDriverDaytonaBranch:
                 image="ubuntu:22.04",
                 timeout=120.0,
                 retry_config=None,
+                git_token=None,
             )
+
+    def test_daytona_mode_passes_github_token(self):
+        """GITHUB_TOKEN env var should be forwarded as git_token."""
+        sandbox = SandboxConfig(
+            mode="daytona",
+            repo_url="https://github.com/org/repo.git",
+        )
+        with patch("amelia.sandbox.daytona.DaytonaSandboxProvider") as mock_provider_cls, \
+             patch("amelia.sandbox.driver.ContainerDriver") as mock_driver_cls, \
+             patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key", "GITHUB_TOKEN": "ghp_abc123"}):
+            mock_driver_cls.return_value = MagicMock()
+            get_driver("api", model="test-model", sandbox_config=sandbox, profile_name="work")
+            assert mock_provider_cls.call_args.kwargs["git_token"] == "ghp_abc123"
