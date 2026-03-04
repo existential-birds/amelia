@@ -511,9 +511,14 @@ class TestHandoff(TestBrainstormService):
             )
         ]
 
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.queue_workflow = AsyncMock(return_value="wf-status-123")
+
         result = await service.handoff_to_implementation(
             session_id=sess_id,
             artifact_path="docs/plans/design.md",
+            orchestrator=mock_orchestrator,
+            worktree_path="/path/to/worktree",
         )
 
         assert result is not None
@@ -542,13 +547,18 @@ class TestHandoff(TestBrainstormService):
             )
         ]
 
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.queue_workflow = AsyncMock(return_value="wf-id-456")
+
         result = await service.handoff_to_implementation(
             session_id=sess_id,
             artifact_path="docs/plans/design.md",
+            orchestrator=mock_orchestrator,
+            worktree_path="/path/to/worktree",
         )
 
         assert "workflow_id" in result
-        assert len(str(result["workflow_id"])) == 36  # UUID
+        assert result["workflow_id"] == "wf-id-456"
 
     async def test_handoff_artifact_not_found(
         self,

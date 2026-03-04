@@ -430,7 +430,6 @@ def create_app() -> FastAPI:
         # Map provider to upstream config
         # NOTE: Only OpenAI-compatible providers (using /chat/completions endpoint)
         # are supported. Anthropic uses /messages and requires different auth headers.
-        # TODO(#420): Move provider registry to database-stored configuration
         provider_registry: dict[str, str] = {
             "openrouter": "https://openrouter.ai/api/v1",
             "openai": "https://api.openai.com/v1",

@@ -13,14 +13,7 @@ EPHEMERAL_SEQUENCE: int = 0
 
 
 class EventDomain(StrEnum):
-    """Domain of event origin.
-
-    Attributes:
-        WORKFLOW: Standard workflow events (orchestrator, agents).
-        BRAINSTORM: Brainstorming session events (chat streaming).
-        ORACLE: Oracle consultation events.
-        KNOWLEDGE: Knowledge ingestion events.
-    """
+    """Domain of event origin."""
 
     WORKFLOW = "workflow"
     BRAINSTORM = "brainstorm"
@@ -29,14 +22,7 @@ class EventDomain(StrEnum):
 
 
 class EventLevel(StrEnum):
-    """Event severity level for filtering and retention.
-
-    Attributes:
-        INFO: High-level workflow events (lifecycle, stages, approvals).
-        WARNING: System warnings and non-critical issues.
-        DEBUG: Operational details (tasks, files, messages).
-        ERROR: Error events.
-    """
+    """Event severity level for filtering and retention."""
 
     INFO = "info"
     WARNING = "warning"
@@ -49,30 +35,6 @@ class EventType(StrEnum):
 
     Events are categorized into lifecycle, stage, approval, artifact,
     review, agent message, and system event types.
-
-    Attributes:
-        WORKFLOW_STARTED: Workflow execution has begun.
-        WORKFLOW_COMPLETED: Workflow finished successfully.
-        WORKFLOW_FAILED: Workflow terminated due to error.
-        WORKFLOW_CANCELLED: Workflow was cancelled by user.
-        STAGE_STARTED: A workflow stage has begun.
-        STAGE_COMPLETED: A workflow stage has finished.
-        APPROVAL_REQUIRED: Human approval is needed to proceed.
-        APPROVAL_GRANTED: Human approved the pending action.
-        APPROVAL_REJECTED: Human rejected the pending action.
-        FILE_CREATED: A new file was created.
-        FILE_MODIFIED: An existing file was modified.
-        FILE_DELETED: A file was deleted.
-        REVIEW_REQUESTED: Code review has been requested.
-        REVIEW_COMPLETED: Code review has been completed.
-        REVISION_REQUESTED: Reviewer requested changes.
-        AGENT_MESSAGE: Message from an agent.
-        TASK_STARTED: An agent task has begun.
-        TASK_COMPLETED: An agent task has finished.
-        TASK_FAILED: An agent task has failed.
-        SYSTEM_ERROR: System-level error occurred.
-        SYSTEM_WARNING: System-level warning issued.
-        STREAM: Ephemeral streaming event (not persisted).
     """
 
     # Lifecycle
@@ -254,25 +216,6 @@ class WorkflowEvent(BaseModel):
 
     Events are immutable and append-only. They form the authoritative
     history of workflow execution.
-
-    Attributes:
-        id: Unique event identifier (UUID).
-        domain: Event domain (workflow or brainstorm).
-        workflow_id: Links to ExecutionState.
-        sequence: Monotonic counter per workflow (ensures ordering).
-        timestamp: When event occurred.
-        agent: Source of event ("architect", "developer", "reviewer", "system").
-        event_type: Typed event category.
-        level: Event severity level (info, debug, trace).
-        message: Human-readable summary.
-        data: Optional structured payload (file paths, error details, etc.).
-        session_id: Per-consultation session ID (independent from workflow_id).
-        correlation_id: Links related events (e.g., approval request -> granted).
-        tool_name: Tool name for trace events (optional).
-        tool_input: Tool input parameters for trace events (optional).
-        is_error: Whether trace event represents an error (default False).
-        trace_id: Distributed trace ID (flows through all events in a workflow execution).
-        parent_id: Parent event ID for causal chain (e.g., tool_call -> tool_result).
     """
 
     id: uuid.UUID = Field(..., description="Unique event identifier")

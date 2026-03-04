@@ -452,12 +452,6 @@ def event_bus(connection_manager: ConnectionManager) -> EventBus:
 
 
 @pytest.fixture
-def memory_checkpointer() -> MemorySaver:
-    """Create an in-memory checkpoint saver for integration tests."""
-    return MemorySaver()
-
-
-@pytest.fixture
 def orchestrator_graph() -> CompiledStateGraph[Any]:
     """Create orchestrator graph with in-memory checkpointer.
 

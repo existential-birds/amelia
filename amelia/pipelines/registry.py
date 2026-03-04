@@ -35,19 +35,3 @@ def get_pipeline(name: str) -> Pipeline[Any]:
     if name not in PIPELINES:
         raise ValueError(f"Unknown pipeline: {name}")
     return PIPELINES[name]()
-
-
-def list_pipelines() -> list[dict[str, str]]:
-    """List all available pipelines with metadata.
-
-    Returns:
-        List of dicts with name, display_name, and description.
-    """
-    return [
-        {
-            "name": p.metadata.name,
-            "display_name": p.metadata.display_name,
-            "description": p.metadata.description,
-        }
-        for p in (cls() for cls in PIPELINES.values())
-    ]

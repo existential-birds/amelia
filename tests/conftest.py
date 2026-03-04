@@ -25,7 +25,6 @@ from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
 )
-from amelia.server.database import ProfileRecord
 from amelia.server.events.bus import EventBus
 from amelia.server.models.events import EventType, WorkflowEvent
 
@@ -196,37 +195,6 @@ def make_agents_json(
         "task_reviewer": {"driver": driver, "model": effective_validator, "options": {}},
     }
     return json.dumps(agents)
-
-
-@pytest.fixture
-def mock_profile_record_factory() -> Callable[..., ProfileRecord]:
-    """Factory fixture for creating test ProfileRecord instances.
-
-    ProfileRecord is the database-level model that stores agents as JSON.
-    Use this fixture when testing database operations or routes.
-    """
-    def _create(
-        id: str = "test",
-        tracker: str = "noop",
-        repo_root: str = "/tmp/test",
-        driver: DriverType = "claude",
-        model: str = "sonnet",
-        validator_model: str | None = None,
-        agents: str | None = None,
-        is_active: bool = False,
-        **kwargs: Any
-    ) -> ProfileRecord:
-        if agents is None:
-            agents = make_agents_json(driver, model, validator_model)
-        return ProfileRecord(
-            id=id,
-            tracker=tracker,
-            repo_root=repo_root,
-            agents=agents,
-            is_active=is_active,
-            **kwargs
-        )
-    return _create
 
 
 @pytest.fixture

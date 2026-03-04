@@ -2,7 +2,7 @@
 
 import pytest
 
-from amelia.pipelines.registry import PIPELINES, get_pipeline, list_pipelines
+from amelia.pipelines.registry import PIPELINES, get_pipeline
 
 
 class TestPipelineRegistry:
@@ -37,16 +37,3 @@ class TestPipelineRegistry:
         p2 = get_pipeline("implementation")
         assert p1 is not p2
 
-    def test_list_pipelines_returns_list(self) -> None:
-        """list_pipelines should return list of pipeline info dicts."""
-        pipelines = list_pipelines()
-        assert isinstance(pipelines, list)
-        assert len(pipelines) >= 2
-
-    def test_list_pipelines_contains_required_fields(self) -> None:
-        """Each pipeline info should have name, display_name, description."""
-        pipelines = list_pipelines()
-        for p in pipelines:
-            assert "name" in p
-            assert "display_name" in p
-            assert "description" in p
