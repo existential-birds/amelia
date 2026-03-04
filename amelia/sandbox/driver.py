@@ -111,17 +111,21 @@ class ContainerDriver:
         workflow_id = kwargs.get("workflow_id")
         prompt_path = await self._write_prompt(prompt, workflow_id=workflow_id)
 
+        # Translate host path to sandbox-internal path (no-op for Docker,
+        # maps to /workspace/repo for Daytona).
+        sandbox_cwd = self._provider.resolve_cwd(cwd)
+
         try:
             cmd = [
                 "python", "-m", "amelia.sandbox.worker", "agentic",
                 "--prompt-file", prompt_path,
-                "--cwd", cwd,
+                "--cwd", sandbox_cwd,
                 "--model", self.model,
             ]
             if instructions:
                 cmd.extend(["--instructions", instructions])
 
-            async for line in self._provider.exec_stream(cmd, cwd=cwd):
+            async for line in self._provider.exec_stream(cmd, cwd=sandbox_cwd):
                 msg = self._parse_line(line)
                 if msg.type == AgenticMessageType.USAGE:
                     self._last_usage = msg.usage

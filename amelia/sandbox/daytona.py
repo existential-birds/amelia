@@ -154,6 +154,19 @@ class DaytonaSandboxProvider:
                 f"Daytona sandbox creation timed out after {self._timeout}s"
             ) from None
 
+    def resolve_cwd(self, cwd: str) -> str:
+        """Map host paths to the sandbox repo path.
+
+        Inside the Daytona sandbox the repo is cloned to REPO_PATH
+        (/workspace/repo). Any host-side path that doesn't start with
+        /workspace/ is replaced with REPO_PATH so commands execute in the
+        correct location.
+        """
+        if cwd.startswith("/workspace/"):
+            return cwd
+        logger.debug("Mapping host cwd to sandbox path", host_cwd=cwd, sandbox_cwd=REPO_PATH)
+        return REPO_PATH
+
     async def exec_stream(
         self,
         command: list[str],
@@ -204,11 +217,13 @@ class DaytonaSandboxProvider:
         cmd_id = resp.cmd_id
 
         queue: asyncio.Queue[str | None] = asyncio.Queue()
+        stderr_chunks: list[str] = []
 
         async def on_stdout(chunk: str) -> None:
             await queue.put(chunk)
 
         async def on_stderr(chunk: str) -> None:
+            stderr_chunks.append(chunk)
             logger.debug("Daytona stderr chunk", content=chunk)
 
         async def stream_logs() -> None:
@@ -253,9 +268,13 @@ class DaytonaSandboxProvider:
                     session_id, cmd_id,
                 )
                 if cmd_info.exit_code is not None and cmd_info.exit_code != 0:
-                    raise RuntimeError(
-                        f"Command exited with code {cmd_info.exit_code}: {cmd_str}"
-                    )
+                    stderr_text = "".join(stderr_chunks).strip()
+                    detail = f"Command exited with code {cmd_info.exit_code}: {cmd_str}"
+                    if stderr_text:
+                        # Limit stderr to last 2000 chars to avoid huge error messages.
+                        tail = stderr_text[-2000:]
+                        detail += f"\n\nStderr:\n{tail}"
+                    raise RuntimeError(detail)
             finally:
                 try:
                     await sandbox.process.delete_session(session_id)

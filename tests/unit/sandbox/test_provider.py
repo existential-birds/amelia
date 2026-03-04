@@ -26,6 +26,9 @@ class FakeSandboxProvider:
     async def write_file(self, path: str, content: bytes) -> None:
         pass
 
+    def resolve_cwd(self, cwd: str) -> str:
+        return cwd
+
     async def health_check(self) -> bool:
         return True
 

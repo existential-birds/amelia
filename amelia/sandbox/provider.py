@@ -51,6 +51,22 @@ class SandboxProvider(Protocol):
         """Stop and clean up the sandbox."""
         ...
 
+    def resolve_cwd(self, cwd: str) -> str:
+        """Translate a host working directory to a sandbox-internal path.
+
+        The default implementation returns the path unchanged, which is
+        correct for providers that mount the host filesystem (e.g. Docker).
+        Providers with their own filesystem layout (e.g. Daytona) should
+        override this to map to the sandbox's repo path.
+
+        Args:
+            cwd: Host-side working directory path.
+
+        Returns:
+            Path to use inside the sandbox.
+        """
+        return cwd
+
     async def health_check(self) -> bool:
         """Check if the sandbox is responsive.
 
