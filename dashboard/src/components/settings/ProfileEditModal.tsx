@@ -6,6 +6,7 @@
  * Utility agents are collapsed by default but easily accessible.
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { z } from 'zod';
 import { motion } from 'motion/react';
 import {
   Dialog,
@@ -225,6 +226,32 @@ const DEFAULT_FORM_DATA: FormData = {
   sandbox_network_allowlist_enabled: false,
   sandbox_network_allowed_hosts: [],
 };
+
+/** Zod schema for profile form validation */
+const agentFormSchema = z.object({
+  driver: z.string().min(1),
+  model: z.string(),
+});
+
+const profileFormSchema = z.object({
+  id: z
+    .string()
+    .min(1, 'Profile name is required')
+    .regex(/^\S+$/, 'Profile name cannot contain spaces')
+    .regex(
+      /^[a-zA-Z0-9_-]+$/,
+      'Only letters, numbers, underscores, and hyphens allowed'
+    ),
+  tracker: z.string(),
+  repo_root: z.string().min(1, 'Repository root is required'),
+  plan_output_dir: z.string(),
+  plan_path_pattern: z.string(),
+  agents: z.record(agentFormSchema),
+  sandbox_mode: z.enum(['none', 'container']),
+  sandbox_image: z.string(),
+  sandbox_network_allowlist_enabled: z.boolean(),
+  sandbox_network_allowed_hosts: z.array(z.string()),
+});
 
 /** Validation rules for profile fields */
 const validateField = (field: string, value: string): string | null => {
@@ -665,14 +692,20 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (!isEditMode) {
-      const idError = validateField('id', formData.id);
-      if (idError) newErrors.id = idError;
+    // Schema validation (skip id validation in edit mode)
+    const dataToValidate = isEditMode
+      ? { ...formData, id: 'placeholder' }
+      : formData;
+    const result = profileFormSchema.safeParse(dataToValidate);
+
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        const key = issue.path.join('_') || 'general';
+        newErrors[key] = issue.message;
+      }
     }
 
-    const workingDirError = validateField('repo_root', formData.repo_root);
-    if (workingDirError) newErrors.repo_root = workingDirError;
-
+    // Cross-field: API driver agents must have a model selected
     for (const agent of AGENT_DEFINITIONS) {
       const agentConfig = formData.agents[agent.key];
       if (agentConfig?.driver === 'api' && agentConfig.model === '') {
