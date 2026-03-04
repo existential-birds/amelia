@@ -205,10 +205,58 @@ Do something
     });
   });
 
+  describe('title extraction', () => {
+    it('extracts title from H1', () => {
+      const result = parsePlanPreview('# My Feature\n\n## Goal\nBuild X');
+      expect(result.title).toBe('My Feature');
+    });
+
+    it('strips Design suffix', () => {
+      const result = parsePlanPreview('# Queue Workflows Design\n\n## Goal\n...');
+      expect(result.title).toBe('Queue Workflows');
+    });
+
+    it('strips Plan suffix', () => {
+      const result = parsePlanPreview('# Queue Workflows Plan\n...');
+      expect(result.title).toBe('Queue Workflows');
+    });
+
+    it('strips Spec suffix', () => {
+      const result = parsePlanPreview('# Auth System Spec\n...');
+      expect(result.title).toBe('Auth System');
+    });
+
+    it('strips RFC suffix', () => {
+      const result = parsePlanPreview('# Feature RFC\n...');
+      expect(result.title).toBe('Feature');
+    });
+
+    it('strips Proposal suffix', () => {
+      const result = parsePlanPreview('# New API Proposal\n...');
+      expect(result.title).toBe('New API');
+    });
+
+    it('strips suffix case-insensitively', () => {
+      const result = parsePlanPreview('# My Feature DESIGN\n...');
+      expect(result.title).toBe('My Feature');
+    });
+
+    it('returns undefined when no H1 found', () => {
+      const result = parsePlanPreview('## Only H2\nSome content');
+      expect(result.title).toBeUndefined();
+    });
+
+    it('returns undefined for empty content', () => {
+      const result = parsePlanPreview('');
+      expect(result.title).toBeUndefined();
+    });
+  });
+
   describe('edge cases', () => {
     it('handles empty input', () => {
       const result = parsePlanPreview('');
       expect(result).toEqual<PlanPreview>({
+        title: undefined,
         goal: '',
         taskCount: 0,
         keyFiles: [],
@@ -218,6 +266,7 @@ Do something
     it('handles whitespace-only input', () => {
       const result = parsePlanPreview('   \n\n  \t  ');
       expect(result).toEqual<PlanPreview>({
+        title: undefined,
         goal: '',
         taskCount: 0,
         keyFiles: [],
