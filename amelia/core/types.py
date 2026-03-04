@@ -23,6 +23,7 @@ DEFAULT_NETWORK_ALLOWED_HOSTS: tuple[str, ...] = (
     "registry.npmjs.org",
     "pypi.org",
     "files.pythonhosted.org",
+    "app.daytona.io",
 )
 
 
@@ -47,16 +48,38 @@ class SandboxMode(StrEnum):
 
     NONE = "none"
     CONTAINER = "container"
+    DAYTONA = "daytona"
+
+
+class DaytonaResources(BaseModel):
+    """Resource configuration for Daytona sandbox instances.
+
+    Attributes:
+        cpu: Number of CPU cores.
+        memory: Memory in GB.
+        disk: Disk space in GB.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    cpu: int = 2
+    memory: int = 4
+    disk: int = 10
 
 
 class SandboxConfig(BaseModel):
     """Sandbox execution configuration for a profile.
 
     Attributes:
-        mode: Sandbox mode ('none' = direct execution, 'container' = Docker sandbox).
+        mode: Sandbox mode ('none' = direct execution, 'container' = Docker sandbox,
+            'daytona' = Daytona cloud sandbox).
         image: Docker image for sandbox container.
         network_allowlist_enabled: Whether to restrict outbound network.
         network_allowed_hosts: Hosts allowed when network allowlist is enabled.
+        repo_url: Git remote URL to clone into the sandbox.
+        daytona_api_url: Daytona API endpoint URL.
+        daytona_target: Daytona target region.
+        daytona_resources: Optional CPU/memory/disk resource configuration.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -67,6 +90,12 @@ class SandboxConfig(BaseModel):
     network_allowed_hosts: tuple[str, ...] = Field(
         default_factory=lambda: DEFAULT_NETWORK_ALLOWED_HOSTS,
     )
+
+    # Remote sandbox fields (Daytona)
+    repo_url: str | None = None
+    daytona_api_url: str = "https://app.daytona.io/api"
+    daytona_target: str = "us"
+    daytona_resources: DaytonaResources | None = None
 
 
 class AgentConfig(BaseModel):
