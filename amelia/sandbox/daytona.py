@@ -96,12 +96,17 @@ class DaytonaSandboxProvider:
                 memory=self._resources.memory,
                 disk=self._resources.disk,
             )
-        # Parse image string like "debian-slim:3.12" into Image call
-        if "debian-slim" in self._image:
-            version = self._image.split(":")[-1]
-            image = Image.debian_slim(version)  # type: ignore[arg-type]
+        # Parse image string into Image call
+        # Format: "debian-slim:3.12" for Daytona-managed images, or arbitrary Docker image
+        if self._image.startswith("debian-slim"):
+            if ":" in self._image:
+                version = self._image.split(":", 1)[1]
+                image = Image.debian_slim(version)  # type: ignore[arg-type]
+            else:
+                image = Image.debian_slim()
         else:
-            image = Image.debian_slim()  # fallback to default debian-slim
+            # Arbitrary Docker image (e.g., "python:3.12-slim", "ubuntu:22.04")
+            image = Image.base(self._image)
 
         create_params = CreateSandboxFromImageParams(
             image=image,
@@ -227,8 +232,8 @@ class DaytonaSandboxProvider:
                     await log_task
             try:
                 await sandbox.process.delete_session(session_id)
-            except Exception:
-                logger.debug("Failed to delete Daytona session", session_id=session_id)
+            except Exception as exc:
+                logger.debug("Failed to delete Daytona session", session_id=session_id, error=exc)
 
         # Propagate any exception from the log streaming task.
         if log_task.done():
@@ -264,6 +269,6 @@ class DaytonaSandboxProvider:
         try:
             response = await self._sandbox.process.exec("true")
             return bool(response.exit_code == 0)
-        except Exception:
-            logger.debug("Daytona health check failed")
+        except Exception as e:
+            logger.debug("Daytona health check failed", error=e)
             return False
