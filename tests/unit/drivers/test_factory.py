@@ -1,4 +1,5 @@
 """Unit tests for the driver factory."""
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -126,3 +127,47 @@ class TestLegacyDriverRejection:
         """cleanup_driver_session should return False for codex driver."""
         result = await cleanup_driver_session("codex", "any-session-id")
         assert result is False
+
+
+class TestGetDriverDaytonaBranch:
+    """Daytona sandbox driver creation."""
+
+    def test_daytona_mode_returns_container_driver(self):
+        sandbox = SandboxConfig(
+            mode="daytona",
+            repo_url="https://github.com/org/repo.git",
+            daytona_api_url="https://test.daytona.io/api",
+            daytona_target="eu",
+        )
+        with patch("amelia.sandbox.daytona.DaytonaSandboxProvider") as mock_provider_cls, \
+             patch("amelia.sandbox.driver.ContainerDriver") as mock_driver_cls, \
+             patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}):
+            mock_driver_cls.return_value = MagicMock()
+            _driver = get_driver(
+                "api", model="test-model",
+                sandbox_config=sandbox, profile_name="work",
+            )
+            mock_provider_cls.assert_called_once_with(
+                api_key="test-key",
+                api_url="https://test.daytona.io/api",
+                target="eu",
+                repo_url="https://github.com/org/repo.git",
+                resources=None,
+            )
+            mock_driver_cls.assert_called_once_with(
+                model="test-model",
+                provider=mock_provider_cls.return_value,
+            )
+
+    def test_daytona_mode_missing_api_key_raises(self):
+        sandbox = SandboxConfig(mode="daytona", repo_url="https://github.com/org/repo.git")
+        with patch.dict(os.environ, {}, clear=True), \
+             pytest.raises(ValueError, match="DAYTONA_API_KEY"):
+            get_driver("api", sandbox_config=sandbox, profile_name="test")
+
+    @pytest.mark.parametrize("driver_key", ["claude", "codex"])
+    def test_daytona_mode_rejects_cli_wrappers(self, driver_key: str):
+        sandbox = SandboxConfig(mode="daytona", repo_url="https://github.com/org/repo.git")
+        with patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}), \
+             pytest.raises(ValueError, match="Daytona sandbox requires API driver"):
+            get_driver(driver_key, sandbox_config=sandbox, profile_name="test")

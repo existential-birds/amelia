@@ -51,6 +51,35 @@ def get_driver(
         )
         return ContainerDriver(model=model, provider=provider)
 
+    if sandbox_config and sandbox_config.mode == "daytona":
+        if driver_key in {"claude", "codex"}:
+            raise ValueError(
+                "Daytona sandbox requires API driver. "
+                "CLI driver containerization is not yet supported."
+            )
+        if driver_key != "api":
+            raise ValueError(f"Unknown driver key: {driver_key!r}")
+
+        import os  # noqa: PLC0415
+
+        from amelia.sandbox.daytona import DaytonaSandboxProvider  # noqa: PLC0415
+        from amelia.sandbox.driver import ContainerDriver  # noqa: PLC0415
+
+        api_key = os.environ.get("DAYTONA_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "DAYTONA_API_KEY environment variable is required for Daytona sandbox"
+            )
+
+        provider = DaytonaSandboxProvider(
+            api_key=api_key,
+            api_url=sandbox_config.daytona_api_url,
+            target=sandbox_config.daytona_target,
+            repo_url=sandbox_config.repo_url or "",
+            resources=sandbox_config.daytona_resources,
+        )
+        return ContainerDriver(model=model, provider=provider)
+
     if driver_key == "claude":
         return ClaudeCliDriver(model=model, cwd=cwd)
     elif driver_key == "codex":
