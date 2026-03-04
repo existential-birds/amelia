@@ -12,12 +12,50 @@ from amelia.core.types import SandboxConfig
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 
 
+def _configure_session_streaming(mock_sandbox, responses: dict[str, str]):
+    """Configure mock sandbox with session-based streaming.
+
+    Args:
+        mock_sandbox: The mock sandbox object.
+        responses: Mapping of command substring -> stdout output.
+            If a command contains the key, the corresponding value is
+            delivered via the on_stdout callback.
+    """
+    # Health check still uses process.exec
+    mock_sandbox.process.exec.return_value = MagicMock(exit_code=0)
+
+    # execute_session_command returns a response with cmd_id
+    mock_sandbox.process.execute_session_command.return_value = MagicMock(
+        cmd_id="test-cmd-id",
+    )
+
+    # get_session_command returns success exit code
+    mock_sandbox.process.get_session_command.return_value = MagicMock(
+        exit_code=0,
+    )
+
+    # get_session_command_logs_async delivers output via callback
+    async def fake_logs_async(session_id, cmd_id, on_stdout, on_stderr):
+        # Find which command was executed by checking the execute call
+        exec_call = mock_sandbox.process.execute_session_command.call_args
+        cmd_str = exec_call[0][1].command if exec_call else ""
+
+        for pattern, output in responses.items():
+            if pattern in cmd_str:
+                if output:
+                    await on_stdout(output)
+                return
+        # Default: no output
+
+    mock_sandbox.process.get_session_command_logs_async.side_effect = fake_logs_async
+
+
 class TestDaytonaFullStack:
     """DaytonaSandboxProvider + ContainerDriver end-to-end."""
 
     @pytest.fixture
     def mock_daytona(self):
-        """Mock Daytona SDK returning realistic process.exec responses."""
+        """Mock Daytona SDK returning realistic session-based responses."""
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             mock_client = AsyncMock()
             mock_sandbox = AsyncMock()
@@ -49,23 +87,26 @@ class TestDaytonaFullStack:
             content="Generated output",
         )
 
-        # exec_stream is called multiple times:
-        # 1. ensure_running -> health_check (process.exec "true")
-        # 2. _write_prompt -> exec_stream(["tee", ...], stdin=...)
-        # 3. worker command -> exec_stream(["python", "-m", ...])
-        # 4. _cleanup_prompt -> exec_stream(["rm", "-f", ...])
-        #
-        # We configure process.exec to return the worker JSON only when the
-        # command contains the worker module name; otherwise return empty.
-        def exec_side_effect(cmd, **kwargs):
-            if "amelia.sandbox.worker" in cmd:
-                return MagicMock(
-                    result=result_msg.model_dump_json(),
-                    exit_code=0,
-                )
-            return MagicMock(result="", exit_code=0)
+        # Track which command is being executed for per-call responses.
+        call_count = {"n": 0}
+        worker_json = result_msg.model_dump_json()
 
-        mock_daytona.process.exec.side_effect = exec_side_effect
+        async def per_call_logs_async(session_id, cmd_id, on_stdout, on_stderr):
+            call_count["n"] += 1
+            exec_call = mock_daytona.process.execute_session_command.call_args
+            cmd_str = exec_call[0][1].command if exec_call else ""
+            if "amelia.sandbox.worker" in cmd_str:
+                await on_stdout(worker_json + "\n")
+
+        mock_daytona.process.execute_session_command.return_value = MagicMock(
+            cmd_id="test-cmd-id",
+        )
+        mock_daytona.process.get_session_command.return_value = MagicMock(
+            exit_code=0,
+        )
+        mock_daytona.process.get_session_command_logs_async.side_effect = (
+            per_call_logs_async
+        )
 
         output, session_id = await driver.generate(prompt="Test prompt")
         assert output == "Generated output"
@@ -85,18 +126,26 @@ class TestDaytonaFullStack:
         )
         await provider.ensure_running()
 
-        # WorktreeManager uses exec_stream for git worktree commands
         wt = WorktreeManager(
             provider=provider,
             repo_url="https://github.com/org/repo.git",
         )
 
-        mock_daytona.process.exec.return_value = MagicMock(
-            result="", exit_code=0,
+        # Session-based streaming returns empty output for git commands
+        mock_daytona.process.execute_session_command.return_value = MagicMock(
+            cmd_id="test-cmd-id",
+        )
+        mock_daytona.process.get_session_command.return_value = MagicMock(
+            exit_code=0,
         )
 
-        # create_worktree calls setup_repo (git clone --bare) then
-        # git worktree add, both via exec_stream
+        async def noop_logs_async(session_id, cmd_id, on_stdout, on_stderr):
+            pass  # No output for git commands
+
+        mock_daytona.process.get_session_command_logs_async.side_effect = (
+            noop_logs_async
+        )
+
         worktree_path = await wt.create_worktree("wf-123", base_branch="main")
         assert worktree_path == "/workspace/worktrees/wf-123"
 

@@ -1,12 +1,16 @@
 """Daytona cloud sandbox provider.
 
 Implements the SandboxProvider protocol using Daytona's native APIs
-for sandbox lifecycle and git operations, with process.exec() for
-command execution.
+for sandbox lifecycle and git operations, with session-based streaming
+for real-time command output.
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import shlex
+import uuid
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
@@ -17,6 +21,7 @@ from daytona_sdk import (
     DaytonaConfig,
     Image,
     Resources,
+    SessionExecuteRequest,
 )
 from loguru import logger
 
@@ -101,44 +106,106 @@ class DaytonaSandboxProvider:
         env: dict[str, str] | None = None,
         stdin: bytes | None = None,
     ) -> AsyncIterator[str]:
-        """Execute command in sandbox, yielding stdout lines.
+        """Execute command in sandbox, yielding stdout lines in real-time.
 
-        Wraps Daytona's process.exec() and splits the result into lines.
-        Note: stdin is not supported by the Daytona SDK and is ignored
-        with a warning if provided.
+        Uses Daytona's session-based API with WebSocket log streaming to
+        deliver output incrementally as it's produced.
 
         Args:
             command: Command and arguments to execute.
             cwd: Working directory inside the sandbox.
             env: Additional environment variables.
-            stdin: Ignored (Daytona process.exec does not support stdin).
+            stdin: Ignored (Daytona sessions do not support stdin).
 
         Yields:
-            Lines of stdout output.
+            Lines of stdout output as they arrive.
 
         Raises:
             RuntimeError: If the sandbox is not running or command fails.
         """
-        if self._sandbox is None:
+        sandbox = self._sandbox
+        if sandbox is None:
             raise RuntimeError("Sandbox not running — call ensure_running() first")
 
         if stdin:
             logger.warning("Daytona exec_stream does not support stdin, ignoring")
 
-        cmd_str = " ".join(command)
-        response = await self._sandbox.process.exec(
-            cmd_str,
-            cwd=cwd,
-            env=env,
-        )
+        # Build command string with cwd/env baked in (session API has no
+        # cwd/env params).
+        cmd_str = shlex.join(command)
+        if env:
+            exports = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
+            cmd_str = f"export {exports} && {cmd_str}"
+        if cwd:
+            cmd_str = f"cd {shlex.quote(cwd)} && {cmd_str}"
 
-        if response.exit_code != 0:
-            raise RuntimeError(
-                f"Command exited with code {response.exit_code}: {cmd_str}"
+        session_id = f"amelia-{uuid.uuid4().hex[:12]}"
+        try:
+            await sandbox.process.create_session(session_id)
+
+            resp = await sandbox.process.execute_session_command(
+                session_id,
+                SessionExecuteRequest(command=cmd_str, run_async=True),
             )
+            cmd_id = resp.cmd_id
 
-        for line in response.result.splitlines():
-            yield line
+            queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+            async def on_stdout(chunk: str) -> None:
+                await queue.put(chunk)
+
+            async def on_stderr(chunk: str) -> None:
+                logger.debug("Daytona stderr chunk", content=chunk)
+
+            async def stream_logs() -> None:
+                try:
+                    await sandbox.process.get_session_command_logs_async(
+                        session_id, cmd_id, on_stdout, on_stderr,
+                    )
+                finally:
+                    await queue.put(None)
+
+            log_task = asyncio.create_task(stream_logs())
+
+            # Buffer partial lines; yield only complete newline-delimited lines.
+            buf = ""
+            try:
+                while True:
+                    chunk = await queue.get()
+                    if chunk is None:
+                        break
+                    buf += chunk
+                    while "\n" in buf:
+                        line, buf = buf.split("\n", 1)
+                        yield line
+                # Yield any remaining partial line.
+                if buf:
+                    yield buf
+            finally:
+                if not log_task.done():
+                    log_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await log_task
+
+            # Propagate any exception from the log streaming task.
+            if log_task.done():
+                exc = log_task.exception()
+                if exc is not None:
+                    raise exc
+
+            # Check exit code after streaming completes.
+            cmd_info = await sandbox.process.get_session_command(
+                session_id, cmd_id,
+            )
+            if cmd_info.exit_code is not None and cmd_info.exit_code != 0:
+                raise RuntimeError(
+                    f"Command exited with code {cmd_info.exit_code}: {cmd_str}"
+                )
+        finally:
+            try:
+                await sandbox.process.delete_session(session_id)
+            except Exception:
+                logger.debug("Failed to delete Daytona session", session_id=session_id)
 
     async def teardown(self) -> None:
         """Delete the ephemeral Daytona sandbox."""
