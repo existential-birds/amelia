@@ -11,7 +11,7 @@ from amelia.core.types import DaytonaResources, RetryConfig
 class TestDaytonaSandboxProviderInit:
     """Provider initialization."""
 
-    def test_creates_client_with_config(self):
+    def test_creates_client_with_config(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -29,7 +29,7 @@ class TestDaytonaSandboxProviderEnsureRunning:
     """Sandbox creation and repo cloning."""
 
     @pytest.mark.asyncio
-    async def test_creates_sandbox_and_clones_repo(self):
+    async def test_creates_sandbox_and_clones_repo(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -54,7 +54,7 @@ class TestDaytonaSandboxProviderEnsureRunning:
             )
 
     @pytest.mark.asyncio
-    async def test_clones_specified_branch(self):
+    async def test_clones_specified_branch(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -79,7 +79,7 @@ class TestDaytonaSandboxProviderEnsureRunning:
             )
 
     @pytest.mark.asyncio
-    async def test_noop_if_already_healthy(self):
+    async def test_noop_if_already_healthy(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -103,7 +103,7 @@ class TestDaytonaSandboxProviderEnsureRunning:
             assert mock_client.create.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_uses_custom_image(self):
+    async def test_uses_custom_image(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -126,7 +126,7 @@ class TestDaytonaSandboxProviderEnsureRunning:
             assert params.image is not None
 
     @pytest.mark.asyncio
-    async def test_uses_debian_slim_image_with_version(self):
+    async def test_uses_debian_slim_image_with_version(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -148,13 +148,13 @@ class TestDaytonaSandboxProviderEnsureRunning:
             assert params.image is not None
 
     @pytest.mark.asyncio
-    async def test_ensure_running_times_out(self):
+    async def test_ensure_running_times_out(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
 
-            async def hang(*args, **kwargs):
+            async def hang(*args: object, **kwargs: object) -> None:
                 await asyncio.sleep(999)
 
             mock_client.create.side_effect = hang
@@ -172,7 +172,7 @@ class TestDaytonaSandboxProviderEnsureRunning:
                 await provider.ensure_running()
 
     @pytest.mark.asyncio
-    async def test_passes_resources_when_configured(self):
+    async def test_passes_resources_when_configured(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -198,7 +198,7 @@ class TestDaytonaSandboxProviderEnsureRunning:
 
 
     @pytest.mark.asyncio
-    async def test_retries_on_transient_failure(self):
+    async def test_retries_on_transient_failure(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -227,7 +227,7 @@ class TestDaytonaSandboxProviderGitAuth:
     """Git credential threading."""
 
     @pytest.mark.asyncio
-    async def test_clone_passes_credentials_when_token_set(self):
+    async def test_clone_passes_credentials_when_token_set(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -252,7 +252,7 @@ class TestDaytonaSandboxProviderGitAuth:
             )
 
     @pytest.mark.asyncio
-    async def test_clone_no_credentials_when_token_absent(self):
+    async def test_clone_no_credentials_when_token_absent(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -274,7 +274,7 @@ class TestDaytonaSandboxProviderGitAuth:
             )
 
     @pytest.mark.asyncio
-    async def test_git_push_passes_credentials(self):
+    async def test_git_push_passes_credentials(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -298,7 +298,7 @@ class TestDaytonaSandboxProviderGitAuth:
             )
 
     @pytest.mark.asyncio
-    async def test_git_push_raises_when_not_running(self):
+    async def test_git_push_raises_when_not_running(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -312,7 +312,7 @@ class TestDaytonaSandboxProviderGitAuth:
                 await provider.git_push("/workspace/repo")
 
     @pytest.mark.asyncio
-    async def test_git_fetch_passes_credentials(self):
+    async def test_git_fetch_passes_credentials(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -336,7 +336,7 @@ class TestDaytonaSandboxProviderGitAuth:
             )
 
     @pytest.mark.asyncio
-    async def test_git_fetch_raises_when_not_running(self):
+    async def test_git_fetch_raises_when_not_running(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -350,7 +350,7 @@ class TestDaytonaSandboxProviderGitAuth:
                 await provider.git_fetch("/workspace/repo")
 
 
-def _make_mock_sandbox(stdout_chunks: list[str], exit_code: int = 0):
+def _make_mock_sandbox(stdout_chunks: list[str], exit_code: int = 0) -> AsyncMock:
     """Create a mock sandbox with session-based streaming configured.
 
     Args:
@@ -384,7 +384,7 @@ class TestDaytonaSandboxProviderExecStream:
     """Command execution via session-based streaming."""
 
     @pytest.mark.asyncio
-    async def test_exec_stream_yields_stdout_lines(self):
+    async def test_exec_stream_yields_stdout_lines(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -408,7 +408,7 @@ class TestDaytonaSandboxProviderExecStream:
             assert lines == ["line1", "line2", "line3"]
 
     @pytest.mark.asyncio
-    async def test_exec_stream_raises_on_nonzero_exit(self):
+    async def test_exec_stream_raises_on_nonzero_exit(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -430,7 +430,7 @@ class TestDaytonaSandboxProviderExecStream:
                     pass
 
     @pytest.mark.asyncio
-    async def test_exec_stream_buffers_partial_lines(self):
+    async def test_exec_stream_buffers_partial_lines(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -455,7 +455,7 @@ class TestDaytonaSandboxProviderExecStream:
             assert lines == ["hello world", "foo"]
 
     @pytest.mark.asyncio
-    async def test_exec_stream_yields_trailing_partial_line(self):
+    async def test_exec_stream_yields_trailing_partial_line(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -480,7 +480,7 @@ class TestDaytonaSandboxProviderExecStream:
             assert lines == ["partial"]
 
     @pytest.mark.asyncio
-    async def test_exec_stream_cleans_up_session_on_error(self):
+    async def test_exec_stream_cleans_up_session_on_error(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -504,7 +504,7 @@ class TestDaytonaSandboxProviderExecStream:
             mock_sandbox.process.delete_session.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_exec_stream_cleans_up_session_on_success(self):
+    async def test_exec_stream_cleans_up_session_on_success(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -527,7 +527,7 @@ class TestDaytonaSandboxProviderExecStream:
             mock_sandbox.process.delete_session.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_exec_stream_cleans_up_on_early_break(self):
+    async def test_exec_stream_cleans_up_on_early_break(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -552,7 +552,7 @@ class TestDaytonaSandboxProviderExecStream:
             mock_sandbox.process.delete_session.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_exec_stream_bakes_cwd_and_env_into_command(self):
+    async def test_exec_stream_bakes_cwd_and_env_into_command(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -586,7 +586,7 @@ class TestDaytonaSandboxProviderTeardown:
     """Sandbox cleanup."""
 
     @pytest.mark.asyncio
-    async def test_teardown_deletes_sandbox(self):
+    async def test_teardown_deletes_sandbox(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -608,7 +608,7 @@ class TestDaytonaSandboxProviderTeardown:
             assert provider._sandbox is None
 
     @pytest.mark.asyncio
-    async def test_teardown_noop_when_no_sandbox(self):
+    async def test_teardown_noop_when_no_sandbox(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -627,7 +627,7 @@ class TestDaytonaSandboxProviderHealthCheck:
     """Health check."""
 
     @pytest.mark.asyncio
-    async def test_healthy_sandbox(self):
+    async def test_healthy_sandbox(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -648,7 +648,7 @@ class TestDaytonaSandboxProviderHealthCheck:
             assert await provider.health_check() is True
 
     @pytest.mark.asyncio
-    async def test_no_sandbox_returns_false(self):
+    async def test_no_sandbox_returns_false(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 

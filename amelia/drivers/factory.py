@@ -1,6 +1,6 @@
 from typing import Any
 
-from amelia.core.types import RetryConfig, SandboxConfig
+from amelia.core.types import RetryConfig, SandboxConfig, SandboxMode
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import DriverInterface
 from amelia.drivers.cli.claude import ClaudeCliDriver
@@ -34,7 +34,7 @@ def get_driver(
     Raises:
         ValueError: If driver_key is not recognized or incompatible with sandbox.
     """
-    if sandbox_config and sandbox_config.mode == "container":
+    if sandbox_config and sandbox_config.mode == SandboxMode.CONTAINER:
         if driver_key in {"claude", "codex"}:
             raise ValueError(
                 "Container sandbox requires API driver. "
@@ -54,7 +54,7 @@ def get_driver(
         )
         return ContainerDriver(model=model, provider=provider)
 
-    if sandbox_config and sandbox_config.mode == "daytona":
+    if sandbox_config and sandbox_config.mode == SandboxMode.DAYTONA:
         if driver_key in {"claude", "codex"}:
             raise ValueError(
                 "Daytona sandbox requires API driver. "

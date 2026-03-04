@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from amelia.core.types import SandboxConfig
+from amelia.core.types import SandboxConfig, SandboxMode
 from amelia.drivers.factory import cleanup_driver_session, get_driver
 
 
@@ -48,7 +48,7 @@ class TestGetDriverContainerBranch:
     """Container sandbox driver creation."""
 
     def test_container_mode_returns_container_driver(self) -> None:
-        sandbox = SandboxConfig(mode="container", image="test:latest")
+        sandbox = SandboxConfig(mode=SandboxMode.CONTAINER, image="test:latest")
         with patch("amelia.sandbox.docker.DockerSandboxProvider") as mock_provider_cls, \
              patch("amelia.sandbox.driver.ContainerDriver") as mock_driver_cls:
             mock_driver_cls.return_value = MagicMock()
@@ -70,12 +70,12 @@ class TestGetDriverContainerBranch:
     @pytest.mark.parametrize("driver_key", ["claude", "codex"])
     def test_container_mode_rejects_cli_wrappers(self, driver_key: str) -> None:
         """Container sandbox should reject CLI wrapper drivers."""
-        sandbox = SandboxConfig(mode="container")
+        sandbox = SandboxConfig(mode=SandboxMode.CONTAINER)
         with pytest.raises(ValueError, match="Container sandbox requires API driver"):
             get_driver(driver_key, sandbox_config=sandbox, profile_name="test")
 
     def test_none_mode_returns_normal_driver(self) -> None:
-        sandbox = SandboxConfig(mode="none")
+        sandbox = SandboxConfig(mode=SandboxMode.NONE)
         with patch("amelia.drivers.factory.ApiDriver") as mock_cls:
             mock_cls.return_value = MagicMock()
             _driver = get_driver("api", model="test-model", sandbox_config=sandbox)
@@ -132,9 +132,9 @@ class TestLegacyDriverRejection:
 class TestGetDriverDaytonaBranch:
     """Daytona sandbox driver creation."""
 
-    def test_daytona_mode_returns_container_driver(self):
+    def test_daytona_mode_returns_container_driver(self) -> None:
         sandbox = SandboxConfig(
-            mode="daytona",
+            mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
             daytona_api_url="https://test.daytona.io/api",
             daytona_target="eu",
@@ -163,23 +163,23 @@ class TestGetDriverDaytonaBranch:
                 provider=mock_provider_cls.return_value,
             )
 
-    def test_daytona_mode_missing_api_key_raises(self):
-        sandbox = SandboxConfig(mode="daytona", repo_url="https://github.com/org/repo.git")
+    def test_daytona_mode_missing_api_key_raises(self) -> None:
+        sandbox = SandboxConfig(mode=SandboxMode.DAYTONA, repo_url="https://github.com/org/repo.git")
         with patch.dict(os.environ, {}, clear=True), \
              pytest.raises(ValueError, match="DAYTONA_API_KEY"):
             get_driver("api", sandbox_config=sandbox, profile_name="test")
 
     @pytest.mark.parametrize("driver_key", ["claude", "codex"])
-    def test_daytona_mode_rejects_cli_wrappers(self, driver_key: str):
-        sandbox = SandboxConfig(mode="daytona", repo_url="https://github.com/org/repo.git")
+    def test_daytona_mode_rejects_cli_wrappers(self, driver_key: str) -> None:
+        sandbox = SandboxConfig(mode=SandboxMode.DAYTONA, repo_url="https://github.com/org/repo.git")
         with patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}), \
              pytest.raises(ValueError, match="Daytona sandbox requires API driver"):
             get_driver(driver_key, sandbox_config=sandbox, profile_name="test")
 
-    def test_daytona_mode_rejects_network_allowlist(self):
+    def test_daytona_mode_rejects_network_allowlist(self) -> None:
         """Network allowlist should be rejected for Daytona mode."""
         sandbox = SandboxConfig(
-            mode="daytona",
+            mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
             network_allowlist_enabled=True,
         )
@@ -187,10 +187,10 @@ class TestGetDriverDaytonaBranch:
              pytest.raises(ValueError, match="Network allowlist is not supported with Daytona"):
             get_driver("api", sandbox_config=sandbox, profile_name="test")
 
-    def test_daytona_mode_passes_image(self):
+    def test_daytona_mode_passes_image(self) -> None:
         """Custom daytona_image should be forwarded to DaytonaSandboxProvider."""
         sandbox = SandboxConfig(
-            mode="daytona",
+            mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
             daytona_image="ubuntu:22.04",
         )
@@ -211,10 +211,10 @@ class TestGetDriverDaytonaBranch:
                 git_token=None,
             )
 
-    def test_daytona_mode_passes_github_token(self):
+    def test_daytona_mode_passes_github_token(self) -> None:
         """GITHUB_TOKEN env var should be forwarded as git_token."""
         sandbox = SandboxConfig(
-            mode="daytona",
+            mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
         )
         with patch("amelia.sandbox.daytona.DaytonaSandboxProvider") as mock_provider_cls, \

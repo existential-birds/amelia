@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from amelia.core.types import SandboxConfig
+from amelia.core.types import SandboxConfig, SandboxMode
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 
 
@@ -208,7 +208,7 @@ class TestDaytonaFullStack:
         from amelia.drivers.factory import get_driver
 
         sandbox = SandboxConfig(
-            mode="daytona",
+            mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
         )
         with patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}):
