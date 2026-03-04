@@ -26,6 +26,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 
 from amelia.agents.schemas.architect import MarkdownPlanOutput
+from amelia.core.constants import resolve_plan_path
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
@@ -286,7 +287,9 @@ class TestExternalPlanAtCreation:
 
         # The plan_path_pattern would generate a different filename.
         # Verify no duplicate was created at the pattern-based location.
-        pattern_based = git_dir / "docs" / "plans" / "2026-03-04-test-999.md"
+        pattern_based = git_dir / resolve_plan_path(
+            setup_test_profile.plan_path_pattern, "TEST-999"
+        )
         # Only the original custom plan should exist
         assert custom_plan.exists()
         # The pattern-based file should NOT exist (no duplicate)
@@ -552,7 +555,9 @@ class TestSetPlanEndpoint:
         assert response.status_code == status.HTTP_200_OK
 
         # Verify no duplicate at pattern-based location
-        pattern_based = git_dir / "docs" / "plans" / "2026-03-04-test-888.md"
+        pattern_based = git_dir / resolve_plan_path(
+            setup_test_profile.plan_path_pattern, "TEST-888"
+        )
         assert custom_plan.exists()
         assert not pattern_based.exists(), f"Duplicate plan file created at {pattern_based}"
 
