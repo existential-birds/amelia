@@ -564,13 +564,6 @@ class OrchestratorService:
                     raise WorkflowConflictError(resolved_path, "existing") from e
                 raise
 
-            logger.info(
-                "Starting workflow",
-                workflow_id=workflow_id,
-                issue_id=issue_id,
-                worktree_path=resolved_path,
-            )
-
             # Start async task with retry wrapper for transient failures
             task = asyncio.create_task(self._run_workflow_with_retry(workflow_id, state))
             self._active_tasks[resolved_path] = (workflow_id, task)
@@ -633,18 +626,29 @@ class OrchestratorService:
         # Handle external plan if provided
         plan_cache: PlanCache | None = None
         if request.plan_file is not None or request.plan_content is not None:
-            # Resolve target plan path
-            plan_rel_path = resolve_plan_path(profile.plan_path_pattern, request.issue_id)
             working_dir = Path(profile.repo_root)
-            target_path = working_dir / plan_rel_path
 
-            # Import and validate external plan
+            if request.plan_file is not None:
+                # External plan file: use it in-place (no naming convention copy)
+                source = Path(request.plan_file)
+                if not source.is_absolute():
+                    source = working_dir / request.plan_file
+                target_path = source.expanduser().resolve()
+            else:
+                # Pasted content: generate path from naming convention
+                plan_rel_path = resolve_plan_path(
+                    profile.plan_path_pattern, request.issue_id
+                )
+                target_path = working_dir / plan_rel_path
+
+            # Import and validate external plan (skip LLM for fast queue)
             plan_result = await import_external_plan(
                 plan_file=request.plan_file,
                 plan_content=request.plan_content,
                 target_path=target_path,
                 profile=profile,
                 workflow_id=workflow_id,
+                skip_llm=True,
             )
 
             # Update execution state with plan data and external flag
@@ -861,12 +865,6 @@ class OrchestratorService:
         # Persist the cancelled status to database
         await self._repository.set_status(workflow_id, WorkflowStatus.CANCELLED)
 
-        logger.info(
-            "Workflow cancelled",
-            workflow_id=workflow_id,
-            reason=reason,
-        )
-
     async def resume_workflow(self, workflow_id: uuid.UUID) -> ServerExecutionState:
         """Resume a failed workflow from its last checkpoint.
 
@@ -939,8 +937,6 @@ class OrchestratorService:
                 "Workflow resumed from checkpoint",
                 data={"resumed": True},
             )
-
-            logger.info("Resuming workflow", workflow_id=workflow_id)
 
             # Launch workflow task (same as start_workflow)
             task = asyncio.create_task(
@@ -1187,13 +1183,7 @@ class OrchestratorService:
                 chunk_tuple = cast(tuple[str, Any], chunk)
                 if self._is_interrupt_chunk(chunk_tuple):
                     was_interrupted = True
-                    mode, data = chunk_tuple
-                    interrupt_data = data.get("__interrupt__") if isinstance(data, dict) else None
-                    logger.info(
-                        "Workflow paused for human approval",
-                        workflow_id=workflow_id,
-                        interrupt_data=interrupt_data,
-                    )
+                    _mode, _data = chunk_tuple
                     # Sync plan from LangGraph checkpoint to ServerExecutionState
                     # so it's available via REST API while blocked
                     await self._sync_plan_from_checkpoint(workflow_id, graph, config)
@@ -1519,8 +1509,6 @@ class OrchestratorService:
                 agent="human_approval",
             )
 
-            logger.info("Workflow approved", workflow_id=workflow_id)
-
         # Get profile from settings using profile_id
         if workflow.profile_id is None:
             logger.error("No profile_id in workflow", workflow_id=workflow_id)
@@ -1694,12 +1682,6 @@ class OrchestratorService:
             if workflow.worktree_path in self._active_tasks:
                 _, task = self._active_tasks[workflow.worktree_path]
                 task.cancel()
-
-            logger.info(
-                "Workflow rejected",
-                workflow_id=workflow_id,
-                feedback=feedback,
-            )
 
         # Get profile from settings using profile_id
         if workflow.profile_id is None:
@@ -2372,11 +2354,6 @@ class OrchestratorService:
                         data={"paused_at": "human_approval_node"},
                     )
 
-                    logger.info(
-                        "Workflow queued with plan",
-                        workflow_id=workflow_id,
-                        issue_id=fresh.issue_id,
-                    )
                     break
 
                 # Handle combined mode chunk (updates, tasks)
@@ -2481,13 +2458,6 @@ class OrchestratorService:
             data={"issue_id": request.issue_id, "queued": True, "planning": True},
         )
 
-        logger.info(
-            "Workflow queued, spawning planning task",
-            workflow_id=workflow_id,
-            issue_id=request.issue_id,
-            worktree_path=resolved_path,
-        )
-
         # Spawn planning task in background (non-blocking)
         task = asyncio.create_task(
             self._run_planning_task(workflow_id, state, execution_state, profile)
@@ -2556,13 +2526,6 @@ class OrchestratorService:
             # the pending -> in_progress transition, consistent with start_workflow
             workflow.started_at = datetime.now(UTC)
             await self._repository.update(workflow)
-
-            logger.info(
-                "Starting pending workflow",
-                workflow_id=workflow_id,
-                issue_id=workflow.issue_id,
-                worktree_path=workflow.worktree_path,
-            )
 
             # Spawn execution task
             task = asyncio.create_task(
@@ -2736,9 +2699,20 @@ class OrchestratorService:
         profile = self._update_profile_repo_root(profile, workflow.worktree_path)
 
         # Resolve target plan path
-        plan_rel_path = resolve_plan_path(profile.plan_path_pattern, workflow.issue_id)
         working_dir = Path(profile.repo_root)
-        target_path = working_dir / plan_rel_path
+
+        if plan_file is not None:
+            # External plan file: use it in-place (no naming convention copy)
+            source = Path(plan_file)
+            if not source.is_absolute():
+                source = working_dir / plan_file
+            target_path = source.expanduser().resolve()
+        else:
+            # Pasted content: generate path from naming convention
+            plan_rel_path = resolve_plan_path(
+                profile.plan_path_pattern, workflow.issue_id
+            )
+            target_path = working_dir / plan_rel_path
 
         # Fast path: read content, write to target, count tasks (no LLM)
         content = await read_plan_content(

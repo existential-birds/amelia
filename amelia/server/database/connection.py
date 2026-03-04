@@ -124,12 +124,10 @@ class Database:
                 self._pool = None
 
     async def __aenter__(self) -> "Database":
-        """Async context manager entry."""
         await self.connect()
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Async context manager exit."""
         await self.close()
 
     @property

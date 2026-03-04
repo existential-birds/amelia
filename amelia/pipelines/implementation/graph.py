@@ -92,13 +92,12 @@ def create_implementation_graph(
     """
     workflow = StateGraph(ImplementationState)
 
-    # Add nodes
     workflow.add_node("architect_node", call_architect_node)
     workflow.add_node("plan_validator_node", plan_validator_node)
     workflow.add_node("human_approval_node", human_approval_node)
     workflow.add_node("developer_node", call_developer_node)
     workflow.add_node("reviewer_node", call_reviewer_node)
-    workflow.add_node("next_task_node", next_task_node)  # Task-based execution
+    workflow.add_node("next_task_node", next_task_node)
 
     # Conditional entry point: route based on external_plan flag
     workflow.add_conditional_edges(
@@ -110,8 +109,6 @@ def create_implementation_graph(
         }
     )
 
-    # Define edges
-    # Architect -> Plan Validator -> Human approval
     workflow.add_edge("architect_node", "plan_validator_node")
     workflow.add_conditional_edges(
         "plan_validator_node",

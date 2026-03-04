@@ -176,6 +176,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     event_bus.set_connection_manager(connection_manager)
     connection_manager.set_repository(repository)
 
+    # Bridge events to server console via loguru
+    from amelia.server.events.log_subscriber import log_event_to_console  # noqa: PLC0415
+
+    event_bus.subscribe(log_event_to_console)
+
     # Create and register orchestrator
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
@@ -430,7 +435,6 @@ def create_app() -> FastAPI:
         # Map provider to upstream config
         # NOTE: Only OpenAI-compatible providers (using /chat/completions endpoint)
         # are supported. Anthropic uses /messages and requires different auth headers.
-        # TODO(#420): Move provider registry to database-stored configuration
         provider_registry: dict[str, str] = {
             "openrouter": "https://openrouter.ai/api/v1",
             "openai": "https://api.openai.com/v1",

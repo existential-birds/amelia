@@ -6,6 +6,7 @@
  * Utility agents are collapsed by default but easily accessible.
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { z } from 'zod';
 import { motion } from 'motion/react';
 import {
   Dialog,
@@ -209,6 +210,28 @@ const getModelsForDriver = (driver: string): readonly string[] => {
   return MODEL_OPTIONS_BY_DRIVER[driver] ?? CLAUDE_MODELS;
 };
 
+/**
+ * Manages driver/model state with automatic model reset on driver change.
+ * Used by BulkApply for its independent driver/model selection state.
+ */
+function useDriverModel(initialDriver = 'claude', initialModel = 'sonnet') {
+  const [driver, setDriverRaw] = useState(initialDriver);
+  const [model, setModel] = useState(initialModel);
+  const availableModels = useMemo(() => getModelsForDriver(driver), [driver]);
+
+  const setDriver = useCallback((newDriver: string) => {
+    setDriverRaw(newDriver);
+    if (newDriver === 'api') {
+      setModel('');
+    } else {
+      const models = getModelsForDriver(newDriver);
+      setModel((prev) => (models.includes(prev) ? prev : models[0] ?? ''));
+    }
+  }, []);
+
+  return { driver, model, availableModels, setDriver, setModel };
+}
+
 /** Build default agent configuration */
 const buildDefaultAgents = (): Record<string, AgentFormData> => {
   const agents: Record<string, AgentFormData> = {};
@@ -241,22 +264,46 @@ const DEFAULT_FORM_DATA: FormData = {
   sandbox_daytona_image: 'debian-slim:3.12',
 };
 
-/** Validation rules for profile fields */
-const validateField = (field: string, value: string): string | null => {
-  switch (field) {
-    case 'id':
-      if (!value.trim()) return 'Profile name is required';
-      if (/\s/.test(value)) return 'Profile name cannot contain spaces';
-      if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
-        return 'Profile name can only contain letters, numbers, underscores, and hyphens';
-      }
-      return null;
-    case 'repo_root':
-      if (!value.trim()) return 'Repository root is required';
-      return null;
-    default:
-      return null;
+/** Zod schema for profile form validation */
+const agentFormSchema = z.object({
+  driver: z.string().min(1),
+  model: z.string(),
+}).refine(
+  (data) => data.driver !== 'api' || data.model !== '',
+  { message: 'Model required for API driver', path: ['model'] }
+);
+
+const profileFormSchema = z.object({
+  id: z
+    .string()
+    .min(1, 'Profile name is required')
+    .regex(/^\S+$/, 'Profile name cannot contain spaces')
+    .regex(
+      /^[a-zA-Z0-9_-]+$/,
+      'Only letters, numbers, underscores, and hyphens allowed'
+    ),
+  tracker: z.string(),
+  repo_root: z.string().min(1, 'Repository root is required'),
+  plan_output_dir: z.string(),
+  plan_path_pattern: z.string(),
+  agents: z.record(agentFormSchema),
+  sandbox_mode: z.enum(['none', 'container']),
+  sandbox_image: z.string(),
+  sandbox_network_allowlist_enabled: z.boolean(),
+  sandbox_network_allowed_hosts: z.array(z.string()),
+});
+
+/** Fields that accept string values and can be validated individually */
+type ValidatableField = 'id' | 'repo_root';
+
+/** Validate individual field using Zod schema */
+const validateField = (field: ValidatableField, value: string): string | null => {
+  const fieldSchema = profileFormSchema.shape[field];
+  const result = fieldSchema.safeParse(value);
+  if (!result.success) {
+    return result.error.issues[0]?.message ?? 'Invalid value';
   }
+  return null;
 };
 
 /** Convert Profile to FormData for comparison */
@@ -377,18 +424,8 @@ interface BulkApplyProps {
 }
 
 function BulkApply({ onApply }: BulkApplyProps) {
-  const [driver, setDriver] = useState('claude');
-  const [model, setModel] = useState('sonnet');
+  const { driver, model, availableModels, setDriver, setModel } = useDriverModel('claude', 'sonnet');
   const [showSuccess, setShowSuccess] = useState(false);
-
-  const availableModels = useMemo(() => getModelsForDriver(driver), [driver]);
-
-  // Reset model when driver changes if current model isn't available
-  useEffect(() => {
-    if (!availableModels.includes(model)) {
-      setModel(availableModels[0] ?? 'sonnet');
-    }
-  }, [availableModels, model]);
 
   const handleApply = (targets: 'all' | 'primary' | 'utility') => {
     onApply(driver, model, targets);
@@ -603,40 +640,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
    * Check if the form has unsaved changes
    */
   const hasUnsavedChanges = useCallback((): boolean => {
-    const original = originalFormDataRef.current;
-    if (
-      formData.id !== original.id ||
-      formData.tracker !== original.tracker ||
-      formData.repo_root !== original.repo_root ||
-      formData.plan_output_dir !== original.plan_output_dir ||
-      formData.plan_path_pattern !== original.plan_path_pattern
-    ) {
-      return true;
-    }
-    for (const key of ALL_AGENT_KEYS) {
-      if (
-        formData.agents[key]?.driver !== original.agents[key]?.driver ||
-        formData.agents[key]?.model !== original.agents[key]?.model
-      ) {
-        return true;
-      }
-    }
-    if (
-      formData.sandbox_mode !== original.sandbox_mode ||
-      formData.sandbox_image !== original.sandbox_image ||
-      formData.sandbox_network_allowlist_enabled !== original.sandbox_network_allowlist_enabled ||
-      JSON.stringify(formData.sandbox_network_allowed_hosts) !== JSON.stringify(original.sandbox_network_allowed_hosts) ||
-      formData.sandbox_repo_url !== original.sandbox_repo_url ||
-      formData.sandbox_daytona_api_url !== original.sandbox_daytona_api_url ||
-      formData.sandbox_daytona_target !== original.sandbox_daytona_target ||
-      formData.sandbox_daytona_cpu !== original.sandbox_daytona_cpu ||
-      formData.sandbox_daytona_memory !== original.sandbox_daytona_memory ||
-      formData.sandbox_daytona_disk !== original.sandbox_daytona_disk ||
-      formData.sandbox_daytona_image !== original.sandbox_daytona_image
-    ) {
-      return true;
-    }
-    return false;
+    return JSON.stringify(formData) !== JSON.stringify(originalFormDataRef.current);
   }, [formData]);
 
   const handleClose = useCallback(() => {
@@ -672,22 +676,19 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     setFormData((prev) => {
       const nextAgents = { ...prev.agents };
       const currentAgent = nextAgents[agentKey] ?? { driver: 'claude', model: 'opus' };
-      nextAgents[agentKey] = { ...currentAgent, [field]: value };
 
-      // When driver changes, reset model to appropriate default
       if (field === 'driver') {
-        const updatedAgent = nextAgents[agentKey]!;
+        // Same logic as useDriverModel: reset model on driver change
+        let newModel: string;
         if (value === 'api') {
-          // API models are selected dynamically via the model picker
-          // Set to empty string until user selects from picker
-          updatedAgent.model = '';
+          newModel = '';
         } else {
-          // Claude driver: reset to first available Claude model if current model is invalid
-          const availableModels = getModelsForDriver(value);
-          if (!availableModels.includes(updatedAgent.model)) {
-            updatedAgent.model = availableModels[0] ?? '';
-          }
+          const models = getModelsForDriver(value);
+          newModel = models.includes(currentAgent.model) ? currentAgent.model : (models[0] ?? '');
         }
+        nextAgents[agentKey] = { driver: value, model: newModel };
+      } else {
+        nextAgents[agentKey] = { ...currentAgent, model: value };
       }
 
       return { ...prev, agents: nextAgents };
@@ -710,7 +711,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     });
   };
 
-  const handleBlur = (field: string, value: string) => {
+  const handleBlur = (field: 'id' | 'repo_root', value: string) => {
     const error = validateField(field, value);
     if (error) {
       setErrors((prev) => ({ ...prev, [field]: error }));
@@ -720,23 +721,29 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (!isEditMode) {
-      const idError = validateField('id', formData.id);
-      if (idError) newErrors.id = idError;
-    }
+    // Schema validation (skip id validation in edit mode)
+    const dataToValidate = isEditMode
+      ? { ...formData, id: 'placeholder' }
+      : formData;
+    const result = profileFormSchema.safeParse(dataToValidate);
 
-    const workingDirError = validateField('repo_root', formData.repo_root);
-    if (workingDirError) newErrors.repo_root = workingDirError;
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        // Normalize agent field paths: agents.<key>.model -> agent_model_<key>
+        let key: string;
+        if (issue.path[0] === 'agents' && issue.path.length === 3) {
+          const agentKey = issue.path[1];
+          const field = issue.path[2];
+          key = `agent_${field}_${agentKey}`;
+        } else {
+          key = issue.path.join('_') || 'general';
+        }
+        newErrors[key] = issue.message;
+      }
+    }
 
     if (formData.sandbox_mode === 'daytona' && !formData.sandbox_repo_url.trim()) {
       newErrors.sandbox_repo_url = 'Repository URL is required for Daytona mode';
-    }
-
-    for (const agent of AGENT_DEFINITIONS) {
-      const agentConfig = formData.agents[agent.key];
-      if (agentConfig?.driver === 'api' && agentConfig.model === '') {
-        newErrors[`agent_model_${agent.key}`] = 'Model required';
-      }
     }
 
     setErrors(newErrors);

@@ -14,11 +14,11 @@ class ConfigurationError(AmeliaError):
     pass
 
 
-class ModelProviderError(AmeliaError):
-    """Raised when a model provider returns a transient error.
+class ProviderAwareError(AmeliaError):
+    """Base for errors that carry provider context (name + original message).
 
-    Wraps upstream LLM provider errors (bad JSON, provider 400s) that may
-    succeed on retry. Not caused by Amelia.
+    Not intended to be raised directly — use ModelProviderError or
+    SchemaValidationError instead.
     """
 
     def __init__(
@@ -39,7 +39,17 @@ class ModelProviderError(AmeliaError):
         )
 
 
-class SchemaValidationError(AmeliaError):
+class ModelProviderError(ProviderAwareError):
+    """Raised when a model provider returns a transient error.
+
+    Wraps upstream LLM provider errors (bad JSON, provider 400s) that may
+    succeed on retry. Not caused by Amelia.
+    """
+
+    pass
+
+
+class SchemaValidationError(ProviderAwareError):
     """Raised when LLM output fails Pydantic schema validation.
 
     This is a content error, not a transient provider error.
@@ -47,12 +57,4 @@ class SchemaValidationError(AmeliaError):
     feedback loop handles it instead.
     """
 
-    def __init__(
-        self,
-        message: str,
-        provider_name: str | None = None,
-        original_message: str | None = None,
-    ) -> None:
-        self.provider_name = provider_name
-        self.original_message = original_message
-        super().__init__(message)
+    pass

@@ -511,9 +511,15 @@ class TestHandoff(TestBrainstormService):
             )
         ]
 
+        expected_workflow_id = UUID("11111111-1111-1111-1111-111111111111")
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.queue_workflow = AsyncMock(return_value=expected_workflow_id)
+
         result = await service.handoff_to_implementation(
             session_id=sess_id,
             artifact_path="docs/plans/design.md",
+            orchestrator=mock_orchestrator,
+            worktree_path="/path/to/worktree",
         )
 
         assert result is not None
@@ -542,13 +548,19 @@ class TestHandoff(TestBrainstormService):
             )
         ]
 
+        expected_workflow_id = UUID("22222222-2222-2222-2222-222222222222")
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.queue_workflow = AsyncMock(return_value=expected_workflow_id)
+
         result = await service.handoff_to_implementation(
             session_id=sess_id,
             artifact_path="docs/plans/design.md",
+            orchestrator=mock_orchestrator,
+            worktree_path="/path/to/worktree",
         )
 
         assert "workflow_id" in result
-        assert len(str(result["workflow_id"])) == 36  # UUID
+        assert result["workflow_id"] == expected_workflow_id
 
     async def test_handoff_artifact_not_found(
         self,

@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -30,58 +30,16 @@ from fastapi import status
 from fastapi.testclient import TestClient
 
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.server.database.connection import Database
-from amelia.server.database.migrator import Migrator
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.dependencies import get_orchestrator, get_repository
-from amelia.server.events.bus import EventBus
 from amelia.server.main import create_app
 from amelia.server.models.state import ServerExecutionState, WorkflowStatus
 from amelia.server.orchestrator.service import OrchestratorService
 
 
-DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
-
-
 # =============================================================================
 # Fixtures
 # =============================================================================
-
-
-@pytest.fixture
-async def test_db() -> AsyncGenerator[Database, None]:
-    """Create and initialize PostgreSQL test database."""
-    db = Database(DATABASE_URL)
-    await db.connect()
-    migrator = Migrator(db)
-    await migrator.run()
-    yield db
-    await db.close()
-
-
-@pytest.fixture
-def test_repository(test_db: Database) -> WorkflowRepository:
-    """Create repository backed by test database."""
-    return WorkflowRepository(test_db)
-
-
-@pytest.fixture
-def test_event_bus() -> EventBus:
-    """Create event bus for testing."""
-    return EventBus()
-
-
-@pytest.fixture
-def test_orchestrator(
-    test_event_bus: EventBus,
-    test_repository: WorkflowRepository,
-) -> OrchestratorService:
-    """Create real OrchestratorService with test dependencies."""
-    return OrchestratorService(
-        event_bus=test_event_bus,
-        repository=test_repository,
-        checkpointer=AsyncMock(),
-    )
 
 
 @pytest.fixture

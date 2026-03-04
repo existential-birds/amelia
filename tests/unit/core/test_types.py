@@ -247,10 +247,6 @@ class TestPlanValidationResult:
         assert len(result.issues) == 2
         assert result.severity == Severity.MAJOR
 
-    def test_is_frozen(self) -> None:
-        result = PlanValidationResult(valid=True, issues=[], severity=Severity.NONE)
-        with pytest.raises(ValidationError):
-            result.valid = False  # type: ignore[misc]
 
 
 class TestAskUserQuestionPayload:

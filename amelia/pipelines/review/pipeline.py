@@ -4,8 +4,6 @@ This module provides the ReviewPipeline class that implements the Pipeline
 protocol for code review workflows.
 """
 
-import uuid
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from langgraph.graph.state import CompiledStateGraph
@@ -15,6 +13,7 @@ from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
 )
+from amelia.pipelines.mixins import ImplementationStateMixin
 from amelia.pipelines.review.graph import create_review_graph
 
 
@@ -27,7 +26,7 @@ if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
 
-class ReviewPipeline(Pipeline[ImplementationState]):
+class ReviewPipeline(ImplementationStateMixin, Pipeline[ImplementationState]):
     """Pipeline for code review workflows.
 
     Implements the Reviewer -> Evaluator -> Developer cycle.
@@ -55,25 +54,3 @@ class ReviewPipeline(Pipeline[ImplementationState]):
     ) -> CompiledStateGraph[Any]:
         """Create and compile the LangGraph state machine."""
         return create_review_graph(checkpointer=checkpointer)
-
-    def get_initial_state(self, **kwargs: object) -> ImplementationState:
-        """Create initial state for a new workflow.
-
-        Args:
-            **kwargs: Must include:
-                - workflow_id: Unique identifier for the workflow
-                - profile_id: ID of the active profile
-
-        Returns:
-            ImplementationState configured for a review workflow.
-        """
-        return ImplementationState(
-            workflow_id=uuid.UUID(str(kwargs["workflow_id"])),
-            profile_id=str(kwargs["profile_id"]),
-            created_at=datetime.now(UTC),
-            status="pending",
-        )
-
-    def get_state_class(self) -> type[ImplementationState]:
-        """Return the state class used by this pipeline."""
-        return ImplementationState

@@ -28,11 +28,9 @@ import {
   History,
   Radio,
   BookOpen,
-  Zap,
   Library,
   Target,
   MessageSquare,
-  Gauge,
   Coins,
   Settings,
   Bolt,
@@ -254,12 +252,6 @@ export function DashboardSidebar() {
                 label="Spec Builder"
               />
               <SidebarNavLink
-                to="/roundtable"
-                icon={Zap}
-                label="Roundtable"
-                comingSoon
-              />
-              <SidebarNavLink
                 to="/knowledge"
                 icon={Library}
                 label="Knowledge"
@@ -284,23 +276,6 @@ export function DashboardSidebar() {
                 to="/benchmarks"
                 icon={Target}
                 label="Benchmarks"
-                comingSoon
-              />
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Usage Section - Costs and resource tracking */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-heading text-muted-foreground/60 font-semibold tracking-wider">
-            USAGE
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarNavLink
-                to="/capacity"
-                icon={Gauge}
-                label="Capacity"
                 comingSoon
               />
               <SidebarNavLink
