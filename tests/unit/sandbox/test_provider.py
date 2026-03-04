@@ -23,6 +23,9 @@ class FakeSandboxProvider:
     async def teardown(self) -> None:
         pass
 
+    async def write_file(self, path: str, content: bytes) -> None:
+        pass
+
     async def health_check(self) -> bool:
         return True
 

@@ -38,6 +38,15 @@ class SandboxProvider(Protocol):
         """
         ...
 
+    async def write_file(self, path: str, content: bytes) -> None:
+        """Write content to a file inside the sandbox.
+
+        Default implementation uses tee + stdin (works for Docker).
+        Providers without stdin support should override this.
+        """
+        async for _ in self.exec_stream(["tee", path], stdin=content):
+            pass
+
     async def teardown(self) -> None:
         """Stop and clean up the sandbox."""
         ...

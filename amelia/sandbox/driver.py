@@ -41,11 +41,7 @@ class ContainerDriver:
         """
         suffix = workflow_id or uuid4().hex[:12]
         prompt_path = f"/tmp/prompt-{suffix}.txt"
-        async for _ in self._provider.exec_stream(
-            ["tee", prompt_path],
-            stdin=prompt.encode(),
-        ):
-            pass
+        await self._provider.write_file(prompt_path, prompt.encode())
         return prompt_path
 
     async def _cleanup_prompt(self, prompt_path: str) -> None:

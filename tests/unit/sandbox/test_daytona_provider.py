@@ -380,6 +380,47 @@ def _make_mock_sandbox(stdout_chunks: list[str], exit_code: int = 0) -> AsyncMoc
     return mock_sandbox
 
 
+class TestDaytonaSandboxProviderWriteFile:
+    """File upload via Daytona FS API."""
+
+    @pytest.mark.asyncio
+    async def test_write_file_uploads_content(self) -> None:
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                api_url="https://test.daytona.io/api",
+                target="us",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            await provider.write_file("/tmp/prompt.txt", b"hello world")
+
+            mock_sandbox.fs.upload_file.assert_called_once_with(
+                b"hello world", "/tmp/prompt.txt",
+            )
+
+    @pytest.mark.asyncio
+    async def test_write_file_raises_when_not_running(self) -> None:
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_cls.return_value = AsyncMock()
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            with pytest.raises(RuntimeError, match="Sandbox not running"):
+                await provider.write_file("/tmp/file.txt", b"content")
+
+
 class TestDaytonaSandboxProviderExecStream:
     """Command execution via session-based streaming."""
 

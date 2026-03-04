@@ -24,6 +24,7 @@ def _make_provider_mock(lines: list[str]) -> AsyncMock:
     """Create a mock SandboxProvider whose exec_stream returns the given lines."""
     provider = AsyncMock()
     provider.ensure_running = AsyncMock()
+    provider.write_file = AsyncMock()
 
     call_count = 0
 
@@ -35,7 +36,7 @@ def _make_provider_mock(lines: list[str]) -> AsyncMock:
     ) -> AsyncIterator[str]:
         nonlocal call_count
         call_count += 1
-        if call_count == 2:
+        if call_count == 1:
             for line in lines:
                 yield line
 
@@ -125,6 +126,7 @@ class TestExecuteAgentic:
         calls: list[list[str]] = []
         provider = AsyncMock()
         provider.ensure_running = AsyncMock()
+        provider.write_file = AsyncMock()
 
         call_count = 0
 
@@ -134,7 +136,7 @@ class TestExecuteAgentic:
             nonlocal call_count
             calls.append(command)
             call_count += 1
-            if call_count == 2:
+            if call_count == 1:
                 for line in lines:
                     yield line
 
@@ -144,9 +146,10 @@ class TestExecuteAgentic:
         async for _ in driver.execute_agentic(prompt="test", cwd="/work"):
             pass
 
-        assert len(calls) == 3
-        assert calls[2][0] == "rm"
-        assert calls[2][1] == "-f"
+        # 2 exec_stream calls: worker + rm (write_file replaces tee)
+        assert len(calls) == 2
+        assert calls[1][0] == "rm"
+        assert calls[1][1] == "-f"
 
     async def test_prompt_file_cleanup_on_exception(self) -> None:
         from amelia.sandbox.driver import ContainerDriver
@@ -154,6 +157,7 @@ class TestExecuteAgentic:
         calls: list[list[str]] = []
         provider = AsyncMock()
         provider.ensure_running = AsyncMock()
+        provider.write_file = AsyncMock()
 
         call_count = 0
 
@@ -163,7 +167,7 @@ class TestExecuteAgentic:
             nonlocal call_count
             calls.append(command)
             call_count += 1
-            if call_count == 2:
+            if call_count == 1:
                 yield "invalid json"
 
         provider.exec_stream = failing_exec_stream
@@ -299,24 +303,7 @@ class TestWorkflowId:
 
         result = AgenticMessage(type=AgenticMessageType.RESULT, content="Done")
         lines = [result.model_dump_json()]
-
-        calls: list[tuple[list[str], dict]] = []
-        provider = AsyncMock()
-        provider.ensure_running = AsyncMock()
-
-        call_count = 0
-
-        async def tracking_exec_stream(
-            command: list[str], **kwargs: Any,
-        ) -> AsyncIterator[str]:
-            nonlocal call_count
-            calls.append((command, kwargs))
-            call_count += 1
-            if call_count == 2:
-                for line in lines:
-                    yield line
-
-        provider.exec_stream = tracking_exec_stream
+        provider = _make_provider_mock(lines)
         driver = ContainerDriver(model="test", provider=provider)
 
         wf_id = uuid4()
@@ -325,10 +312,10 @@ class TestWorkflowId:
         ):
             pass
 
-        # calls[0] is the tee command for _write_prompt
-        tee_cmd = calls[0][0]
-        assert tee_cmd[0] == "tee"
-        assert tee_cmd[1] == f"/tmp/prompt-{wf_id}.txt"
+        # write_file is called with the workflow_id-based path
+        provider.write_file.assert_called_once_with(
+            f"/tmp/prompt-{wf_id}.txt", b"test",
+        )
 
     async def test_generate_uses_workflow_id(self) -> None:
         from amelia.sandbox.driver import ContainerDriver
@@ -337,69 +324,32 @@ class TestWorkflowId:
             type=AgenticMessageType.RESULT, content="Generated",
         )
         lines = [result.model_dump_json()]
-
-        calls: list[tuple[list[str], dict]] = []
-        provider = AsyncMock()
-        provider.ensure_running = AsyncMock()
-
-        call_count = 0
-
-        async def tracking_exec_stream(
-            command: list[str], **kwargs: Any,
-        ) -> AsyncIterator[str]:
-            nonlocal call_count
-            calls.append((command, kwargs))
-            call_count += 1
-            if call_count == 2:
-                for line in lines:
-                    yield line
-
-        provider.exec_stream = tracking_exec_stream
+        provider = _make_provider_mock(lines)
         driver = ContainerDriver(model="test", provider=provider)
 
         wf_id = uuid4()
         await driver.generate(prompt="test", workflow_id=wf_id)
 
-        # calls[0] is the tee command for _write_prompt
-        tee_cmd = calls[0][0]
-        assert tee_cmd[0] == "tee"
-        assert tee_cmd[1] == f"/tmp/prompt-{wf_id}.txt"
+        provider.write_file.assert_called_once_with(
+            f"/tmp/prompt-{wf_id}.txt", b"test",
+        )
 
     async def test_falls_back_to_random_when_no_workflow_id(self) -> None:
         from amelia.sandbox.driver import ContainerDriver
 
         result = AgenticMessage(type=AgenticMessageType.RESULT, content="Done")
         lines = [result.model_dump_json()]
-
-        calls: list[tuple[list[str], dict]] = []
-        provider = AsyncMock()
-        provider.ensure_running = AsyncMock()
-
-        call_count = 0
-
-        async def tracking_exec_stream(
-            command: list[str], **kwargs: Any,
-        ) -> AsyncIterator[str]:
-            nonlocal call_count
-            calls.append((command, kwargs))
-            call_count += 1
-            if call_count == 2:
-                for line in lines:
-                    yield line
-
-        provider.exec_stream = tracking_exec_stream
+        provider = _make_provider_mock(lines)
         driver = ContainerDriver(model="test", provider=provider)
 
         async for _ in driver.execute_agentic(prompt="test", cwd="/work"):
             pass
 
-        # calls[0] is the tee command for _write_prompt
-        tee_cmd = calls[0][0]
-        assert tee_cmd[0] == "tee"
-        # Without workflow_id, should use a random hex suffix
-        prompt_path = tee_cmd[1]
+        # write_file is called with a random-suffix path
+        provider.write_file.assert_called_once()
+        call_args = provider.write_file.call_args
+        prompt_path = call_args[0][0]
         assert prompt_path.startswith("/tmp/prompt-")
         assert prompt_path.endswith(".txt")
-        # The random suffix should not be "wf-" prefixed
         suffix = prompt_path.removeprefix("/tmp/prompt-").removesuffix(".txt")
         assert len(suffix) == 12  # uuid4().hex[:12]

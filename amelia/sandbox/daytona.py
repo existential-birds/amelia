@@ -183,7 +183,7 @@ class DaytonaSandboxProvider:
             raise RuntimeError("Sandbox not running — call ensure_running() first")
 
         if stdin:
-            logger.warning("Daytona exec_stream does not support stdin, ignoring")
+            logger.warning("Daytona exec_stream does not support stdin — use write_file() instead")
 
         # Build command string with cwd/env baked in (session API has no
         # cwd/env params).
@@ -240,25 +240,33 @@ class DaytonaSandboxProvider:
                 log_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await log_task
+
+            # Propagate any exception from the log streaming task.
+            if log_task.done():
+                task_exc = log_task.exception()
+                if task_exc is not None:
+                    raise task_exc
+
+            # Check exit code before deleting the session.
             try:
-                await sandbox.process.delete_session(session_id)
-            except Exception as exc:
-                logger.debug("Failed to delete Daytona session", session_id=session_id, error=exc)
+                cmd_info = await sandbox.process.get_session_command(
+                    session_id, cmd_id,
+                )
+                if cmd_info.exit_code is not None and cmd_info.exit_code != 0:
+                    raise RuntimeError(
+                        f"Command exited with code {cmd_info.exit_code}: {cmd_str}"
+                    )
+            finally:
+                try:
+                    await sandbox.process.delete_session(session_id)
+                except Exception as exc:
+                    logger.debug("Failed to delete Daytona session", session_id=session_id, error=exc)
 
-        # Propagate any exception from the log streaming task.
-        if log_task.done():
-            task_exc = log_task.exception()
-            if task_exc is not None:
-                raise task_exc
-
-        # Check exit code after streaming completes.
-        cmd_info = await sandbox.process.get_session_command(
-            session_id, cmd_id,
-        )
-        if cmd_info.exit_code is not None and cmd_info.exit_code != 0:
-            raise RuntimeError(
-                f"Command exited with code {cmd_info.exit_code}: {cmd_str}"
-            )
+    async def write_file(self, path: str, content: bytes) -> None:
+        """Write content to a file inside the sandbox via Daytona FS API."""
+        if self._sandbox is None:
+            raise RuntimeError("Sandbox not running — call ensure_running() first")
+        await self._sandbox.fs.upload_file(content, path)
 
     async def git_push(self, path: str) -> None:
         """Push via Daytona SDK with credentials."""

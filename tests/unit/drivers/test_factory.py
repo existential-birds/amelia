@@ -141,7 +141,7 @@ class TestGetDriverDaytonaBranch:
         )
         with patch("amelia.sandbox.daytona.DaytonaSandboxProvider") as mock_provider_cls, \
              patch("amelia.sandbox.driver.ContainerDriver") as mock_driver_cls, \
-             patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}):
+             patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}, clear=True):
             mock_driver_cls.return_value = MagicMock()
             _driver = get_driver(
                 "api", model="test-model",
@@ -196,7 +196,7 @@ class TestGetDriverDaytonaBranch:
         )
         with patch("amelia.sandbox.daytona.DaytonaSandboxProvider") as mock_provider_cls, \
              patch("amelia.sandbox.driver.ContainerDriver") as mock_driver_cls, \
-             patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}):
+             patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}, clear=True):
             mock_driver_cls.return_value = MagicMock()
             get_driver("api", model="test-model", sandbox_config=sandbox, profile_name="work")
             mock_provider_cls.assert_called_once_with(
