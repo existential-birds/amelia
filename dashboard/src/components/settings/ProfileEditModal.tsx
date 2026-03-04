@@ -581,33 +581,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
    * Check if the form has unsaved changes
    */
   const hasUnsavedChanges = useCallback((): boolean => {
-    const original = originalFormDataRef.current;
-    if (
-      formData.id !== original.id ||
-      formData.tracker !== original.tracker ||
-      formData.repo_root !== original.repo_root ||
-      formData.plan_output_dir !== original.plan_output_dir ||
-      formData.plan_path_pattern !== original.plan_path_pattern
-    ) {
-      return true;
-    }
-    for (const key of ALL_AGENT_KEYS) {
-      if (
-        formData.agents[key]?.driver !== original.agents[key]?.driver ||
-        formData.agents[key]?.model !== original.agents[key]?.model
-      ) {
-        return true;
-      }
-    }
-    if (
-      formData.sandbox_mode !== original.sandbox_mode ||
-      formData.sandbox_image !== original.sandbox_image ||
-      formData.sandbox_network_allowlist_enabled !== original.sandbox_network_allowlist_enabled ||
-      JSON.stringify(formData.sandbox_network_allowed_hosts) !== JSON.stringify(original.sandbox_network_allowed_hosts)
-    ) {
-      return true;
-    }
-    return false;
+    return JSON.stringify(formData) !== JSON.stringify(originalFormDataRef.current);
   }, [formData]);
 
   const handleClose = useCallback(() => {
