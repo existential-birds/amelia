@@ -11,11 +11,12 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from amelia.core.types import Profile
+from amelia.core.types import PlanValidationResult, Profile
 from amelia.pipelines.implementation.utils import (
     _extract_goal_from_plan,
     _extract_key_files_from_plan,
     extract_task_count,
+    validate_plan_structure,
 )
 
 
@@ -27,6 +28,7 @@ class ExternalPlanImportResult(BaseModel):
     plan_path: Path
     key_files: list[str] = Field(default_factory=list)
     total_tasks: int
+    validation_result: PlanValidationResult | None = None
 
 
 async def read_plan_content(
@@ -209,6 +211,9 @@ async def import_external_plan(
     # Extract structured fields
     result = await extract_plan_fields(content)
 
+    # Run structural validation
+    validation_result = validate_plan_structure(result.goal, content)
+
     # Resolve target_path for the result
     resolved_target = target_path.expanduser().resolve()
 
@@ -226,4 +231,5 @@ async def import_external_plan(
         plan_path=resolved_target,
         key_files=result.key_files,
         total_tasks=result.total_tasks,
+        validation_result=validation_result,
     )

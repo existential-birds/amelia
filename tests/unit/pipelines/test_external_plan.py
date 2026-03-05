@@ -1,13 +1,16 @@
 """Unit tests for external plan import helper."""
 
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 
 from amelia.core.types import AgentConfig, Profile
 from amelia.pipelines.implementation.external_plan import (
+    ExternalPlanImportResult,
     extract_plan_fields,
+    import_external_plan,
     read_plan_content,
     write_plan_to_target,
 )
@@ -380,6 +383,32 @@ Content here.
         assert result.plan_path == target_path
         # goal should still be extracted
         assert result.goal == "Do thing"
+
+    async def test_import_runs_structural_validation(self, mock_profile: Profile, tmp_path: Path) -> None:
+        """Import runs structural validation and includes result."""
+        plan_content = "**Goal:** Add auth\n\n### Task 1: Setup\n\nCreate: `src/auth.py`\n" + ("x" * 200)
+        plan_file = tmp_path / "worktree" / "docs" / "plan.md"
+        plan_file.parent.mkdir(parents=True, exist_ok=True)
+        plan_file.write_text(plan_content)
+        target_path = tmp_path / "worktree" / "docs" / "plans" / "plan.md"
+
+        with patch("amelia.pipelines.implementation.external_plan.extract_plan_fields") as mock_extract:
+            mock_extract.return_value = ExternalPlanImportResult(
+                goal="Add auth",
+                plan_markdown=plan_content,
+                plan_path=target_path,
+                key_files=["src/auth.py"],
+                total_tasks=1,
+            )
+            result = await import_external_plan(
+                plan_file=str(plan_file),
+                plan_content=None,
+                target_path=target_path,
+                profile=mock_profile,
+                workflow_id=uuid4(),
+            )
+        assert result.validation_result is not None
+        assert result.validation_result.valid is True
 
 
 class TestReadPlanContent:
