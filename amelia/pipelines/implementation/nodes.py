@@ -58,10 +58,13 @@ async def plan_validator_node(
     if not state.issue:
         raise ValueError("Issue is required in state for plan validation")
 
-    # Resolve plan path - use working_dir to match call_architect_node
-    plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
-    working_dir = Path(profile.repo_root)
-    plan_path = working_dir / plan_rel_path
+    # Resolve plan path - use state.plan_path for external plans, otherwise construct from pattern
+    if state.external_plan and state.plan_path is not None:
+        plan_path = state.plan_path
+    else:
+        plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
+        working_dir = Path(profile.repo_root)
+        plan_path = working_dir / plan_rel_path
 
     logger.info(
         "Orchestrator: Validating plan structure",

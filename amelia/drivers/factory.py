@@ -97,7 +97,42 @@ def get_driver(
             retry_config=retry_config,
             git_token=git_token,
         )
-        return ContainerDriver(model=model, provider=provider)
+
+        # Daytona sandboxes are remote — the worker can't reach the local
+        # LLM proxy.  Resolve the LLM provider and pass credentials directly
+        # so the worker can call the LLM API from within the sandbox.
+        llm_provider = (options or {}).get("provider", "openrouter")
+
+        provider_registry: dict[str, str] = {
+            "openrouter": "https://openrouter.ai/api/v1",
+            "openai": "https://api.openai.com/v1",
+        }
+        api_key_env_vars: dict[str, str] = {
+            "openrouter": "OPENROUTER_API_KEY",
+            "openai": "OPENAI_API_KEY",
+        }
+
+        llm_base_url = provider_registry.get(llm_provider)
+        llm_env_var = api_key_env_vars.get(llm_provider)
+        if llm_base_url is None or llm_env_var is None:
+            raise ValueError(
+                f"Unsupported LLM provider for Daytona sandbox: {llm_provider!r}. "
+                f"Supported: {', '.join(sorted(provider_registry))}."
+            )
+
+        llm_api_key = os.environ.get(llm_env_var, "")
+        if not llm_api_key:
+            raise ValueError(
+                f"{llm_env_var} environment variable is required for "
+                f"Daytona sandbox with provider {llm_provider!r}"
+            )
+
+        worker_env: dict[str, str] = {
+            "LLM_PROXY_URL": llm_base_url,
+            "OPENAI_API_KEY": llm_api_key,
+        }
+
+        return ContainerDriver(model=model, provider=provider, env=worker_env)
 
     if driver_key == "claude":
         return ClaudeCliDriver(model=model, cwd=cwd)

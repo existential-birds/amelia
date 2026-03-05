@@ -1,0 +1,108 @@
+version: 1
+metadata:
+  branch: feat/506-daytona-sandbox
+  base: main
+  generated: "2026-03-05T00:00:00Z"
+  changes_summary: |
+    Adds Daytona as a cloud sandbox provider for code execution. This test
+    verifies the core capability end-to-end: running a real workflow through
+    the Daytona sandbox using an external implementation plan on the jocko repo.
+
+setup:
+  stack:
+    - type: python
+      package_manager: uv
+    - type: node
+      package_manager: pnpm
+  commands:
+    - uv sync
+    - cd dashboard && pnpm install
+    - uv run amelia dev
+  health_checks:
+    - url: http://localhost:8420/api/health/live
+      timeout: 30
+    - url: http://localhost:8421
+      timeout: 30
+
+tests:
+  - id: TC-01
+    name: Run sleep-stage-tracking workflow in Daytona sandbox with external plan
+    context: |
+      Core end-to-end test of the Daytona sandbox feature. Uses the existing
+      jocko-daytona profile to start a workflow against the jocko repo with
+      an external plan (sleep stage tracking). This exercises:
+        - DaytonaSandboxProvider lifecycle (create sandbox, clone repo, execute)
+        - ContainerDriver streaming output from Daytona sessions
+        - Factory wiring for SandboxMode.DAYTONA
+        - External plan loading and task execution
+
+      The plan has 5 tasks modifying Swift/SwiftUI files for HealthKit sleep
+      stage tracking (SleepModels, SleepService, MockSleepService, SleepTab).
+
+      Requires: DAYTONA_API_KEY env var, jocko-daytona profile configured,
+      jocko repo accessible.
+    steps:
+      - action: curl
+        method: GET
+        url: http://localhost:8420/api/profiles
+        note: Verify jocko-daytona profile exists and has sandbox.mode = daytona
+      - action: curl
+        method: POST
+        url: http://localhost:8420/api/workflows
+        headers:
+          Content-Type: application/json
+        body: |
+          {
+            "task_title": "Sleep stage tracking: inBed + asleepUnspecified support",
+            "task_description": "Support asleepUnspecified and inBed HealthKit sleep categories so users without stage-capable devices see their sleep data, and all users get sleep onset latency tracking.",
+            "profile": "jocko-daytona",
+            "plan_file": "docs/plans/2026-03-03-sleep-stage-tracking-plan.md",
+            "start": true
+          }
+        note: Create and start workflow with external plan in Daytona sandbox
+      - action: curl
+        method: GET
+        url: http://localhost:8420/api/workflows/${WORKFLOW_ID}
+        note: Poll workflow status — check it transitions from queued → running
+    expected: |
+      1. GET /api/profiles returns the jocko-daytona profile with sandbox.mode = "daytona"
+      2. POST /api/workflows returns 201 with a workflow_id
+      3. The workflow starts and transitions to "running" state
+      4. Server logs show DaytonaSandboxProvider creating a Daytona sandbox instance
+      5. The sandbox clones the jocko repo and loads the external plan
+      6. Developer agent begins executing tasks from the sleep-stage-tracking plan
+         inside the Daytona sandbox (visible in workflow events/logs)
+      7. The workflow progresses through plan tasks — modifying SleepModels.swift,
+         SleepService.swift, MockSleepService.swift, and SleepTab.swift
+
+  - id: TC-02
+    name: Monitor workflow execution and verify task completion in Daytona sandbox
+    context: |
+      Continuation of TC-01. After the workflow starts, monitor it through
+      the dashboard to verify the Developer agent is executing inside the
+      Daytona sandbox and producing code changes.
+    steps:
+      - run: agent-browser open http://localhost:8421
+      - run: agent-browser snapshot -i
+        note: Capture dashboard — should show running workflow
+      - run: agent-browser click @workflow
+        note: Click on the running workflow to view details
+      - run: agent-browser snapshot -i
+        note: Capture workflow detail view with task progress
+      - run: agent-browser screenshot evidence/tc-02-workflow-running.png
+        note: Evidence of workflow running in Daytona sandbox
+      - run: agent-browser wait --text "completed" --timeout 600
+        note: Wait for workflow to complete (up to 10 min)
+      - run: agent-browser snapshot -i
+      - run: agent-browser screenshot evidence/tc-02-workflow-complete.png
+    expected: |
+      1. Dashboard shows the workflow in "running" state
+      2. Workflow detail view shows task progress from the external plan
+      3. Events/logs indicate commands are executing inside a Daytona sandbox
+         (not local container)
+      4. The workflow eventually completes (or makes meaningful progress on
+         the sleep stage tracking tasks)
+      5. Code changes are visible in the workflow output — modifications to
+         SleepModels.swift, SleepService.swift, etc.
+    evidence:
+      screenshot: evidence/tc-02-workflow-complete.png

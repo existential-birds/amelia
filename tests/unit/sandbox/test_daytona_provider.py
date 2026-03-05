@@ -253,8 +253,13 @@ class TestDaytonaSandboxProviderWorkerInstall:
             )
             await provider.ensure_running()
 
-            # Should have called process.exec with pip install --no-deps
-            mock_sandbox.process.exec.assert_called_once_with(
+            assert mock_sandbox.process.exec.call_count == 2
+            # First call: check for pyproject.toml / setup.py
+            mock_sandbox.process.exec.assert_any_call(
+                "test -f /workspace/repo/pyproject.toml || test -f /workspace/repo/setup.py"
+            )
+            # Second call: pip install
+            mock_sandbox.process.exec.assert_any_call(
                 "pip install --no-cache-dir --no-deps /workspace/repo"
             )
 
@@ -286,9 +291,10 @@ class TestDaytonaSandboxProviderWorkerInstall:
 
             mock_client = AsyncMock()
             mock_sandbox = AsyncMock()
-            mock_sandbox.process.exec.return_value = MagicMock(
-                exit_code=1, result="pip error",
-            )
+            mock_sandbox.process.exec.side_effect = [
+                MagicMock(exit_code=0, result=""),  # test -f check passes
+                MagicMock(exit_code=1, result="pip error"),  # pip install fails
+            ]
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -296,9 +302,59 @@ class TestDaytonaSandboxProviderWorkerInstall:
                 api_key="test-key",
                 repo_url="https://github.com/org/repo.git",
             )
-            with pytest.raises(RuntimeError, match="Failed to install amelia"):
+            with pytest.raises(RuntimeError, match="Failed to install package from cloned repo"):
                 await provider.ensure_running()
             assert provider._sandbox is None
+
+
+class TestDaytonaSandboxProviderWorkflowBranch:
+    """Workflow branch creation after clone."""
+
+    @pytest.mark.asyncio
+    async def test_creates_workflow_branch_after_clone(self) -> None:
+        """workflow_branch should create a git branch after clone + install."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            # All process.exec calls succeed: test -f check, pip install, git checkout
+            mock_sandbox.process.exec.return_value = MagicMock(exit_code=0, result="")
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+                workflow_branch="amelia/wf-123",
+            )
+            await provider.ensure_running()
+
+            mock_sandbox.process.exec.assert_any_call(
+                "git -C /workspace/repo checkout -b amelia/wf-123"
+            )
+
+    @pytest.mark.asyncio
+    async def test_no_branch_when_workflow_branch_is_none(self) -> None:
+        """No git checkout -b when workflow_branch is None."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_sandbox.process.exec.return_value = MagicMock(exit_code=0, result="")
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            # process.exec should only be called for test -f check and pip install
+            for call in mock_sandbox.process.exec.call_args_list:
+                assert "checkout -b" not in str(call)
 
 
 class TestDaytonaSandboxProviderImageBuilder:

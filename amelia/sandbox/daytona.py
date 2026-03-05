@@ -76,6 +76,7 @@ class DaytonaSandboxProvider:
         timeout: float = 120.0,
         retry_config: RetryConfig | None = None,
         git_token: str | None = None,
+        workflow_branch: str | None = None,
     ) -> None:
         self._client = AsyncDaytona(DaytonaConfig(
             api_key=api_key,
@@ -91,6 +92,7 @@ class DaytonaSandboxProvider:
         self._timeout = timeout
         self._retry_config = retry_config
         self._git_token = git_token
+        self._workflow_branch = workflow_branch
         self._sandbox: AsyncSandbox | None = None
 
     @property
@@ -186,18 +188,37 @@ class DaytonaSandboxProvider:
                     else:
                         await created_sandbox.git.clone(self._repo_url, REPO_PATH, branch=self._branch, **self._git_auth)
 
-                    # Install amelia package from the cloned source so the
-                    # sandbox worker module is importable.  --no-deps because
-                    # worker dependencies are already baked into the image.
-                    logger.info("Installing amelia package in sandbox")
-                    install_resp = await created_sandbox.process.exec(
-                        f"pip install --no-cache-dir --no-deps {REPO_PATH}"
+                    # If the cloned repo is a Python package (has pyproject.toml
+                    # or setup.py), install it so its modules are importable.
+                    # For non-Python repos (e.g. Swift), amelia is already
+                    # installed from the image definition above.
+                    check_resp = await created_sandbox.process.exec(
+                        f"test -f {REPO_PATH}/pyproject.toml || test -f {REPO_PATH}/setup.py"
                     )
-                    if install_resp.exit_code != 0:
-                        raise RuntimeError(
-                            "Failed to install amelia in sandbox: "
-                            f"exit_code={install_resp.exit_code}, result={install_resp.result}"
+                    if check_resp.exit_code == 0:
+                        logger.info("Installing Python package from cloned repo")
+                        install_resp = await created_sandbox.process.exec(
+                            f"pip install --no-cache-dir --no-deps {REPO_PATH}"
                         )
+                        if install_resp.exit_code != 0:
+                            raise RuntimeError(
+                                "Failed to install package from cloned repo: "
+                                f"exit_code={install_resp.exit_code}, result={install_resp.result}"
+                            )
+                    else:
+                        logger.info("Cloned repo is not a Python package, skipping pip install")
+
+                    # Create workflow-specific branch after clone.
+                    if self._workflow_branch:
+                        branch_resp = await created_sandbox.process.exec(
+                            f"git -C {REPO_PATH} checkout -b {shlex.quote(self._workflow_branch)}"
+                        )
+                        if branch_resp.exit_code != 0:
+                            raise RuntimeError(
+                                f"Failed to create workflow branch {self._workflow_branch!r}: "
+                                f"exit_code={branch_resp.exit_code}, result={branch_resp.result}"
+                            )
+                        logger.info("Created workflow branch", branch=self._workflow_branch)
 
                 # Only persist after all setup steps succeed.
                 self._sandbox = created_sandbox

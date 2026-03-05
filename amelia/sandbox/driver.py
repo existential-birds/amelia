@@ -24,9 +24,15 @@ from amelia.sandbox.provider import SandboxProvider
 class ContainerDriver:
     """Driver that executes LLM operations inside a sandbox container."""
 
-    def __init__(self, model: str, provider: SandboxProvider) -> None:
+    def __init__(
+        self,
+        model: str,
+        provider: SandboxProvider,
+        env: dict[str, str] | None = None,
+    ) -> None:
         self.model = model
         self._provider = provider
+        self._env = env
         self._last_usage: DriverUsage | None = None
 
     async def _write_prompt(self, prompt: str, workflow_id: str | None = None) -> str:
@@ -125,7 +131,7 @@ class ContainerDriver:
             if instructions:
                 cmd.extend(["--instructions", instructions])
 
-            async for line in self._provider.exec_stream(cmd, cwd=sandbox_cwd):
+            async for line in self._provider.exec_stream(cmd, cwd=sandbox_cwd, env=self._env):
                 msg = self._parse_line(line)
                 if msg.type == AgenticMessageType.USAGE:
                     self._last_usage = msg.usage
@@ -179,7 +185,7 @@ class ContainerDriver:
                 cmd.extend(["--schema", f"{schema.__module__}:{schema.__name__}"])
 
             result_content: str | None = None
-            async for line in self._provider.exec_stream(cmd):
+            async for line in self._provider.exec_stream(cmd, env=self._env):
                 msg = self._parse_line(line)
                 if msg.type == AgenticMessageType.USAGE:
                     self._last_usage = msg.usage
