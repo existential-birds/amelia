@@ -22,4 +22,9 @@ RUN pip install --no-cache-dir --no-deps /tmp/amelia \
     && pip install --no-cache-dir deepagents pydantic loguru httpx langchain-openai \
     && rm -rf /tmp/amelia
 
+RUN useradd --create-home --uid 10001 amelia \
+    && mkdir -p /workspace \
+    && chown -R amelia:amelia /workspace
+
 WORKDIR /workspace
+USER amelia

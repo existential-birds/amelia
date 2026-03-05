@@ -106,8 +106,13 @@ class DaytonaSandboxProvider:
         First call creates the sandbox and clones the repository.
         Subsequent calls are no-ops if the sandbox is healthy.
         """
-        if self._sandbox is not None and await self.health_check():
-            return
+        if self._sandbox is not None:
+            if await self.health_check():
+                return
+            # Existing sandbox is unhealthy — tear it down before replacing.
+            with contextlib.suppress(Exception):
+                await self._sandbox.delete()
+            self._sandbox = None
 
         logger.info("Creating Daytona sandbox", target=self._target)
 
@@ -155,48 +160,59 @@ class DaytonaSandboxProvider:
 
         _retryable = (ConnectionError, TimeoutError, OSError)
 
+        created_sandbox: AsyncSandbox | None = None
         try:
             async with asyncio.timeout(self._timeout):
                 if self._retry_config:
-                    self._sandbox = await with_retry(
+                    created_sandbox = await with_retry(
                         lambda: self._client.create(create_params),
                         self._retry_config,
                         retryable_exceptions=_retryable,
                     )
                 else:
-                    self._sandbox = await self._client.create(create_params)
-                logger.info("Daytona sandbox created", sandbox_id=self._sandbox.id)
+                    created_sandbox = await self._client.create(create_params)
+                logger.info("Daytona sandbox created", sandbox_id=created_sandbox.id)
 
                 if self._repo_url:
                     logger.info("Cloning repo via Daytona git API", url=self._repo_url)
                     if self._retry_config:
                         await with_retry(
-                            lambda: self._sandbox.git.clone(  # type: ignore[union-attr]
+                            lambda: created_sandbox.git.clone(
                                 self._repo_url, REPO_PATH, branch=self._branch, **self._git_auth
                             ),
                             self._retry_config,
                             retryable_exceptions=_retryable,
                         )
                     else:
-                        await self._sandbox.git.clone(self._repo_url, REPO_PATH, branch=self._branch, **self._git_auth)
+                        await created_sandbox.git.clone(self._repo_url, REPO_PATH, branch=self._branch, **self._git_auth)
 
                     # Install amelia package from the cloned source so the
                     # sandbox worker module is importable.  --no-deps because
                     # worker dependencies are already baked into the image.
                     logger.info("Installing amelia package in sandbox")
-                    install_resp = await self._sandbox.process.exec(
+                    install_resp = await created_sandbox.process.exec(
                         f"pip install --no-cache-dir --no-deps {REPO_PATH}"
                     )
                     if install_resp.exit_code != 0:
-                        logger.error(
-                            "Failed to install amelia in sandbox",
-                            exit_code=install_resp.exit_code,
-                            result=install_resp.result,
+                        raise RuntimeError(
+                            "Failed to install amelia in sandbox: "
+                            f"exit_code={install_resp.exit_code}, result={install_resp.result}"
                         )
+
+                # Only persist after all setup steps succeed.
+                self._sandbox = created_sandbox
         except TimeoutError:
+            if created_sandbox is not None:
+                with contextlib.suppress(Exception):
+                    await created_sandbox.delete()
             raise TimeoutError(
                 f"Daytona sandbox creation timed out after {self._timeout}s"
             ) from None
+        except Exception:
+            if created_sandbox is not None:
+                with contextlib.suppress(Exception):
+                    await created_sandbox.delete()
+            raise
 
     def resolve_cwd(self, cwd: str) -> str:
         """Map host paths to the sandbox repo path.
@@ -268,7 +284,7 @@ class DaytonaSandboxProvider:
 
         async def on_stderr(chunk: str) -> None:
             stderr_chunks.append(chunk)
-            logger.debug("Daytona stderr chunk", content=chunk)
+            logger.debug("Daytona stderr chunk", size=len(chunk))
 
         async def stream_logs() -> None:
             try:
@@ -348,8 +364,12 @@ class DaytonaSandboxProvider:
         if self._sandbox is None:
             return
         logger.info("Tearing down Daytona sandbox", sandbox_id=self._sandbox.id)
-        await self._sandbox.delete()
-        self._sandbox = None
+        try:
+            await self._sandbox.delete()
+        except Exception as exc:
+            logger.warning("Failed to delete Daytona sandbox", sandbox_id=self._sandbox.id, error=exc)
+        finally:
+            self._sandbox = None
 
     async def health_check(self) -> bool:
         """Check if the sandbox is responsive.

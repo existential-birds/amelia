@@ -8,6 +8,13 @@ import pytest
 from amelia.core.types import DaytonaResources, RetryConfig
 
 
+def _mock_sandbox_with_install() -> AsyncMock:
+    """Create a mock sandbox that passes the post-clone pip install check."""
+    mock = AsyncMock()
+    mock.process.exec.return_value = MagicMock(exit_code=0, result="")
+    return mock
+
+
 class TestDaytonaSandboxProviderInit:
     """Provider initialization."""
 
@@ -34,7 +41,7 @@ class TestDaytonaSandboxProviderEnsureRunning:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -59,7 +66,7 @@ class TestDaytonaSandboxProviderEnsureRunning:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -108,7 +115,7 @@ class TestDaytonaSandboxProviderEnsureRunning:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -131,7 +138,7 @@ class TestDaytonaSandboxProviderEnsureRunning:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -177,7 +184,7 @@ class TestDaytonaSandboxProviderEnsureRunning:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -203,7 +210,7 @@ class TestDaytonaSandboxProviderEnsureRunning:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.side_effect = [
                 ConnectionError("connection reset"),
                 mock_sandbox,
@@ -258,7 +265,7 @@ class TestDaytonaSandboxProviderWorkerInstall:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -272,8 +279,8 @@ class TestDaytonaSandboxProviderWorkerInstall:
             mock_sandbox.process.exec.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_logs_error_on_install_failure(self) -> None:
-        """Failed pip install should log error but not raise."""
+    async def test_raises_on_install_failure(self) -> None:
+        """Failed pip install should raise RuntimeError and clean up."""
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -289,9 +296,9 @@ class TestDaytonaSandboxProviderWorkerInstall:
                 api_key="test-key",
                 repo_url="https://github.com/org/repo.git",
             )
-            # Should not raise — logs error instead
-            await provider.ensure_running()
-            assert provider._sandbox is not None
+            with pytest.raises(RuntimeError, match="Failed to install amelia"):
+                await provider.ensure_running()
+            assert provider._sandbox is None
 
 
 class TestDaytonaSandboxProviderImageBuilder:
@@ -304,7 +311,7 @@ class TestDaytonaSandboxProviderImageBuilder:
             from amelia.sandbox.daytona import _WORKER_DEPS, DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -327,7 +334,7 @@ class TestDaytonaSandboxProviderImageBuilder:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -352,7 +359,7 @@ class TestDaytonaSandboxProviderGitAuth:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -377,7 +384,7 @@ class TestDaytonaSandboxProviderGitAuth:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -399,7 +406,7 @@ class TestDaytonaSandboxProviderGitAuth:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -437,7 +444,7 @@ class TestDaytonaSandboxProviderGitAuth:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -509,7 +516,7 @@ class TestDaytonaSandboxProviderWriteFile:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 
@@ -755,7 +762,7 @@ class TestDaytonaSandboxProviderTeardown:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
             mock_client = AsyncMock()
-            mock_sandbox = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
             mock_client.create.return_value = mock_sandbox
             mock_cls.return_value = mock_client
 

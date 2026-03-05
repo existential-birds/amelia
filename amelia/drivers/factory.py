@@ -80,13 +80,16 @@ def get_driver(
                 "DAYTONA_API_KEY environment variable is required for Daytona sandbox"
             )
 
+        if not sandbox_config.repo_url:
+            raise ValueError("repo_url is required when sandbox mode is 'daytona'")
+
         git_token = os.environ.get("AMELIA_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
 
         provider = DaytonaSandboxProvider(
             api_key=api_key,
             api_url=sandbox_config.daytona_api_url,
             target=sandbox_config.daytona_target,
-            repo_url=sandbox_config.repo_url or "",
+            repo_url=sandbox_config.repo_url,
             resources=sandbox_config.daytona_resources,
             image=sandbox_config.daytona_image,
             snapshot=sandbox_config.daytona_snapshot,

@@ -287,7 +287,7 @@ const profileFormSchema = z.object({
   plan_output_dir: z.string(),
   plan_path_pattern: z.string(),
   agents: z.record(agentFormSchema),
-  sandbox_mode: z.enum(['none', 'container']),
+  sandbox_mode: z.enum(['none', 'container', 'daytona']),
   sandbox_image: z.string(),
   sandbox_network_allowlist_enabled: z.boolean(),
   sandbox_network_allowed_hosts: z.array(z.string()),
@@ -762,23 +762,26 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     return agents;
   };
 
-  const formSandboxToApi = (): SandboxConfig => ({
-    mode: formData.sandbox_mode,
-    image: formData.sandbox_image,
-    network_allowlist_enabled: formData.sandbox_network_allowlist_enabled,
-    network_allowed_hosts: formData.sandbox_network_allowed_hosts,
-    ...(formData.sandbox_mode === 'daytona' && {
-      repo_url: formData.sandbox_repo_url,
-      daytona_api_url: formData.sandbox_daytona_api_url,
-      daytona_target: formData.sandbox_daytona_target,
-      daytona_image: formData.sandbox_daytona_image,
-      daytona_resources: {
-        cpu: formData.sandbox_daytona_cpu,
-        memory: formData.sandbox_daytona_memory,
-        disk: formData.sandbox_daytona_disk,
-      },
-    }),
-  });
+  const formSandboxToApi = (): SandboxConfig => {
+    const isContainer = formData.sandbox_mode === 'container';
+    return {
+      mode: formData.sandbox_mode,
+      image: formData.sandbox_image,
+      network_allowlist_enabled: isContainer ? formData.sandbox_network_allowlist_enabled : false,
+      network_allowed_hosts: isContainer ? formData.sandbox_network_allowed_hosts : [],
+      ...(formData.sandbox_mode === 'daytona' && {
+        repo_url: formData.sandbox_repo_url,
+        daytona_api_url: formData.sandbox_daytona_api_url,
+        daytona_target: formData.sandbox_daytona_target,
+        daytona_image: formData.sandbox_daytona_image,
+        daytona_resources: {
+          cpu: formData.sandbox_daytona_cpu,
+          memory: formData.sandbox_daytona_memory,
+          disk: formData.sandbox_daytona_disk,
+        },
+      }),
+    };
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
