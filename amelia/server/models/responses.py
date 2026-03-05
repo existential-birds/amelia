@@ -242,19 +242,16 @@ class SetPlanResponse(BaseModel):
     """Response from setting an external plan on a workflow.
 
     Attributes:
-        status: 'validating' or 'validated'.
+        status: 'ready' or 'invalid'.
         total_tasks: Number of tasks in the plan.
-        goal: Extracted goal (present when status=validated).
-        key_files: Key files (present when status=validated).
+        goal: Extracted goal.
+        key_files: Key files found in the plan.
     """
 
-    status: Annotated[str, Field(description="'validating' or 'validated'")]
+    status: Annotated[str, Field(description="'ready' or 'invalid'")]
     total_tasks: Annotated[int, Field(description="Number of tasks in the plan")]
-    goal: Annotated[
-        str | None,
-        Field(default=None, description="Extracted goal (present when status=validated)"),
-    ] = None
+    goal: Annotated[str, Field(description="Extracted goal from the plan")]
     key_files: Annotated[
-        list[str] | None,
-        Field(default=None, description="Key files (present when status=validated)"),
-    ] = None
+        list[str],
+        Field(default_factory=list, description="Key files found in the plan"),
+    ]
