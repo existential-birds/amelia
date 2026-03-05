@@ -23,7 +23,7 @@ const NODE_DISPLAY_NAMES: Record<string, string> = {
   developer: 'Developer',
   reviewer: 'Reviewer',
   plan_validator: 'Plan Validator',
-  human_approval: 'Approval',
+  human_approval: 'Human Approval',
 };
 
 /** Get display name for a node type. */
