@@ -7,7 +7,7 @@ from io import StringIO
 
 import pytest
 
-from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage
+from amelia.sandbox.worker import AgenticMessage, AgenticMessageType, DriverUsage
 
 
 class TestWorkerEmitLine:

@@ -1,10 +1,6 @@
 """Tests for the USAGE message type added to the worker protocol."""
 
-from uuid import uuid4
-
-import pytest
-
-from amelia.drivers.base import (
+from amelia.sandbox.worker import (
     AgenticMessage,
     AgenticMessageType,
     DriverUsage,
@@ -47,10 +43,3 @@ class TestUsageMessageType:
         restored = AgenticMessage.model_validate_json(json_str)
         assert restored.type == AgenticMessageType.USAGE
         assert restored.usage == usage
-
-    def test_usage_message_not_in_workflow_event_mapping(self) -> None:
-        """USAGE messages should raise KeyError in to_workflow_event — they are
-        consumed by the driver, never reaching the event bus."""
-        msg = AgenticMessage(type=AgenticMessageType.USAGE)
-        with pytest.raises(KeyError):
-            msg.to_workflow_event(workflow_id=uuid4(), agent="developer")

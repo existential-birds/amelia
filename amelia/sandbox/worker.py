@@ -17,16 +17,92 @@ import os
 import sys
 import tempfile
 import time
+from enum import StrEnum
 from typing import Any, TextIO, cast
 
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
-from amelia.drivers.base import (
-    AgenticMessage,
-    AgenticMessageType,
-    DriverUsage,
-)
+
+# --- Inlined types (standalone: no amelia imports in the container) --------
+
+class DriverUsage(BaseModel):
+    """Token usage data returned by drivers.
+
+    All fields optional - drivers populate what they can.
+    """
+
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cache_read_tokens: int | None = None
+    cache_creation_tokens: int | None = None
+    cost_usd: float | None = None
+    duration_ms: int | None = None
+    num_turns: int | None = None
+    model: str | None = None
+
+
+class AgenticMessageType(StrEnum):
+    """Types of messages yielded during agentic execution."""
+
+    THINKING = "thinking"
+    TOOL_CALL = "tool_call"
+    TOOL_RESULT = "tool_result"
+    RESULT = "result"
+    USAGE = "usage"
+
+
+class AgenticMessage(BaseModel):
+    """Unified message type for agentic execution across all drivers."""
+
+    type: AgenticMessageType
+    content: str | None = None
+    tool_name: str | None = None
+    tool_input: dict[str, Any] | None = None
+    tool_output: str | None = None
+    tool_call_id: str | None = None
+    session_id: str | None = None
+    is_error: bool = False
+    model: str | None = None
+    usage: DriverUsage | None = None
+
+
+# Mapping of CLI-specific tool names to normalized canonical names.
+TOOL_NAME_ALIASES: dict[str, str] = {
+    "Read": "read_file",
+    "Write": "write_file",
+    "Edit": "edit_file",
+    "NotebookEdit": "notebook_edit",
+    "Glob": "glob",
+    "Grep": "grep",
+    "Bash": "run_shell_command",
+    "Task": "task",
+    "TaskOutput": "task_output",
+    "TaskStop": "task_stop",
+    "EnterPlanMode": "enter_plan_mode",
+    "ExitPlanMode": "exit_plan_mode",
+    "AskUserQuestion": "ask_user_question",
+    "Skill": "skill",
+    "TaskCreate": "task_create",
+    "TaskGet": "task_get",
+    "TaskUpdate": "task_update",
+    "TaskList": "task_list",
+    "WebFetch": "web_fetch",
+    "WebSearch": "web_search",
+    "KnowledgeSearch": "knowledge_search",
+}
+
+
+def normalize_tool_name(raw_name: str) -> str:
+    """Normalize driver-specific tool name to standard tool name.
+
+    Args:
+        raw_name: The raw tool name from a driver (e.g., "Write", "Bash").
+
+    Returns:
+        The normalized tool name (e.g., "write_file"), or raw_name if no alias exists.
+    """
+    return TOOL_NAME_ALIASES.get(raw_name, raw_name)
 
 
 def _emit_line(msg: AgenticMessage, file: TextIO = sys.stdout) -> None:
@@ -156,8 +232,6 @@ async def _run_agentic(args: argparse.Namespace) -> None:
     from deepagents import create_deep_agent  # noqa: PLC0415
     from deepagents.backends import FilesystemBackend  # noqa: PLC0415
     from langchain_core.messages import AIMessage, HumanMessage, ToolMessage  # noqa: PLC0415
-
-    from amelia.core.constants import normalize_tool_name  # noqa: PLC0415
 
     prompt = _read_prompt(args.prompt_file)
     base_url = os.environ.get("LLM_PROXY_URL")

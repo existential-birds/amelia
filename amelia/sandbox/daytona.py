@@ -190,8 +190,8 @@ class DaytonaSandboxProvider:
 
                     # If the cloned repo is a Python package (has pyproject.toml
                     # or setup.py), install it so its modules are importable.
-                    # For non-Python repos (e.g. Swift), amelia is already
-                    # installed from the image definition above.
+                    # For non-Python repos (e.g. Swift), no extra install
+                    # needed — the worker has no amelia dependencies.
                     check_resp = await created_sandbox.process.exec(
                         f"test -f {REPO_PATH}/pyproject.toml || test -f {REPO_PATH}/setup.py"
                     )
