@@ -49,7 +49,7 @@ Use `agent-browser` for web automation: `agent-browser open <url>`, then `agent-
 ## Agent Discipline
 
 - **No "pre-existing" failures.** You are the only agent modifying this codebase. If a test fails, you caused it — investigate and fix it before proceeding. Never dismiss a failure as "pre-existing" or "unrelated."
-- **No "unrelated" changes.** All uncommitted changes on the branch are your responsibility. When committing, `git status` shows YOUR work — stage and commit everything, or explicitly revert what shouldn't be there. Never silectively ignore dirty files.
+- **No "unrelated" changes.** All uncommitted changes on the branch are your responsibility. When committing, `git status` shows YOUR work — stage and commit everything, or explicitly revert what shouldn't be there. Never selectively ignore dirty files.
 - **All tests must pass.** 100% pass rate is the bar. Do not proceed past verification with any failures.
 
 ## Release Process
