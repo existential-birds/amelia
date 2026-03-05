@@ -108,7 +108,7 @@ class EventType(StrEnum):
     DOCUMENT_INGESTION_COMPLETED = "document_ingestion_completed"
     DOCUMENT_INGESTION_FAILED = "document_ingestion_failed"
 
-    # Plan validation (async extraction results)
+    # Plan validation (synchronous extraction and structural checks)
     PLAN_VALIDATED = "plan_validated"
     PLAN_VALIDATION_FAILED = "plan_validation_failed"
 
