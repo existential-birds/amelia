@@ -6,6 +6,8 @@ from uuid import uuid4
 
 import pytest
 
+from amelia.core.types import PlanValidationResult, Severity
+from amelia.pipelines.implementation.external_plan import ExternalPlanImportResult
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.exceptions import (
     InvalidStateError,
@@ -68,35 +70,50 @@ class TestSetWorkflowPlan:
 
         return mock_workflow
 
-    async def test_set_plan_returns_validating_status(
+    def _make_import_result(
+        self,
+        goal: str = "Implement feature X",
+        plan_markdown: str = "# Plan\n\n### Task 1: Do A\n\n### Task 2: Do B",
+        total_tasks: int = 2,
+        key_files: list[str] | None = None,
+        valid: bool = True,
+    ) -> ExternalPlanImportResult:
+        """Create a mock ExternalPlanImportResult."""
+        return ExternalPlanImportResult(
+            goal=goal,
+            plan_markdown=plan_markdown,
+            plan_path=Path("/tmp/worktree/docs/TEST-001/plan.md"),
+            key_files=key_files or [],
+            total_tasks=total_tasks,
+            validation_result=PlanValidationResult(
+                valid=valid,
+                issues=[] if valid else ["Missing goal"],
+                severity=Severity.NONE if valid else Severity.CRITICAL,
+            ),
+        )
+
+    async def test_set_plan_returns_ready_status(
         self,
         mock_orchestrator: OrchestratorService,
         mock_repository: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """Setting plan on pending workflow returns validating status with task count."""
+        """Setting plan on pending workflow returns ready status with goal."""
         workflow = self._create_workflow_mock(workflow_status=WorkflowStatus.PENDING)
         mock_repository.get.return_value = workflow
 
-        # Mock profile with required plan_path_pattern
         mock_profile = MagicMock()
         mock_profile.plan_path_pattern = "docs/{issue_key}/plan.md"
         mock_profile.repo_root = str(tmp_path)
 
         plan_content = "# Plan\n\n### Task 1: Do A\n\n### Task 2: Do B"
+        import_result = self._make_import_result(plan_markdown=plan_content)
 
         with (
             patch(
-                "amelia.server.orchestrator.service.read_plan_content",
+                "amelia.server.orchestrator.service.import_external_plan",
                 new_callable=AsyncMock,
-            ) as mock_read,
-            patch(
-                "amelia.server.orchestrator.service.write_plan_to_target",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "amelia.server.orchestrator.service.extract_task_count",
-                return_value=2,
+                return_value=import_result,
             ),
             patch.object(
                 mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
@@ -105,9 +122,7 @@ class TestSetWorkflowPlan:
                 mock_orchestrator, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
-            patch("asyncio.create_task") as mock_create_task,
         ):
-            mock_read.return_value = plan_content
             mock_get_profile.return_value = mock_profile
             mock_update_profile.return_value = mock_profile
 
@@ -116,20 +131,18 @@ class TestSetWorkflowPlan:
                 plan_content=plan_content,
             )
 
-        assert result["status"] == "validating"
+        assert result["status"] == "ready"
+        assert result["goal"] == "Implement feature X"
         assert result["total_tasks"] == 2
-        assert "goal" not in result
         mock_repository.update_plan_cache.assert_called_once()
-        # Verify background task was created
-        mock_create_task.assert_called_once()
 
-    async def test_set_plan_saves_plan_cache_with_null_goal(
+    async def test_set_plan_saves_plan_cache_with_goal(
         self,
         mock_orchestrator: OrchestratorService,
         mock_repository: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """Setting plan saves PlanCache with goal=None (validating state)."""
+        """Setting plan saves PlanCache with goal populated."""
         workflow = self._create_workflow_mock(workflow_status=WorkflowStatus.PENDING)
         mock_repository.get.return_value = workflow
 
@@ -138,19 +151,17 @@ class TestSetWorkflowPlan:
         mock_profile.repo_root = str(tmp_path)
 
         plan_content = "# Plan\n\n### Task 1: Do A"
+        import_result = self._make_import_result(
+            goal="Do the thing",
+            plan_markdown=plan_content,
+            total_tasks=1,
+        )
 
         with (
             patch(
-                "amelia.server.orchestrator.service.read_plan_content",
+                "amelia.server.orchestrator.service.import_external_plan",
                 new_callable=AsyncMock,
-            ) as mock_read,
-            patch(
-                "amelia.server.orchestrator.service.write_plan_to_target",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "amelia.server.orchestrator.service.extract_task_count",
-                return_value=1,
+                return_value=import_result,
             ),
             patch.object(
                 mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
@@ -159,9 +170,7 @@ class TestSetWorkflowPlan:
                 mock_orchestrator, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
-            patch("asyncio.create_task"),
         ):
-            mock_read.return_value = plan_content
             mock_get_profile.return_value = mock_profile
             mock_update_profile.return_value = mock_profile
 
@@ -170,10 +179,10 @@ class TestSetWorkflowPlan:
                 plan_content=plan_content,
             )
 
-        # Verify plan_cache was saved with goal=None
+        # Verify plan_cache was saved with goal populated
         call_args = mock_repository.update_plan_cache.call_args
         plan_cache = call_args[0][1]  # second positional arg
-        assert plan_cache.goal is None
+        assert plan_cache.goal == "Do the thing"
         assert plan_cache.total_tasks == 1
 
     async def test_set_plan_on_running_workflow_fails(
@@ -222,19 +231,17 @@ class TestSetWorkflowPlan:
         mock_profile.repo_root = str(tmp_path)
 
         plan_content = "# New plan\n\n### Task 1: A\n\n### Task 2: B\n\n### Task 3: C"
+        import_result = self._make_import_result(
+            goal="New goal",
+            plan_markdown=plan_content,
+            total_tasks=3,
+        )
 
         with (
             patch(
-                "amelia.server.orchestrator.service.read_plan_content",
+                "amelia.server.orchestrator.service.import_external_plan",
                 new_callable=AsyncMock,
-            ) as mock_read,
-            patch(
-                "amelia.server.orchestrator.service.write_plan_to_target",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "amelia.server.orchestrator.service.extract_task_count",
-                return_value=3,
+                return_value=import_result,
             ),
             patch.object(
                 mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
@@ -243,9 +250,7 @@ class TestSetWorkflowPlan:
                 mock_orchestrator, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
-            patch("asyncio.create_task"),
         ):
-            mock_read.return_value = plan_content
             mock_get_profile.return_value = mock_profile
             mock_update_profile.return_value = mock_profile
 
@@ -255,7 +260,8 @@ class TestSetWorkflowPlan:
                 force=True,
             )
 
-        assert result["status"] == "validating"
+        assert result["status"] == "ready"
+        assert result["goal"] == "New goal"
         assert result["total_tasks"] == 3
         mock_repository.update_plan_cache.assert_called_once()
 
@@ -302,3 +308,102 @@ class TestSetWorkflowPlan:
                 workflow_id=uuid4(),
                 plan_content="# Plan",
             )
+
+    async def test_set_plan_emits_validated_event_on_success(
+        self,
+        mock_orchestrator: OrchestratorService,
+        mock_repository: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Setting plan emits PLAN_VALIDATED event when validation passes."""
+        workflow = self._create_workflow_mock(workflow_status=WorkflowStatus.PENDING)
+        mock_repository.get.return_value = workflow
+
+        mock_profile = MagicMock()
+        mock_profile.plan_path_pattern = "docs/{issue_key}/plan.md"
+        mock_profile.repo_root = str(tmp_path)
+
+        plan_content = "# Plan\n\n### Task 1: Do A"
+        import_result = self._make_import_result(
+            plan_markdown=plan_content, total_tasks=1, valid=True
+        )
+
+        with (
+            patch(
+                "amelia.server.orchestrator.service.import_external_plan",
+                new_callable=AsyncMock,
+                return_value=import_result,
+            ),
+            patch.object(
+                mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
+            ) as mock_get_profile,
+            patch.object(
+                mock_orchestrator, "_update_profile_repo_root"
+            ) as mock_update_profile,
+            patch.object(
+                mock_orchestrator, "_emit", new_callable=AsyncMock
+            ) as mock_emit,
+        ):
+            mock_get_profile.return_value = mock_profile
+            mock_update_profile.return_value = mock_profile
+
+            await mock_orchestrator.set_workflow_plan(
+                workflow_id=uuid4(),
+                plan_content=plan_content,
+            )
+
+        # Check that PLAN_VALIDATED was emitted
+        from amelia.server.models.events import EventType
+
+        emit_calls = mock_emit.call_args_list
+        event_types = [call.args[1] for call in emit_calls]
+        assert EventType.PLAN_VALIDATED in event_types
+
+    async def test_set_plan_emits_validation_failed_event(
+        self,
+        mock_orchestrator: OrchestratorService,
+        mock_repository: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Setting plan emits PLAN_VALIDATION_FAILED when validation fails."""
+        workflow = self._create_workflow_mock(workflow_status=WorkflowStatus.PENDING)
+        mock_repository.get.return_value = workflow
+
+        mock_profile = MagicMock()
+        mock_profile.plan_path_pattern = "docs/{issue_key}/plan.md"
+        mock_profile.repo_root = str(tmp_path)
+
+        plan_content = "# Plan\n\n### Task 1: Do A"
+        import_result = self._make_import_result(
+            plan_markdown=plan_content, total_tasks=1, valid=False
+        )
+
+        with (
+            patch(
+                "amelia.server.orchestrator.service.import_external_plan",
+                new_callable=AsyncMock,
+                return_value=import_result,
+            ),
+            patch.object(
+                mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
+            ) as mock_get_profile,
+            patch.object(
+                mock_orchestrator, "_update_profile_repo_root"
+            ) as mock_update_profile,
+            patch.object(
+                mock_orchestrator, "_emit", new_callable=AsyncMock
+            ) as mock_emit,
+        ):
+            mock_get_profile.return_value = mock_profile
+            mock_update_profile.return_value = mock_profile
+
+            await mock_orchestrator.set_workflow_plan(
+                workflow_id=uuid4(),
+                plan_content=plan_content,
+            )
+
+        from amelia.server.models.events import EventType
+
+        emit_calls = mock_emit.call_args_list
+        event_types = [call.args[1] for call in emit_calls]
+        assert EventType.PLAN_VALIDATION_FAILED in event_types
