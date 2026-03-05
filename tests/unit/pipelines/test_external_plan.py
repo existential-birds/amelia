@@ -381,8 +381,8 @@ Content here.
         assert result.plan_markdown == plan_content
         # plan_path should be set
         assert result.plan_path == target_path
-        # goal should still be extracted (regex extracts from heading)
-        assert "Implementation Plan" in result.goal or result.goal == "Implementation plan"
+        # goal should be extracted from **Goal:** pattern (takes priority over heading)
+        assert result.goal == "Do thing"
 
     async def test_import_runs_structural_validation(self, mock_profile: Profile, tmp_path: Path) -> None:
         """Import runs structural validation and includes result."""
