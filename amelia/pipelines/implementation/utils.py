@@ -198,8 +198,10 @@ def _extract_goal_from_plan(plan_content: str) -> str:
         Extracted goal or a default placeholder.
     """
     # Try to find **Goal:** pattern (multi-line: capture until blank line, heading, or bold)
+    # Use [^\n] with explicit \n to avoid polynomial backtracking with re.DOTALL
     goal_match = re.search(
-        r"\*\*Goal:\*\*\s*(.+?)(?=\n\n|\n#|\n\*\*|$)", plan_content, re.DOTALL
+        r"\*\*Goal:\*\*[ \t]*([^\n](?:[^\n]|\n(?!\n|#|\*\*))*)",
+        plan_content,
     )
     if goal_match:
         # Normalize whitespace: collapse newlines and multiple spaces
