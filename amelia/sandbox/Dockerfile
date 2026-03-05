@@ -6,7 +6,7 @@ FROM tob-claude-devcontainer:latest
 # Install amelia package (code only, no transitive deps) and worker dependencies.
 # This gives the worker access to:
 #   amelia.drivers.base (AgenticMessage, DriverUsage)
-#   amelia.agents.schemas (EvaluationOutput, MarkdownPlanOutput, etc.)
+#   amelia.agents.schemas (EvaluationOutput, etc.)
 #   amelia.sandbox.worker (entrypoint)
 # Heavy deps (langgraph, fastapi, asyncpg, langchain) are NOT installed.
 USER root
