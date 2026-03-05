@@ -301,9 +301,8 @@ const profileToFormData = (profile: Profile): ProfileFormData => {
   const agents: Record<string, AgentFormData> = {};
 
   for (const agent of AGENT_DEFINITIONS) {
-    const rawDriver = profile.agents?.[agent.key]?.driver ?? 'claude';
     agents[agent.key] = {
-      driver: rawDriver === 'cli' ? 'claude' : rawDriver,
+      driver: profile.agents?.[agent.key]?.driver ?? 'claude',
       model: profile.agents?.[agent.key]?.model ?? agent.defaultModel,
     };
   }
