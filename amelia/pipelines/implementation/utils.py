@@ -2,6 +2,12 @@
 
 This module contains helper functions specific to the implementation pipeline,
 including plan parsing, task extraction, and git commit utilities.
+
+Plan Format Requirements:
+    Plans are markdown documents. For optimal regex extraction, use:
+    - ``**Goal:** <text>`` for goal extraction (falls back to first ``# heading``)
+    - ``Create: `path``` / ``Modify: `path``` for key file extraction
+    - ``### Task N: <title>`` for task counting
 """
 
 import asyncio
@@ -182,7 +188,7 @@ def _extract_goal_from_plan(plan_content: str) -> str:
     """Extract goal from plan content using simple pattern matching.
 
     Looks for common goal patterns in the plan markdown:
-    - **Goal:** <text>
+    - **Goal:** <text> (may span multiple lines until blank line, heading, or bold)
     - # <Title> (first h1 header)
 
     Args:
@@ -191,10 +197,15 @@ def _extract_goal_from_plan(plan_content: str) -> str:
     Returns:
         Extracted goal or a default placeholder.
     """
-    # Try to find **Goal:** pattern
-    goal_match = re.search(r"\*\*Goal:\*\*\s*(.+?)(?:\n|$)", plan_content)
+    # Try to find **Goal:** pattern (multi-line: capture until blank line, heading, or bold)
+    goal_match = re.search(
+        r"\*\*Goal:\*\*\s*(.+?)(?=\n\n|\n#|\n\*\*|$)", plan_content, re.DOTALL
+    )
     if goal_match:
-        return goal_match.group(1).strip()
+        # Normalize whitespace: collapse newlines and multiple spaces
+        goal = re.sub(r"\s+", " ", goal_match.group(1)).strip()
+        logger.debug("Goal extracted from **Goal:** pattern", goal=goal)
+        return goal
 
     # Try to find first # header as title
     title_match = re.search(r"^#\s+(.+?)(?:\n|$)", plan_content, re.MULTILINE)
@@ -202,8 +213,10 @@ def _extract_goal_from_plan(plan_content: str) -> str:
         title = title_match.group(1).strip()
         # Remove "Implementation Plan" suffix if present
         title = re.sub(r"\s*Implementation Plan\s*$", "", title, flags=re.IGNORECASE)
+        logger.debug("Goal extracted from heading fallback", title=title)
         return f"Implement {title}" if title else "Implementation plan"
 
+    logger.debug("No goal pattern found, using default")
     return "Implementation plan"
 
 
@@ -241,6 +254,12 @@ def _extract_key_files_from_plan(plan_content: str) -> list[str]:
         if f not in seen:
             seen.add(f)
             unique_files.append(f)
+
+    logger.debug(
+        "Key files extraction complete",
+        file_count=len(unique_files),
+        files=unique_files if unique_files else "(none)",
+    )
 
     return unique_files
 

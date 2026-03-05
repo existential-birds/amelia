@@ -42,7 +42,7 @@ describe('AgentNode', () => {
       { agentType: 'developer', displayName: 'Developer' },
       { agentType: 'reviewer', displayName: 'Reviewer' },
       { agentType: 'plan_validator', displayName: 'Plan Validator' },
-      { agentType: 'human_approval', displayName: 'Human Approval' },
+      { agentType: 'human_approval', displayName: 'Approval' },
     ])('renders "$displayName" for $agentType', ({ agentType, displayName }) => {
       renderNode({
         agentType,

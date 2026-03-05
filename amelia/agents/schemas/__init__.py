@@ -5,7 +5,6 @@ in constrained environments (e.g. DevContainer sandboxes) without pulling
 in heavy infrastructure dependencies.
 """
 
-from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.agents.schemas.evaluator import (
     Disposition,
     EvaluatedItem,
@@ -19,5 +18,4 @@ __all__ = [
     "EvaluatedItem",
     "EvaluationOutput",
     "EvaluationResult",
-    "MarkdownPlanOutput",
 ]

@@ -16,11 +16,7 @@ from langchain_core.runnables.config import RunnableConfig
 from loguru import logger
 
 from amelia.agents.architect import Architect
-from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.constants import ToolName, resolve_plan_path
-from amelia.core.exceptions import SchemaValidationError
-from amelia.core.extraction import extract_structured
-from amelia.pipelines.implementation.external_plan import build_plan_extraction_prompt
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.implementation.utils import (
     _extract_goal_from_plan,
@@ -38,17 +34,19 @@ async def plan_validator_node(
     state: ImplementationState,
     config: RunnableConfig | None = None,
 ) -> dict[str, Any]:
-    """Validate and extract structure from architect's plan file.
+    """Validate and extract structure from plan file using regex.
 
-    Reads the plan file written by the architect and uses an LLM to extract
-    structured fields (goal, plan_markdown, key_files) using the MarkdownPlanOutput schema.
+    Reads the plan file and extracts structured fields (goal, key_files)
+    using pattern matching. Runs structural validation to check for
+    required headers and minimum content.
 
     Args:
-        state: Current execution state with raw_architect_output.
+        state: Current execution state.
         config: RunnableConfig with profile in configurable.
 
     Returns:
-        Partial state dict with goal, plan_markdown, plan_path, key_files.
+        Partial state dict with goal, plan_markdown, plan_path, key_files,
+        total_tasks, plan_validation_result, plan_revision_count.
 
     Raises:
         ValueError: If plan file not found or empty.
@@ -58,7 +56,7 @@ async def plan_validator_node(
     if not state.issue:
         raise ValueError("Issue is required in state for plan validation")
 
-    # Resolve plan path - use working_dir to match call_architect_node
+    # Resolve plan path
     plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
     working_dir = Path(profile.repo_root)
     plan_path = working_dir / plan_rel_path
@@ -77,38 +75,13 @@ async def plan_validator_node(
     if not plan_content.strip():
         raise ValueError(f"Plan file is empty at {plan_path}")
 
-    # Extract structured fields using lightweight extraction (no tools needed)
-    # The plan already exists - we just need to parse it into structured format
-    # Use plan_validator agent config for structured extraction
-    agent_config = profile.get_agent_config("plan_validator")
-    prompt = build_plan_extraction_prompt(plan_content)
-
-    try:
-        output = await extract_structured(
-            prompt=prompt,
-            schema=MarkdownPlanOutput,
-            model=agent_config.model,
-            driver_type=agent_config.driver,
-        )
-        goal = output.goal
-        plan_markdown = output.plan_markdown
-        key_files = output.key_files
-    except (RuntimeError, SchemaValidationError) as e:
-        # Fallback: extract what we can from the plan content directly
-        logger.warning(
-            "Structured extraction failed, using fallback",
-            error=str(e),
-            workflow_id=workflow_id,
-        )
-        goal = _extract_goal_from_plan(plan_content)
-        plan_markdown = plan_content
-        key_files = _extract_key_files_from_plan(plan_content)
-
-    # Parse task count from plan markdown
+    # Extract fields using regex
+    goal = _extract_goal_from_plan(plan_content)
+    key_files = _extract_key_files_from_plan(plan_content)
     total_tasks = extract_task_count(plan_content)
 
-    # Run structural validation (on both happy path and fallback output)
-    validation_result = validate_plan_structure(goal, plan_markdown)
+    # Run structural validation
+    validation_result = validate_plan_structure(goal, plan_content)
 
     revision_count = state.plan_revision_count
     if not validation_result.valid:
@@ -131,7 +104,7 @@ async def plan_validator_node(
 
     return {
         "goal": goal,
-        "plan_markdown": plan_markdown,
+        "plan_markdown": plan_content,
         "plan_path": plan_path,
         "key_files": key_files,
         "total_tasks": total_tasks,

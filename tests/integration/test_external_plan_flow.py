@@ -1,10 +1,7 @@
 """Integration tests for external plan import flow.
 
 Tests the complete external plan lifecycle with real components,
-mocking only at the external HTTP boundary (LLM API calls).
-
-Mock boundaries:
-- extract_structured: Prevents actual LLM API calls for plan extraction
+using regex-only plan extraction (no LLM calls).
 
 Real components:
 - FastAPI route handlers
@@ -12,20 +9,18 @@ Real components:
 - WorkflowRepository with PostgreSQL test database
 - ProfileRepository with test profile in database
 - Request/Response model validation
-- import_external_plan function (except LLM extraction)
+- import_external_plan function with regex extraction
 """
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.constants import resolve_plan_path
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.database.profile_repository import ProfileRepository
@@ -87,22 +82,6 @@ def test_client(
     return TestClient(app, raise_server_exceptions=False)
 
 
-def create_mock_plan_output(
-    goal: str = "Test goal",
-    plan_markdown: str = "# Plan\n\n### Task 1: Do thing\n\nDo it.",
-    key_files: list[str] | None = None,
-) -> MarkdownPlanOutput:
-    """Create a mock MarkdownPlanOutput for testing.
-
-    Returns a real Pydantic model instance to match production behavior.
-    """
-    return MarkdownPlanOutput(
-        goal=goal,
-        plan_markdown=plan_markdown,
-        key_files=key_files or [],
-    )
-
-
 # =============================================================================
 # Test Classes
 # =============================================================================
@@ -129,27 +108,18 @@ class TestExternalPlanAtCreation:
         (git_dir / ".git").mkdir()
         resolved_path = str(git_dir.resolve())
 
-        plan_content = "# Implementation Plan\n\n### Task 1: Do thing\n\nDo it."
+        plan_content = "**Goal:** Do thing\n\n### Task 1: Do thing\n\nDo it."
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            mock_extract.return_value = create_mock_plan_output(
-                goal="Do thing",
-                plan_markdown=plan_content,
-                key_files=["test.py"],
-            )
-
-            response = test_client.post(
-                "/api/workflows",
-                json={
-                    "issue_id": "TEST-EXT-001",
-                    "worktree_path": resolved_path,
-                    "start": False,
-                    "task_title": "Test task",
-                    "plan_content": plan_content,
-                },
-            )
+        response = test_client.post(
+            "/api/workflows",
+            json={
+                "issue_id": "TEST-EXT-001",
+                "worktree_path": resolved_path,
+                "start": False,
+                "task_title": "Test task",
+                "plan_content": plan_content,
+            },
+        )
 
         assert response.status_code == status.HTTP_201_CREATED
         workflow_id = response.json()["id"]
@@ -177,31 +147,22 @@ class TestExternalPlanAtCreation:
         resolved_path = str(git_dir.resolve())
 
         # Create plan file in the git repo
-        plan_content = "# Implementation Plan\n\n### Task 1: Create module\n\nCreate it."
+        plan_content = "**Goal:** Create module\n\n### Task 1: Create module\n\nCreate it."
         docs_dir = git_dir / "docs"
         docs_dir.mkdir()
         plan_file = docs_dir / "plan.md"
         plan_file.write_text(plan_content)
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            mock_extract.return_value = create_mock_plan_output(
-                goal="Create module",
-                plan_markdown=plan_content,
-                key_files=["module.py"],
-            )
-
-            response = test_client.post(
-                "/api/workflows",
-                json={
-                    "issue_id": "TEST-FILE-001",
-                    "worktree_path": resolved_path,
-                    "start": False,
-                    "task_title": "Test task",
-                    "plan_file": "docs/plan.md",  # Relative path
-                },
-            )
+        response = test_client.post(
+            "/api/workflows",
+            json={
+                "issue_id": "TEST-FILE-001",
+                "worktree_path": resolved_path,
+                "start": False,
+                "task_title": "Test task",
+                "plan_file": "docs/plan.md",  # Relative path
+            },
+        )
 
         assert response.status_code == status.HTTP_201_CREATED
         workflow_id = response.json()["id"]
@@ -264,24 +225,19 @@ class TestExternalPlanAtCreation:
         # Create plan at a custom location (not the plan_path_pattern location)
         custom_plan = git_dir / "docs" / "plans" / "my-custom-plan.md"
         custom_plan.parent.mkdir(parents=True, exist_ok=True)
-        custom_plan.write_text("# Custom plan\n\n### Task 1: Do it\n\nDo the thing.\n")
+        custom_plan.write_text("**Goal:** Do it\n\n### Task 1: Do it\n\nDo the thing.\n")
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            mock_extract.return_value = create_mock_plan_output()
-
-            response = test_client.post(
-                "/api/workflows",
-                json={
-                    "issue_id": "TEST-999",
-                    "worktree_path": resolved_path,
-                    "profile": setup_test_profile.name,
-                    "task_title": "Test task",
-                    "start": False,
-                    "plan_file": str(custom_plan),
-                },
-            )
+        response = test_client.post(
+            "/api/workflows",
+            json={
+                "issue_id": "TEST-999",
+                "worktree_path": resolved_path,
+                "profile": setup_test_profile.name,
+                "task_title": "Test task",
+                "start": False,
+                "plan_file": str(custom_plan),
+            },
+        )
 
         assert response.status_code == status.HTTP_201_CREATED
 
@@ -363,27 +319,17 @@ class TestSetPlanEndpoint:
         assert workflow.execution_state is not None
         assert workflow.execution_state.external_plan is False
 
-        # Now set the plan
-        plan_content = "# Plan\n\n### Task 1: Implement feature\n\nDo it."
+        # Now set the plan (uses regex extraction, no LLM)
+        plan_content = "**Goal:** Implement feature\n\n### Task 1: Implement feature\n\nDo it."
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            mock_extract.return_value = create_mock_plan_output(
-                goal="Implement feature",
-                plan_markdown=plan_content,
-                key_files=["feature.py"],
-            )
-
-            response = test_client.post(
-                f"/api/workflows/{workflow_id}/plan",
-                json={"plan_content": plan_content},
-            )
+        response = test_client.post(
+            f"/api/workflows/{workflow_id}/plan",
+            json={"plan_content": plan_content},
+        )
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["goal"] == "Implement feature"
-        assert data["key_files"] == ["feature.py"]
         assert data["total_tasks"] == 1
 
         # Verify workflow now has external plan
@@ -454,32 +400,24 @@ class TestSetPlanEndpoint:
         resolved_path = str(git_dir.resolve())
 
         # Create workflow with initial plan
-        plan_content = "# Initial Plan\n\n### Task 1: First thing"
+        plan_content = "**Goal:** First thing\n\n### Task 1: First thing"
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            mock_extract.return_value = create_mock_plan_output(
-                goal="First thing",
-                plan_markdown=plan_content,
-            )
-
-            response = test_client.post(
-                "/api/workflows",
-                json={
-                    "issue_id": "TEST-FORCE-001",
-                    "worktree_path": resolved_path,
-                    "start": False,
-                    "task_title": "Test task",
-                    "plan_content": plan_content,
-                },
-            )
+        response = test_client.post(
+            "/api/workflows",
+            json={
+                "issue_id": "TEST-FORCE-001",
+                "worktree_path": resolved_path,
+                "start": False,
+                "task_title": "Test task",
+                "plan_content": plan_content,
+            },
+        )
 
         assert response.status_code == status.HTTP_201_CREATED
         workflow_id = response.json()["id"]
 
         # Try to set a new plan without force - should fail
-        new_plan_content = "# New Plan\n\n### Task 1: Second thing"
+        new_plan_content = "**Goal:** Second thing\n\n### Task 1: Second thing"
         response = test_client.post(
             f"/api/workflows/{workflow_id}/plan",
             json={"plan_content": new_plan_content},  # force defaults to False
@@ -488,18 +426,10 @@ class TestSetPlanEndpoint:
         assert response.status_code == status.HTTP_409_CONFLICT
 
         # Now try with force=True - should succeed
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            mock_extract.return_value = create_mock_plan_output(
-                goal="Second thing",
-                plan_markdown=new_plan_content,
-            )
-
-            response = test_client.post(
-                f"/api/workflows/{workflow_id}/plan",
-                json={"plan_content": new_plan_content, "force": True},
-            )
+        response = test_client.post(
+            f"/api/workflows/{workflow_id}/plan",
+            json={"plan_content": new_plan_content, "force": True},
+        )
 
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["goal"] == "Second thing"
@@ -541,16 +471,12 @@ class TestSetPlanEndpoint:
         # Create custom plan file
         custom_plan = git_dir / "docs" / "plans" / "custom-set-plan.md"
         custom_plan.parent.mkdir(parents=True, exist_ok=True)
-        custom_plan.write_text("# Set plan\n\n### Task 1: Do it\n\nDo the thing.\n")
+        custom_plan.write_text("**Goal:** Do it\n\n### Task 1: Do it\n\nDo the thing.\n")
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            mock_extract.return_value = create_mock_plan_output()
-            response = test_client.post(
-                f"/api/workflows/{workflow_id}/plan",
-                json={"plan_file": str(custom_plan)},
-            )
+        response = test_client.post(
+            f"/api/workflows/{workflow_id}/plan",
+            json={"plan_file": str(custom_plan)},
+        )
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -655,8 +581,8 @@ class TestExternalPlanTaskCount:
         (git_dir / ".git").mkdir()
         resolved_path = str(git_dir.resolve())
 
-        # Plan with 3 tasks
-        plan_content = """# Implementation Plan
+        # Plan with 3 tasks (uses regex-friendly format)
+        plan_content = """**Goal:** Implement feature with models, routes, and tests
 
 ### Task 1: Create models
 
@@ -671,25 +597,16 @@ Add the API routes.
 Write unit tests.
 """
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            mock_extract.return_value = create_mock_plan_output(
-                goal="Implement feature with models, routes, and tests",
-                plan_markdown=plan_content,
-                key_files=["models.py", "routes.py", "test_feature.py"],
-            )
-
-            response = test_client.post(
-                "/api/workflows",
-                json={
-                    "issue_id": "TEST-TASKS-001",
-                    "worktree_path": resolved_path,
-                    "start": False,
-                    "task_title": "Test task",
-                    "plan_content": plan_content,
-                },
-            )
+        response = test_client.post(
+            "/api/workflows",
+            json={
+                "issue_id": "TEST-TASKS-001",
+                "worktree_path": resolved_path,
+                "start": False,
+                "task_title": "Test task",
+                "plan_content": plan_content,
+            },
+        )
 
         assert response.status_code == status.HTTP_201_CREATED
         workflow_id = response.json()["id"]

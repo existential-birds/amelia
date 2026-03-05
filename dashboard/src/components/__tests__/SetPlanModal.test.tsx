@@ -47,7 +47,7 @@ describe('SetPlanModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.setPlan).mockResolvedValue({
-      status: 'validating',
+      status: 'ready',
       goal: 'Test goal',
       key_files: ['src/main.ts'],
       total_tasks: 3,
@@ -194,7 +194,7 @@ describe('SetPlanModal', () => {
 
     it('shows success toast with task count from response', async () => {
       vi.mocked(api.setPlan).mockResolvedValue({
-        status: 'validating',
+        status: 'ready',
         goal: 'Implement authentication',
         key_files: ['src/auth.ts'],
         total_tasks: 5,
@@ -209,16 +209,14 @@ describe('SetPlanModal', () => {
       await user.click(screen.getByRole('button', { name: /apply/i }));
 
       await waitFor(() => {
-        expect(toast.success).toHaveBeenCalledWith(
-          expect.stringContaining('5 tasks')
-        );
+        expect(toast.success).toHaveBeenCalledWith('Plan imported (5 tasks)');
         expect(onOpenChange).toHaveBeenCalledWith(false);
       });
     });
 
     it('shows generic success toast when total_tasks is 0', async () => {
       vi.mocked(api.setPlan).mockResolvedValue({
-        status: 'validating',
+        status: 'ready',
         goal: 'Some goal',
         key_files: [],
         total_tasks: 0,
@@ -232,7 +230,7 @@ describe('SetPlanModal', () => {
       await user.click(screen.getByRole('button', { name: /apply/i }));
 
       await waitFor(() => {
-        expect(toast.success).toHaveBeenCalledWith('Plan imported, validating...');
+        expect(toast.success).toHaveBeenCalledWith('Plan imported');
       });
     });
 
@@ -275,7 +273,7 @@ describe('SetPlanModal', () => {
 
       // Resolve the promise and wait for the submission to complete
       await act(async () => {
-        resolvePromise!({ status: 'validating', goal: 'Test', key_files: [], total_tasks: 1 });
+        resolvePromise!({ status: 'ready', goal: 'Test', key_files: [], total_tasks: 1 });
       });
     });
   });
