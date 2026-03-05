@@ -20,7 +20,22 @@ function createTimeoutSignal(timeoutMs: number = DEFAULT_TIMEOUT_MS): AbortSigna
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
+    let message = `HTTP ${response.status}: ${response.statusText}`;
+    if (error.detail) {
+      if (typeof error.detail === 'string') {
+        message = error.detail;
+      } else if (Array.isArray(error.detail)) {
+        message = error.detail
+          .map((e: { msg?: string; loc?: string[] }) => {
+            const loc = e.loc?.slice(1).join('.') ?? '';
+            return loc ? `${loc}: ${e.msg}` : (e.msg ?? String(e));
+          })
+          .join('; ');
+      } else {
+        message = JSON.stringify(error.detail);
+      }
+    }
+    throw new Error(message);
   }
   return response.json();
 }

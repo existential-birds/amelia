@@ -148,7 +148,7 @@ interface AgentFormData {
   model: string;
 }
 
-interface FormData {
+interface ProfileFormData {
   id: string;
   tracker: string;
   repo_root: string;
@@ -236,7 +236,7 @@ const buildDefaultAgents = (): Record<string, AgentFormData> => {
   return agents;
 };
 
-const DEFAULT_FORM_DATA: FormData = {
+const DEFAULT_FORM_DATA: ProfileFormData = {
   id: '',
   tracker: 'noop',
   repo_root: '',
@@ -268,7 +268,8 @@ const profileFormSchema = z.object({
       'Only letters, numbers, underscores, and hyphens allowed'
     ),
   tracker: z.string(),
-  repo_root: z.string().min(1, 'Repository root is required'),
+  repo_root: z.string().min(1, 'Repository root is required')
+    .refine(v => v.startsWith('/'), 'Repository root must be an absolute path'),
   plan_output_dir: z.string(),
   plan_path_pattern: z.string(),
   agents: z.record(agentFormSchema),
@@ -288,16 +289,21 @@ const validateField = (field: ValidatableField, value: string): string | null =>
   if (!result.success) {
     return result.error.issues[0]?.message ?? 'Invalid value';
   }
+  // Additional refinements not captured by .shape extraction
+  if (field === 'repo_root' && value && !value.startsWith('/')) {
+    return 'Repository root must be an absolute path';
+  }
   return null;
 };
 
-/** Convert Profile to FormData for comparison */
-const profileToFormData = (profile: Profile): FormData => {
+/** Convert Profile to ProfileFormData for comparison */
+const profileToFormData = (profile: Profile): ProfileFormData => {
   const agents: Record<string, AgentFormData> = {};
 
   for (const agent of AGENT_DEFINITIONS) {
+    const rawDriver = profile.agents?.[agent.key]?.driver ?? 'claude';
     agents[agent.key] = {
-      driver: profile.agents?.[agent.key]?.driver ?? 'claude',
+      driver: rawDriver === 'cli' ? 'claude' : rawDriver,
       model: profile.agents?.[agent.key]?.model ?? agent.defaultModel,
     };
   }
@@ -600,10 +606,10 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
 
   const [utilityAgentsOpen, setUtilityAgentsOpen] = useState(false);
 
-  const [formData, setFormData] = useState<FormData>({ ...DEFAULT_FORM_DATA });
+  const [formData, setFormData] = useState<ProfileFormData>({ ...DEFAULT_FORM_DATA });
 
   // Track the original state when modal opens for comparison
-  const originalFormDataRef = useRef<FormData>({ ...DEFAULT_FORM_DATA });
+  const originalFormDataRef = useRef<ProfileFormData>({ ...DEFAULT_FORM_DATA });
 
   useEffect(() => {
     const newFormData = profile ? profileToFormData(profile) : { ...DEFAULT_FORM_DATA };
@@ -777,8 +783,8 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       }
       onSaved();
       onOpenChange(false);
-    } catch {
-      toast.error(isEditMode ? 'Failed to update profile' : 'Failed to create profile');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save profile');
     } finally {
       setIsSaving(false);
     }
