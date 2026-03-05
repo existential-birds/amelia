@@ -236,6 +236,9 @@ const buildDefaultAgents = (): Record<string, AgentFormData> => {
   return agents;
 };
 
+const ABSOLUTE_PATH_ERROR = 'Repository root must be an absolute path';
+const isAbsolutePath = (v: string) => v.startsWith('/');
+
 const DEFAULT_FORM_DATA: ProfileFormData = {
   id: '',
   tracker: 'noop',
@@ -269,7 +272,7 @@ const profileFormSchema = z.object({
     ),
   tracker: z.string(),
   repo_root: z.string().min(1, 'Repository root is required')
-    .refine(v => v.startsWith('/'), 'Repository root must be an absolute path'),
+    .refine(isAbsolutePath, ABSOLUTE_PATH_ERROR),
   plan_output_dir: z.string(),
   plan_path_pattern: z.string(),
   agents: z.record(agentFormSchema),
@@ -290,8 +293,8 @@ const validateField = (field: ValidatableField, value: string): string | null =>
     return result.error.issues[0]?.message ?? 'Invalid value';
   }
   // Additional refinements not captured by .shape extraction
-  if (field === 'repo_root' && value && !value.startsWith('/')) {
-    return 'Repository root must be an absolute path';
+  if (field === 'repo_root' && value && !isAbsolutePath(value)) {
+    return ABSOLUTE_PATH_ERROR;
   }
   return null;
 };

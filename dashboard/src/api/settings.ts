@@ -4,6 +4,8 @@
  * Provides functions for managing server settings and profile configurations.
  */
 
+import { parseErrorDetail } from './errors';
+
 const API_BASE_URL = "/api";
 const DEFAULT_TIMEOUT_MS = 30000;
 
@@ -20,22 +22,11 @@ function createTimeoutSignal(timeoutMs: number = DEFAULT_TIMEOUT_MS): AbortSigna
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    let message = `HTTP ${response.status}: ${response.statusText}`;
-    if (error.detail) {
-      if (typeof error.detail === 'string') {
-        message = error.detail;
-      } else if (Array.isArray(error.detail)) {
-        message = error.detail
-          .map((e: { msg?: string; loc?: string[] }) => {
-            const loc = e.loc?.slice(1).join('.') ?? '';
-            return loc ? `${loc}: ${e.msg}` : (e.msg ?? String(e));
-          })
-          .join('; ');
-      } else {
-        message = JSON.stringify(error.detail);
-      }
-    }
+    const message = parseErrorDetail(error.detail, `HTTP ${response.status}: ${response.statusText}`);
     throw new Error(message);
+  }
+  if (response.status === 204 || response.headers?.get('content-length') === '0') {
+    return undefined as T;
   }
   return response.json();
 }
@@ -301,10 +292,7 @@ export async function deleteProfile(id: string): Promise<void> {
     headers: { "Content-Type": "application/json" },
     signal: createTimeoutSignal(),
   });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
-  }
+  await handleResponse<void>(response);
 }
 
 /**

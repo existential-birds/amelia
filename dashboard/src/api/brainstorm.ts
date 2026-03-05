@@ -4,6 +4,7 @@ import type {
   SessionWithHistory,
   SessionStatus,
 } from "@/types/api";
+import { parseErrorDetail } from './errors';
 
 const API_BASE_URL = "/api/brainstorm";
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -15,7 +16,8 @@ function createTimeoutSignal(timeoutMs: number = DEFAULT_TIMEOUT_MS): AbortSigna
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    const message = parseErrorDetail(error.detail, `HTTP ${response.status}`);
+    throw new Error(message);
   }
   return response.json();
 }
@@ -90,7 +92,7 @@ export const brainstormApi = {
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || `HTTP ${response.status}`);
+      throw new Error(parseErrorDetail(error.detail, `HTTP ${response.status}`));
     }
   },
 

@@ -19,10 +19,10 @@ vi.mock('@/api/settings', () => ({
 }));
 
 // Mock toast notifications
-vi.mock('@/components/Toast', () => ({
-  success: vi.fn(),
-  error: vi.fn(),
-}));
+vi.mock('@/components/Toast', async () => {
+  const actual = await vi.importActual<typeof import('@/components/Toast')>('@/components/Toast');
+  return { ...actual, error: vi.fn(), success: vi.fn() };
+});
 
 // Mock useRecentModels with a recent model to show dropdown with "Browse all models" link
 vi.mock('@/hooks/useRecentModels', () => ({
