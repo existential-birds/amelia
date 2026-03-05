@@ -456,6 +456,62 @@ describe('QuickShotModal', () => {
     });
   });
 
+  describe('Title Auto-fill', () => {
+    it('auto-fills task title when plan with H1 is pasted and title is empty', async () => {
+      const user = userEvent.setup();
+      await renderAndWaitForInit();
+
+      // Expand External Plan and switch to paste mode
+      await user.click(screen.getByText(/external plan/i));
+      await user.click(screen.getByRole('radio', { name: /paste/i }));
+
+      const textarea = screen.getByPlaceholderText(/paste.*plan.*markdown/i);
+      await user.type(textarea, '# My Feature Design\n\n## Goal\nBuild X');
+
+      await waitFor(() => {
+        const titleInput = screen.getByLabelText(/task title/i);
+        expect(titleInput).toHaveValue('My Feature');
+      });
+    });
+
+    it('does not overwrite existing user-provided title', async () => {
+      const user = userEvent.setup();
+      await renderAndWaitForInit();
+
+      // Type a title first
+      await user.type(screen.getByLabelText(/task title/i), 'My custom title');
+
+      // Expand External Plan and switch to paste mode
+      await user.click(screen.getByText(/external plan/i));
+      await user.click(screen.getByRole('radio', { name: /paste/i }));
+
+      const textarea = screen.getByPlaceholderText(/paste.*plan.*markdown/i);
+      await user.type(textarea, '# Different Title Design\n\n## Goal\nBuild X');
+
+      // Title should remain unchanged
+      await waitFor(() => {
+        const titleInput = screen.getByLabelText(/task title/i);
+        expect(titleInput).toHaveValue('My custom title');
+      });
+    });
+
+    it('does not auto-fill when plan has no H1', async () => {
+      const user = userEvent.setup();
+      await renderAndWaitForInit();
+
+      // Expand External Plan and switch to paste mode
+      await user.click(screen.getByText(/external plan/i));
+      await user.click(screen.getByRole('radio', { name: /paste/i }));
+
+      const textarea = screen.getByPlaceholderText(/paste.*plan.*markdown/i);
+      await user.type(textarea, '## Goal\nBuild X\n\n## Tasks\n### Task 1\nDo it');
+
+      // Title should remain empty
+      const titleInput = screen.getByLabelText(/task title/i);
+      expect(titleInput).toHaveValue('');
+    });
+  });
+
   describe('Config Integration', () => {
     it('pre-fills worktree path from server config', async () => {
       vi.mocked(api.getConfig).mockResolvedValue({ repo_root: '/tmp/repo', max_concurrent: 5, active_profile: 'test', active_profile_info: null });

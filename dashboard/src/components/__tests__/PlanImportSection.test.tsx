@@ -116,6 +116,7 @@ describe('PlanImportSection', () => {
         expect(onPlanChange).toHaveBeenLastCalledWith({
           plan_file: 'docs/plan.md',
           plan_content: undefined,
+          extracted_title: undefined,
         });
       });
     });
@@ -133,6 +134,7 @@ describe('PlanImportSection', () => {
         expect(onPlanChange).toHaveBeenLastCalledWith({
           plan_file: undefined,
           plan_content: undefined,
+          extracted_title: undefined,
         });
       });
     });
@@ -154,6 +156,7 @@ describe('PlanImportSection', () => {
         expect(onPlanChange).toHaveBeenLastCalledWith({
           plan_file: undefined,
           plan_content: '# Plan\n\n## Goal\nTest goal',
+          extracted_title: 'Plan',
         });
       });
     });
@@ -222,6 +225,7 @@ Implement user authentication.
         expect(onPlanChange).toHaveBeenLastCalledWith({
           plan_file: undefined,
           plan_content: content,
+          extracted_title: 'Plan',
         });
       });
     });
@@ -577,7 +581,49 @@ Add new feature.
       });
     });
 
-    it('calls onPlanChange when a file is selected from combobox', async () => {
+    it('calls onPlanChange with extracted title when file has H1', async () => {
+      vi.mocked(api.listFiles).mockResolvedValue({
+        files: mockFiles,
+        directory: '/tmp/project/docs/plans',
+      });
+      vi.mocked(api.readFile).mockResolvedValue({
+        content: '# My Feature Design\n\n## Goal\nTest\n\n## Tasks\n### Task 1\nDo it\n',
+        filename: 'plan-1.md',
+      });
+
+      const onPlanChange = vi.fn();
+      const user = userEvent.setup();
+      render(
+        <PlanImportSection
+          onPlanChange={onPlanChange}
+          defaultExpanded
+          worktreePath="/tmp/project"
+          planOutputDir="docs/plans"
+        />
+      );
+
+      // Wait for files to load
+      await waitFor(() => {
+        expect(api.listFiles).toHaveBeenCalled();
+      });
+
+      // Open combobox and select a file
+      await user.click(screen.getByRole('combobox'));
+      await waitFor(() => {
+        expect(screen.getByText('plan-1.md')).toBeInTheDocument();
+      });
+      await user.click(screen.getByText('plan-1.md'));
+
+      await waitFor(() => {
+        expect(onPlanChange).toHaveBeenLastCalledWith({
+          plan_file: 'docs/plans/plan-1.md',
+          plan_content: undefined,
+          extracted_title: 'My Feature',
+        });
+      });
+    });
+
+    it('passes undefined extracted_title when file has no H1', async () => {
       vi.mocked(api.listFiles).mockResolvedValue({
         files: mockFiles,
         directory: '/tmp/project/docs/plans',
@@ -614,6 +660,7 @@ Add new feature.
         expect(onPlanChange).toHaveBeenLastCalledWith({
           plan_file: 'docs/plans/plan-1.md',
           plan_content: undefined,
+          extracted_title: undefined,
         });
       });
     });
