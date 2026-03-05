@@ -60,7 +60,7 @@ describe('PendingWorkflowControls', () => {
     });
     vi.mocked(api.cancelWorkflow).mockResolvedValue(undefined);
     vi.mocked(api.setPlan).mockResolvedValue({
-      status: 'validating',
+      status: 'ready',
       goal: 'Test goal',
       key_files: [],
       total_tasks: 1,

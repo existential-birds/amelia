@@ -585,17 +585,17 @@ export interface SetPlanRequest {
  * Returned by POST /api/workflows/:id/plan endpoint.
  */
 export interface SetPlanResponse {
-  /** Current validation status. */
-  status: 'validating' | 'validated';
+  /** Current status — always 'ready' since extraction is synchronous. */
+  status: 'ready';
 
   /** Number of tasks in the plan. */
   total_tasks: number;
 
-  /** Extracted goal from the plan, if available. */
-  goal?: string;
+  /** Extracted goal from the plan. */
+  goal: string;
 
-  /** List of key files from the plan, if available. */
-  key_files?: string[];
+  /** List of key files from the plan. */
+  key_files: string[];
 }
 
 /**

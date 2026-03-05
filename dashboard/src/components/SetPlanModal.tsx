@@ -73,8 +73,8 @@ export function SetPlanModal({
       });
 
       const summary = result.total_tasks > 0
-        ? `Plan imported (${result.total_tasks} tasks), validating...`
-        : 'Plan imported, validating...';
+        ? `Plan imported (${result.total_tasks} tasks)`
+        : 'Plan imported';
       toast.success(summary);
       onOpenChange(false);
       onSuccess?.();
