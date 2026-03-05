@@ -18,6 +18,7 @@ from daytona_sdk import (
     AsyncDaytona,
     AsyncSandbox,
     CreateSandboxFromImageParams,
+    CreateSandboxFromSnapshotParams,
     DaytonaConfig,
     Image,
     Resources,
@@ -28,6 +29,12 @@ from loguru import logger
 from amelia.core.retry import with_retry
 from amelia.core.types import RetryConfig
 from amelia.sandbox.worktree import REPO_PATH
+
+
+# Lightweight deps needed by amelia.sandbox.worker inside the sandbox.
+# These are installed into the Daytona image at build time so the worker
+# can run without a pre-built GHCR image.
+_WORKER_DEPS = ["deepagents", "pydantic", "loguru", "httpx", "langchain-openai"]
 
 
 if TYPE_CHECKING:
@@ -48,7 +55,10 @@ class DaytonaSandboxProvider:
         repo_url: Git remote URL to clone into the sandbox.
         branch: Git branch to clone.
         resources: Optional CPU/memory/disk resource configuration.
-        image: Docker image for the sandbox (default: pre-built amelia image).
+        image: Docker image for the sandbox (default: python:3.12-slim).
+        snapshot: Optional Daytona snapshot name.  When set, the sandbox is
+            created from a pre-built snapshot (fastest startup) and the
+            ``image`` parameter is ignored.
         timeout: Timeout in seconds for sandbox creation and git clone.
         git_token: Optional Git access token for private repo operations.
     """
@@ -61,7 +71,8 @@ class DaytonaSandboxProvider:
         repo_url: str = "",
         branch: str = "main",
         resources: DaytonaResources | None = None,
-        image: str = "ghcr.io/existential-birds/amelia-sandbox:latest",
+        image: str = "python:3.12-slim",
+        snapshot: str | None = None,
         timeout: float = 120.0,
         retry_config: RetryConfig | None = None,
         git_token: str | None = None,
@@ -76,6 +87,7 @@ class DaytonaSandboxProvider:
         self._branch = branch
         self._resources = resources
         self._image = image
+        self._snapshot = snapshot
         self._timeout = timeout
         self._retry_config = retry_config
         self._git_token = git_token
@@ -106,22 +118,40 @@ class DaytonaSandboxProvider:
                 memory=self._resources.memory,
                 disk=self._resources.disk,
             )
-        # Parse image string into Image call
-        # Format: "debian-slim:3.12" for Daytona-managed images, or arbitrary Docker image
-        if self._image.startswith("debian-slim"):
-            if ":" in self._image:
-                version = self._image.split(":", 1)[1]
-                image = Image.debian_slim(version)  # type: ignore[arg-type]
-            else:
-                image = Image.debian_slim()
-        else:
-            # Arbitrary Docker image (e.g., "python:3.12-slim", "ubuntu:22.04")
-            image = Image.base(self._image)
 
-        create_params = CreateSandboxFromImageParams(
-            image=image,
-            resources=resources,
-        )
+        create_params: CreateSandboxFromSnapshotParams | CreateSandboxFromImageParams
+        if self._snapshot:
+            # Snapshot path: pre-built image with all deps, fastest startup.
+            logger.info("Using Daytona snapshot", snapshot=self._snapshot)
+            create_params = CreateSandboxFromSnapshotParams(
+                snapshot=self._snapshot,
+            )
+        else:
+            # Image path: build from base image with worker deps.
+            if self._image.startswith("debian-slim"):
+                if ":" in self._image:
+                    version = self._image.split(":", 1)[1]
+                    image = Image.debian_slim(version)  # type: ignore[arg-type]
+                else:
+                    image = Image.debian_slim()
+            else:
+                image = Image.base(self._image)
+
+            # Ensure git and worker dependencies are available regardless of
+            # the base image.  Daytona caches image layers so this only runs
+            # on the first build for a given configuration.
+            image = (
+                image
+                .run_commands(
+                    "apt-get update && apt-get install -y --no-install-recommends git "
+                    "&& rm -rf /var/lib/apt/lists/*"
+                )
+                .pip_install(*_WORKER_DEPS)
+            )
+            create_params = CreateSandboxFromImageParams(
+                image=image,
+                resources=resources,
+            )
 
         _retryable = (ConnectionError, TimeoutError, OSError)
 
@@ -149,6 +179,20 @@ class DaytonaSandboxProvider:
                         )
                     else:
                         await self._sandbox.git.clone(self._repo_url, REPO_PATH, branch=self._branch, **self._git_auth)
+
+                    # Install amelia package from the cloned source so the
+                    # sandbox worker module is importable.  --no-deps because
+                    # worker dependencies are already baked into the image.
+                    logger.info("Installing amelia package in sandbox")
+                    install_resp = await self._sandbox.process.exec(
+                        f"pip install --no-cache-dir --no-deps {REPO_PATH}"
+                    )
+                    if install_resp.exit_code != 0:
+                        logger.error(
+                            "Failed to install amelia in sandbox",
+                            exit_code=install_resp.exit_code,
+                            result=install_resp.result,
+                        )
         except TimeoutError:
             raise TimeoutError(
                 f"Daytona sandbox creation timed out after {self._timeout}s"

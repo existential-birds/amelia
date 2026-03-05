@@ -46,6 +46,17 @@ Tests use `pytest-asyncio` with `asyncio_mode = "auto"`.
 
 Use `agent-browser` for web automation: `agent-browser open <url>`, then `agent-browser snapshot -i` for interactive element refs, then `agent-browser click @e1` / `agent-browser fill @e2 "text"`.
 
+## Git Authentication
+
+- **NEVER** modify `git remote set-url` to embed tokens or credentials in the URL — this poisons the macOS keychain (`osxkeychain` credential helper) and breaks authentication for all repos
+- **NEVER** run `git credential reject`, `security delete-internet-password`, or any command that modifies stored git credentials
+- **NEVER** run `gh auth login --with-token`, `gh auth setup-git`, or `gh auth refresh` — these modify the user's authentication state
+- **NEVER** suggest `unset GITHUB_TOKEN` or any command that modifies environment variables — this breaks the user's shell session and all dependent tools
+- **NEVER** suggest `docker login` with tokens from the environment — the user manages their own Docker/GHCR auth
+- Git push authentication is managed by `osxkeychain` and `gh auth` — do not touch it
+- If a push or registry auth fails with a permissions error, **report the error to the user** and let them fix it — do not attempt to fix authentication yourself
+- Do not suggest any commands that modify auth state, credentials, tokens, or environment variables
+
 ## Release Process
 
 Use `/gen-release-notes <previous-tag>` to generate notes and bump versions in `pyproject.toml`, `amelia/__init__.py`, `dashboard/package.json`, `docs/site/package.json`, and `CHANGELOG.md`. All version files must stay in sync. Then create a release branch/PR, merge, tag with `vX.Y.Z`, and the GitHub Action creates the release.

@@ -96,7 +96,8 @@ class SandboxConfig(BaseModel):
     daytona_api_url: str = "https://app.daytona.io/api"
     daytona_target: str = "us"
     daytona_resources: DaytonaResources | None = None
-    daytona_image: str = "ghcr.io/existential-birds/amelia-sandbox:latest"
+    daytona_image: str = "python:3.12-slim"
+    daytona_snapshot: str | None = None
     daytona_timeout: float = 120.0
 
 

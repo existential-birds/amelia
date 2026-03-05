@@ -223,6 +223,126 @@ class TestDaytonaSandboxProviderEnsureRunning:
             mock_sandbox.git.clone.assert_called_once()
 
 
+class TestDaytonaSandboxProviderWorkerInstall:
+    """Post-clone amelia package installation."""
+
+    @pytest.mark.asyncio
+    async def test_installs_amelia_after_clone(self) -> None:
+        """ensure_running should pip install amelia from repo after clone."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_sandbox.process.exec.return_value = MagicMock(
+                exit_code=0, result="",
+            )
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            # Should have called process.exec with pip install --no-deps
+            mock_sandbox.process.exec.assert_called_once_with(
+                "pip install --no-cache-dir --no-deps /workspace/repo"
+            )
+
+    @pytest.mark.asyncio
+    async def test_skips_install_when_no_repo_url(self) -> None:
+        """No repo = no clone = no pip install."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="",
+            )
+            await provider.ensure_running()
+
+            mock_sandbox.git.clone.assert_not_called()
+            mock_sandbox.process.exec.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_logs_error_on_install_failure(self) -> None:
+        """Failed pip install should log error but not raise."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_sandbox.process.exec.return_value = MagicMock(
+                exit_code=1, result="pip error",
+            )
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            # Should not raise — logs error instead
+            await provider.ensure_running()
+            assert provider._sandbox is not None
+
+
+class TestDaytonaSandboxProviderImageBuilder:
+    """Image construction with worker deps."""
+
+    @pytest.mark.asyncio
+    async def test_image_includes_worker_deps(self) -> None:
+        """Image should include pip install for worker dependencies."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import _WORKER_DEPS, DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            params = mock_client.create.call_args[0][0]
+            dockerfile = params.image._dockerfile
+            # Should contain pip install with all worker deps
+            for dep in _WORKER_DEPS:
+                assert dep in dockerfile, f"Missing worker dep: {dep}"
+
+    @pytest.mark.asyncio
+    async def test_image_includes_git(self) -> None:
+        """Image should install git."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            params = mock_client.create.call_args[0][0]
+            dockerfile = params.image._dockerfile
+            assert "apt-get" in dockerfile
+            assert "git" in dockerfile
+
+
 class TestDaytonaSandboxProviderGitAuth:
     """Git credential threading."""
 

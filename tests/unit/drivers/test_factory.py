@@ -153,7 +153,8 @@ class TestGetDriverDaytonaBranch:
                 target="eu",
                 repo_url="https://github.com/org/repo.git",
                 resources=None,
-                image="ghcr.io/existential-birds/amelia-sandbox:latest",
+                image="python:3.12-slim",
+                snapshot=None,
                 timeout=120.0,
                 retry_config=None,
                 git_token=None,
@@ -206,6 +207,7 @@ class TestGetDriverDaytonaBranch:
                 repo_url="https://github.com/org/repo.git",
                 resources=None,
                 image="ubuntu:22.04",
+                snapshot=None,
                 timeout=120.0,
                 retry_config=None,
                 git_token=None,
@@ -219,7 +221,7 @@ class TestGetDriverDaytonaBranch:
         )
         with patch("amelia.sandbox.daytona.DaytonaSandboxProvider") as mock_provider_cls, \
              patch("amelia.sandbox.driver.ContainerDriver") as mock_driver_cls, \
-             patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key", "GITHUB_TOKEN": "ghp_abc123"}):
+             patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key", "GITHUB_TOKEN": "ghp_abc123", "AMELIA_GITHUB_TOKEN": ""}):
             mock_driver_cls.return_value = MagicMock()
             get_driver("api", model="test-model", sandbox_config=sandbox, profile_name="work")
             assert mock_provider_cls.call_args.kwargs["git_token"] == "ghp_abc123"
