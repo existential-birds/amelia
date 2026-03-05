@@ -527,3 +527,9 @@ class TestExtractPlanFields:
         content = "**Goal:** First line\nsecond line\n**Key Files:** stuff"
         result = extract_plan_fields(content)
         assert result.goal == "First line second line"
+
+    def test_extracts_goal_with_inline_code(self) -> None:
+        """Extract goal that contains inline code blocks."""
+        content = "**Goal:** Add `user_auth` module to `src/auth.py`\n\n### Task 1: Setup"
+        result = extract_plan_fields(content)
+        assert result.goal == "Add `user_auth` module to `src/auth.py`"

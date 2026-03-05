@@ -25,6 +25,7 @@ from amelia.core.types import (
 )
 from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.external_plan import (
+    ExternalPlanImportResult,
     import_external_plan,
 )
 from amelia.pipelines.implementation.state import ImplementationState
@@ -1462,6 +1463,58 @@ class OrchestratorService:
 
         return event
 
+    async def _emit_plan_validation_event(
+        self,
+        workflow_id: uuid.UUID,
+        plan_result: ExternalPlanImportResult,
+    ) -> dict[str, Any]:
+        """Emit plan validation event and return response dict.
+
+        Args:
+            workflow_id: The workflow ID.
+            plan_result: Result from import_external_plan with validation data.
+
+        Returns:
+            Dict with status, goal, key_files, total_tasks, and validation_issues if invalid.
+        """
+        validation = plan_result.validation_result
+        if validation is not None and not validation.valid:
+            await self._emit(
+                workflow_id,
+                EventType.PLAN_VALIDATION_FAILED,
+                f"Plan validation failed: {'; '.join(validation.issues)}",
+                agent="system",
+                data={
+                    "issues": validation.issues,
+                    "severity": validation.severity,
+                },
+            )
+            return {
+                "status": "invalid",
+                "goal": plan_result.goal,
+                "key_files": plan_result.key_files,
+                "total_tasks": plan_result.total_tasks,
+                "validation_issues": validation.issues,
+            }
+
+        await self._emit(
+            workflow_id,
+            EventType.PLAN_VALIDATED,
+            f"Plan validated: {plan_result.goal}",
+            agent="system",
+            data={
+                "goal": plan_result.goal,
+                "key_files": plan_result.key_files,
+                "total_tasks": plan_result.total_tasks,
+            },
+        )
+        return {
+            "status": "ready",
+            "goal": plan_result.goal,
+            "key_files": plan_result.key_files,
+            "total_tasks": plan_result.total_tasks,
+        }
+
     async def _delete_checkpoint(self, workflow_id: uuid.UUID) -> None:
         """Delete LangGraph checkpoint data for a workflow.
 
@@ -2728,31 +2781,8 @@ class OrchestratorService:
         )
         await self._repository.update_plan_cache(workflow_id, plan_cache)
 
-        # Emit validation event based on result
-        validation = plan_result.validation_result
-        if validation is not None and not validation.valid:
-            await self._emit(
-                workflow_id,
-                EventType.PLAN_VALIDATION_FAILED,
-                f"Plan validation failed: {'; '.join(validation.issues)}",
-                agent="system",
-                data={
-                    "issues": validation.issues,
-                    "severity": validation.severity,
-                },
-            )
-        else:
-            await self._emit(
-                workflow_id,
-                EventType.PLAN_VALIDATED,
-                f"Plan validated: {plan_result.goal}",
-                agent="system",
-                data={
-                    "goal": plan_result.goal,
-                    "key_files": plan_result.key_files,
-                    "total_tasks": plan_result.total_tasks,
-                },
-            )
+        # Emit validation event and build response
+        result = await self._emit_plan_validation_event(workflow_id, plan_result)
 
         logger.info(
             "External plan imported and validated",
@@ -2761,21 +2791,7 @@ class OrchestratorService:
             total_tasks=plan_result.total_tasks,
         )
 
-        if validation is not None and not validation.valid:
-            return {
-                "status": "invalid",
-                "goal": plan_result.goal,
-                "key_files": plan_result.key_files,
-                "total_tasks": plan_result.total_tasks,
-                "validation_issues": validation.issues,
-            }
-
-        return {
-            "status": "ready",
-            "goal": plan_result.goal,
-            "key_files": plan_result.key_files,
-            "total_tasks": plan_result.total_tasks,
-        }
+        return result
 
     async def replan_workflow(self, workflow_id: uuid.UUID) -> None:
         """Regenerate the plan for a blocked workflow.
