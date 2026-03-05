@@ -162,17 +162,18 @@ async def import_external_plan(
     target_path: Path,
     profile: Profile,
     workflow_id: str | uuid.UUID,
-    skip_llm: bool = False,
 ) -> ExternalPlanImportResult:
     """Import and validate an external plan.
+
+    Reads plan content from file or inline string, writes to target path,
+    extracts structured fields using regex, and runs structural validation.
 
     Args:
         plan_file: Path to plan file (relative to worktree or absolute).
         plan_content: Inline plan markdown content.
         target_path: Where to write the plan (standard plan location).
-        profile: Profile for LLM extraction config.
+        profile: Profile with repo_root for security boundary.
         workflow_id: For logging.
-        skip_llm: If True, skip LLM extraction and use regex fallback only.
 
     Returns:
         ExternalPlanImportResult with goal, plan_markdown, plan_path, key_files,

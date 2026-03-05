@@ -638,14 +638,13 @@ class OrchestratorService:
                 )
                 target_path = working_dir / plan_rel_path
 
-            # Import and validate external plan (skip LLM for fast queue)
+            # Import and validate external plan (regex extraction)
             plan_result = await import_external_plan(
                 plan_file=request.plan_file,
                 plan_content=request.plan_content,
                 target_path=target_path,
                 profile=profile,
                 workflow_id=workflow_id,
-                skip_llm=True,
             )
 
             # Update execution state with plan data and external flag
