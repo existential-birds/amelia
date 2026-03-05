@@ -381,6 +381,8 @@ describe("settings API", () => {
     it("deletes a profile", async () => {
       vi.mocked(fetch).mockResolvedValueOnce({
         ok: true,
+        status: 204,
+        headers: new Headers(),
       } as Response);
 
       await deleteProfile("old-profile");

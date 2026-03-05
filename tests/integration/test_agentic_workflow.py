@@ -6,12 +6,11 @@ and workflow invocation with real components (mocking only at HTTP/LLM boundary)
 
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.constants import ToolName
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
@@ -363,24 +362,21 @@ class TestArchitectValidatorFlowIntegration:
         # The architect writes the plan content to disk via Write tool
         plan_content = """# Implementation Plan: Add User Authentication
 
-## Goal
-Implement JWT-based authentication for the API endpoints.
-
-## Key Files
-- `src/auth/jwt.py` - JWT token handling
-- `src/api/middleware.py` - Authentication middleware
-- `tests/test_auth.py` - Authentication tests
+**Goal:** Implement JWT-based authentication for the API endpoints
 
 ## Tasks
 
 ### Task 1: Create JWT utilities
 Create the JWT token generation and validation utilities.
+- Create: `src/auth/jwt.py`
 
 ### Task 2: Add authentication middleware
 Implement middleware to validate tokens on protected routes.
+- Modify: `src/api/middleware.py`
 
 ### Task 3: Write tests
 Add comprehensive tests for the authentication flow.
+- Create: `tests/test_auth.py`
 """
         # Mock messages include Write tool call (how architect saves plan in production)
         mock_architect_messages = [
@@ -444,20 +440,12 @@ Add comprehensive tests for the authentication flow.
             update={"raw_architect_output": architect_result["raw_architect_output"]}
         )
 
-        # Mock the validator's generate call to extract structured data
-        mock_validator_output = MarkdownPlanOutput(
-            goal="Implement JWT-based authentication for the API endpoints",
-            plan_markdown=plan_content,
-            key_files=["src/auth/jwt.py", "src/api/middleware.py", "tests/test_auth.py"],
+        # plan_validator_node uses regex-only extraction (no LLM call)
+        validator_result = await plan_validator_node(
+            state_after_architect, cast(RunnableConfig, config)
         )
 
-        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
-            mock_generate.return_value = (mock_validator_output, "validator-session-456")
-            validator_result = await plan_validator_node(
-                state_after_architect, cast(RunnableConfig, config)
-            )
-
-        # Verify validator extracts structured fields
+        # Verify validator extracts structured fields via regex
         assert "goal" in validator_result
         assert validator_result["goal"] == "Implement JWT-based authentication for the API endpoints"
 
@@ -467,9 +455,14 @@ Add comprehensive tests for the authentication flow.
         assert "key_files" in validator_result
         assert len(validator_result["key_files"]) == 3
         assert "src/auth/jwt.py" in validator_result["key_files"]
+        assert "src/api/middleware.py" in validator_result["key_files"]
+        assert "tests/test_auth.py" in validator_result["key_files"]
 
         assert "plan_path" in validator_result
         assert validator_result["plan_path"] == expected_plan_path
+
+        assert "total_tasks" in validator_result
+        assert validator_result["total_tasks"] == 3
 
     async def test_validator_fails_if_plan_file_missing(self, tmp_path: Path) -> None:
         """Validator should raise error if architect didn't write plan file.

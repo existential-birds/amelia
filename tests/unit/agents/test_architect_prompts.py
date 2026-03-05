@@ -4,10 +4,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-import pytest
-
 from amelia.agents.architect import Architect
-from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.types import AgentConfig, PlanValidationResult, Profile, Severity
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
@@ -16,20 +13,10 @@ from amelia.pipelines.implementation.state import ImplementationState
 class TestArchitectPromptInjection:
     """Tests for Architect agent prompt injection."""
 
-    @pytest.fixture
-    def plan_output(self) -> MarkdownPlanOutput:
-        """Sample plan output from driver."""
-        return MarkdownPlanOutput(
-            goal="Test goal",
-            plan_markdown="# Test Plan",
-            key_files=["test.py"],
-        )
-
     async def test_uses_injected_plan_prompt(
         self,
         mock_driver: MagicMock,
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
-        plan_output: MarkdownPlanOutput,
     ) -> None:
         """Should use injected plan prompt for plan method.
 
@@ -70,7 +57,6 @@ class TestArchitectPromptInjection:
         self,
         mock_driver: MagicMock,
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
-        plan_output: MarkdownPlanOutput,
     ) -> None:
         """Should use class default when plan prompt not injected.
 

@@ -46,6 +46,12 @@ Tests use `pytest-asyncio` with `asyncio_mode = "auto"`.
 
 Use `agent-browser` for web automation: `agent-browser open <url>`, then `agent-browser snapshot -i` for interactive element refs, then `agent-browser click @e1` / `agent-browser fill @e2 "text"`.
 
+## Agent Discipline
+
+- **No "pre-existing" failures.** You are the only agent modifying this codebase. If a test fails, you caused it — investigate and fix it before proceeding. Never dismiss a failure as "pre-existing" or "unrelated."
+- **No "unrelated" changes.** All uncommitted changes on the branch are your responsibility. When committing, `git status` shows YOUR work — stage and commit everything, or explicitly revert what shouldn't be there. Never selectively ignore dirty files.
+- **All tests must pass.** 100% pass rate is the bar. Do not proceed past verification with any failures.
+
 ## Release Process
 
 Use `/gen-release-notes <previous-tag>` to generate notes and bump versions in `pyproject.toml`, `amelia/__init__.py`, `dashboard/package.json`, `docs/site/package.json`, and `CHANGELOG.md`. All version files must stay in sync. Then create a release branch/PR, merge, tag with `vX.Y.Z`, and the GitHub Action creates the release.

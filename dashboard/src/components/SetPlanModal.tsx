@@ -72,9 +72,15 @@ export function SetPlanModal({
         force: forceOverwrite,
       });
 
+      if (result.status === 'invalid') {
+        const issues = result.validation_issues?.join('; ') ?? 'Unknown validation error';
+        toast.error(`Plan validation failed: ${issues}`);
+        return;
+      }
+
       const summary = result.total_tasks > 0
-        ? `Plan imported (${result.total_tasks} tasks), validating...`
-        : 'Plan imported, validating...';
+        ? `Plan imported (${result.total_tasks} tasks)`
+        : 'Plan imported';
       toast.success(summary);
       onOpenChange(false);
       onSuccess?.();

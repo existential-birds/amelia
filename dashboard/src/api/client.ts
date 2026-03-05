@@ -27,6 +27,7 @@ import type {
   KnowledgeDocumentListResponse,
   SearchResult,
 } from '../types/knowledge';
+import { parseErrorDetail } from './errors';
 
 /**
  * Base URL for all API requests.
@@ -148,10 +149,10 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
     // Handle both our ErrorResponse format ({error, code}) and
     // FastAPI's HTTPException format ({detail})
-    const message =
-      (errorData.error as string) ||
-      (errorData.detail as string) ||
-      `HTTP ${response.status}: ${response.statusText}`;
+    const message = parseErrorDetail(
+      errorData.detail ?? errorData.error,
+      `HTTP ${response.status}: ${response.statusText}`
+    );
     const code = (errorData.code as string) || 'HTTP_ERROR';
 
     throw new ApiError(

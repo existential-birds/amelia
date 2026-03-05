@@ -25,8 +25,10 @@ class TestSetPlanEndpoint:
         mock = MagicMock()
         mock.set_workflow_plan = AsyncMock(
             return_value={
-                "status": "validating",
+                "status": "ready",
                 "total_tasks": 2,
+                "goal": "Implement feature X",
+                "key_files": ["src/main.py"],
             }
         )
         return mock
@@ -41,7 +43,7 @@ class TestSetPlanEndpoint:
     def test_set_plan_with_inline_content(
         self, test_client: TestClient, mock_orchestrator: MagicMock
     ) -> None:
-        """Setting plan with inline content returns 200 with validating status."""
+        """Setting plan with inline content returns 200 with ready status."""
         response = test_client.post(
             _WF_URL,
             json={"plan_content": "# Plan\n\n### Task 1: Do thing"},
@@ -49,10 +51,10 @@ class TestSetPlanEndpoint:
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data["status"] == "validating"
+        assert data["status"] == "ready"
         assert data["total_tasks"] == 2
-        assert data.get("goal") is None
-        assert data.get("key_files") is None
+        assert data["goal"] == "Implement feature X"
+        assert data["key_files"] == ["src/main.py"]
 
     def test_set_plan_requires_either_file_or_content(
         self, test_client: TestClient
