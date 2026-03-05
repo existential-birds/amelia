@@ -1,12 +1,10 @@
 """Unit tests for external plan import helper."""
 
 from pathlib import Path
-from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 
-from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.types import AgentConfig, Profile
 from amelia.pipelines.implementation.external_plan import (
     extract_plan_fields,
@@ -54,26 +52,16 @@ Create the auth module.
         # Target path must be within working directory (security constraint)
         target_path = worktree / "output" / "plan.md"
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            mock_extract.return_value = MarkdownPlanOutput(
-                goal="Add user authentication",
-                plan_markdown=plan_content,
-                key_files=["auth.py"],
-            )
-
-            result = await import_external_plan(
-                plan_file=str(plan_file),
-                plan_content=None,
-                target_path=target_path,
-                profile=mock_profile,
-                workflow_id=uuid4(),
-            )
+        result = await import_external_plan(
+            plan_file=str(plan_file),
+            plan_content=None,
+            target_path=target_path,
+            profile=mock_profile,
+            workflow_id=uuid4(),
+        )
 
         assert result.goal == "Add user authentication"
         assert result.plan_markdown == plan_content
-        assert result.key_files == ["auth.py"]
         assert result.total_tasks == 1
         assert target_path.read_text() == plan_content
 
@@ -98,22 +86,13 @@ Fix it.
         # Target path must be within working directory (security constraint)
         target_path = worktree / "output" / "plan.md"
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            mock_extract.return_value = MarkdownPlanOutput(
-                goal="Fix bug",
-                plan_markdown=plan_content,
-                key_files=[],
-            )
-
-            result = await import_external_plan(
-                plan_file=None,
-                plan_content=plan_content,
-                target_path=target_path,
-                profile=mock_profile,
-                workflow_id=uuid4(),
-            )
+        result = await import_external_plan(
+            plan_file=None,
+            plan_content=plan_content,
+            target_path=target_path,
+            profile=mock_profile,
+            workflow_id=uuid4(),
+        )
 
         assert result.goal == "Fix bug"
         assert target_path.read_text() == plan_content
@@ -173,7 +152,7 @@ Fix it.
         worktree.mkdir()
         plan_file = worktree / "docs" / "plan.md"
         plan_file.parent.mkdir(parents=True)
-        plan_content = "# Plan\n\n### Task 1: Do thing\n\nDo it."
+        plan_content = "# Plan\n\n**Goal:** Do thing\n\n### Task 1: Do thing\n\nDo it."
         plan_file.write_text(plan_content)
 
         profile = Profile(
@@ -188,29 +167,20 @@ Fix it.
         # Target path must be within working directory (security constraint)
         target_path = worktree / "output" / "plan.md"
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            mock_extract.return_value = MarkdownPlanOutput(
-                goal="Do thing",
-                plan_markdown=plan_content,
-                key_files=[],
-            )
-
-            result = await import_external_plan(
-                plan_file="docs/plan.md",
-                plan_content=None,
-                target_path=target_path,
-                profile=profile,
-                workflow_id=uuid4(),
-            )
+        result = await import_external_plan(
+            plan_file="docs/plan.md",
+            plan_content=None,
+            target_path=target_path,
+            profile=profile,
+            workflow_id=uuid4(),
+        )
 
         assert result.goal == "Do thing"
 
-    async def test_import_fallback_when_extraction_fails(
+    async def test_import_regex_extraction(
         self, tmp_path: Path, mock_profile: Profile
     ) -> None:
-        """Import uses fallback extraction when LLM extraction fails."""
+        """Import uses regex extraction for goal, key_files, and task count."""
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
         # Create worktree directory
@@ -230,24 +200,16 @@ Content here.
         # Target path must be within working directory (security constraint)
         target_path = worktree / "output" / "plan.md"
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            # Simulate extraction failure
-            mock_extract.side_effect = RuntimeError("Extraction failed")
+        result = await import_external_plan(
+            plan_file=None,
+            plan_content=plan_content,
+            target_path=target_path,
+            profile=mock_profile,
+            workflow_id=uuid4(),
+        )
 
-            result = await import_external_plan(
-                plan_file=None,
-                plan_content=plan_content,
-                target_path=target_path,
-                profile=mock_profile,
-                workflow_id=uuid4(),
-            )
-
-        # Fallback should extract goal from **Goal:** pattern
         assert result.goal == "Build feature"
         assert result.plan_markdown == plan_content
-        # Fallback should extract key files from Create: pattern
         assert "src/feature.py" in result.key_files
         assert result.total_tasks == 1
 
@@ -349,30 +311,21 @@ Content here.
         # Small delay to ensure mtime would change if file is rewritten
         time.sleep(0.01)
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            mock_extract.return_value = MarkdownPlanOutput(
-                goal="Do thing",
-                plan_markdown=plan_content,
-                key_files=[],
-            )
-
-            await import_external_plan(
-                plan_file=str(target_path),
-                plan_content=None,
-                target_path=target_path,
-                profile=mock_profile,
-                workflow_id=uuid4(),
-            )
+        await import_external_plan(
+            plan_file=str(target_path),
+            plan_content=None,
+            target_path=target_path,
+            profile=mock_profile,
+            workflow_id=uuid4(),
+        )
 
         # Verify file was NOT rewritten
         assert target_path.stat().st_mtime == original_mtime
 
-    async def test_import_skip_llm_uses_regex_fallback(
+    async def test_import_uses_regex_extraction(
         self, tmp_path: Path, mock_profile: Profile
     ) -> None:
-        """When skip_llm=True, extract_plan_fields uses regex fallback (no LLM call)."""
+        """extract_plan_fields always uses regex (no LLM call)."""
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
         worktree = Path(mock_profile.repo_root)
@@ -384,22 +337,15 @@ Content here.
 
         target_path = worktree / "output" / "plan.md"
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            result = await import_external_plan(
-                plan_file=str(plan_file),
-                plan_content=None,
-                target_path=target_path,
-                profile=mock_profile,
-                workflow_id="test-wf-1",
-                skip_llm=True,
-            )
+        result = await import_external_plan(
+            plan_file=str(plan_file),
+            plan_content=None,
+            target_path=target_path,
+            profile=mock_profile,
+            workflow_id="test-wf-1",
+        )
 
-            # LLM should NOT have been called
-            mock_extract.assert_not_called()
-
-        # Regex fallback should extract the heading as goal (prefixed with "Implement")
+        # Regex should extract the heading as goal (prefixed with "Implement")
         assert result.goal == "Implement Build the widget"
         assert result.total_tasks == 1
         assert result.plan_markdown is not None
@@ -415,27 +361,18 @@ Content here.
         worktree.mkdir(parents=True, exist_ok=True)
 
         # Create plan file at the target location
-        plan_content = "# Implementation Plan\n\n### Task 1: Do thing\n\nDo it."
+        plan_content = "# Implementation Plan\n\n**Goal:** Do thing\n\n### Task 1: Do thing\n\nDo it."
         target_path = worktree / "docs" / "plans" / "plan.md"
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(plan_content)
 
-        with patch(
-            "amelia.pipelines.implementation.external_plan.extract_structured"
-        ) as mock_extract:
-            mock_extract.return_value = MarkdownPlanOutput(
-                goal="Do thing",
-                plan_markdown=plan_content,
-                key_files=[],
-            )
-
-            result = await import_external_plan(
-                plan_file=str(target_path),
-                plan_content=None,
-                target_path=target_path,
-                profile=mock_profile,
-                workflow_id=uuid4(),
-            )
+        result = await import_external_plan(
+            plan_file=str(target_path),
+            plan_content=None,
+            target_path=target_path,
+            profile=mock_profile,
+            workflow_id=uuid4(),
+        )
 
         # plan_markdown should always be returned (no special handling required by consumers)
         assert result.plan_markdown == plan_content
@@ -505,14 +442,35 @@ class TestWritePlanToTarget:
 
 
 class TestExtractPlanFields:
-    """Tests for extract_plan_fields (LLM extraction with fallback)."""
+    """Tests for extract_plan_fields (regex-only, no LLM)."""
 
-    async def test_fallback_extracts_goal_from_heading(self) -> None:
+    async def test_extracts_goal_from_heading(self) -> None:
+        """Extract goal from first heading."""
         content = "# Implement user auth\n\n### Task 1: Setup"
-        result = await extract_plan_fields(content, profile=None)
+        result = await extract_plan_fields(content)
         assert "auth" in result.goal.lower() or result.goal == "Implementation plan"
 
-    async def test_fallback_returns_content_as_markdown(self) -> None:
+    async def test_extracts_goal_from_bold_pattern(self) -> None:
+        """Extract goal from **Goal:** pattern."""
+        content = "**Goal:** Add user authentication\n\n### Task 1: Setup auth"
+        result = await extract_plan_fields(content)
+        assert result.goal == "Add user authentication"
+
+    async def test_returns_content_as_markdown(self) -> None:
+        """Plan markdown is the content as-is."""
         content = "# Plan\n\nSome content"
-        result = await extract_plan_fields(content, profile=None)
+        result = await extract_plan_fields(content)
         assert result.plan_markdown == content
+
+    async def test_extracts_key_files(self) -> None:
+        """Extract key files from Create/Modify patterns."""
+        content = "**Goal:** Test\n\n### Task 1: Files\n\nCreate: `src/auth.py`\nModify: `src/main.py`"
+        result = await extract_plan_fields(content)
+        assert "src/auth.py" in result.key_files
+        assert "src/main.py" in result.key_files
+
+    async def test_counts_tasks(self) -> None:
+        """Extract task count from ### Task N: headers."""
+        content = "**Goal:** Test\n\n### Task 1: First\n\n### Task 2: Second"
+        result = await extract_plan_fields(content)
+        assert result.total_tasks == 2

@@ -11,8 +11,6 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from amelia.agents.schemas.architect import MarkdownPlanOutput
-from amelia.core.extraction import extract_structured
 from amelia.core.types import Profile
 from amelia.pipelines.implementation.utils import (
     _extract_goal_from_plan,
@@ -29,27 +27,6 @@ class ExternalPlanImportResult(BaseModel):
     plan_path: Path
     key_files: list[str] = Field(default_factory=list)
     total_tasks: int
-
-
-def build_plan_extraction_prompt(plan_content: str) -> str:
-    """Build prompt for extracting structured fields from a plan.
-
-    Args:
-        plan_content: The raw plan markdown content.
-
-    Returns:
-        Prompt string for LLM extraction.
-    """
-    return f"""Extract the implementation plan structure from the following markdown plan.
-
-<plan>
-{plan_content}
-</plan>
-
-Return:
-- goal: 1-2 sentence summary of what this plan accomplishes
-- plan_markdown: The full plan content (preserve as-is)
-- key_files: List of files that will be created or modified"""
 
 
 async def read_plan_content(
@@ -153,74 +130,24 @@ async def write_plan_to_target(
 
 async def extract_plan_fields(
     content: str,
-    profile: Profile | None,
 ) -> ExternalPlanImportResult:
-    """Extract structured plan fields using LLM with regex fallback.
-
-    When profile is None, skips LLM extraction and uses fallback only.
+    """Extract structured plan fields using regex pattern matching.
 
     Args:
         content: The raw plan markdown content.
-        profile: Profile for LLM extraction config, or None for fallback-only.
 
     Returns:
         ExternalPlanImportResult with goal, plan_markdown, key_files, total_tasks.
         Note: plan_path is set to Path(".") as a placeholder; callers should
         set it to the actual target path.
     """
-    goal: str | None = None
-    plan_markdown: str | None = None
-    key_files: list[str] = []
-
-    if profile is not None:
-        agent_config = profile.get_agent_config("plan_validator")
-        prompt = build_plan_extraction_prompt(content)
-
-        try:
-            output = await extract_structured(
-                prompt=prompt,
-                schema=MarkdownPlanOutput,
-                model=agent_config.model,
-                driver_type=agent_config.driver,
-            )
-            goal = output.goal
-            plan_markdown = output.plan_markdown
-            key_files = output.key_files
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.warning(
-                "Structured extraction failed, using regex fallback",
-                error=str(e),
-            )
-            # Fall through to fallback below
-
-    # Fallback extraction (used when profile is None or LLM failed)
-    if goal is None:
-        goal = _extract_goal_from_plan(content)
-        plan_markdown = content
-        key_files = _extract_key_files_from_plan(content)
-
-        goal_is_default = goal == "Implementation plan"
-        logger.info(
-            "Regex fallback extraction complete",
-            goal_extracted=not goal_is_default,
-            goal=goal if not goal_is_default else "(default)",
-            key_files_count=len(key_files),
-            key_files=key_files if key_files else "(none found)",
-        )
-        if goal_is_default or not key_files:
-            logger.warning(
-                "Fallback extraction produced partial data",
-                goal_is_default=goal_is_default,
-                key_files_empty=not key_files,
-            )
-
+    goal = _extract_goal_from_plan(content)
+    key_files = _extract_key_files_from_plan(content)
     total_tasks = extract_task_count(content)
 
     return ExternalPlanImportResult(
         goal=goal,
-        plan_markdown=plan_markdown,
+        plan_markdown=content,
         plan_path=Path("."),  # Placeholder; caller sets actual path
         key_files=key_files,
         total_tasks=total_tasks,
@@ -280,7 +207,7 @@ async def import_external_plan(
     )
 
     # Extract structured fields
-    result = await extract_plan_fields(content, profile=None if skip_llm else profile)
+    result = await extract_plan_fields(content)
 
     # Resolve target_path for the result
     resolved_target = target_path.expanduser().resolve()

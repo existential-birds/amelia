@@ -2804,7 +2804,7 @@ class OrchestratorService:
             total_tasks: Pre-computed task count.
         """
         try:
-            result = await extract_plan_fields(content, profile=profile)
+            result = await extract_plan_fields(content)
 
             # Guard against stale extraction overwriting a newer plan
             current = await self._repository.get(workflow_id)
