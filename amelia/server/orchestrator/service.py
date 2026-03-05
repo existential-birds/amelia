@@ -2761,6 +2761,15 @@ class OrchestratorService:
             total_tasks=plan_result.total_tasks,
         )
 
+        if validation is not None and not validation.valid:
+            return {
+                "status": "invalid",
+                "goal": plan_result.goal,
+                "key_files": plan_result.key_files,
+                "total_tasks": plan_result.total_tasks,
+                "validation_issues": validation.issues,
+            }
+
         return {
             "status": "ready",
             "goal": plan_result.goal,

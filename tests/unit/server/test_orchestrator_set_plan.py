@@ -359,6 +359,50 @@ class TestSetWorkflowPlan:
         event_types = [call.args[1] for call in emit_calls]
         assert EventType.PLAN_VALIDATED in event_types
 
+    async def test_set_plan_returns_invalid_status_when_validation_fails(
+        self,
+        mock_orchestrator: OrchestratorService,
+        mock_repository: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Setting plan returns invalid status when validation fails."""
+        workflow = self._create_workflow_mock(workflow_status=WorkflowStatus.PENDING)
+        mock_repository.get.return_value = workflow
+
+        mock_profile = MagicMock()
+        mock_profile.plan_path_pattern = "docs/{issue_key}/plan.md"
+        mock_profile.repo_root = str(tmp_path)
+
+        plan_content = "# Plan\n\n### Task 1: Do A"
+        import_result = self._make_import_result(
+            plan_markdown=plan_content, total_tasks=1, valid=False
+        )
+
+        with (
+            patch(
+                "amelia.server.orchestrator.service.import_external_plan",
+                new_callable=AsyncMock,
+                return_value=import_result,
+            ),
+            patch.object(
+                mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
+            ) as mock_get_profile,
+            patch.object(
+                mock_orchestrator, "_update_profile_repo_root"
+            ) as mock_update_profile,
+            patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
+        ):
+            mock_get_profile.return_value = mock_profile
+            mock_update_profile.return_value = mock_profile
+
+            result = await mock_orchestrator.set_workflow_plan(
+                workflow_id=uuid4(),
+                plan_content=plan_content,
+            )
+
+        assert result["status"] == "invalid"
+        assert "Missing goal" in result["validation_issues"]
+
     async def test_set_plan_emits_validation_failed_event(
         self,
         mock_orchestrator: OrchestratorService,

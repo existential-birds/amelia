@@ -130,7 +130,7 @@ async def write_plan_to_target(
     )
 
 
-async def extract_plan_fields(
+def extract_plan_fields(
     content: str,
 ) -> ExternalPlanImportResult:
     """Extract structured plan fields using regex pattern matching.
@@ -210,7 +210,7 @@ async def import_external_plan(
     )
 
     # Extract structured fields
-    result = await extract_plan_fields(content)
+    result = extract_plan_fields(content)
 
     # Run structural validation
     validation_result = validate_plan_structure(result.goal, content)

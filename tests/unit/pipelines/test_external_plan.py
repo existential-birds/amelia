@@ -473,33 +473,57 @@ class TestWritePlanToTarget:
 class TestExtractPlanFields:
     """Tests for extract_plan_fields (regex-only, no LLM)."""
 
-    async def test_extracts_goal_from_heading(self) -> None:
+    def test_extracts_goal_from_heading(self) -> None:
         """Extract goal from first heading."""
         content = "# Implement user auth\n\n### Task 1: Setup"
-        result = await extract_plan_fields(content)
+        result = extract_plan_fields(content)
         assert "auth" in result.goal.lower() or result.goal == "Implementation plan"
 
-    async def test_extracts_goal_from_bold_pattern(self) -> None:
+    def test_extracts_goal_from_bold_pattern(self) -> None:
         """Extract goal from **Goal:** pattern."""
         content = "**Goal:** Add user authentication\n\n### Task 1: Setup auth"
-        result = await extract_plan_fields(content)
+        result = extract_plan_fields(content)
         assert result.goal == "Add user authentication"
 
-    async def test_returns_content_as_markdown(self) -> None:
+    def test_returns_content_as_markdown(self) -> None:
         """Plan markdown is the content as-is."""
         content = "# Plan\n\nSome content"
-        result = await extract_plan_fields(content)
+        result = extract_plan_fields(content)
         assert result.plan_markdown == content
 
-    async def test_extracts_key_files(self) -> None:
+    def test_extracts_key_files(self) -> None:
         """Extract key files from Create/Modify patterns."""
         content = "**Goal:** Test\n\n### Task 1: Files\n\nCreate: `src/auth.py`\nModify: `src/main.py`"
-        result = await extract_plan_fields(content)
+        result = extract_plan_fields(content)
         assert "src/auth.py" in result.key_files
         assert "src/main.py" in result.key_files
 
-    async def test_counts_tasks(self) -> None:
+    def test_counts_tasks(self) -> None:
         """Extract task count from ### Task N: headers."""
         content = "**Goal:** Test\n\n### Task 1: First\n\n### Task 2: Second"
-        result = await extract_plan_fields(content)
+        result = extract_plan_fields(content)
         assert result.total_tasks == 2
+
+    def test_extracts_multiline_goal(self) -> None:
+        """Extract goal that spans multiple lines."""
+        content = "**Goal:** Implement user authentication\nwith OAuth2 support\n\n### Task 1: Setup"
+        result = extract_plan_fields(content)
+        assert result.goal == "Implement user authentication with OAuth2 support"
+
+    def test_multiline_goal_stops_at_blank_line(self) -> None:
+        """Multi-line goal stops at blank line."""
+        content = "**Goal:** First line\nsecond line\n\nSome other text"
+        result = extract_plan_fields(content)
+        assert result.goal == "First line second line"
+
+    def test_multiline_goal_stops_at_heading(self) -> None:
+        """Multi-line goal stops at heading."""
+        content = "**Goal:** First line\nsecond line\n# Heading"
+        result = extract_plan_fields(content)
+        assert result.goal == "First line second line"
+
+    def test_multiline_goal_stops_at_bold(self) -> None:
+        """Multi-line goal stops at next bold marker."""
+        content = "**Goal:** First line\nsecond line\n**Key Files:** stuff"
+        result = extract_plan_fields(content)
+        assert result.goal == "First line second line"

@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -242,16 +242,24 @@ class SetPlanResponse(BaseModel):
     """Response from setting an external plan on a workflow.
 
     Attributes:
-        status: 'ready' or 'invalid'.
+        status: 'ready' when plan is valid, 'invalid' when validation fails.
         total_tasks: Number of tasks in the plan.
-        goal: Extracted goal.
+        goal: Extracted goal from the plan.
         key_files: Key files found in the plan.
+        validation_issues: Validation issues (present when status='invalid').
     """
 
-    status: Annotated[str, Field(description="'ready' or 'invalid'")]
+    status: Annotated[
+        Literal["ready", "invalid"],
+        Field(description="'ready' when valid, 'invalid' when validation fails"),
+    ]
     total_tasks: Annotated[int, Field(description="Number of tasks in the plan")]
     goal: Annotated[str, Field(description="Extracted goal from the plan")]
     key_files: Annotated[
         list[str],
         Field(default_factory=list, description="Key files found in the plan"),
     ]
+    validation_issues: Annotated[
+        list[str] | None,
+        Field(default=None, description="Validation issues (present when status='invalid')"),
+    ] = None
