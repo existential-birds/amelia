@@ -1587,7 +1587,7 @@ class TestExponentialBackoff:
         # Make _run_workflow fail max_retries times, then succeed
         call_count = 0
 
-        async def failing_run_workflow(workflow_id: uuid.UUID, state: ServerExecutionState) -> None:
+        async def failing_run_workflow(workflow_id: uuid.UUID, state: ServerExecutionState, **kwargs: Any) -> None:
             nonlocal call_count
             call_count += 1
             if call_count <= max_retries:
@@ -1617,7 +1617,7 @@ class TestExponentialBackoff:
         )
 
         # Always fail
-        async def always_fail(workflow_id: str, state: ServerExecutionState) -> None:
+        async def always_fail(workflow_id: str, state: ServerExecutionState, **kwargs: Any) -> None:
             raise ModelProviderError("always fails")
 
         with (
@@ -1654,7 +1654,7 @@ class TestExponentialBackoff:
         # Fail exactly 10 times
         call_count = 0
 
-        async def failing_run_workflow(workflow_id: uuid.UUID, state: ServerExecutionState) -> None:
+        async def failing_run_workflow(workflow_id: uuid.UUID, state: ServerExecutionState, **kwargs: Any) -> None:
             nonlocal call_count
             call_count += 1
             if call_count <= 10:
