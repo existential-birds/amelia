@@ -95,7 +95,7 @@ class TestDaytonaFullStack:
             call_count["n"] += 1
             exec_call = mock_daytona.process.execute_session_command.call_args
             cmd_str = exec_call[0][1].command if exec_call else ""
-            if "amelia.sandbox.worker" in cmd_str:
+            if "worker" in cmd_str and "generate" in cmd_str:
                 await on_stdout(worker_json + "\n")
 
         mock_daytona.process.execute_session_command.return_value = MagicMock(
