@@ -3,6 +3,8 @@
 This module provides the Developer agent that executes code changes using
 autonomous tool-calling LLM execution rather than structured step-by-step plans.
 """
+from __future__ import annotations
+
 import uuid
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
@@ -19,6 +21,7 @@ from amelia.server.models.events import WorkflowEvent
 
 if TYPE_CHECKING:
     from amelia.pipelines.implementation.state import ImplementationState
+    from amelia.sandbox.provider import SandboxProvider
 
 
 class Developer:
@@ -36,18 +39,25 @@ class Developer:
     # Single source of truth for system prompt is PROMPT_DEFAULTS
     SYSTEM_PROMPT = PROMPT_DEFAULTS["developer.system"].content
 
-    def __init__(self, config: AgentConfig, prompts: dict[str, str] | None = None):
+    def __init__(
+        self,
+        config: AgentConfig,
+        prompts: dict[str, str] | None = None,
+        sandbox_provider: SandboxProvider | None = None,
+    ):
         """Initialize the Developer agent.
 
         Args:
             config: Agent configuration with driver, model, and options.
             prompts: Optional dict mapping prompt IDs to custom content.
                 Supports key: "developer.system".
+            sandbox_provider: Optional shared sandbox provider for sandbox reuse.
         """
         self.driver = get_driver(
             config.driver,
             model=config.model,
             sandbox_config=config.sandbox,
+            sandbox_provider=sandbox_provider,
             profile_name=config.profile_name,
             options=config.options,
         )

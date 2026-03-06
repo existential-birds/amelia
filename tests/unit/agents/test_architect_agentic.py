@@ -32,6 +32,7 @@ class TestArchitectInitWithAgentConfig:
                 "claude",
                 model="sonnet",
                 sandbox_config=SandboxConfig(),
+                sandbox_provider=None,
                 profile_name="default",
                 options={},
             )

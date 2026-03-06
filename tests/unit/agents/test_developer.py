@@ -28,6 +28,7 @@ def test_developer_init_with_agent_config() -> None:
             "api",
             model="anthropic/claude-sonnet-4",
             sandbox_config=SandboxConfig(),
+            sandbox_provider=None,
             profile_name="default",
             options={},
         )
@@ -71,6 +72,7 @@ def test_developer_init_passes_sandbox_config() -> None:
             "api",
             model="test-model",
             sandbox_config=sandbox,
+            sandbox_provider=None,
             profile_name="work",
             options={"max_iterations": 5},
         )

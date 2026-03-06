@@ -3,6 +3,8 @@
 This module provides the Architect agent that analyzes issues and produces
 rich markdown implementation plans for agentic execution.
 """
+from __future__ import annotations
+
 import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -20,6 +22,7 @@ from amelia.server.models.events import WorkflowEvent
 
 if TYPE_CHECKING:
     from amelia.pipelines.implementation.state import ImplementationState
+    from amelia.sandbox.provider import SandboxProvider
 
 
 class Architect:
@@ -66,6 +69,7 @@ Before planning, discover:
         self,
         config: AgentConfig,
         prompts: dict[str, str] | None = None,
+        sandbox_provider: SandboxProvider | None = None,
     ):
         """Initialize the Architect agent.
 
@@ -73,12 +77,14 @@ Before planning, discover:
             config: Agent configuration with driver, model, and options.
             prompts: Optional dict mapping prompt IDs to custom content.
                 Supports keys: "architect.system", "architect.plan".
+            sandbox_provider: Optional shared sandbox provider for sandbox reuse.
 
         """
         self.driver = get_driver(
             config.driver,
             model=config.model,
             sandbox_config=config.sandbox,
+            sandbox_provider=sandbox_provider,
             profile_name=config.profile_name,
             options=config.options,
         )

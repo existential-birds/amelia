@@ -12,7 +12,7 @@ from amelia.agents.schemas.evaluator import (
     EvaluationOutput,
     EvaluationResult,
 )
-from amelia.core.types import AgentConfig, Profile, ReviewResult, Severity
+from amelia.core.types import AgentConfig, Profile, ReviewResult, SandboxConfig, Severity
 from amelia.pipelines.implementation.state import ImplementationState
 
 
@@ -60,7 +60,12 @@ class TestEvaluator:
 
             evaluator = Evaluator(config)
 
-            mock_get_driver.assert_called_once_with("claude", model="sonnet")
+            mock_get_driver.assert_called_once_with(
+                "claude",
+                model="sonnet",
+                sandbox_config=SandboxConfig(),
+                sandbox_provider=None,
+            )
             assert evaluator.driver is mock_driver
 
     def test_evaluator_init_stores_options(self) -> None:
