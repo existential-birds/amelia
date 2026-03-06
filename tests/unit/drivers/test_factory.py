@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from amelia.core.types import SandboxConfig, SandboxMode
-from amelia.drivers.factory import cleanup_driver_session, get_driver
+from amelia.drivers.factory import cleanup_driver_session, create_daytona_provider, get_driver
 
 
 class TestGetDriverExistingBehavior:
@@ -322,3 +322,30 @@ class TestGetDriverWithSharedProvider:
             mock_cls.return_value = MagicMock()
             get_driver("api", model="test-model", sandbox_provider=None)
             mock_cls.assert_called_once_with(provider="openrouter", model="test-model")
+
+
+class TestCreateDaytonaProvider:
+    """Tests for the standalone create_daytona_provider function."""
+
+    def test_creates_provider_with_required_fields(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("DAYTONA_API_KEY", "test-key")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
+        sandbox = SandboxConfig(mode="daytona", repo_url="https://github.com/test/repo")
+        with patch("amelia.sandbox.daytona.DaytonaSandboxProvider") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            provider, worker_env = create_daytona_provider(sandbox)
+            mock_cls.assert_called_once()
+            assert "LLM_PROXY_URL" in worker_env
+            assert "OPENAI_API_KEY" in worker_env
+
+    def test_raises_without_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("DAYTONA_API_KEY", raising=False)
+        sandbox = SandboxConfig(mode="daytona", repo_url="https://github.com/test/repo")
+        with pytest.raises(ValueError, match="DAYTONA_API_KEY"):
+            create_daytona_provider(sandbox)
+
+    def test_raises_without_repo_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("DAYTONA_API_KEY", "test-key")
+        sandbox = SandboxConfig(mode="daytona")
+        with pytest.raises(ValueError, match="repo_url"):
+            create_daytona_provider(sandbox)

@@ -12,6 +12,102 @@ if TYPE_CHECKING:
     from amelia.sandbox.provider import SandboxProvider
 
 
+def create_daytona_provider(
+    sandbox_config: SandboxConfig,
+    *,
+    options: dict[str, Any] | None = None,
+    retry_config: RetryConfig | None = None,
+) -> tuple["SandboxProvider", dict[str, str]]:
+    """Create a DaytonaSandboxProvider and resolve worker environment.
+
+    This standalone function can be called both by ``get_driver()`` and by
+    the orchestrator (to create a shared provider for sandbox reuse).
+
+    Args:
+        sandbox_config: Sandbox configuration with Daytona fields.
+        options: Driver options (used to resolve LLM provider).
+        retry_config: Retry configuration for transient failures.
+
+    Returns:
+        Tuple of (provider, worker_env dict).
+
+    Raises:
+        ValueError: If required env vars or config fields are missing.
+    """
+    import os  # noqa: PLC0415
+
+    from amelia.sandbox.daytona import DaytonaSandboxProvider  # noqa: PLC0415
+
+    if sandbox_config.network_allowlist_enabled:
+        raise ValueError(
+            "Network allowlist is not supported with Daytona cloud sandboxes. "
+            "Daytona manages network isolation through its own infrastructure."
+        )
+
+    api_key = os.environ.get("DAYTONA_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "DAYTONA_API_KEY environment variable is required for Daytona sandbox"
+        )
+
+    if not sandbox_config.repo_url:
+        raise ValueError("repo_url is required when sandbox mode is 'daytona'")
+
+    git_token = os.environ.get("AMELIA_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+
+    provider = DaytonaSandboxProvider(
+        api_key=api_key,
+        api_url=sandbox_config.daytona_api_url,
+        target=sandbox_config.daytona_target,
+        repo_url=sandbox_config.repo_url,
+        resources=sandbox_config.daytona_resources,
+        image=sandbox_config.daytona_image,
+        snapshot=sandbox_config.daytona_snapshot,
+        timeout=sandbox_config.daytona_timeout,
+        retry_config=retry_config,
+        git_token=git_token,
+    )
+
+    # Daytona sandboxes are remote — the worker can't reach the local
+    # LLM proxy.  Resolve the LLM provider and pass credentials directly
+    # so the worker can call the LLM API from within the sandbox.
+    llm_provider = (options or {}).get("provider", "openrouter")
+
+    provider_registry: dict[str, str] = {
+        "openrouter": "https://openrouter.ai/api/v1",
+        "openai": "https://api.openai.com/v1",
+    }
+    api_key_env_vars: dict[str, str] = {
+        "openrouter": "OPENROUTER_API_KEY",
+        "openai": "OPENAI_API_KEY",
+    }
+
+    llm_base_url = provider_registry.get(llm_provider)
+    llm_env_var = api_key_env_vars.get(llm_provider)
+    if llm_base_url is None or llm_env_var is None:
+        raise ValueError(
+            f"Unsupported LLM provider for Daytona sandbox: {llm_provider!r}. "
+            f"Supported: {', '.join(sorted(provider_registry))}."
+        )
+
+    llm_api_key = os.environ.get(llm_env_var, "")
+    if not llm_api_key:
+        raise ValueError(
+            f"{llm_env_var} environment variable is required for "
+            f"Daytona sandbox with provider {llm_provider!r}"
+        )
+
+    worker_env: dict[str, str] = {
+        "LLM_PROXY_URL": llm_base_url,
+        "OPENAI_API_KEY": llm_api_key,
+    }
+
+    # Store worker_env on the provider for ContainerDriver to read
+    provider._worker_env = worker_env
+
+    return provider, worker_env
+
+
 def get_driver(
     driver_key: str,
     *,
@@ -79,75 +175,11 @@ def get_driver(
         if driver_key != "api":
             raise ValueError(f"Unknown driver key: {driver_key!r}")
 
-        import os  # noqa: PLC0415
-
-        from amelia.sandbox.daytona import DaytonaSandboxProvider  # noqa: PLC0415
         from amelia.sandbox.driver import ContainerDriver  # noqa: PLC0415
 
-        if sandbox_config.network_allowlist_enabled:
-            raise ValueError(
-                "Network allowlist is not supported with Daytona cloud sandboxes. "
-                "Daytona manages network isolation through its own infrastructure."
-            )
-
-        api_key = os.environ.get("DAYTONA_API_KEY")
-        if not api_key:
-            raise ValueError(
-                "DAYTONA_API_KEY environment variable is required for Daytona sandbox"
-            )
-
-        if not sandbox_config.repo_url:
-            raise ValueError("repo_url is required when sandbox mode is 'daytona'")
-
-        git_token = os.environ.get("AMELIA_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
-
-        provider = DaytonaSandboxProvider(
-            api_key=api_key,
-            api_url=sandbox_config.daytona_api_url,
-            target=sandbox_config.daytona_target,
-            repo_url=sandbox_config.repo_url,
-            resources=sandbox_config.daytona_resources,
-            image=sandbox_config.daytona_image,
-            snapshot=sandbox_config.daytona_snapshot,
-            timeout=sandbox_config.daytona_timeout,
-            retry_config=retry_config,
-            git_token=git_token,
+        provider, worker_env = create_daytona_provider(
+            sandbox_config, options=options, retry_config=retry_config,
         )
-
-        # Daytona sandboxes are remote — the worker can't reach the local
-        # LLM proxy.  Resolve the LLM provider and pass credentials directly
-        # so the worker can call the LLM API from within the sandbox.
-        llm_provider = (options or {}).get("provider", "openrouter")
-
-        provider_registry: dict[str, str] = {
-            "openrouter": "https://openrouter.ai/api/v1",
-            "openai": "https://api.openai.com/v1",
-        }
-        api_key_env_vars: dict[str, str] = {
-            "openrouter": "OPENROUTER_API_KEY",
-            "openai": "OPENAI_API_KEY",
-        }
-
-        llm_base_url = provider_registry.get(llm_provider)
-        llm_env_var = api_key_env_vars.get(llm_provider)
-        if llm_base_url is None or llm_env_var is None:
-            raise ValueError(
-                f"Unsupported LLM provider for Daytona sandbox: {llm_provider!r}. "
-                f"Supported: {', '.join(sorted(provider_registry))}."
-            )
-
-        llm_api_key = os.environ.get(llm_env_var, "")
-        if not llm_api_key:
-            raise ValueError(
-                f"{llm_env_var} environment variable is required for "
-                f"Daytona sandbox with provider {llm_provider!r}"
-            )
-
-        worker_env: dict[str, str] = {
-            "LLM_PROXY_URL": llm_base_url,
-            "OPENAI_API_KEY": llm_api_key,
-        }
-
         return ContainerDriver(model=model, provider=provider, env=worker_env)
 
     if driver_key == "claude":
