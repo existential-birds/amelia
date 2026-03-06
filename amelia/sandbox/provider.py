@@ -38,6 +38,25 @@ class SandboxProvider(Protocol):
         """
         ...
 
+    @property
+    def worker_cmd(self) -> list[str]:
+        """Base command to invoke the sandbox worker.
+
+        Returns the command prefix (without subcommand or args).
+        Default uses module invocation; providers that upload a standalone
+        worker script should override this.
+        """
+        return ["python", "-m", "amelia.sandbox.worker"]
+
+    @property
+    def worker_env(self) -> dict[str, str]:
+        """Environment variables for the worker process.
+
+        Returns additional env vars the worker needs (e.g., LLM API keys
+        for remote sandboxes). Default is empty.
+        """
+        return {}
+
     async def write_file(self, path: str, content: bytes) -> None:
         """Write content to a file inside the sandbox.
 

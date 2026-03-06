@@ -253,7 +253,7 @@ class TestDaytonaSandboxProviderWorkerInstall:
             )
             await provider.ensure_running()
 
-            assert mock_sandbox.process.exec.call_count == 2
+            assert mock_sandbox.process.exec.call_count == 3
             # First call: check for pyproject.toml / setup.py
             mock_sandbox.process.exec.assert_any_call(
                 "test -f /workspace/repo/pyproject.toml || test -f /workspace/repo/setup.py"
@@ -262,6 +262,8 @@ class TestDaytonaSandboxProviderWorkerInstall:
             mock_sandbox.process.exec.assert_any_call(
                 "pip install --no-cache-dir --no-deps /workspace/repo"
             )
+            # Third call: mkdir for worker upload
+            mock_sandbox.process.exec.assert_any_call("mkdir -p /opt/amelia")
 
     @pytest.mark.asyncio
     async def test_skips_install_when_no_repo_url(self) -> None:
@@ -281,7 +283,8 @@ class TestDaytonaSandboxProviderWorkerInstall:
             await provider.ensure_running()
 
             mock_sandbox.git.clone.assert_not_called()
-            mock_sandbox.process.exec.assert_not_called()
+            # Only call should be mkdir for worker upload (no pip install)
+            mock_sandbox.process.exec.assert_called_once_with("mkdir -p /opt/amelia")
 
     @pytest.mark.asyncio
     async def test_raises_on_install_failure(self) -> None:
@@ -584,6 +587,9 @@ class TestDaytonaSandboxProviderWriteFile:
             )
             await provider.ensure_running()
 
+            # Reset after ensure_running (which uploads worker.py).
+            mock_sandbox.fs.upload_file.reset_mock()
+
             await provider.write_file("/tmp/prompt.txt", b"hello world")
 
             mock_sandbox.fs.upload_file.assert_called_once_with(
@@ -848,6 +854,30 @@ class TestDaytonaSandboxProviderTeardown:
             )
             # Should not raise
             await provider.teardown()
+
+
+class TestWorkerEnv:
+    """Tests for the worker_env property."""
+
+    def test_worker_env_returns_empty_when_no_env_set(self) -> None:
+        """Provider with no LLM env returns empty dict."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona"):
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            provider = DaytonaSandboxProvider(api_key="test-key")
+            assert provider.worker_env == {}
+
+    def test_worker_env_returns_configured_env(self) -> None:
+        """Provider with LLM env returns the configured variables."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona"):
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            provider = DaytonaSandboxProvider(api_key="test-key")
+            provider._worker_env = {"LLM_PROXY_URL": "https://example.com", "OPENAI_API_KEY": "sk-test"}
+            assert provider.worker_env == {
+                "LLM_PROXY_URL": "https://example.com",
+                "OPENAI_API_KEY": "sk-test",
+            }
 
 
 class TestDaytonaSandboxProviderHealthCheck:

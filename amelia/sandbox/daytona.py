@@ -31,6 +31,9 @@ from amelia.core.types import RetryConfig
 from amelia.sandbox.worktree import REPO_PATH
 
 
+# Path where the standalone worker script is uploaded inside the sandbox.
+WORKER_PATH = "/opt/amelia/worker.py"
+
 # Lightweight deps needed by amelia.sandbox.worker inside the sandbox.
 # These are installed into the Daytona image at build time so the worker
 # can run without a pre-built GHCR image.
@@ -93,6 +96,7 @@ class DaytonaSandboxProvider:
         self._retry_config = retry_config
         self._git_token = git_token
         self._workflow_branch = workflow_branch
+        self._worker_env: dict[str, str] = {}
         self._sandbox: AsyncSandbox | None = None
 
     @property
@@ -101,6 +105,27 @@ class DaytonaSandboxProvider:
         if self._git_token:
             return {"username": "x-access-token", "password": self._git_token}
         return {}
+
+    @property
+    def worker_cmd(self) -> list[str]:
+        """Invoke the standalone worker script uploaded to the sandbox."""
+        return ["python", WORKER_PATH]
+
+    @property
+    def worker_env(self) -> dict[str, str]:
+        """Environment variables needed by the worker inside the sandbox."""
+        return dict(self._worker_env)
+
+    async def _upload_worker(self, sandbox: AsyncSandbox) -> None:
+        """Upload the standalone worker.py script into the sandbox."""
+        from pathlib import Path  # noqa: PLC0415
+
+        worker_src = Path(__file__).parent / "worker.py"
+        content = worker_src.read_bytes()
+        # Ensure parent directory exists.
+        await sandbox.process.exec(f"mkdir -p {shlex.quote(str(Path(WORKER_PATH).parent))}")
+        await sandbox.fs.upload_file(content, WORKER_PATH)
+        logger.info("Uploaded standalone worker", path=WORKER_PATH, size=len(content))
 
     async def ensure_running(self) -> None:
         """Create Daytona sandbox and clone repo using native APIs.
@@ -219,6 +244,10 @@ class DaytonaSandboxProvider:
                                 f"exit_code={branch_resp.exit_code}, result={branch_resp.result}"
                             )
                         logger.info("Created workflow branch", branch=self._workflow_branch)
+
+                # Upload the standalone worker script so the container
+                # driver can invoke it without installing the amelia package.
+                await self._upload_worker(created_sandbox)
 
                 # Only persist after all setup steps succeed.
                 self._sandbox = created_sandbox
