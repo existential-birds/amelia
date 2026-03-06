@@ -71,10 +71,10 @@ class Developer:
 
     async def run(
         self,
-        state: "ImplementationState",
+        state: ImplementationState,
         profile: Profile,
         workflow_id: uuid.UUID,
-    ) -> AsyncIterator[tuple["ImplementationState", WorkflowEvent]]:
+    ) -> AsyncIterator[tuple[ImplementationState, WorkflowEvent]]:
         """Execute development task agentically.
 
         Uses the driver's execute_agentic method to let the LLM autonomously
@@ -173,7 +173,7 @@ class Developer:
                 })
                 yield current_state, event
 
-    def _build_prompt(self, state: "ImplementationState") -> str:
+    def _build_prompt(self, state: ImplementationState) -> str:
         """Build prompt combining goal, review feedback, and context.
 
         For multi-task execution, extracts only the current task section

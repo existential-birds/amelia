@@ -77,9 +77,9 @@ Provide clear evidence for each disposition decision."""
     def __init__(
         self,
         config: AgentConfig,
-        event_bus: "EventBus | None" = None,
+        event_bus: EventBus | None = None,
         prompts: dict[str, str] | None = None,
-        sandbox_provider: "SandboxProvider | None" = None,
+        sandbox_provider: SandboxProvider | None = None,
     ):
         """Initialize the Evaluator agent.
 
@@ -120,7 +120,7 @@ Provide clear evidence for each disposition decision."""
         """
         return self._prompts.get(self.PROMPT_KEY_SYSTEM, self.SYSTEM_PROMPT)
 
-    def _build_prompt(self, state: "ImplementationState") -> str:
+    def _build_prompt(self, state: ImplementationState) -> str:
         """Build the user prompt for evaluation from state.
 
         Args:
@@ -174,7 +174,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
 
     async def evaluate(
         self,
-        state: "ImplementationState",
+        state: ImplementationState,
         profile: Profile,
         *,
         workflow_id: uuid.UUID,

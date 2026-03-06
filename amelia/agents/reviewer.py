@@ -119,10 +119,10 @@ class Reviewer:
     def __init__(
         self,
         config: AgentConfig,
-        event_bus: "EventBus | None" = None,
+        event_bus: EventBus | None = None,
         prompts: dict[str, str] | None = None,
         agent_name: str = "reviewer",
-        sandbox_provider: "SandboxProvider | None" = None,
+        sandbox_provider: SandboxProvider | None = None,
     ):
         """Initialize the Reviewer agent.
 
@@ -153,7 +153,7 @@ class Reviewer:
     def agentic_prompt(self) -> str:
         return self._prompts.get("reviewer.agentic", self.AGENTIC_REVIEW_PROMPT)
 
-    def _extract_task_context(self, state: "ImplementationState") -> str | None:
+    def _extract_task_context(self, state: ImplementationState) -> str | None:
         """Extract task context from execution state.
 
         For multi-task execution, extracts only the current task section
@@ -238,7 +238,7 @@ class Reviewer:
 
     async def agentic_review(
         self,
-        state: "ImplementationState",
+        state: ImplementationState,
         base_commit: str,
         profile: Profile,
         *,

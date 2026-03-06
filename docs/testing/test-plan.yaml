@@ -53,48 +53,66 @@ tests:
           Content-Type: application/json
         body: |
           {
+            "issue_id": "sleep-stage-tracking",
+            "worktree_path": "/Users/ka/github/existential-birds/jocko",
             "task_title": "Sleep stage tracking: inBed + asleepUnspecified support",
             "task_description": "Support asleepUnspecified and inBed HealthKit sleep categories so users without stage-capable devices see their sleep data, and all users get sleep onset latency tracking.",
             "profile": "jocko-daytona",
             "plan_file": "docs/plans/2026-03-03-sleep-stage-tracking-plan.md",
             "start": true
           }
-        note: Create and start workflow with external plan in Daytona sandbox
+        note: Create and start workflow with external plan in Daytona sandbox. Response field is "id" (not "workflow_id").
       - action: curl
         method: GET
         url: http://localhost:8420/api/workflows/${WORKFLOW_ID}
-        note: Poll workflow status — check it transitions from queued → running
+        note: |
+          Poll workflow status using the "id" from the POST response.
+          Expect transitions: pending → running → plan_validator → human_approval (blocked).
+      - action: curl
+        method: POST
+        url: http://localhost:8420/api/workflows/${WORKFLOW_ID}/approve
+        headers:
+          Content-Type: application/json
+        body: |
+          {}
+        note: |
+          Approve the plan after plan_validator completes. The workflow blocks
+          at human_approval stage and requires this POST to continue execution.
+      - action: curl
+        method: GET
+        url: http://localhost:8420/api/workflows/${WORKFLOW_ID}
+        note: Poll workflow status — after approval it should transition to running/developer stage.
     expected: |
-      1. GET /api/profiles returns the jocko-daytona profile with sandbox.mode = "daytona"
-      2. POST /api/workflows returns 201 with a workflow_id
-      3. The workflow starts and transitions to "running" state
+      1. GET /api/profiles returns a list containing the jocko-daytona profile with sandbox.mode = "daytona"
+      2. POST /api/workflows returns 201 with an "id" field (UUID)
+      3. The workflow starts and transitions through: pending → running → plan_validator → human_approval (blocked)
       4. Server logs show DaytonaSandboxProvider creating a Daytona sandbox instance
-      5. The sandbox clones the jocko repo and loads the external plan
-      6. Developer agent begins executing tasks from the sleep-stage-tracking plan
-         inside the Daytona sandbox (visible in workflow events/logs)
+      5. POST /api/workflows/{id}/approve returns success, unblocking the workflow
+      6. The workflow resumes and the Developer agent begins executing tasks from the
+         sleep-stage-tracking plan inside the Daytona sandbox (visible in workflow events/logs)
       7. The workflow progresses through plan tasks — modifying SleepModels.swift,
          SleepService.swift, MockSleepService.swift, and SleepTab.swift
 
   - id: TC-02
     name: Monitor workflow execution and verify task completion in Daytona sandbox
     context: |
-      Continuation of TC-01. After the workflow starts, monitor it through
+      Continuation of TC-01. After the workflow is approved, monitor it through
       the dashboard to verify the Developer agent is executing inside the
       Daytona sandbox and producing code changes.
     steps:
       - run: agent-browser open http://localhost:8421
       - run: agent-browser snapshot -i
-        note: Capture dashboard — should show running workflow
-      - run: agent-browser click @workflow
-        note: Click on the running workflow to view details
+        note: Capture dashboard — should show running workflow. Note element refs from output.
+      - run: agent-browser click @<ref>
+        note: Click on the running workflow element using the ref from the snapshot output (e.g. @e1, @e2).
       - run: agent-browser snapshot -i
         note: Capture workflow detail view with task progress
-      - run: agent-browser screenshot evidence/tc-02-workflow-running.png
+      - run: agent-browser screenshot docs/testing/evidence/tc-02-workflow-running.png
         note: Evidence of workflow running in Daytona sandbox
-      - run: agent-browser wait --text "completed" --timeout 600
-        note: Wait for workflow to complete (up to 10 min)
+      - run: agent-browser wait --text "Completed" --timeout 600
+        note: Wait for workflow to complete (up to 10 min). Look for capitalized status label.
       - run: agent-browser snapshot -i
-      - run: agent-browser screenshot evidence/tc-02-workflow-complete.png
+      - run: agent-browser screenshot docs/testing/evidence/tc-02-workflow-complete.png
     expected: |
       1. Dashboard shows the workflow in "running" state
       2. Workflow detail view shows task progress from the external plan
@@ -105,4 +123,4 @@ tests:
       5. Code changes are visible in the workflow output — modifications to
          SleepModels.swift, SleepService.swift, etc.
     evidence:
-      screenshot: evidence/tc-02-workflow-complete.png
+      screenshot: docs/testing/evidence/tc-02-workflow-complete.png

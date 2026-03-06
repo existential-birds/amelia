@@ -101,11 +101,11 @@ Before planning, discover:
 
     async def plan(
         self,
-        state: "ImplementationState",
+        state: ImplementationState,
         profile: Profile,
         *,
         workflow_id: uuid.UUID,
-    ) -> AsyncIterator[tuple["ImplementationState", WorkflowEvent]]:
+    ) -> AsyncIterator[tuple[ImplementationState, WorkflowEvent]]:
         """Generate a markdown implementation plan from an issue using agentic execution.
 
         Creates a rich markdown plan by exploring the codebase with read-only tools,
@@ -253,7 +253,7 @@ Before planning, discover:
             })
             yield current_state, error_event
 
-    def _build_agentic_prompt(self, state: "ImplementationState", profile: Profile) -> str:
+    def _build_agentic_prompt(self, state: ImplementationState, profile: Profile) -> str:
         """Build user prompt for agentic plan generation.
 
         Simplified prompt that doesn't include codebase scan - the agent

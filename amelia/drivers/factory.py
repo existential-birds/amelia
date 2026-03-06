@@ -8,6 +8,7 @@ from amelia.drivers.base import DriverInterface
 from amelia.drivers.cli.claude import ClaudeCliDriver
 from amelia.drivers.cli.codex import CodexCliDriver
 
+
 if TYPE_CHECKING:
     from amelia.sandbox.provider import SandboxProvider
 
@@ -17,7 +18,7 @@ def create_daytona_provider(
     *,
     options: dict[str, Any] | None = None,
     retry_config: RetryConfig | None = None,
-) -> tuple["SandboxProvider", dict[str, str]]:
+) -> tuple[SandboxProvider, dict[str, str]]:
     """Create a DaytonaSandboxProvider and resolve worker environment.
 
     This standalone function can be called both by ``get_driver()`` and by
@@ -156,7 +157,6 @@ def get_driver(
             raise ValueError(f"Unknown driver key: {driver_key!r}")
         from amelia.sandbox.docker import DockerSandboxProvider  # noqa: PLC0415
         from amelia.sandbox.driver import ContainerDriver  # noqa: PLC0415
-        from amelia.sandbox.provider import SandboxProvider  # noqa: PLC0415
 
         provider: SandboxProvider = DockerSandboxProvider(
             profile_name=profile_name,

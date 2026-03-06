@@ -4,87 +4,52 @@
 
 ### What Failed
 
-**Test:** TC-01 - Run sleep-stage-tracking workflow in Daytona sandbox with external plan
+The workflow made significant progress but ultimately failed at **Task 1/5 second iteration** (after reviewer feedback) because the Daytona tier memory limit (10GiB) was exceeded when creating a third sandbox.
 
-**Expected:**
-1. GET /api/profiles returns the jocko-daytona profile with sandbox.mode = "daytona" ✓
-2. POST /api/workflows returns 201 with a workflow_id ✓
-3. The workflow starts and transitions to "running" state ✗
-4. Server logs show DaytonaSandboxProvider creating a Daytona sandbox instance ✗
-
-**Actual:**
-- Step 1 (GET /api/profiles): PASS — jocko-daytona profile returned with sandbox.mode = "daytona"
-- Step 2 (POST /api/workflows): PASS — 201 Created, workflow_id = 9358e855-ab53-4832-94bd-14a8e1e24a5c
-  - Note: test plan was missing required fields `issue_id` and `worktree_path`; added manually
-- Step 3 (Poll status): FAIL — workflow stuck in "blocked" (awaiting human approval of plan)
-  - After manual approval via POST /approve, the developer_node failed immediately
-- Workflow transitioned: pending → started → plan_validator → human_approval (blocked) → approved → failed
-
-### Error Details
-
-```
-ModuleNotFoundError: No module named 'amelia'
-```
-
-Full command that failed inside the Daytona sandbox:
-```
-cd /workspace/repo && python -m amelia.sandbox.worker agentic \
-  --prompt-file /tmp/prompt-138175bcea9b.txt \
-  --cwd /workspace/repo \
-  --model minimax/minimax-m2.5 \
-  --instructions '...'
-```
-
-The Daytona sandbox container (image: `debian-slim:3.12`) does not have the `amelia` Python package installed.
+**Expected:** Workflow completes all 5 tasks
+**Actual:** Workflow ran through:
+1. Plan validation (passed)
+2. Human approval (approved)
+3. Developer - Task 1/5 (completed successfully in Daytona sandbox)
+4. Reviewer (completed review in second sandbox)
+5. Developer - Task 1/5 retry (FAILED: `Total memory limit exceeded`)
 
 ### Root Cause Analysis
 
-The DaytonaSandboxProvider (`amelia/sandbox/daytona.py`) dynamically builds the sandbox image:
-1. Starts from a base image (e.g., `debian-slim:3.12`)
-2. Installs lightweight worker deps (`deepagents`, `pydantic`, `loguru`, `httpx`, `langchain-openai`)
-3. Clones the target repo (jocko) into `/workspace/repo`
-4. Checks if the cloned repo has `pyproject.toml` → if so, runs `pip install --no-deps /workspace/repo`
+**Two issues were found and one was fixed:**
 
-**The problem:** The cloned repo is `jocko` (a Swift/iOS project), NOT `amelia`. So step 4 either doesn't find a `pyproject.toml` or installs jocko's package (not amelia). The `amelia.sandbox.worker` module is never available.
+#### Issue 1 (FIXED): Worker module not found in Daytona sandbox
 
-The `Dockerfile.daytona` exists and DOES install amelia into the image, but the dynamic image builder doesn't use it — it builds from scratch with only worker deps.
+The `ContainerDriver` invoked the worker as `python -m amelia.sandbox.worker`, but the Daytona sandbox doesn't install the `amelia` package. Commit `6f528986` made `worker.py` standalone (no amelia imports) but forgot to update the invocation command.
 
-### Relevant Changes in This PR
+**Fix applied:**
+- `amelia/sandbox/daytona.py`: Added `_upload_worker()` to upload `worker.py` to `/opt/amelia/worker.py` during `ensure_running()`
+- `amelia/sandbox/daytona.py`: Added `worker_cmd` property returning `["python", "/opt/amelia/worker.py"]`
+- `amelia/sandbox/provider.py`: Added `worker_cmd` property to protocol (default: `["python", "-m", "amelia.sandbox.worker"]`)
+- `amelia/sandbox/driver.py`: Changed invocation from hardcoded module path to `self._provider.worker_cmd`
 
-- `amelia/sandbox/daytona.py` — DaytonaSandboxProvider implementation (dynamic image building)
-- `amelia/sandbox/driver.py` — ContainerDriver that runs `python -m amelia.sandbox.worker`
-- `amelia/sandbox/worker.py` — The worker entrypoint that needs `amelia` installed
-- `amelia/sandbox/Dockerfile.daytona` — Pre-built image that DOES include amelia (not used dynamically)
-- `amelia/sandbox/provider.py` — SandboxProvider protocol
+**Evidence:** Server logs show `Uploaded standalone worker | path='/opt/amelia/worker.py' size=13956` and the developer agent successfully executed Task 1/5.
+
+#### Issue 2 (NOT FIXED): Sandbox not reused across workflow stages
+
+Each workflow stage (developer, reviewer, developer retry) creates a **new** Daytona sandbox without tearing down the previous one. With 4GiB per sandbox and a 10GiB tier limit, the third sandbox creation fails.
+
+This is a design issue in how the workflow engine manages sandbox lifecycles. Sandboxes should either be:
+- Reused across stages within the same workflow
+- Torn down after each stage completes
+
+### Evidence
+
+Server log excerpts:
+```
+10:08:27 | INFO | amelia.sandbox.daytona:Uploaded standalone worker | path='/opt/amelia/worker.py' size=13956
+10:09:39 | INFO | amelia.sandbox.daytona:Creating Daytona sandbox  (2nd sandbox for reviewer)
+10:18:53 | INFO | amelia.sandbox.daytona:Creating Daytona sandbox  (3rd sandbox - FAILED)
+daytona_sdk.common.errors.DaytonaError: Failed to create sandbox: Total memory limit exceeded.
+```
 
 ### Suggested Investigation
 
-1. The dynamic image builder in `daytona.py` needs to install `amelia` itself (not just worker deps). Either `pip install` from a wheel/sdist, or copy the `amelia.sandbox.worker` module directly.
-2. The `Dockerfile.daytona` already solves this — consider using pre-built images or snapshots instead of dynamic builds.
-3. The `_WORKER_DEPS` list in `daytona.py` includes third-party deps but not `amelia` itself. The worker module (`amelia.sandbox.worker`) imports from `amelia`, so `amelia` must be installed.
-
-### Additional Test Plan Issues
-
-1. The POST /api/workflows body in the test plan is missing required fields `issue_id` and `worktree_path` (returns 422 without them).
-2. The test plan doesn't account for the human approval step — the workflow pauses at `human_approval_node` before reaching "running" state.
-
-### Debug Session Prompt
-
----
-I'm debugging a test failure in branch `feat/506-daytona-sandbox`.
-
-**Test:** TC-01 - Run sleep-stage-tracking workflow in Daytona sandbox
-**Error:** `ModuleNotFoundError: No module named 'amelia'` inside Daytona sandbox container
-
-The Daytona sandbox dynamically builds its container image in `amelia/sandbox/daytona.py` but only installs lightweight worker dependencies (`_WORKER_DEPS`), not the `amelia` package itself. When the ContainerDriver tries to run `python -m amelia.sandbox.worker`, the module doesn't exist.
-
-The `Dockerfile.daytona` already handles this correctly by copying and installing amelia, but the dynamic image builder doesn't replicate this.
-
-Relevant files:
-- `amelia/sandbox/daytona.py` (dynamic image building, `_WORKER_DEPS`)
-- `amelia/sandbox/driver.py` (ContainerDriver runs the worker command)
-- `amelia/sandbox/worker.py` (worker entrypoint)
-- `amelia/sandbox/Dockerfile.daytona` (pre-built image that works)
-
-Help me fix the dynamic image builder to include the `amelia.sandbox.worker` module in the Daytona sandbox.
----
+1. Look at how `ContainerDriver` instances are created per workflow stage -- each stage gets a fresh driver/provider instance
+2. Consider adding sandbox teardown in `DaytonaSandboxProvider` after each stage completes
+3. Or implement sandbox reuse by sharing a single provider instance across stages within a workflow
