@@ -123,7 +123,7 @@ class ContainerDriver:
 
         try:
             cmd = [
-                "python", "-m", "amelia.sandbox.worker", "agentic",
+                *self._provider.worker_cmd, "agentic",
                 "--prompt-file", prompt_path,
                 "--cwd", sandbox_cwd,
                 "--model", self.model,
@@ -177,7 +177,7 @@ class ContainerDriver:
 
         try:
             cmd = [
-                "python", "-m", "amelia.sandbox.worker", "generate",
+                *self._provider.worker_cmd, "generate",
                 "--prompt-file", prompt_path,
                 "--model", self.model,
             ]

@@ -275,3 +275,50 @@ class TestGetDriverDaytonaBranch:
                 sandbox_config=sandbox, profile_name="work",
                 options={"provider": "anthropic"},
             )
+
+
+class TestGetDriverWithSharedProvider:
+    """Tests for sandbox_provider parameter (sandbox reuse)."""
+
+    def test_shared_provider_skips_creation(self) -> None:
+        """When sandbox_provider is passed, get_driver wraps it directly."""
+        mock_provider = MagicMock()
+        mock_provider.worker_env = {"LLM_PROXY_URL": "https://example.com", "OPENAI_API_KEY": "sk-test"}
+        with patch("amelia.sandbox.driver.ContainerDriver") as mock_driver_cls:
+            mock_driver_cls.return_value = MagicMock()
+            get_driver(
+                "api",
+                model="test-model",
+                sandbox_provider=mock_provider,
+            )
+            mock_driver_cls.assert_called_once_with(
+                model="test-model",
+                provider=mock_provider,
+                env={"LLM_PROXY_URL": "https://example.com", "OPENAI_API_KEY": "sk-test"},
+            )
+
+    def test_shared_provider_ignores_sandbox_config(self) -> None:
+        """sandbox_provider takes precedence over sandbox_config."""
+        mock_provider = MagicMock()
+        mock_provider.worker_env = {}
+        sandbox = SandboxConfig(mode="container", image="test:latest")
+        with patch("amelia.sandbox.driver.ContainerDriver") as mock_driver_cls:
+            mock_driver_cls.return_value = MagicMock()
+            get_driver(
+                "api",
+                model="test-model",
+                sandbox_config=sandbox,
+                sandbox_provider=mock_provider,
+            )
+            mock_driver_cls.assert_called_once_with(
+                model="test-model",
+                provider=mock_provider,
+                env={},
+            )
+
+    def test_none_provider_preserves_existing_behavior(self) -> None:
+        """sandbox_provider=None (default) doesn't change behavior."""
+        with patch("amelia.drivers.factory.ApiDriver") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            get_driver("api", model="test-model", sandbox_provider=None)
+            mock_cls.assert_called_once_with(provider="openrouter", model="test-model")

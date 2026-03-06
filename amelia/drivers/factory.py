@@ -1,10 +1,15 @@
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 from amelia.core.types import RetryConfig, SandboxConfig, SandboxMode
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import DriverInterface
 from amelia.drivers.cli.claude import ClaudeCliDriver
 from amelia.drivers.cli.codex import CodexCliDriver
+
+if TYPE_CHECKING:
+    from amelia.sandbox.provider import SandboxProvider
 
 
 def get_driver(
@@ -13,6 +18,7 @@ def get_driver(
     model: str = "",
     cwd: str | None = None,
     sandbox_config: SandboxConfig | None = None,
+    sandbox_provider: SandboxProvider | None = None,
     profile_name: str = "default",
     options: dict[str, Any] | None = None,
     retry_config: RetryConfig | None = None,
@@ -34,6 +40,16 @@ def get_driver(
     Raises:
         ValueError: If driver_key is not recognized or incompatible with sandbox.
     """
+    # Shared provider path: reuse an existing provider instance.
+    if sandbox_provider is not None:
+        from amelia.sandbox.driver import ContainerDriver  # noqa: PLC0415
+
+        return ContainerDriver(
+            model=model,
+            provider=sandbox_provider,
+            env=sandbox_provider.worker_env,
+        )
+
     if sandbox_config and sandbox_config.mode == SandboxMode.CONTAINER:
         if driver_key in {"claude", "codex"}:
             raise ValueError(
