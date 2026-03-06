@@ -1370,7 +1370,15 @@ class OrchestratorService:
             if profile.sandbox.mode == SandboxMode.DAYTONA:
                 from amelia.drivers.factory import create_daytona_provider  # noqa: PLC0415
 
-                provider, _worker_env = create_daytona_provider(profile.sandbox)
+                agent_options = None
+                try:
+                    dev_config = profile.get_agent_config("developer")
+                    agent_options = dev_config.options
+                except ValueError:
+                    pass
+                provider, _worker_env = create_daytona_provider(
+                    profile.sandbox, options=agent_options, retry_config=profile.retry,
+                )
                 await provider.ensure_running()
                 sandbox_provider = provider
 
