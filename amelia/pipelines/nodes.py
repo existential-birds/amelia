@@ -134,9 +134,10 @@ async def call_developer_node(
     configurable = config.get("configurable", {})
     repository = configurable.get("repository")
     prompts = configurable.get("prompts", {})
+    sandbox_provider = configurable.get("sandbox_provider")
 
     agent_config = profile.get_agent_config("developer")
-    developer = Developer(agent_config, prompts=prompts)
+    developer = Developer(agent_config, prompts=prompts, sandbox_provider=sandbox_provider)
 
     final_state = state
     async for new_state, event in developer.run(state, profile, workflow_id=workflow_id):
@@ -193,6 +194,7 @@ async def call_reviewer_node(
     configurable = config.get("configurable", {})
     repository = configurable.get("repository")
     prompts = configurable.get("prompts", {})
+    sandbox_provider = configurable.get("sandbox_provider")
 
     # Use "task_reviewer" only for non-final tasks in task-based execution
     is_non_final_task = state.current_task_index + 1 < state.total_tasks
@@ -202,7 +204,7 @@ async def call_reviewer_node(
         agent_config = profile.get_agent_config(agent_name)
     except ValueError:
         agent_config = profile.get_agent_config("reviewer")
-    reviewer = Reviewer(agent_config, event_bus=event_bus, prompts=prompts, agent_name=agent_name)
+    reviewer = Reviewer(agent_config, event_bus=event_bus, prompts=prompts, agent_name=agent_name, sandbox_provider=sandbox_provider)
 
     # Compute base_commit if not in state
     base_commit = state.base_commit

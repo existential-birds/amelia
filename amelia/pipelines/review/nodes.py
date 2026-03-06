@@ -36,10 +36,11 @@ async def call_evaluation_node(
     config = config or {}
     configurable = config.get("configurable", {})
     prompts = configurable.get("prompts", {})
+    sandbox_provider = configurable.get("sandbox_provider")
     repository = configurable.get("repository")
 
     agent_config = profile.get_agent_config("evaluator")
-    evaluator = Evaluator(config=agent_config, event_bus=event_bus, prompts=prompts)
+    evaluator = Evaluator(config=agent_config, event_bus=event_bus, prompts=prompts, sandbox_provider=sandbox_provider)
 
     evaluation_result, new_session_id = await evaluator.evaluate(
         state, profile, workflow_id=workflow_id
