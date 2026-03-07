@@ -346,9 +346,9 @@ function AgentCard({ agent, config, onChange, error }: AgentCardProps) {
       <div className={cn('w-0.5 h-6 rounded-full shrink-0', colors.line)} />
 
       {/* Agent icon + name */}
-      <div className="flex items-center gap-2 w-full sm:w-[110px] sm:min-w-[110px] shrink-0">
+      <div className="flex min-w-0 items-center gap-2 w-full sm:w-[110px] sm:min-w-[110px] shrink-0">
         <Icon className={cn('h-4 w-4 shrink-0', colors.icon)} />
-        <span className="font-heading text-sm font-medium tracking-wide">{agent.label}</span>
+        <span className="truncate font-heading text-sm font-medium tracking-wide">{agent.label}</span>
       </div>
 
       {/* Driver select */}
