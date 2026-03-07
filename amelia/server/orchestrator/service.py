@@ -2411,23 +2411,41 @@ class OrchestratorService:
 
         graph = self._create_server_graph(self._checkpointer)
 
-        config: RunnableConfig = {
-            "recursion_limit": 100,
-            "configurable": {
-                "thread_id": str(workflow_id),
-                "execution_mode": "server",
-                "event_bus": self._event_bus,
-                "profile": profile,
-                "repository": self._repository,
-                "prompts": prompts,
-            },
-        }
-
+        # Create shared sandbox provider if Daytona mode (same as _run_workflow_with_retry)
+        sandbox_provider: SandboxProvider | None = None
         try:
+            if profile.sandbox.mode == SandboxMode.DAYTONA:
+                from amelia.drivers.factory import create_daytona_provider  # noqa: PLC0415
+
+                agent_options = None
+                try:
+                    dev_config = profile.get_agent_config("developer")
+                    agent_options = dev_config.options
+                except ValueError:
+                    pass
+                provider, _worker_env = create_daytona_provider(
+                    profile.sandbox, options=agent_options, retry_config=profile.retry,
+                )
+                await provider.ensure_running()
+                sandbox_provider = provider
+
+            config: RunnableConfig = {
+                "recursion_limit": 100,
+                "configurable": {
+                    "thread_id": str(workflow_id),
+                    "execution_mode": "server",
+                    "event_bus": self._event_bus,
+                    "profile": profile,
+                    "repository": self._repository,
+                    "prompts": prompts,
+                    "sandbox_provider": sandbox_provider,
+                },
+            }
+
+            was_interrupted = False
             # Convert Pydantic model to JSON-serializable dict for checkpointing
             input_state = execution_state.model_dump(mode="json")
 
-            was_interrupted = False
             async for chunk in graph.astream(
                 input_state,
                 config=config,
@@ -2520,6 +2538,9 @@ class OrchestratorService:
                 workflow_id=workflow_id,
                 error=str(e),
             )
+        finally:
+            if sandbox_provider is not None:
+                await sandbox_provider.teardown()
 
     async def queue_and_plan_workflow(
         self,

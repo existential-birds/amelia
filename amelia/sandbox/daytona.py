@@ -132,11 +132,32 @@ class DaytonaSandboxProvider:
 
         First call creates the sandbox and clones the repository.
         Subsequent calls are no-ops if the sandbox is healthy.
+        Health checks are retried to avoid destroying a sandbox on
+        transient API failures.
         """
         if self._sandbox is not None:
-            if await self.health_check():
-                return
-            # Existing sandbox is unhealthy — tear it down before replacing.
+            # Retry health check to avoid destroying sandbox on transient failures
+            for attempt in range(3):
+                if await self.health_check():
+                    logger.debug(
+                        "Sandbox healthy, reusing",
+                        sandbox_id=self._sandbox.id,
+                        attempt=attempt,
+                    )
+                    return
+                if attempt < 2:
+                    logger.warning(
+                        "Sandbox health check failed, retrying",
+                        sandbox_id=self._sandbox.id,
+                        attempt=attempt + 1,
+                    )
+                    await asyncio.sleep(2 * (attempt + 1))
+
+            # All retries exhausted — tear it down before replacing.
+            logger.warning(
+                "Sandbox unhealthy after retries, recreating",
+                sandbox_id=self._sandbox.id,
+            )
             with contextlib.suppress(Exception):
                 await self._sandbox.delete()
             self._sandbox = None
