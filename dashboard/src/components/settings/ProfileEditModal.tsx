@@ -341,19 +341,19 @@ function AgentCard({ agent, config, onChange, error }: AgentCardProps) {
   const colors = AGENT_COLORS[agent.key] ?? { line: 'bg-muted-foreground/40', icon: 'text-muted-foreground' };
 
   return (
-    <div className="group relative flex flex-wrap items-center gap-2 rounded-md border border-border/40 bg-card/30 px-3 py-2 transition-all duration-200 hover:border-border/60 hover:bg-card/50">
+    <div className="group relative flex flex-wrap sm:flex-nowrap items-center gap-2 rounded-md border border-border/40 bg-card/30 px-3 py-2 transition-all duration-200 hover:border-border/60 hover:bg-card/50">
       {/* Status indicator line */}
       <div className={cn('w-0.5 h-6 rounded-full shrink-0', colors.line)} />
 
       {/* Agent icon + name */}
-      <div className="flex items-center gap-2 min-w-[110px] flex-1 sm:flex-none">
+      <div className="flex items-center gap-2 w-full sm:w-[110px] sm:min-w-[110px] shrink-0">
         <Icon className={cn('h-4 w-4 shrink-0', colors.icon)} />
         <span className="font-heading text-sm font-medium tracking-wide">{agent.label}</span>
       </div>
 
       {/* Driver select */}
       <Select value={config.driver} onValueChange={(v) => onChange('driver', v)}>
-        <SelectTrigger className="h-7 w-full sm:w-[130px] text-xs bg-background/50">
+        <SelectTrigger className="h-7 w-full sm:w-[130px] shrink-0 text-xs bg-background/50">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -378,6 +378,7 @@ function AgentCard({ agent, config, onChange, error }: AgentCardProps) {
           value={config.model}
           onChange={(v) => onChange('model', v)}
           error={error}
+          className="h-7 w-full sm:w-auto sm:min-w-[140px] sm:flex-1"
         />
       ) : (
         <Select
@@ -452,16 +453,25 @@ function BulkApply({ onApply }: BulkApplyProps) {
               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
                 Model
               </Label>
-              <Select value={model} onValueChange={setModel}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableModels.map((m) => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {driver === 'api' ? (
+                <ApiModelSelect
+                  agentKey="__bulk__"
+                  value={model}
+                  onChange={setModel}
+                  className="h-8 w-full sm:w-full"
+                />
+              ) : (
+                <Select value={model} onValueChange={setModel}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableModels.map((m) => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
           <div className="flex gap-2">
