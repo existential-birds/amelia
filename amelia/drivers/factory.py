@@ -101,6 +101,11 @@ def create_daytona_provider(
     worker_env: dict[str, str] = {
         "LLM_PROXY_URL": llm_base_url,
         "OPENAI_API_KEY": llm_api_key,
+        "OPENROUTER_SITE_URL": os.environ.get(
+            "OPENROUTER_SITE_URL",
+            "https://github.com/existential-birds/amelia",
+        ),
+        "OPENROUTER_SITE_NAME": os.environ.get("OPENROUTER_SITE_NAME", "Amelia"),
     }
 
     # Store worker_env on the provider for ContainerDriver to read

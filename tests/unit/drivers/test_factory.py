@@ -162,7 +162,12 @@ class TestGetDriverDaytonaBranch:
             mock_driver_cls.assert_called_once_with(
                 model="test-model",
                 provider=mock_provider_cls.return_value,
-                env={"LLM_PROXY_URL": "https://openrouter.ai/api/v1", "OPENAI_API_KEY": "or-test-key"},
+                env={
+                    "LLM_PROXY_URL": "https://openrouter.ai/api/v1",
+                    "OPENAI_API_KEY": "or-test-key",
+                    "OPENROUTER_SITE_URL": "https://github.com/existential-birds/amelia",
+                    "OPENROUTER_SITE_NAME": "Amelia",
+                },
             )
 
     def test_daytona_mode_missing_api_key_raises(self) -> None:
@@ -257,7 +262,12 @@ class TestGetDriverDaytonaBranch:
             mock_driver_cls.assert_called_once_with(
                 model="test-model",
                 provider=mock_provider_cls.return_value,
-                env={"LLM_PROXY_URL": "https://api.openai.com/v1", "OPENAI_API_KEY": "sk-test"},
+                env={
+                    "LLM_PROXY_URL": "https://api.openai.com/v1",
+                    "OPENAI_API_KEY": "sk-test",
+                    "OPENROUTER_SITE_URL": "https://github.com/existential-birds/amelia",
+                    "OPENROUTER_SITE_NAME": "Amelia",
+                },
             )
 
     def test_daytona_mode_unsupported_provider_raises(self) -> None:

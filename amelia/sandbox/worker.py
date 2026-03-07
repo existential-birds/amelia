@@ -212,7 +212,19 @@ def _create_worker_chat_model(model: str, base_url: str | None = None) -> Any:
         # When calling the LLM API directly (e.g. Daytona), use OPENAI_API_KEY.
         api_key = os.environ.get("OPENAI_API_KEY", "proxy-managed")
         profile = os.environ.get("AMELIA_PROFILE", "")
-        headers = {"X-Amelia-Profile": profile} if profile else {}
+        headers: dict[str, str] = {}
+        if profile:
+            headers["X-Amelia-Profile"] = profile
+
+        # Inject OpenRouter app attribution headers so requests from
+        # Daytona sandbox workers show "Amelia" instead of "unknown".
+        if "openrouter.ai" in base_url:
+            headers["HTTP-Referer"] = os.environ.get(
+                "OPENROUTER_SITE_URL",
+                "https://github.com/existential-birds/amelia",
+            )
+            headers["X-Title"] = os.environ.get("OPENROUTER_SITE_NAME", "Amelia")
+
         return init_chat_model(
             model=model,
             model_provider="openai",
