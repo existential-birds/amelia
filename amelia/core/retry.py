@@ -48,9 +48,9 @@ async def with_retry[T](
             if attempt >= config.max_retries:
                 raise
 
-            delay = min(config.base_delay * (2**attempt), config.max_delay)
+            delay = config.base_delay * (2**attempt)
             jitter = random.uniform(0, 0.25 * delay)  # noqa: S311
-            delay += jitter
+            delay = min(delay + jitter, config.max_delay)
 
             logger.warning(
                 "Retrying after error",

@@ -313,7 +313,7 @@ class TestWorkflowId:
             pass
 
         # write_file is called with the workflow_id-based path
-        provider.write_file.assert_called_once_with(
+        provider.write_file.assert_awaited_once_with(
             f"/tmp/prompt-{wf_id}.txt", b"test",
         )
 
@@ -330,7 +330,7 @@ class TestWorkflowId:
         wf_id = uuid4()
         await driver.generate(prompt="test", workflow_id=wf_id)
 
-        provider.write_file.assert_called_once_with(
+        provider.write_file.assert_awaited_once_with(
             f"/tmp/prompt-{wf_id}.txt", b"test",
         )
 
@@ -346,7 +346,7 @@ class TestWorkflowId:
             pass
 
         # write_file is called with a random-suffix path
-        provider.write_file.assert_called_once()
+        provider.write_file.assert_awaited_once()
         call_args = provider.write_file.call_args
         prompt_path = call_args[0][0]
         assert prompt_path.startswith("/tmp/prompt-")

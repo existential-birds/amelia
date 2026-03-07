@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # Default allowed hosts for sandbox network allowlist
@@ -62,9 +62,9 @@ class DaytonaResources(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    cpu: int = 2
-    memory: int = 4
-    disk: int = 10
+    cpu: int = Field(default=2, gt=0)
+    memory: int = Field(default=4, gt=0)
+    disk: int = Field(default=10, gt=0)
 
 
 class SandboxConfig(BaseModel):
@@ -98,7 +98,18 @@ class SandboxConfig(BaseModel):
     daytona_resources: DaytonaResources | None = None
     daytona_image: str = "python:3.12-slim"
     daytona_snapshot: str | None = None
-    daytona_timeout: float = 120.0
+    daytona_timeout: float = Field(default=120.0, gt=0)
+
+    @model_validator(mode="after")
+    def _validate_daytona(self) -> "SandboxConfig":
+        if self.mode == SandboxMode.DAYTONA:
+            if not self.repo_url:
+                raise ValueError("repo_url is required when mode='daytona'")
+            if self.network_allowlist_enabled:
+                raise ValueError(
+                    "Network allowlist is not supported with Daytona sandboxes"
+                )
+        return self
 
 
 class AgentConfig(BaseModel):

@@ -1263,11 +1263,24 @@ class OrchestratorService:
                     agent_options = dev_config.options
                 except ValueError:
                     pass
-                provider, _worker_env = create_daytona_provider(
-                    profile.sandbox, options=agent_options, retry_config=profile.retry,
-                )
-                await provider.ensure_running()
-                sandbox_provider = provider
+                try:
+                    provider, _worker_env = create_daytona_provider(
+                        profile.sandbox, options=agent_options, retry_config=profile.retry,
+                    )
+                    await provider.ensure_running()
+                    sandbox_provider = provider
+                except Exception as e:
+                    logger.exception("Daytona sandbox bootstrap failed", workflow_id=workflow_id)
+                    await self._emit(
+                        workflow_id,
+                        EventType.WORKFLOW_FAILED,
+                        f"Sandbox bootstrap failed: {e!s}",
+                        data={"error": str(e), "error_type": "sandbox_bootstrap"},
+                    )
+                    await self._repository.set_status(
+                        workflow_id, WorkflowStatus.FAILED, failure_reason=f"Sandbox bootstrap failed: {e}"
+                    )
+                    return
 
             attempt = 0
 
@@ -1324,7 +1337,10 @@ class OrchestratorService:
                     raise
         finally:
             if sandbox_provider is not None:
-                await sandbox_provider.teardown()
+                try:
+                    await sandbox_provider.teardown()
+                except Exception:
+                    logger.warning("Sandbox teardown failed", exc_info=True)
 
     async def _run_review_workflow(
         self,
@@ -1426,7 +1442,18 @@ class OrchestratorService:
                             "Unexpected interrupt in review workflow",
                             workflow_id=workflow_id,
                         )
-                        continue
+                        await self._emit(
+                            workflow_id,
+                            EventType.WORKFLOW_FAILED,
+                            "Review workflow aborted due to unexpected interrupt",
+                            data={"error": "unexpected_interrupt"},
+                        )
+                        await self._repository.set_status(
+                            workflow_id,
+                            WorkflowStatus.FAILED,
+                            failure_reason="Unexpected interrupt in review workflow",
+                        )
+                        return
                     # Emit stage events for each node
                     await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
@@ -1450,7 +1477,10 @@ class OrchestratorService:
                 )
         finally:
             if sandbox_provider is not None:
-                await sandbox_provider.teardown()
+                try:
+                    await sandbox_provider.teardown()
+                except Exception:
+                    logger.warning("Sandbox teardown failed", exc_info=True)
 
     async def _emit(
         self,
@@ -1610,6 +1640,8 @@ class OrchestratorService:
                 agent="human_approval",
             )
 
+            await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
+
         # Get profile from settings using profile_id
         if workflow.profile_id is None:
             logger.error("No profile_id in workflow", workflow_id=workflow_id)
@@ -1663,9 +1695,6 @@ class OrchestratorService:
 
             # Update checkpoint state with approval decision
             await graph.aupdate_state(config, {"human_approved": True})
-
-            # Update status to in_progress before resuming
-            await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
 
             # Resume execution from checkpoint with retry for transient errors
             retry_config = profile.retry
@@ -1760,7 +1789,10 @@ class OrchestratorService:
                     raise
         finally:
             if sandbox_provider is not None:
-                await sandbox_provider.teardown()
+                try:
+                    await sandbox_provider.teardown()
+                except Exception:
+                    logger.warning("Sandbox teardown failed", exc_info=True)
 
     async def reject_workflow(
         self,
@@ -2419,8 +2451,8 @@ class OrchestratorService:
 
                 agent_options = None
                 try:
-                    dev_config = profile.get_agent_config("developer")
-                    agent_options = dev_config.options
+                    arch_config = profile.get_agent_config("architect")
+                    agent_options = arch_config.options
                 except ValueError:
                     pass
                 provider, _worker_env = create_daytona_provider(
@@ -2540,7 +2572,10 @@ class OrchestratorService:
             )
         finally:
             if sandbox_provider is not None:
-                await sandbox_provider.teardown()
+                try:
+                    await sandbox_provider.teardown()
+                except Exception:
+                    logger.warning("Sandbox teardown failed", exc_info=True)
 
     async def queue_and_plan_workflow(
         self,

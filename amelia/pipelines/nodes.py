@@ -21,7 +21,28 @@ from amelia.tools.git_utils import get_current_commit
 
 
 if TYPE_CHECKING:
+    from amelia.sandbox.provider import SandboxProvider
     from amelia.server.database.repository import WorkflowRepository
+
+
+async def _resolve_commit(
+    profile_repo_root: str,
+    sandbox_provider: "SandboxProvider | None" = None,
+) -> str | None:
+    """Resolve the current HEAD commit, preferring the sandbox repo when available."""
+    if sandbox_provider is not None:
+        try:
+            lines: list[str] = []
+            async for line in sandbox_provider.exec_stream(
+                ["git", "rev-parse", "HEAD"],
+            ):
+                lines.append(line.strip())
+            sha = "".join(lines).strip()
+            if sha:
+                return sha
+        except Exception:
+            logger.warning("Failed to resolve commit from sandbox, falling back to host")
+    return await get_current_commit(cwd=profile_repo_root)
 
 
 async def _save_token_usage(
@@ -114,8 +135,14 @@ async def call_developer_node(
     # Extract event_bus, workflow_id, and profile from config
     event_bus, workflow_id, profile = extract_config_params(config or {})
 
+    config = config or {}
+    configurable = config.get("configurable", {})
+    repository = configurable.get("repository")
+    prompts = configurable.get("prompts", {})
+    sandbox_provider = configurable.get("sandbox_provider")
+
     # Capture current HEAD so the next reviewer only diffs against this point
-    pre_dev_commit = await get_current_commit(cwd=profile.repo_root)
+    pre_dev_commit = await _resolve_commit(profile.repo_root, sandbox_provider)
 
     # Task-based execution: clear session and inject task-scoped context
     task_number = state.current_task_index + 1  # 1-indexed for display
@@ -129,12 +156,6 @@ async def call_developer_node(
         "driver_session_id": None,  # Fresh session for each task
         # plan_markdown stays intact - extraction happens in Developer._build_prompt
     })
-
-    config = config or {}
-    configurable = config.get("configurable", {})
-    repository = configurable.get("repository")
-    prompts = configurable.get("prompts", {})
-    sandbox_provider = configurable.get("sandbox_provider")
 
     agent_config = profile.get_agent_config("developer")
     developer = Developer(agent_config, prompts=prompts, sandbox_provider=sandbox_provider)
@@ -209,7 +230,7 @@ async def call_reviewer_node(
     # Compute base_commit if not in state
     base_commit = state.base_commit
     if not base_commit:
-        computed_commit = await get_current_commit(cwd=profile.repo_root)
+        computed_commit = await _resolve_commit(profile.repo_root, sandbox_provider)
         if computed_commit:
             base_commit = computed_commit
             logger.info(

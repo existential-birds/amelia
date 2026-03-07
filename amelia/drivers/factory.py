@@ -56,19 +56,6 @@ def create_daytona_provider(
 
     git_token = os.environ.get("AMELIA_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
 
-    provider = DaytonaSandboxProvider(
-        api_key=api_key,
-        api_url=sandbox_config.daytona_api_url,
-        target=sandbox_config.daytona_target,
-        repo_url=sandbox_config.repo_url,
-        resources=sandbox_config.daytona_resources,
-        image=sandbox_config.daytona_image,
-        snapshot=sandbox_config.daytona_snapshot,
-        timeout=sandbox_config.daytona_timeout,
-        retry_config=retry_config,
-        git_token=git_token,
-    )
-
     # Daytona sandboxes are remote — the worker can't reach the local
     # LLM proxy.  Resolve the LLM provider and pass credentials directly
     # so the worker can call the LLM API from within the sandbox.
@@ -108,8 +95,19 @@ def create_daytona_provider(
         "OPENROUTER_SITE_NAME": os.environ.get("OPENROUTER_SITE_NAME", "Amelia"),
     }
 
-    # Store worker_env on the provider for ContainerDriver to read
-    provider._worker_env = worker_env
+    provider = DaytonaSandboxProvider(
+        api_key=api_key,
+        api_url=sandbox_config.daytona_api_url,
+        target=sandbox_config.daytona_target,
+        repo_url=sandbox_config.repo_url,
+        resources=sandbox_config.daytona_resources,
+        image=sandbox_config.daytona_image,
+        snapshot=sandbox_config.daytona_snapshot,
+        timeout=sandbox_config.daytona_timeout,
+        retry_config=retry_config,
+        git_token=git_token,
+        worker_env=worker_env,
+    )
 
     return provider, worker_env
 

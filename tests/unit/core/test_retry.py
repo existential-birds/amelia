@@ -114,6 +114,23 @@ async def test_max_delay_caps_backoff() -> None:
     assert delays == [10.0, 15.0, 15.0]
 
 
+async def test_max_delay_caps_backoff_including_jitter() -> None:
+    """Jitter should not push the final delay past max_delay."""
+    fn = AsyncMock(side_effect=[ValueError("e1"), "ok"])
+    config = RetryConfig(max_retries=2, base_delay=10.0, max_delay=22.0)
+
+    with (
+        patch("amelia.core.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        patch("amelia.core.retry.random.uniform", return_value=5.0),
+    ):
+        result = await with_retry(fn, config, retryable_exceptions=(ValueError,))
+
+    assert result == "ok"
+    delays = [call.args[0] for call in mock_sleep.await_args_list]
+    # base_delay * 2^0 = 10, jitter = 5 → 15, capped at 22 → 15 (under cap)
+    assert delays == [15.0]
+
+
 async def test_default_config_used_when_none() -> None:
     """Should use default RetryConfig when None is passed."""
     fn = AsyncMock(return_value="default")

@@ -94,9 +94,10 @@ class WorktreeManager:
                     )
                 self._repo_initialized = True
                 return
-        except RuntimeError:
-            # rev-parse failed — no repo at REPO_PATH, proceed with clone
-            pass
+        except RuntimeError as exc:
+            if "not a git repository" not in str(exc).lower():
+                raise
+            # rev-parse confirmed no repo at REPO_PATH, proceed with clone
 
         logger.info("Cloning bare repo", url=self._repo_url)
         await self._run(

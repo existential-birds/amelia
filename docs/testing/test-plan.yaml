@@ -54,7 +54,7 @@ tests:
         body: |
           {
             "issue_id": "sleep-stage-tracking",
-            "worktree_path": "/Users/ka/github/existential-birds/jocko",
+            "worktree_path": "${REPO_PATH}",
             "task_title": "Sleep stage tracking: inBed + asleepUnspecified support",
             "task_description": "Support asleepUnspecified and inBed HealthKit sleep categories so users without stage-capable devices see their sleep data, and all users get sleep onset latency tracking.",
             "profile": "jocko-daytona",

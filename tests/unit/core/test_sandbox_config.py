@@ -39,7 +39,10 @@ class TestSandboxConfig:
 
 class TestDaytonaSandboxConfig:
     def test_daytona_mode(self) -> None:
-        config = SandboxConfig(mode=SandboxMode.DAYTONA)
+        config = SandboxConfig(
+            mode=SandboxMode.DAYTONA,
+            repo_url="https://github.com/org/repo.git",
+        )
         assert config.mode == SandboxMode.DAYTONA
 
     def test_daytona_resources_defaults(self) -> None:

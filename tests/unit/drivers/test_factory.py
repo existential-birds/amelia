@@ -158,6 +158,12 @@ class TestGetDriverDaytonaBranch:
                 timeout=120.0,
                 retry_config=None,
                 git_token=None,
+                worker_env={
+                    "LLM_PROXY_URL": "https://openrouter.ai/api/v1",
+                    "OPENAI_API_KEY": "or-test-key",
+                    "OPENROUTER_SITE_URL": "https://github.com/existential-birds/amelia",
+                    "OPENROUTER_SITE_NAME": "Amelia",
+                },
             )
             mock_driver_cls.assert_called_once_with(
                 model="test-model",
@@ -184,15 +190,15 @@ class TestGetDriverDaytonaBranch:
             get_driver(driver_key, sandbox_config=sandbox, profile_name="test")
 
     def test_daytona_mode_rejects_network_allowlist(self) -> None:
-        """Network allowlist should be rejected for Daytona mode."""
-        sandbox = SandboxConfig(
-            mode=SandboxMode.DAYTONA,
-            repo_url="https://github.com/org/repo.git",
-            network_allowlist_enabled=True,
-        )
-        with patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}), \
-             pytest.raises(ValueError, match="Network allowlist is not supported with Daytona"):
-            get_driver("api", sandbox_config=sandbox, profile_name="test")
+        """Network allowlist should be rejected for Daytona mode at construction."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="Network allowlist is not supported with Daytona"):
+            SandboxConfig(
+                mode=SandboxMode.DAYTONA,
+                repo_url="https://github.com/org/repo.git",
+                network_allowlist_enabled=True,
+            )
 
     def test_daytona_mode_passes_image(self) -> None:
         """Custom daytona_image should be forwarded to DaytonaSandboxProvider."""
@@ -217,6 +223,12 @@ class TestGetDriverDaytonaBranch:
                 timeout=120.0,
                 retry_config=None,
                 git_token=None,
+                worker_env={
+                    "LLM_PROXY_URL": "https://openrouter.ai/api/v1",
+                    "OPENAI_API_KEY": "or-test-key",
+                    "OPENROUTER_SITE_URL": "https://github.com/existential-birds/amelia",
+                    "OPENROUTER_SITE_NAME": "Amelia",
+                },
             )
 
     def test_daytona_mode_passes_github_token(self) -> None:
@@ -354,8 +366,8 @@ class TestCreateDaytonaProvider:
         with pytest.raises(ValueError, match="DAYTONA_API_KEY"):
             create_daytona_provider(sandbox)
 
-    def test_raises_without_repo_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("DAYTONA_API_KEY", "test-key")
-        sandbox = SandboxConfig(mode="daytona")
-        with pytest.raises(ValueError, match="repo_url"):
-            create_daytona_provider(sandbox)
+    def test_raises_without_repo_url(self) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="repo_url"):
+            SandboxConfig(mode="daytona")

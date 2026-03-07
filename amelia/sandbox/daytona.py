@@ -13,6 +13,7 @@ import shlex
 import uuid
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse, urlunparse
 
 from daytona_sdk import (
     AsyncDaytona,
@@ -80,6 +81,7 @@ class DaytonaSandboxProvider:
         retry_config: RetryConfig | None = None,
         git_token: str | None = None,
         workflow_branch: str | None = None,
+        worker_env: dict[str, str] | None = None,
     ) -> None:
         self._client = AsyncDaytona(DaytonaConfig(
             api_key=api_key,
@@ -96,7 +98,7 @@ class DaytonaSandboxProvider:
         self._retry_config = retry_config
         self._git_token = git_token
         self._workflow_branch = workflow_branch
-        self._worker_env: dict[str, str] = {}
+        self._worker_env: dict[str, str] = dict(worker_env) if worker_env else {}
         self._sandbox: AsyncSandbox | None = None
 
     @property
@@ -222,7 +224,9 @@ class DaytonaSandboxProvider:
                 logger.info("Daytona sandbox created", sandbox_id=created_sandbox.id)
 
                 if self._repo_url:
-                    logger.info("Cloning repo via Daytona git API", url=self._repo_url)
+                    parsed = urlparse(self._repo_url)
+                    safe_url = urlunparse(parsed._replace(netloc=parsed.hostname or parsed.netloc))
+                    logger.info("Cloning repo via Daytona git API", url=safe_url)
                     if self._retry_config:
                         await with_retry(
                             lambda: created_sandbox.git.clone(
@@ -393,7 +397,7 @@ class DaytonaSandboxProvider:
                     await log_task
 
             # Propagate any exception from the log streaming task.
-            if log_task.done():
+            if log_task.done() and not log_task.cancelled():
                 task_exc = log_task.exception()
                 if task_exc is not None:
                     raise task_exc
