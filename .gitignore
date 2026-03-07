@@ -145,5 +145,6 @@ docs/site/logs/
 .specify/
 .gemini/
 .beagle/
+.daydream/
 .devcontainer/
 .feedback-log.csv
