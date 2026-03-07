@@ -341,10 +341,15 @@ class DaytonaSandboxProvider:
         session_id = f"amelia-{uuid.uuid4().hex[:12]}"
         await sandbox.process.create_session(session_id)
 
-        resp = await sandbox.process.execute_session_command(
-            session_id,
-            SessionExecuteRequest(command=cmd_str, run_async=True),
-        )
+        try:
+            resp = await sandbox.process.execute_session_command(
+                session_id,
+                SessionExecuteRequest(command=cmd_str, run_async=True),
+            )
+        except Exception:
+            with contextlib.suppress(Exception):
+                await sandbox.process.delete_session(session_id)
+            raise
         cmd_id = resp.cmd_id
 
         queue: asyncio.Queue[str | None] = asyncio.Queue()
