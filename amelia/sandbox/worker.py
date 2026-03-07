@@ -237,7 +237,7 @@ async def _run_agentic(args: argparse.Namespace) -> None:
     base_url = os.environ.get("LLM_PROXY_URL")
 
     chat_model = _create_worker_chat_model(args.model, base_url=base_url)
-    backend = FilesystemBackend(root_dir=args.cwd)
+    backend = FilesystemBackend(root_dir=args.cwd, virtual_mode=True)
 
     agent = create_deep_agent(
         model=chat_model,
@@ -360,7 +360,7 @@ async def _run_generate(args: argparse.Namespace) -> None:
     if schema:
         agent = create_deep_agent(
             model=chat_model,
-            backend=FilesystemBackend(root_dir=tempfile.gettempdir()),
+            backend=FilesystemBackend(root_dir=tempfile.gettempdir(), virtual_mode=True),
             response_format=ToolStrategy(schema=schema),
         )
         result = await agent.ainvoke({"messages": [HumanMessage(content=prompt)]})
