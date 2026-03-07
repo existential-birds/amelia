@@ -183,6 +183,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Create and register orchestrator
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+    from amelia.server.checkpoint import CHECKPOINT_ALLOWED_MODULES
+
+    serde = JsonPlusSerializer(allowed_json_modules=CHECKPOINT_ALLOWED_MODULES)
 
     exit_stack = AsyncExitStack()
 
@@ -191,7 +196,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     exit_stack.push_async_callback(app.state.proxy_cleanup)
 
     checkpointer = await exit_stack.enter_async_context(
-        AsyncPostgresSaver.from_conn_string(config.database_url)
+        AsyncPostgresSaver.from_conn_string(config.database_url, serde=serde)
     )
     await checkpointer.setup()
 
