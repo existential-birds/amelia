@@ -65,6 +65,8 @@ class TestEvaluator:
                 model="sonnet",
                 sandbox_config=SandboxConfig(),
                 sandbox_provider=None,
+                profile_name="default",
+                options={},
             )
             assert evaluator.driver is mock_driver
 

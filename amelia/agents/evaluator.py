@@ -95,6 +95,8 @@ Provide clear evidence for each disposition decision."""
             model=config.model,
             sandbox_config=config.sandbox,
             sandbox_provider=sandbox_provider,
+            profile_name=config.profile_name,
+            options=config.options,
         )
         self.options = config.options
         self._event_bus = event_bus
