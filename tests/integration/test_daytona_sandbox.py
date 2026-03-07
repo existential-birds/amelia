@@ -211,7 +211,7 @@ class TestDaytonaFullStack:
             mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
         )
-        with patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}):
+        with patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key", "OPENROUTER_API_KEY": "test-openrouter-key"}):
             driver = get_driver(
                 "api", model="test-model",
                 sandbox_config=sandbox, profile_name="work",
