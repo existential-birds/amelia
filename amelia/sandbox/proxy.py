@@ -158,6 +158,21 @@ def create_proxy_router(
         ):
             headers.pop(h, None)
 
+        # Inject OpenRouter app attribution headers so sandbox worker
+        # requests show the correct app name instead of "unknown".
+        if "openrouter.ai" in provider.base_url:
+            headers.setdefault(
+                "HTTP-Referer",
+                os.environ.get(
+                    "OPENROUTER_SITE_URL",
+                    "https://github.com/existential-birds/amelia",
+                ),
+            )
+            headers.setdefault(
+                "X-Title",
+                os.environ.get("OPENROUTER_SITE_NAME", "Amelia"),
+            )
+
         try:
             upstream_request = http_client.build_request(
                 method=request.method,

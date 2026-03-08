@@ -53,7 +53,7 @@ amelia start 123 --profile work
 Options:
 - `--profile, -p` - Profile name (see `amelia config profile list`)
 
-The command auto-detects your git worktree and creates a workflow via the API server.
+The command auto-detects your git worktree and creates a workflow via the API server. Execution happens locally by default, but can run in a Docker sandbox container or a Daytona cloud sandbox depending on profile configuration (see [Configuration Reference](/guide/configuration)).
 
 #### `amelia status`
 
@@ -281,6 +281,8 @@ curl -X POST http://localhost:8420/api/workflows \
 | `driver` | string | No | Driver override (e.g., `api`) |
 | `start` | boolean | No | Start workflow immediately (default: true). Set to false to queue. |
 | `plan_now` | boolean | No | Run Architect when queuing (requires `start: false`). |
+| `plan_file` | string | No | Path to an external plan file (relative to worktree or absolute). Mutually exclusive with `plan_content`. |
+| `plan_content` | string | No | Inline plan markdown content. Mutually exclusive with `plan_file`. |
 
 **Response:** `201 Created`
 ```json
@@ -293,11 +295,13 @@ curl -X POST http://localhost:8420/api/workflows \
 
 **Behavior Matrix:**
 
-| `start` | `plan_now` | Result |
-|---------|------------|--------|
-| `true` (default) | ignored | Immediate execution |
-| `false` | `false` | Queue only (pending state) |
-| `false` | `true` | Queue and generate plan |
+| `start` | `plan_now` | `plan_file`/`plan_content` | Result |
+|---------|------------|---------------------------|--------|
+| `true` (default) | ignored | not set | Immediate execution |
+| `true` (default) | ignored | set | Queue with external plan, then start |
+| `false` | `false` | not set | Queue only (pending state) |
+| `false` | `false` | set | Queue with external plan |
+| `false` | `true` | not set | Queue and generate plan |
 
 #### List Workflows
 
@@ -502,6 +506,219 @@ Start multiple pending workflows at once.
   }
 }
 ```
+
+#### Resume Workflow
+
+```bash
+POST /api/workflows/{workflow_id}/resume
+```
+
+```bash
+curl -X POST http://localhost:8420/api/workflows/550e8400-e29b-41d4-a716-446655440000/resume
+```
+
+Resumes a failed workflow from its last checkpoint. Returns 422 if the workflow cannot be resumed.
+
+**Response:** `200 OK`
+```json
+{
+  "status": "resumed",
+  "workflow_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+#### Create Review Workflow
+
+```bash
+POST /api/workflows/review
+```
+
+```bash
+curl -X POST http://localhost:8420/api/workflows/review \
+  -H "Content-Type: application/json" \
+  -d '{
+    "diff_content": "diff --git a/file.py ...",
+    "worktree_path": "/path/to/project",
+    "profile": "dev"
+  }'
+```
+
+Starts a review-fix workflow that runs autonomously until approved or max iterations (3) reached.
+
+**Request Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `diff_content` | string | Yes | Diff content to review |
+| `worktree_path` | string | Yes | Absolute path to worktree directory |
+| `profile` | string | No | Profile name |
+
+**Response:** `201 Created`
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "pending",
+  "message": "Review workflow created"
+}
+```
+
+### Brainstorming
+
+#### Create Session
+
+```bash
+POST /api/brainstorm/sessions
+```
+
+```bash
+curl -X POST http://localhost:8420/api/brainstorm/sessions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile_id": "dev",
+    "topic": "Refactor authentication layer"
+  }'
+```
+
+**Request Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `profile_id` | string | Yes | Profile to use for brainstorming |
+| `topic` | string | No | Optional session topic |
+
+**Response:** `201 Created` with session object and profile info.
+
+#### List Sessions
+
+```bash
+GET /api/brainstorm/sessions
+```
+
+```bash
+# List all sessions
+curl http://localhost:8420/api/brainstorm/sessions
+
+# Filter by profile and status
+curl "http://localhost:8420/api/brainstorm/sessions?profile_id=dev&status=active&limit=20"
+```
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `profile_id` | string | Filter by profile |
+| `status` | string | Filter by status |
+| `limit` | int | Max results (1-100, default: 50) |
+
+**Response:** `200 OK` with list of session objects.
+
+#### Get Session
+
+```bash
+GET /api/brainstorm/sessions/{session_id}
+```
+
+```bash
+curl http://localhost:8420/api/brainstorm/sessions/550e8400-e29b-41d4-a716-446655440000
+```
+
+Returns the session with full message history and artifacts.
+
+#### Delete Session
+
+```bash
+DELETE /api/brainstorm/sessions/{session_id}
+```
+
+```bash
+curl -X DELETE http://localhost:8420/api/brainstorm/sessions/550e8400-e29b-41d4-a716-446655440000
+```
+
+**Response:** `204 No Content`
+
+#### Send Message
+
+```bash
+POST /api/brainstorm/sessions/{session_id}/message
+```
+
+```bash
+curl -X POST http://localhost:8420/api/brainstorm/sessions/550e8400-e29b-41d4-a716-446655440000/message \
+  -H "Content-Type: application/json" \
+  -d '{"content": "How should we structure the new API?"}'
+```
+
+Triggers async processing and returns immediately. Updates stream via WebSocket.
+
+**Response:** `202 Accepted`
+```json
+{
+  "message_id": "660e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+#### Handoff to Implementation
+
+```bash
+POST /api/brainstorm/sessions/{session_id}/handoff
+```
+
+```bash
+curl -X POST http://localhost:8420/api/brainstorm/sessions/550e8400-e29b-41d4-a716-446655440000/handoff \
+  -H "Content-Type: application/json" \
+  -d '{
+    "artifact_path": "docs/designs/auth-refactor.md",
+    "issue_title": "Refactor authentication layer",
+    "issue_description": "Implement the design from brainstorming"
+  }'
+```
+
+Creates an implementation workflow from a brainstorming design artifact.
+
+**Request Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `artifact_path` | string | Yes | Path to the design artifact |
+| `issue_title` | string | No | Title for the created workflow |
+| `issue_description` | string | No | Description for the created workflow |
+
+**Response:** `200 OK`
+```json
+{
+  "workflow_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "created"
+}
+```
+
+### Oracle
+
+#### Consult
+
+```bash
+POST /api/oracle/consult
+```
+
+```bash
+curl -X POST http://localhost:8420/api/oracle/consult \
+  -H "Content-Type: application/json" \
+  -d '{
+    "problem": "What is the best way to handle database migrations?",
+    "working_dir": "/path/to/project",
+    "files": ["*.py", "alembic/**"],
+    "profile_id": "dev"
+  }'
+```
+
+Expert consultation with codebase context. The Oracle agent gathers relevant files and uses agentic LLM execution to provide advice. Events stream via WebSocket in real-time.
+
+**Request Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `problem` | string | Yes | Problem statement to analyze |
+| `working_dir` | string | Yes | Root directory for codebase access |
+| `files` | array | No | Glob patterns for files to include |
+| `model` | string | No | Model override |
+| `profile_id` | string | No | Profile ID (uses active profile if omitted) |
+| `workflow_id` | string | No | Workflow ID for cross-referencing |
+
+**Response:** `200 OK` with advice string and full consultation record.
 
 ### Health Checks
 

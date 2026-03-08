@@ -34,7 +34,7 @@ import { withBase } from 'vitepress'
 const items = [
   { capability: 'Plan, build, review, ship', detail: 'Architect plans, you approve, Developer codes, Reviewer checks — looping on feedback until it passes.' },
   { capability: 'RAG-powered context', detail: 'Agents query your project docs via pgvector with hierarchical retrieval.' },
-  { capability: 'Sandboxed execution', detail: 'Code runs in Docker with network isolation. Hard decisions route to a dedicated reasoning model.' },
+  { capability: 'Sandboxed execution', detail: 'Isolated code execution via local Docker containers or Daytona cloud sandboxes. Hard decisions route to a dedicated reasoning model.' },
   { capability: 'Mix models and drivers', detail: 'Assign different LLMs and driver types (CLI or API) per agent role.' },
   { capability: 'Resilient workflows', detail: 'Resume from checkpoints, configure via profiles, generate specs from issues.' },
   { capability: 'Real-time dashboard', detail: 'WebSocket-powered UI shows agent progress as it happens.' },
