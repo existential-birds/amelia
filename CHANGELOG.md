@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-03-07
+
+### Added
+
+- **sandbox:** Add Daytona cloud sandbox provider for remote code execution ([#509](https://github.com/existential-birds/amelia/pull/509))
+- **dashboard:** Auto-populate task title from plan/design document H1 heading ([#515](https://github.com/existential-birds/amelia/pull/515))
+- **server:** Bridge EventBus events to server console via loguru for unified observability ([#504](https://github.com/existential-birds/amelia/pull/504))
+- **drivers:** Add token usage tracking to Codex CLI driver ([#503](https://github.com/existential-birds/amelia/pull/503))
+
+### Changed
+
+- **plan-extraction:** Consolidate plan extraction to regex-only, removing LLM dependency for faster and more predictable parsing ([#516](https://github.com/existential-birds/amelia/pull/516))
+- **dashboard:** Remove Roundtable/Capacity placeholders and move Costs to Agent Ops section ([#510](https://github.com/existential-birds/amelia/pull/510))
+
+### Fixed
+
+- **dashboard:** Fix bulk model dropdown for OpenRouter and agent card layout overflow ([#519](https://github.com/existential-birds/amelia/pull/519))
+- **dashboard:** Restore profile settings modal save and clean up error handling ([#517](https://github.com/existential-birds/amelia/pull/517))
+- **dashboard:** Shrink workflow canvas nodes to fit within viewport ([#519](https://github.com/existential-birds/amelia/pull/519))
+- **external_plan:** Resolve Quick Shot timeout and duplicate plan file creation ([#514](https://github.com/existential-birds/amelia/pull/514))
+- **types:** Audit and resolve `type: ignore` comments across codebase ([#501](https://github.com/existential-birds/amelia/pull/501))
+
+### Security
+
+- **deps:** Bump dompurify to 3.3.2 to address XSS vulnerability ([#521](https://github.com/existential-birds/amelia/pull/521))
+- **deps:** Bump minimatch to fix ReDoS vulnerability ([#502](https://github.com/existential-birds/amelia/pull/502))
+
 ## [0.17.0] - 2026-02-22
 
 ### Added
@@ -442,7 +469,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/existential-birds/amelia/compare/v0.17.0...v0.18.0
+[0.17.0]: https://github.com/existential-birds/amelia/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/existential-birds/amelia/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/existential-birds/amelia/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/existential-birds/amelia/compare/v0.13.0...v0.14.0

@@ -160,12 +160,6 @@ Recursive Language Model (RLM) processing for documents exceeding context limits
 
 Automated verification before code reaches human reviewers.
 
-**Foundation in place:**
-
-- Configurable iteration limits (`max_retries`, `max_iterations`) with auto-halt
-- Pre-push hook running lint, typecheck, test, and dashboard build
-- Retry with exponential backoff for transient failures (`RetryConfig`, `_run_workflow_with_retry`)
-
 - Error compaction/summarization before LLM re-invocation (review feedback currently fed verbatim)
 - Pre-review gates integrated into agent workflow (not just git hooks)
 - Evaluation CI/CD integration ([#230](https://github.com/existential-birds/amelia/issues/230))
@@ -178,19 +172,7 @@ Automated verification before code reaches human reviewers.
 
 ---
 
-## Phase 4: Parallel Execution — Advanced Patterns [Planned]
-
-Advanced concurrency patterns building on the parallel execution foundation.
-
-- DAG-aware task scheduling within workflows
-- Resource management (LLM rate limiting, compute allocation)
-- **Sectioning pattern**: Parallel independent subtasks
-- **Voting pattern**: Run high-stakes tasks multiple times for consensus
-- Fire-and-forget completion notifications (currently WebSocket/dashboard only)
-
----
-
-## Phase 5: Bidirectional Tracker Sync [Planned]
+## Phase 4: Bidirectional Tracker Sync [Planned]
 
 Full issue lifecycle management from CLI ([#64](https://github.com/existential-birds/amelia/issues/64)).
 
@@ -200,7 +182,7 @@ Full issue lifecycle management from CLI ([#64](https://github.com/existential-b
 
 ---
 
-## Phase 6: Pull Request Lifecycle [Planned]
+## Phase 5: Pull Request Lifecycle [Planned]
 
 PR management from creation through merge ([#66](https://github.com/existential-birds/amelia/issues/66)).
 
@@ -211,7 +193,7 @@ PR management from creation through merge ([#66](https://github.com/existential-
 
 ---
 
-## Phase 7: Chat Integration & Notifications [Planned]
+## Phase 6: Chat Integration & Notifications [Planned]
 
 Slack/Discord interface for async workflow management ([#61](https://github.com/existential-birds/amelia/issues/61)).
 
@@ -223,7 +205,7 @@ Slack/Discord interface for async workflow management ([#61](https://github.com/
 
 ---
 
-## Phase 8: Observability & Tooling [Planned]
+## Phase 7: Observability & Tooling [Planned]
 
 Infrastructure for monitoring, debugging, and extending agent capabilities.
 
@@ -234,16 +216,9 @@ Infrastructure for monitoring, debugging, and extending agent capabilities.
 
 ---
 
-## Phase 9: Continuous Improvement [Planned]
+## Phase 8: Continuous Improvement [Planned]
 
 Metrics and feedback for agent quality improvement ([#63](https://github.com/existential-birds/amelia/issues/63)).
-
-**Foundation in place:**
-
-- Success/failure tracking with `success_rate` in usage summaries
-- Token usage and cost tracking per agent, model, and workflow (15+ models supported)
-- Costs dashboard with trend charts, success rate badges, and model breakdown
-- Reviewer structured output with severity classification (Critical/Major/Minor)
 
 - Project-specific knowledge base (idioms, pitfalls, decisions)
 - Prompt A/B testing with benchmark suite
@@ -252,7 +227,7 @@ Metrics and feedback for agent quality improvement ([#63](https://github.com/exi
 
 ---
 
-## Phase 10: Debate Mode [Planned]
+## Phase 9: Debate Mode [Planned]
 
 Multi-agent deliberation for design decisions ([#202](https://github.com/existential-birds/amelia/issues/202)).
 
@@ -263,14 +238,9 @@ Multi-agent deliberation for design decisions ([#202](https://github.com/existen
 
 ---
 
-## Phase 11: Security & Authorization [Planned]
+## Phase 10: Security & Authorization [Planned]
 
 Defense-in-depth security with per-agent permissions ([#228](https://github.com/existential-birds/amelia/issues/228), [#231](https://github.com/existential-birds/amelia/issues/231)).
-
-**Foundation in place:**
-
-- Path traversal prevention in worktree and file operations
-- `allowed_tools` parameter on `execute_agentic()` for per-agent tool restriction ([#356](https://github.com/existential-birds/amelia/issues/356))
 
 - Deterministic guardrails blocking high-risk operations
 - Per-agent tool allowlists (Architect: read-only, Developer: write, Reviewer: read+comment)
@@ -281,13 +251,9 @@ Defense-in-depth security with per-agent permissions ([#228](https://github.com/
 
 ---
 
-## Phase 12: Cloud Deployment [Partially Complete]
+## Phase 11: Cloud Deployment [Planned]
 
 Parallel execution on cloud infrastructure.
-
-**Foundation in place:**
-
-- Cloud sandbox execution via Daytona provider — ephemeral cloud-based sandboxes for agent workloads ([#509](https://github.com/existential-birds/amelia/pull/509))
 
 - Multiple workflows running in parallel on cloud infrastructure (AWS or equivalent)
 - Thin CLI client for submitting and monitoring
@@ -295,7 +261,7 @@ Parallel execution on cloud infrastructure.
 
 ---
 
-## Phase 13: Capitalization Tracking [Planned]
+## Phase 12: Capitalization Tracking [Planned]
 
 Engineering work attribution for financial reporting (OPEX vs CAPEX) ([#70](https://github.com/existential-birds/amelia/issues/70)).
 
@@ -313,14 +279,14 @@ Engineering work attribution for financial reporting (OPEX vs CAPEX) ([#70](http
 | F1: Natural Language → Tool Calls | 🟡 Partial | Core Orchestration | Evaluator/Knowledge use Pydantic schemas; core agents (Architect/Developer/Reviewer) use free-form agentic mode |
 | F2: Own Your Prompts | ✅ Complete | Core Orchestration | Full versioning system with DB persistence, `PromptResolver`, workflow audit linking |
 | F3: Own Your Context Window | 🚧 In Progress | Phases 1, 2 | Task sectioning exists; no token counting or context budgeting |
-| F4: Tools = Structured Outputs | 🟡 Partial | Core Orchestration, Phase 8 | Canonical `ToolName` registry; tool schemas owned by driver frameworks, not Amelia |
+| F4: Tools = Structured Outputs | 🟡 Partial | Core Orchestration, Phase 7 | Canonical `ToolName` registry; tool schemas owned by driver frameworks, not Amelia |
 | F5: Unified State | ✅ Complete | Web Dashboard | Frozen `BasePipelineState` → `ImplementationState` hierarchy with LangGraph reducers |
 | F6: Launch/Pause/Resume | ✅ Complete | Web Dashboard | 8 REST endpoints, LangGraph `interrupt_before`, PostgreSQL checkpointing |
-| F7: Contact Humans with Tools | 🟡 Partial | Phases 7, 10, 11 | `human_approval_node` exists; agents cannot initiate contact mid-execution; no outbound notifications |
+| F7: Contact Humans with Tools | 🟡 Partial | Phases 6, 9, 10 | `human_approval_node` exists; agents cannot initiate contact mid-execution; no outbound notifications |
 | F8: Own Your Control Flow | ✅ Complete | Core Orchestration | Custom routing functions with business logic, two pipeline graphs |
-| F9: Compact Errors | 🟡 Partial | Phases 3, 8 | Exponential backoff retry exists; no error compaction for LLM context |
+| F9: Compact Errors | 🟡 Partial | Phases 3, 7 | Exponential backoff retry exists; no error compaction for LLM context |
 | F10: Small Focused Agents | ✅ Complete | Core Orchestration | 6 narrow agents (Architect, Developer, Reviewer, Evaluator, Oracle, Brainstorm), step limits, per-task fresh sessions, sandbox isolation |
-| F11: Trigger from Anywhere | 🟡 Partial | Web Dashboard, Phase 7 | CLI + REST + Dashboard; no inbound webhooks or event-driven triggers |
+| F11: Trigger from Anywhere | 🟡 Partial | Web Dashboard, Phase 6 | CLI + REST + Dashboard; no inbound webhooks or event-driven triggers |
 | F12: Stateless Reducer | ✅ Complete | Core Orchestration | Frozen Pydantic state, `operator.add` reducers, pure node functions |
 | F13: Pre-fetch Context | 🟡 Partial | Phase 1 | Issue/commit/design/prompts pre-fetched; codebase context via runtime exploration |
 
