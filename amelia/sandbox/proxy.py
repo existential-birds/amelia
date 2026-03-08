@@ -7,6 +7,7 @@ X-Amelia-Profile header to resolve which upstream provider to use.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, NamedTuple
 
