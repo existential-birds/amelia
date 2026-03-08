@@ -190,15 +190,16 @@ export default function SettingsProfilesPage() {
 
   /**
    * Get the primary driver from a profile's agents configuration.
+   * Returns the most common driver, with alphabetical tiebreaker.
    */
   const getPrimaryDriver = (profile: Profile): string | undefined => {
-    const agents = profile.agents;
-    if (!agents) return undefined;
-    const drivers = Object.values(agents).map(a => a.driver);
+    const drivers = Object.values(profile.agents ?? {}).map(a => a.driver);
     if (drivers.length === 0) return undefined;
-    const counts = new Map<string, number>();
-    for (const d of drivers) counts.set(d, (counts.get(d) ?? 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+    const counts: Record<string, number> = {};
+    for (const d of drivers) counts[d] = (counts[d] ?? 0) + 1;
+    return Object.entries(counts).reduce((best, curr) =>
+      curr[1] > best[1] || (curr[1] === best[1] && curr[0] < best[0]) ? curr : best
+    )[0];
   };
 
   // Filter profiles

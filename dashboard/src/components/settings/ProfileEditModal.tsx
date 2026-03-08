@@ -1036,7 +1036,6 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
 
               {formData.sandbox_mode === 'daytona' && (
                 <>
-
                   {/* Daytona Image */}
                   <div className="space-y-2">
                     <Label className="text-xs uppercase tracking-wider text-muted-foreground">

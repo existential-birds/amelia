@@ -146,10 +146,8 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
   },
 ];
 
-/** Primary agent keys used across the UI, derived from AGENT_DEFINITIONS. */
-export const PRIMARY_AGENT_KEYS = AGENT_DEFINITIONS
-  .filter(a => a.category === 'primary')
-  .map(a => a.key) as unknown as readonly ['architect', 'developer', 'reviewer'];
+/** Primary agent keys used across the UI. */
+export const PRIMARY_AGENT_KEYS = ['architect', 'developer', 'reviewer'] as const;
 
 /** Style mapping for different agent types in activity logs and UI. */
 export const AGENT_STYLES: Record<string, { text: string; bg: string }> = {
