@@ -124,6 +124,65 @@ When enabled, automatically approves passing reviews without human intervention.
 
 Default: `false`
 
+### Sandbox Configuration
+
+Sandbox settings control how agents execute code. Configuration is set at the profile level and inherited by all agents. Per-agent sandbox overrides are also supported (see [Per-Agent Configuration](#per-agent-configuration)).
+
+::: warning Driver Restriction
+Only the `api` driver works inside sandboxes. The `claude` and `codex` drivers are CLI-based and cannot be used with `container` or `daytona` sandbox modes.
+:::
+
+#### Sandbox Mode
+
+| Value | Description |
+|-------|-------------|
+| `none` | Direct execution on the host (default) |
+| `container` | Local Docker sandbox |
+| `daytona` | Daytona cloud sandbox |
+
+#### Container Mode Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `image` | string | `amelia-sandbox:latest` | Docker image for the sandbox container |
+| `network_allowlist_enabled` | bool | `false` | Enable iptables-based outbound network filtering |
+| `network_allowed_hosts` | list | See below | Hosts allowed when network filtering is enabled |
+
+Default allowed hosts when `network_allowlist_enabled` is `true`:
+
+- `api.anthropic.com`
+- `openrouter.ai`
+- `api.openai.com`
+- `github.com`
+- `registry.npmjs.org`
+- `pypi.org`
+- `files.pythonhosted.org`
+- `app.daytona.io`
+
+#### Daytona Mode Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `repo_url` | string | — | Git remote URL to clone into the sandbox (**required**) |
+| `daytona_api_url` | string | `https://app.daytona.io/api` | Daytona API endpoint |
+| `daytona_target` | string | `us` | Daytona target region (`us` or `eu`) |
+| `daytona_resources` | object | See below | CPU, memory, and disk allocation |
+| `daytona_image` | string | `python:3.12-slim` | Base Docker image for Daytona workspace |
+| `daytona_snapshot` | string | — | Pre-built Daytona snapshot name for faster startup |
+| `daytona_timeout` | float | `120` | Sandbox creation timeout in seconds |
+
+Default `daytona_resources`:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `cpu` | int | `2` | Number of CPU cores |
+| `memory` | int | `4` | Memory in GB |
+| `disk` | int | `10` | Disk space in GB |
+
+::: info
+`network_allowlist_enabled` is not supported with Daytona sandboxes. Daytona manages its own network isolation.
+:::
+
 ## Per-Agent Configuration
 
 Each profile can configure individual agents with different drivers and models. This allows mixing `claude`, `codex`, and `api` drivers within a single profile, or using different models for different agents.
@@ -147,7 +206,7 @@ Agent Configurations
 └────────────────┴────────────────┴────────────────────────┘
 ```
 
-Per-agent configuration can be edited via the dashboard at `/settings/profiles`.
+Per-agent configuration can be edited via the dashboard at `/settings/profiles`. Each agent can also override the profile-level sandbox configuration with its own `sandbox` settings.
 
 ## Server Settings
 
@@ -223,6 +282,19 @@ The GitHub tracker requires the `gh` CLI to be installed and authenticated:
 ```bash
 gh auth login
 ```
+
+### Daytona Cloud Sandbox
+
+| Variable | Description |
+|----------|-------------|
+| `DAYTONA_API_KEY` | API key for Daytona cloud sandbox authentication |
+| `AMELIA_GITHUB_TOKEN` or `GITHUB_TOKEN` | Token for cloning private repos into Daytona sandboxes |
+
+### Provider Error Detection
+
+| Variable | Description |
+|----------|-------------|
+| `AMELIA_PROVIDER_ERROR_PATTERNS` | Comma-separated list of custom error patterns for provider error detection (lowercase). Overrides built-in defaults. |
 
 ## Dashboard Configuration
 

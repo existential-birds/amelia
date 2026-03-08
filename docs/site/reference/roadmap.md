@@ -37,6 +37,8 @@ LangGraph state machine coordinating specialized agents with human approval gate
 - Phased execution for Developer agent with per-task context isolation ([#188](https://github.com/existential-birds/amelia/issues/188))
 - Per-agent driver configuration ([#279](https://github.com/existential-birds/amelia/issues/279))
 - Multiple workflow pipelines: implementation and review ([#260](https://github.com/existential-birds/amelia/issues/260))
+- Evaluator agent with structured review workflow (IMPLEMENT/REJECT/DEFER/CLARIFY decision matrix)
+- Codex CLI driver
 
 ### Web Dashboard
 
@@ -66,7 +68,7 @@ RAG infrastructure for framework documentation, white papers, and specifications
 
 ### Oracle Consulting System
 
-Foundation for agents to query external knowledge sources with codebase context ([#280](https://github.com/existential-birds/amelia/issues/280)).
+Oracle consultation agent for querying external knowledge sources with codebase context ([#280](https://github.com/existential-birds/amelia/issues/280)).
 
 - Oracle agent with agentic consultation via `driver.execute_agentic()`
 - FileBundler for gathering codebase files via glob patterns (git-aware, respects `.gitignore`)
@@ -78,7 +80,7 @@ Foundation for agents to query external knowledge sources with codebase context 
 
 ### Spec Builder — Brainstorming
 
-Document-assisted design tool for synthesizing specifications from research and requirements ([#204](https://github.com/existential-birds/amelia/issues/204)).
+Brainstorming service with chat-based design sessions and artifact handoff ([#204](https://github.com/existential-birds/amelia/issues/204)).
 
 - Brainstorming chat interface with streaming (SpecBuilderPage dashboard + BrainstormService backend)
 - Session management with persistence (create, list, delete, resume)
@@ -93,6 +95,8 @@ Document-assisted design tool for synthesizing specifications from research and 
 Automated plan quality enforcement with feedback loops.
 
 - Plan validation feedback loop: automatic re-validation after architect revisions ([#493](https://github.com/existential-birds/amelia/pull/493))
+- Plan validation via regex-based extraction — replaced LLM dependency ([#516](https://github.com/existential-birds/amelia/pull/516))
+- External plan import support
 
 ### Parallel Execution Foundation
 
@@ -103,7 +107,18 @@ Concurrent workflows with resource management.
 - Batch workflow API (`POST /workflows/start-batch`) for starting multiple queued workflows
 - Queue-and-execute pattern: `queue_workflow()` → `start_batch_workflows()`
 - Background asyncio task execution with proper state tracking
-- DevContainer sandbox for isolated agent execution ([#408](https://github.com/existential-birds/amelia/issues/408)–[#411](https://github.com/existential-birds/amelia/issues/411))
+- Multi-task execution with per-task review
+
+### Sandbox Execution
+
+Isolated agent execution with credential security and network controls.
+
+- Docker sandbox execution with container isolation (DockerSandboxProvider) ([#408](https://github.com/existential-birds/amelia/issues/408)–[#411](https://github.com/existential-birds/amelia/issues/411))
+- Daytona cloud sandbox provider — ephemeral cloud-based sandboxes ([#509](https://github.com/existential-birds/amelia/pull/509))
+- LLM/Git credential proxy — API keys never enter sandbox
+- Network allowlist with iptables-based filtering (Docker mode)
+- Per-workflow git worktree isolation
+- Sandbox provider reuse across workflow stages
 
 ---
 
@@ -148,7 +163,6 @@ Automated verification before code reaches human reviewers.
 **Foundation in place:**
 
 - Configurable iteration limits (`max_retries`, `max_iterations`) with auto-halt
-- Evaluator agent with decision matrix (IMPLEMENT, REJECT, DEFER, CLARIFY)
 - Pre-push hook running lint, typecheck, test, and dashboard build
 - Retry with exponential backoff for transient failures (`RetryConfig`, `_run_workflow_with_retry`)
 
@@ -267,11 +281,15 @@ Defense-in-depth security with per-agent permissions ([#228](https://github.com/
 
 ---
 
-## Phase 12: Cloud Deployment [Planned]
+## Phase 12: Cloud Deployment [Partially Complete]
 
 Parallel execution on cloud infrastructure.
 
-- Multiple workflows running in parallel on AWS
+**Foundation in place:**
+
+- Cloud sandbox execution via Daytona provider — ephemeral cloud-based sandboxes for agent workloads ([#509](https://github.com/existential-birds/amelia/pull/509))
+
+- Multiple workflows running in parallel on cloud infrastructure (AWS or equivalent)
 - Thin CLI client for submitting and monitoring
 - OAuth-based authentication with GitHub
 
@@ -301,7 +319,7 @@ Engineering work attribution for financial reporting (OPEX vs CAPEX) ([#70](http
 | F7: Contact Humans with Tools | 🟡 Partial | Phases 7, 10, 11 | `human_approval_node` exists; agents cannot initiate contact mid-execution; no outbound notifications |
 | F8: Own Your Control Flow | ✅ Complete | Core Orchestration | Custom routing functions with business logic, two pipeline graphs |
 | F9: Compact Errors | 🟡 Partial | Phases 3, 8 | Exponential backoff retry exists; no error compaction for LLM context |
-| F10: Small Focused Agents | ✅ Complete | Core Orchestration | 4 narrow agents, step limits, per-task fresh sessions |
+| F10: Small Focused Agents | ✅ Complete | Core Orchestration | 6 narrow agents (Architect, Developer, Reviewer, Evaluator, Oracle, Brainstorm), step limits, per-task fresh sessions, sandbox isolation |
 | F11: Trigger from Anywhere | 🟡 Partial | Web Dashboard, Phase 7 | CLI + REST + Dashboard; no inbound webhooks or event-driven triggers |
 | F12: Stateless Reducer | ✅ Complete | Core Orchestration | Frozen Pydantic state, `operator.add` reducers, pure node functions |
 | F13: Pre-fetch Context | 🟡 Partial | Phase 1 | Issue/commit/design/prompts pre-fetched; codebase context via runtime exploration |

@@ -567,6 +567,254 @@ PathTraversalError: Path '../../../etc/passwd' resolves to '/etc/passwd' which i
 
 ---
 
+## Sandbox Issues
+
+### Docker Sandbox Issues
+
+#### Docker not running or not installed
+
+**Error:**
+```text
+DockerException: Error while fetching server API version
+```
+
+**Cause:** Docker Desktop or the Docker daemon is not running, or Docker is not installed.
+
+**Solution:**
+
+Ensure Docker Desktop (macOS/Windows) or the Docker daemon (Linux) is running:
+```bash
+docker info    # Verify Docker is running
+```
+
+#### Image build failures
+
+**Error:**
+```text
+Error building sandbox base image
+```
+
+**Cause:** The first sandbox run builds a base image using `scripts/build-sandbox-base.sh`, which can take 5-15 minutes. Build failures are often caused by insufficient Docker disk space or network issues during package installation.
+
+**Solutions:**
+
+1. Check Docker disk space:
+   ```bash
+   docker system df          # Show disk usage
+   docker system prune -a    # Free up space (removes unused images)
+   ```
+
+2. Manually run the build script to see full output:
+   ```bash
+   ./scripts/build-sandbox-base.sh
+   ```
+
+#### Container startup failures
+
+**Error:**
+```text
+Container amelia-sandbox-<profile_name> failed to start
+```
+
+**Cause:** A stale container from a previous run may be blocking the new container.
+
+**Solutions:**
+
+1. Check for existing containers:
+   ```bash
+   docker ps -a --filter name=amelia-sandbox-
+   ```
+
+2. Remove stale containers:
+   ```bash
+   docker rm -f amelia-sandbox-<profile_name>
+   ```
+
+#### Port conflict on 8430
+
+**Error:**
+```text
+Bind for 0.0.0.0:8430 failed: port is already allocated
+```
+
+**Cause:** The LLM proxy runs on port 8430 by default. Another process or sandbox container is using this port.
+
+**Solutions:**
+
+1. Find and kill the process using the port:
+   ```bash
+   lsof -i :8430          # Find process ID
+   kill <PID>             # Kill the process
+   ```
+
+2. Remove stale sandbox containers that may be holding the port:
+   ```bash
+   docker ps -a --filter name=amelia-sandbox-
+   docker rm -f <container_name>
+   ```
+
+#### Network allowlist blocking required hosts
+
+**Error:**
+```text
+Connection refused / timeout when agent tries to reach external service
+```
+
+**Cause:** Sandbox network allowlist is enabled but doesn't include hosts the agent needs to reach.
+
+**Solution:**
+
+Add required hosts to `network_allowed_hosts` in your sandbox configuration via the dashboard at **Settings → Profiles**, or programmatically via the profile API (`PUT /api/profiles/{name}`).
+
+#### Cleaning up all sandbox containers
+
+To remove all Amelia sandbox containers at once:
+
+```bash
+# Via Docker CLI
+docker ps -aq --filter name=amelia-sandbox- | xargs -r docker rm -f
+```
+
+Or programmatically:
+```python
+import asyncio
+from amelia.sandbox.teardown import teardown_all_sandbox_containers
+
+asyncio.run(teardown_all_sandbox_containers())
+```
+
+### Daytona Cloud Sandbox Issues
+
+#### Missing Daytona API key
+
+**Error:**
+```text
+ConfigurationError: DAYTONA_API_KEY environment variable not set
+```
+
+**Cause:** The `DAYTONA_API_KEY` environment variable is not set.
+
+**Solution:**
+
+Set the environment variable with your Daytona API key:
+```bash
+export DAYTONA_API_KEY=your-daytona-api-key
+```
+
+#### Sandbox creation timeout
+
+**Error:**
+```text
+TimeoutError: Daytona sandbox creation timed out
+```
+
+**Cause:** The Daytona sandbox took longer than the configured timeout (default 120 seconds) to create. This can happen with large repositories or when the Daytona service is under load.
+
+**Solutions:**
+
+1. Increase the timeout by setting `daytona_timeout` in your sandbox configuration via the dashboard at **Settings → Profiles**, or programmatically via the profile API (`PUT /api/profiles/{name}`). The default is 120 seconds.
+
+2. Check Daytona service status to ensure it is healthy.
+
+#### Git clone failures in Daytona
+
+**Error:**
+```text
+Error cloning repository in Daytona sandbox
+```
+
+**Cause:** The `repo_url` is not set in the sandbox configuration, or the repository is private and requires authentication.
+
+**Solutions:**
+
+1. Ensure `repo_url` is set in your sandbox configuration via the dashboard at **Settings → Profiles**, or programmatically via the profile API.
+
+2. For private repositories, set the GitHub token:
+   ```bash
+   export AMELIA_GITHUB_TOKEN=ghp_your-token
+   ```
+
+#### Network allowlist not supported with Daytona
+
+**Error:**
+```text
+ConfigurationError: network_allowlist_enabled is not supported with Daytona sandbox mode
+```
+
+**Cause:** The `network_allowlist_enabled` setting is a Docker-only feature and cannot be used with Daytona cloud sandboxes.
+
+**Solution:**
+
+Disable the network allowlist by setting `network_allowlist_enabled: false` in your sandbox configuration via the dashboard at **Settings → Profiles**, or programmatically via the profile API.
+
+#### Worker upload failures
+
+**Error:**
+```text
+Error uploading worker to Daytona sandbox
+```
+
+**Cause:** The Daytona API is unreachable or the API key lacks sufficient permissions.
+
+**Solutions:**
+
+1. Verify Daytona API connectivity:
+   ```bash
+   curl -H "Authorization: Bearer $DAYTONA_API_KEY" https://api.daytona.io/health
+   ```
+
+2. Check that your API key has the required permissions for sandbox creation and file upload.
+
+### General Sandbox Issues
+
+#### CLI drivers don't work in sandbox mode
+
+**Error:**
+```text
+ConfigurationError: Container sandbox requires API driver. CLI driver containerization is not yet supported.
+```
+or:
+```text
+ConfigurationError: Daytona sandbox requires API driver. CLI driver containerization is not yet supported.
+```
+
+**Cause:** CLI-based drivers (`claude`, `codex`) cannot be used with sandbox mode. Only the `api` driver supports sandboxed execution because it communicates with the LLM via API and proxies requests through the sandbox.
+
+**Solution:**
+
+Switch to the `api` driver in your profile configuration via the dashboard at **Settings → Profiles**, or when creating a profile:
+```bash
+amelia config profile create dev --driver api --model "anthropic/claude-sonnet-4"
+```
+
+#### Health check failures
+
+**Error:**
+```text
+Sandbox health check failed — tearing down and recreating
+```
+
+**Cause:** The sandbox container or Daytona workspace became unhealthy. Amelia auto-recovers by tearing down the sandbox and recreating it.
+
+**Solutions:**
+
+1. Check logs for the underlying cause:
+   ```bash
+   export LOGURU_LEVEL=DEBUG
+   amelia dev
+   ```
+
+2. If the issue persists, manually clean up and restart:
+   ```bash
+   # For Docker
+   docker ps -aq --filter name=amelia-sandbox- | xargs -r docker rm -f
+
+   # Then restart
+   amelia dev
+   ```
+
+---
+
 ## Common Workflow Scenarios
 
 ### Fresh installation not working

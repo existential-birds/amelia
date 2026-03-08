@@ -83,6 +83,39 @@ The Reviewer uses agentic execution to auto-detect technologies, load appropriat
 
 The Reviewer examines code changes and either approves them or provides feedback. If changes are not approved, the Developer receives the feedback and attempts fixes. This review-fix loop continues until approved or the maximum iterations (`max_review_iterations`) is reached.
 
+### Evaluator (`amelia/agents/evaluator.py`)
+
+**Role**: Evaluates review feedback against the actual codebase.
+
+The Evaluator examines each piece of review feedback in context and categorizes it using a decision matrix:
+
+| Decision | Meaning |
+|----------|---------|
+| `IMPLEMENT` | Feedback is valid — apply the fix |
+| `REJECT` | Feedback is wrong or inapplicable |
+| `DEFER` | Not relevant to the current task |
+| `CLARIFY` | Need more information before acting |
+
+Returns an `EvaluationResult` with categorized items. This prevents the Developer from blindly applying all review suggestions, filtering out false positives and deferring out-of-scope work.
+
+### Oracle (`amelia/agents/oracle.py`)
+
+**Role**: Expert consultation agent.
+
+The Oracle takes a problem statement combined with codebase context and provides advice via agentic LLM execution. It acts as an on-demand expert that other agents or the user can consult for architectural guidance, debugging help, or design decisions. Returns an `OracleConsultation` record.
+
+### Brainstormer (`amelia/agents/brainstormer.py`)
+
+**Role**: Chat-based design session service.
+
+The Brainstormer facilitates interactive Q&A design sessions with artifacts. It uses a restricted `write_design_doc` tool that only produces markdown output. Sessions persist and can be handed off to implementation workflows, bridging the gap between ideation and execution.
+
+### Plan Validator (`amelia/agents/plan_validator.py`)
+
+**Role**: Pipeline node that validates plan structure.
+
+The Plan Validator is not a traditional agent — it is a pipeline node that validates plan structure using regex-based extraction of `goal`, `key_files`, and `total_tasks` from the Architect's markdown plan. Returns a `PlanValidationResult`. This replaced an earlier LLM-based extraction approach for determinism and speed.
+
 ### Tracker Factory (`amelia/trackers/factory.py`)
 
 **Role**: Creates the appropriate tracker based on profile configuration.
@@ -108,7 +141,14 @@ Amelia uses **LangGraph's StateGraph** for orchestration:
 - Review results
 - `driver_session_id`: For session continuity
 - `review_iteration`: Current iteration in review-fix loop
+- `review_pass` / `max_review_passes`: Track multi-pass review cycles
 - `agentic_status`: Current execution status
+- `total_tasks`: Number of tasks extracted from the plan
+- `current_task_index`: Which task is being worked on (0-indexed)
+- `task_review_iteration`: Review attempts for the current task
+- `evaluation_result`: Output from the Evaluator agent
+- `approved_items`: Review items approved for implementation
+- `external_plan`: Plan provided externally (bypasses Architect)
 
 ## Task-Based Execution
 
@@ -154,9 +194,9 @@ Agents don't just generate text - they call tools. This is what makes them "agen
 ```
 Developer receives goal: "Add user authentication tests"
     ↓
-Developer calls: run_shell_command(command="ls tests/")
+Developer calls: glob(pattern="tests/test_*.py")
     ↓
-Result: "test_api.py test_utils.py"
+Result: ["tests/test_api.py", "tests/test_utils.py"]
     ↓
 Developer calls: read_file(path="tests/test_api.py")
     ↓
@@ -166,7 +206,7 @@ Developer calls: write_file(path="tests/test_auth.py", content="...")
     ↓
 Result: "File created successfully"
     ↓
-Developer calls: run_shell_command(command="pytest tests/test_auth.py")
+Developer calls: bash(command="pytest tests/test_auth.py")
     ↓
 Result: "1 passed"
     ↓
@@ -175,11 +215,16 @@ Developer marks execution complete
 
 ### Available Tools
 
+The Developer agent uses `FilesystemBackend` which provides these tools:
+
 | Tool | Purpose |
 |------|---------|
-| `run_shell_command` | Execute terminal commands |
-| `write_file` | Create or modify files |
 | `read_file` | Read file contents |
+| `write_file` | Create or overwrite files |
+| `edit_file` | Apply targeted edits to existing files |
+| `glob` | Find files by pattern matching |
+| `grep` | Search file contents with regex |
+| `bash` | Execute shell commands |
 
 ### Unified Streaming with StreamEvent
 
@@ -218,6 +263,35 @@ await emit_event(stream_event)
 
 This abstraction allows the dashboard and logging systems to display real-time progress identically regardless of which driver is executing the work.
 
+## Sandbox Execution
+
+When sandbox mode is enabled, agents execute inside isolated containers rather than on the host machine. This provides a security boundary between the AI agent's actions and the host environment.
+
+### How It Works
+
+The `ContainerDriver` delegates execution to a sandboxed worker process running inside a container. Two sandbox providers are supported:
+
+| Provider | Description |
+|----------|-------------|
+| **Docker** | Local container isolation using Docker |
+| **Daytona** | Cloud-based sandbox environments |
+
+### LLM Proxy
+
+API keys never enter the sandbox. Instead, the host runs an LLM proxy that the sandboxed worker connects to for model access. This keeps credentials on the host side of the security boundary while allowing the agent to make LLM calls from within the container.
+
+```
+Host                          Sandbox Container
+┌──────────────┐              ┌──────────────────┐
+│ LLM Proxy    │◄────────────►│ Worker Process   │
+│ (holds keys) │   HTTP       │ (no API keys)    │
+└──────────────┘              └──────────────────┘
+```
+
+### Compatibility
+
+Only the `api` driver works in sandbox mode. The `claude` and `codex` CLI drivers require local CLI installations and authentication that are not available inside the container.
+
 ## The Driver Abstraction
 
 Drivers abstract how Amelia communicates with LLMs. This separation enables flexibility across different environments.
@@ -226,7 +300,7 @@ Drivers abstract how Amelia communicates with LLMs. This separation enables flex
 
 | Driver | Use Case | Requirements |
 |--------|----------|--------------|
-| `api` | Direct API calls, simple setup, fast prototyping | `OPENROUTER_API_KEY` env var |
+| `api` | Direct API calls via DeepAgents + LangChain. Only driver that works in sandbox mode | `OPENROUTER_API_KEY` env var |
 | `claude` | Claude CLI wrapper, policy-compliant | `claude` CLI installed and authenticated |
 | `codex` | OpenAI Codex CLI wrapper | `codex` CLI installed and authenticated |
 
@@ -287,7 +361,7 @@ This abstraction means Amelia works with any issue source without changing the c
 
 ## Key Takeaways
 
-1. **Agents are specialized**: Architect, Developer, and Reviewer each have focused roles with defined input/output contracts
+1. **Agents are specialized**: Architect, Developer, Reviewer, Evaluator, Oracle, Brainstormer, and Plan Validator each have focused roles with defined input/output contracts
 2. **Trajectory is truth**: Full execution trace persisted for debugging, not just final outputs
 3. **Human-in-the-loop**: Approval gates at critical decision points prevent runaway execution
 4. **Defense in depth**: Multiple security layers (metacharacters → blocklist → patterns → allowlist)
