@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface GitHubIssueComboboxProps {
+  id?: string;
   profile: string;
   onSelect: (issue: GitHubIssueSummary) => void;
 }
@@ -41,7 +42,7 @@ function formatRelativeTime(dateStr: string): string {
   return `${Math.floor(diffDays / 365)}y ago`;
 }
 
-export function GitHubIssueCombobox({ profile, onSelect }: GitHubIssueComboboxProps) {
+export function GitHubIssueCombobox({ id, profile, onSelect }: GitHubIssueComboboxProps) {
   const [open, setOpen] = useState(false);
   const [issues, setIssues] = useState<GitHubIssueSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,7 +80,10 @@ export function GitHubIssueCombobox({ profile, onSelect }: GitHubIssueComboboxPr
   // Fetch on mount and when profile changes
   useEffect(() => {
     fetchIssues();
-    return () => abortRef.current?.abort();
+    return () => {
+      abortRef.current?.abort();
+      clearTimeout(debounceRef.current);
+    };
   }, [fetchIssues]);
 
   const handleSearchChange = (value: string) => {
@@ -100,6 +104,7 @@ export function GitHubIssueCombobox({ profile, onSelect }: GitHubIssueComboboxPr
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           variant="outline"
           role="combobox"
           aria-expanded={open}

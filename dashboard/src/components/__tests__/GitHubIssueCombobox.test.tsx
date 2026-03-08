@@ -70,7 +70,7 @@ describe('GitHubIssueCombobox', () => {
 
     await user.click(screen.getByText('Fix login bug'));
 
-    expect(onSelect).toHaveBeenCalledWith(mockIssues[0]);
+    expect(onSelect).toHaveBeenCalledWith(mockIssues[0]!);
   });
 
   it('shows empty state when no issues found', async () => {

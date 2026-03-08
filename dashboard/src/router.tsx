@@ -27,6 +27,7 @@ import { approveAction, rejectAction, cancelAction, replanAction } from '@/actio
  * - `/logs` → System logs view (lazy-loaded)
  * - `/prompts` → Prompts configuration page (lazy-loaded)
  * - `/specs` → Spec Builder page (lazy-loaded)
+ * - `/develop` → Develop page for creating workflows (lazy-loaded)
  * - `/knowledge` → Knowledge Library page (lazy-loaded)
  * - `/settings` → Redirects to `/settings/profiles`
  * - `/settings/profiles` → Profile management (lazy-loaded)
@@ -117,6 +118,13 @@ export const router = createBrowserRouter([
         path: 'specs',
         lazy: async () => {
           const { default: Component } = await import('@/pages/SpecBuilderPage');
+          return { Component };
+        },
+      },
+      {
+        path: 'develop',
+        lazy: async () => {
+          const { default: Component } = await import('@/pages/DevelopPage');
           return { Component };
         },
       },

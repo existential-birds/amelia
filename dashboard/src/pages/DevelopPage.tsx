@@ -391,10 +391,11 @@ export default function DevelopPage() {
           {/* GitHub issue combobox — shown when profile uses GitHub tracker */}
           {trackerType === 'github' && profileValue && (
             <div>
-              <Label className="text-[11px] font-heading uppercase tracking-wider text-muted-foreground mb-1 block">
+              <Label htmlFor="github-issue" className="text-[11px] font-heading uppercase tracking-wider text-muted-foreground mb-1 block">
                 GitHub Issue
               </Label>
               <GitHubIssueCombobox
+                id="github-issue"
                 profile={profileValue}
                 onSelect={handleIssueSelect}
               />
