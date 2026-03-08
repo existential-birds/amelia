@@ -77,8 +77,8 @@ describe('DashboardSidebar', () => {
 
   it('renders Develop nav link', () => {
     renderSidebar();
-
     const developLink = screen.getByRole('link', { name: /develop/i });
     expect(developLink).toBeInTheDocument();
+    expect(developLink).toHaveAttribute('href', '/develop');
   });
 });

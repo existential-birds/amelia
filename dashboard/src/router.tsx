@@ -107,6 +107,13 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'develop',
+        async lazy() {
+          const { default: Component } = await import('@/pages/DevelopPage');
+          return { Component };
+        },
+      },
+      {
         path: 'prompts',
         loader: promptsLoader,
         lazy: async () => {
