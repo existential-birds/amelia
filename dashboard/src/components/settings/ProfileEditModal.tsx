@@ -28,100 +28,19 @@ import {
   Copy,
   Check,
   Cpu,
-  Brain,
-  Code,
   Code2,
-  Search,
-  ClipboardCheck,
-  Scale,
-  Lightbulb,
-  FileCheck,
   Wand2,
   Terminal,
   Cloud,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AGENT_DEFINITIONS, type AgentDefinition } from '@/lib/constants';
 import { createProfile, updateProfile } from '@/api/settings';
 import type { Profile, ProfileCreate, ProfileUpdate, SandboxConfig } from '@/api/settings';
 import { Switch } from '@/components/ui/switch';
 import * as toast from '@/components/Toast';
 import { ApiModelSelect } from '@/components/model-picker';
-
-// =============================================================================
-// Agent Definitions
-// =============================================================================
-
-interface AgentDefinition {
-  key: string;
-  label: string;
-  description: string;
-  icon: typeof Cpu;
-  defaultModel: string;
-  category: 'primary' | 'utility';
-}
-
-/** All agents in the system with their metadata */
-const AGENT_DEFINITIONS: AgentDefinition[] = [
-  // Primary agents - always visible
-  {
-    key: 'architect',
-    label: 'Architect',
-    description: 'Plans implementation strategy',
-    icon: Brain,
-    defaultModel: 'opus',
-    category: 'primary',
-  },
-  {
-    key: 'developer',
-    label: 'Developer',
-    description: 'Writes and modifies code',
-    icon: Code,
-    defaultModel: 'opus',
-    category: 'primary',
-  },
-  {
-    key: 'reviewer',
-    label: 'Reviewer',
-    description: 'Reviews code changes',
-    icon: Search,
-    defaultModel: 'sonnet',
-    category: 'primary',
-  },
-  // Utility agents - collapsed by default
-  {
-    key: 'plan_validator',
-    label: 'Plan Validator',
-    description: 'Validates plan structure',
-    icon: FileCheck,
-    defaultModel: 'haiku',
-    category: 'utility',
-  },
-  {
-    key: 'task_reviewer',
-    label: 'Task Reviewer',
-    description: 'Reviews individual tasks',
-    icon: ClipboardCheck,
-    defaultModel: 'haiku',
-    category: 'utility',
-  },
-  {
-    key: 'evaluator',
-    label: 'Evaluator',
-    description: 'Evaluates review quality',
-    icon: Scale,
-    defaultModel: 'haiku',
-    category: 'utility',
-  },
-  {
-    key: 'brainstormer',
-    label: 'Brainstormer',
-    description: 'Generates creative ideas',
-    icon: Lightbulb,
-    defaultModel: 'haiku',
-    category: 'utility',
-  },
-];
 
 const PRIMARY_AGENTS = AGENT_DEFINITIONS.filter(a => a.category === 'primary');
 const UTILITY_AGENTS = AGENT_DEFINITIONS.filter(a => a.category === 'utility');
@@ -272,8 +191,8 @@ const agentFormSchema = z.object({
   driver: z.string().min(1),
   model: z.string(),
 }).refine(
-  (data) => data.driver !== 'api' || data.model !== '',
-  { message: 'Model required for API driver', path: ['model'] }
+  (data) => data.driver === 'claude' || data.model !== '',
+  { message: 'Model is required', path: ['model'] }
 );
 
 const profileFormSchema = z.object({
@@ -1066,21 +985,23 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
 
               {/* Container-specific settings */}
               {formData.sandbox_mode === 'container' && (
-                <>
-                  {/* Docker Image */}
-                  <div className="space-y-2">
-                    <Label htmlFor="sandbox_image" className="text-xs uppercase tracking-wider text-muted-foreground">
-                      Docker Image
-                    </Label>
-                    <Input
-                      id="sandbox_image"
-                      value={formData.sandbox_image}
-                      onChange={(e) => handleChange('sandbox_image', e.target.value)}
-                      placeholder="amelia-sandbox:latest"
-                      className="bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm"
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sandbox_image" className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Docker Image
+                  </Label>
+                  <Input
+                    id="sandbox_image"
+                    value={formData.sandbox_image}
+                    onChange={(e) => handleChange('sandbox_image', e.target.value)}
+                    placeholder="amelia-sandbox:latest"
+                    className="bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm"
+                  />
+                </div>
+              )}
 
+              {/* Network settings for container mode only */}
+              {formData.sandbox_mode === 'container' && (
+                <>
                   {/* Network Allowlist Toggle */}
                   <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
                     <div className="space-y-0.5">
@@ -1115,15 +1036,6 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
 
               {formData.sandbox_mode === 'daytona' && (
                 <>
-                  {/* Network allowlist warning */}
-                  {formData.sandbox_network_allowlist_enabled && (
-                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
-                      <p className="text-xs text-amber-400">
-                        Network allowlist settings are not available in Daytona mode. Daytona manages network isolation through its own infrastructure.
-                      </p>
-                    </div>
-                  )}
-
                   {/* Daytona Image */}
                   <div className="space-y-2">
                     <Label className="text-xs uppercase tracking-wider text-muted-foreground">

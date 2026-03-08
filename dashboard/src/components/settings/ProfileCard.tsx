@@ -22,6 +22,7 @@ import {
   MoreHorizontal,
 } from 'lucide-react';
 import { getDriverIcon, getDriverStyle } from '@/utils/driver-colors';
+import { PRIMARY_AGENT_KEYS } from '@/lib/constants';
 import {
   Tooltip,
   TooltipContent,
@@ -57,12 +58,16 @@ const MODEL_COLORS = {
   haiku: 'text-muted-foreground',
 } as const;
 
-/** Get model display color */
+const MODEL_TIERS: Record<string, string[]> = {
+  opus: ['opus', 'gpt-4-turbo', 'gpt-5'],
+  sonnet: ['sonnet', 'gpt-4o-mini', 'gpt-4o', 'gpt-3.5'],
+};
+
 const getModelColor = (model: string): string => {
-  // Check for known tiers
-  if (model.includes('opus') || model.includes('gpt-4')) return MODEL_COLORS.opus;
-  if (model.includes('sonnet') || model.includes('gpt-3.5')) return MODEL_COLORS.sonnet;
-  // Default to haiku styling for unknown models
+  const m = model.toLowerCase();
+  for (const [tier, keywords] of Object.entries(MODEL_TIERS)) {
+    if (keywords.some(k => m.includes(k))) return MODEL_COLORS[tier as keyof typeof MODEL_COLORS];
+  }
   return MODEL_COLORS.haiku;
 };
 
@@ -80,7 +85,7 @@ const formatModel = (model: string): string => {
 export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
   function ProfileCard({ profile, onEdit, onDelete, onActivate }, ref) {
   // Get primary agents configuration
-  const primaryAgents = ['architect', 'developer', 'reviewer'] as const;
+  const primaryAgents = PRIMARY_AGENT_KEYS;
   const agentConfigs = primaryAgents.map(key => ({
     key,
     driver: profile.agents?.[key]?.driver ?? 'claude',
@@ -194,7 +199,7 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
             {!allSameDriver && (
               <span className="text-[10px] text-muted-foreground">mixed</span>
             )}
-            {profile.sandbox?.mode === 'container' && (
+            {profile.sandbox && profile.sandbox.mode !== 'none' && (
               <Badge
                 variant="outline"
                 className="text-xs bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
