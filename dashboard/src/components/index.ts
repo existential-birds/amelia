@@ -19,14 +19,10 @@ export { ActivityLog } from './ActivityLog';
 
 // Workflow components
 export { ApprovalControls } from './ApprovalControls';
-export { WorkflowCanvas } from './WorkflowCanvas';
 export { WorkflowEmptyState } from './WorkflowEmptyState';
 
 // Layout components
 export { DashboardSidebar } from './DashboardSidebar';
-
-// Agent node (for WorkflowCanvas)
-export { AgentNode } from './AgentNode';
 
 // =============================================================================
 // ai-elements (re-exported for direct use when needed)
