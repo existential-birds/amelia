@@ -433,7 +433,7 @@ export interface StartWorkflowRequest {
 }
 
 /**
- * Request payload for creating a new workflow via Quick Shot.
+ * Request payload for creating a new workflow.
  * Used by POST /api/workflows endpoint.
  *
  * @example
@@ -984,4 +984,29 @@ export interface UsageResponse {
   trend: UsageTrendPoint[];
   /** Breakdown by model. */
   by_model: UsageByModel[];
+}
+
+// ---------------------------------------------------------------------------
+// GitHub Issues (for Develop page combobox)
+// ---------------------------------------------------------------------------
+
+/** Label on a GitHub issue. */
+export interface GitHubIssueLabel {
+  name: string;
+  color: string;
+}
+
+/** Summary of a GitHub issue for the issue picker. */
+export interface GitHubIssueSummary {
+  number: number;
+  title: string;
+  labels: GitHubIssueLabel[];
+  assignee: string | null;
+  created_at: string;
+  state: string;
+}
+
+/** Response from GET /api/github/issues. */
+export interface GitHubIssuesResponse {
+  issues: GitHubIssueSummary[];
 }
