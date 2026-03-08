@@ -1,5 +1,5 @@
 /**
- * @fileoverview Profile selection dropdown for Quick Shot modal.
+ * @fileoverview Profile selection dropdown for workflow creation.
  *
  * Fetches available profiles and displays them in a styled dropdown
  * with active indicator and tracker type information.

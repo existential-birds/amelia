@@ -370,32 +370,6 @@
   50% { width: 60%; }
 }
 
-/* Quick Shot modal animations */
-@keyframes quick-shot-field-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes quick-shot-charge-pulse {
-  0%, 100% {
-    box-shadow: 0 0 8px oklch(from var(--primary) l c h / 0.4);
-  }
-  50% {
-    box-shadow: 0 0 16px oklch(from var(--primary) l c h / 0.6);
-  }
-}
-
-@keyframes quick-shot-scan-line {
-  0% { left: -100%; }
-  100% { left: 100%; }
-}
-
 @layer utilities {
   .animate-pulse-glow {
     animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -407,18 +381,6 @@
 
   .animate-blink {
     animation: blink 1s step-end infinite;
-  }
-
-  .animate-quick-shot-field {
-    animation: quick-shot-field-reveal 200ms ease-out both;
-  }
-
-  .animate-quick-shot-charge {
-    animation: quick-shot-charge-pulse 2s ease-in-out infinite;
-  }
-
-  .animate-quick-shot-scan {
-    animation: quick-shot-scan-line 1s ease-in-out infinite;
   }
 }
 

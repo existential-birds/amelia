@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { useDemoMode } from '@/hooks/useDemoMode';
 import { renderSidebar } from '@/test/helpers';
 
@@ -76,15 +75,10 @@ describe('DashboardSidebar', () => {
     }
   });
 
-  it('renders Quick Shot button that opens modal', async () => {
-    const user = userEvent.setup();
+  it('renders Develop nav link', () => {
     renderSidebar();
 
-    const quickShotButton = screen.getByRole('button', { name: /quick shot/i });
-    expect(quickShotButton).toBeInTheDocument();
-
-    await user.click(quickShotButton);
-
-    expect(await screen.findByText('QUICK SHOT')).toBeInTheDocument();
+    const developLink = screen.getByRole('link', { name: /develop/i });
+    expect(developLink).toBeInTheDocument();
   });
 });

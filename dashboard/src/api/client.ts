@@ -375,7 +375,7 @@ export const api = {
   },
 
   /**
-   * Creates a new workflow via Quick Shot.
+   * Creates a new workflow.
    *
    * @param request - The workflow creation request.
    * @returns The created workflow response.
@@ -545,29 +545,6 @@ export const api = {
       { signal },
     );
     return handleResponse<GitHubIssuesResponse>(response);
-  },
-
-  /**
-   * Retrieves the most recent workflow defaults for pre-population.
-   *
-   * @deprecated Will be removed when QuickShotModal is deleted.
-   */
-  async getWorkflowDefaults(): Promise<{
-    worktree_path: string | null;
-    profile: string | null;
-  }> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows?limit=1`);
-    const data = await handleResponse<WorkflowListResponse>(response);
-
-    const mostRecent = data.workflows[0];
-    if (mostRecent) {
-      return {
-        worktree_path: mostRecent.worktree_path,
-        profile: mostRecent.profile,
-      };
-    }
-
-    return { worktree_path: null, profile: null };
   },
 
   // ==========================================================================

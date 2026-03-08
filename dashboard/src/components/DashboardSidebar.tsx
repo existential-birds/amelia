@@ -5,10 +5,7 @@
  * Sidebar primitives with React Router for active state management.
  */
 
-import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { api } from '@/api/client';
-import { logger } from '@/lib/logger';
 import {
   Sidebar,
   SidebarContent,
@@ -39,7 +36,6 @@ import { APP_VERSION } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { useWorkflowStore } from '@/store/workflowStore';
 import { useDemoMode } from '@/hooks/useDemoMode';
-import { QuickShotModal } from './QuickShotModal';
 
 /**
  * Navigation link component using React Router's NavLink for active state.
@@ -139,27 +135,6 @@ export function DashboardSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
   const { isDemo } = useDemoMode();
-  const [quickShotOpen, setQuickShotOpen] = useState(false);
-  const [quickShotDefaults, setQuickShotDefaults] = useState<{
-    worktree_path?: string;
-    profile?: string;
-  }>({});
-
-  // Fetch defaults for Quick Shot on mount
-  useEffect(() => {
-    api
-      .getWorkflowDefaults()
-      .then((defaults) => {
-        setQuickShotDefaults({
-          worktree_path: defaults.worktree_path ?? undefined,
-          profile: defaults.profile ?? undefined,
-        });
-      })
-      .catch((error) => {
-        // Silently ignore errors - defaults are optional
-        logger.warn('Failed to fetch workflow defaults', { error });
-      });
-  }, []);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
@@ -220,32 +195,18 @@ export function DashboardSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Tools Section - Quick Shot and Coming Soon features */}
+        {/* Tools Section */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-heading text-muted-foreground/60 font-semibold tracking-wider">
             TOOLS
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  tooltip="Quick Shot"
-                  onClick={() => setQuickShotOpen(true)}
-                  className="cursor-pointer"
-                >
-                  <div
-                    className={cn(
-                      'flex items-center gap-3 w-full',
-                      'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0'
-                    )}
-                  >
-                    <Bolt className="h-4 w-4 shrink-0" />
-                    <span className="font-heading font-semibold tracking-wide truncate group-data-[collapsible=icon]:hidden">
-                      Quick Shot
-                    </span>
-                  </div>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              <SidebarNavLink
+                to="/develop"
+                icon={Bolt}
+                label="Develop"
+              />
               <SidebarNavLink
                 to="/specs"
                 icon={BookOpen}
@@ -369,7 +330,6 @@ export function DashboardSidebar() {
         </div>
       </SidebarFooter>
 
-      <QuickShotModal open={quickShotOpen} onOpenChange={setQuickShotOpen} defaults={quickShotDefaults} />
     </Sidebar>
   );
 }

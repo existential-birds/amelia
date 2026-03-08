@@ -1,8 +1,8 @@
 /**
  * @fileoverview Develop page for creating workflows from GitHub issues.
  *
- * Full-page replacement for QuickShotModal with GitHub issue selection
- * via searchable combobox when the selected profile uses a GitHub tracker.
+ * Supports GitHub issue selection via searchable combobox when the
+ * selected profile uses a GitHub tracker.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
