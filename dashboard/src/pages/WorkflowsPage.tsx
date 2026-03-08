@@ -1,8 +1,8 @@
 /**
- * @fileoverview Main workflows listing page with canvas visualization.
+ * @fileoverview Main workflows listing page.
  *
- * Displays the active workflow's pipeline canvas at the top with
- * job queue and activity log in a split view below.
+ * Displays the active workflow's header with job queue and activity log
+ * in a split view below.
  */
 import { useCallback } from 'react';
 import { useLoaderData, useNavigate, useParams } from 'react-router-dom';
@@ -12,7 +12,6 @@ import { Separator } from '@/components/ui/separator';
 import { WorkflowEmptyState } from '@/components/WorkflowEmptyState';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
-import { WorkflowCanvas } from '@/components/WorkflowCanvas';
 import { ActivityLog } from '@/components/ActivityLog';
 import { JobQueue } from '@/components/JobQueue';
 import { ApprovalControls } from '@/components/ApprovalControls';
@@ -24,14 +23,13 @@ import { getActiveWorkflow } from '@/utils/workflow';
 import { truncateWorkflowId } from '@/utils';
 import { useElapsedTime, useAutoRevalidation } from '@/hooks';
 import { useIsTablet } from '@/hooks/use-tablet';
-import { buildPipelineFromEvents } from '@/utils/pipeline';
 import type { workflowsLoader } from '@/loaders/workflows';
 
 /**
- * Displays workflow canvas and job queue with activity log.
+ * Displays job queue with activity log.
  *
  * Layout:
- * - Top: Workflow header and pipeline canvas (full width)
+ * - Top: Workflow header (full width)
  * - Bottom: Job queue (1/3) and activity log (2/3) side by side
  *
  * The active workflow is determined by priority:
@@ -41,8 +39,6 @@ import type { workflowsLoader } from '@/loaders/workflows';
  * Selection is managed via URL:
  * - /workflows - shows active workflow
  * - /workflows/:id - shows specific workflow
- *
- * @returns React element for the workflows page with canvas visualization and job queue
  */
 export default function WorkflowsPage() {
   const { workflows, detail, detailError } = useLoaderData<typeof workflowsLoader>();
@@ -79,12 +75,6 @@ export default function WorkflowsPage() {
   if (workflows.length === 0 && !detail) {
     return <WorkflowEmptyState variant="no-workflows" />;
   }
-
-  // Build pipeline from events for canvas visualization (real-time updates)
-  const pipeline = buildPipelineFromEvents(
-    detail?.recent_events ?? [],
-    { showDefaultPipeline: true }
-  );
 
   return (
     <div className="flex flex-col h-full w-full overflow-y-auto">
@@ -130,7 +120,6 @@ export default function WorkflowsPage() {
         )}
       </PageHeader>
       <Separator />
-      <WorkflowCanvas pipeline={pipeline} className="h-48 lg:h-64" />
 
       {/* Plan Review - shown when workflow needs approval */}
       {detail?.status === 'blocked' && (

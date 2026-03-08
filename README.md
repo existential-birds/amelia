@@ -2,10 +2,16 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/existential-birds/amelia)
 
-[Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is multi-agent orchestration for software development with human-in-the-loop approval gates, defense-in-depth security, and end-to-end observability.
+[Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is multi-agent orchestration for software development with human-in-the-loop approval gates and end-to-end observability.
 
-> [!WARNING]
-> This project is under active development. APIs and configuration may change between releases. See the [Roadmap](https://existential-birds.github.io/amelia/reference/roadmap) for planned changes.
+- **Six specialized agents** — Architect, Developer, Reviewer, Evaluator, Oracle, and Brainstormer collaborate through a LangGraph state machine
+- **Human approval before code** — review and approve the Architect's plan before any code is written
+- **Task-based execution** — each task is reviewed, committed, and tracked independently so large projects stay manageable
+- **Multiple LLM drivers** — OpenRouter API, Claude CLI, or Codex CLI with per-agent model configuration
+- **Real-time dashboard** — monitor workflows, review plans, track costs, and manage configuration
+- **Workflow queueing** — queue issues, batch-generate plans, and control execution
+- **Issue tracker integration** — work from GitHub or Jira issues directly
+- **Sandbox execution** — run agents locally, in Docker, or in Daytona cloud sandboxes
 
 ## Prerequisites
 
@@ -95,15 +101,9 @@ cd /path/to/your/project
 
 Amelia orchestrates three specialized agents through a LangGraph state machine:
 
-```
-Issue → Architect (plan) → Human Approval → Developer (execute) ↔ Reviewer (review) → Done
-```
-
 - **Architect** — reads the issue and produces a step-by-step implementation plan
 - **Developer** — executes the plan, writing code and running commands
 - **Reviewer** — reviews the Developer's changes and requests fixes if needed
-
-You approve the Architect's plan before any code is written. The design follows [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) principles for reliable LLM-powered software.
 
 See [Architecture](https://existential-birds.github.io/amelia/architecture/overview) and [Concepts](https://existential-birds.github.io/amelia/architecture/concepts) for details.
 
@@ -143,10 +143,6 @@ Configuration is stored in SQLite (`~/.amelia/amelia.db`) and managed via CLI (`
 
 See [Configuration Reference](https://existential-birds.github.io/amelia/guide/configuration) for profile setup, server settings, and Jira integration.
 
-## Documentation
-
-For full documentation, visit **[existential-birds.github.io/amelia](https://existential-birds.github.io/amelia/)**.
-
 ## License
 
-Amelia is licensed under the [Apache License 2.0](LICENSE), a permissive open-source license that allows free use, modification, and distribution.
+Amelia is licensed under the [Apache License 2.0](LICENSE).

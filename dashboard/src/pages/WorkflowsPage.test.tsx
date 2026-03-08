@@ -4,16 +4,11 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import WorkflowsPage from './WorkflowsPage';
 import type { WorkflowSummary, WorkflowDetail } from '@/types';
-import type { EventDrivenPipeline } from '@/utils/pipeline';
 
 // Mock modules
 vi.mock('@/utils/workflow', () => ({
   getActiveWorkflow: vi.fn(),
   formatElapsedTime: vi.fn(),
-}));
-
-vi.mock('@/utils/pipeline', () => ({
-  buildPipelineFromEvents: vi.fn(),
 }));
 
 // Mock useVirtualizer to render all items (JSDOM doesn't support scroll dimensions)
@@ -34,7 +29,6 @@ vi.mock('@tanstack/react-virtual', () => ({
 }));
 
 import { getActiveWorkflow, formatElapsedTime } from '@/utils/workflow';
-import { buildPipelineFromEvents } from '@/utils/pipeline';
 
 // Mock data
 const mockWorkflowSummary: WorkflowSummary = {
@@ -62,34 +56,6 @@ const mockWorkflowDetail: WorkflowDetail = {
   goal: null,
   plan_markdown: null,
   plan_path: null,
-};
-
-// Event-driven pipeline mock data (new format)
-const mockPipeline: EventDrivenPipeline = {
-  nodes: [
-    {
-      id: 'architect',
-      type: 'agent',
-      position: { x: 0, y: 0 },
-      data: { agentType: 'architect', status: 'completed', iterations: [], isExpanded: false },
-    },
-    {
-      id: 'developer',
-      type: 'agent',
-      position: { x: 200, y: 0 },
-      data: { agentType: 'developer', status: 'active', iterations: [], isExpanded: false },
-    },
-    {
-      id: 'reviewer',
-      type: 'agent',
-      position: { x: 400, y: 0 },
-      data: { agentType: 'reviewer', status: 'pending', iterations: [], isExpanded: false },
-    },
-  ],
-  edges: [
-    { id: 'architect-developer', source: 'architect', target: 'developer', data: { status: 'completed' } },
-    { id: 'developer-reviewer', source: 'developer', target: 'reviewer', data: { status: 'active' } },
-  ],
 };
 
 // Second workflow for testing selection behavior
@@ -168,7 +134,6 @@ describe('WorkflowsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getActiveWorkflow).mockReturnValue(mockWorkflowSummary);
-    vi.mocked(buildPipelineFromEvents).mockReturnValue(mockPipeline);
     vi.mocked(formatElapsedTime).mockReturnValue('2h 15m');
   });
 
@@ -212,16 +177,6 @@ describe('WorkflowsPage', () => {
     });
   });
 
-  it('should display workflow pipeline canvas when detail exists', async () => {
-    renderWithRouter({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
-
-    await waitFor(() => {
-      // WorkflowCanvas renders pipeline nodes with proper display names
-      expect(screen.getByText('Architect')).toBeInTheDocument();
-      expect(screen.getByText('Developer')).toBeInTheDocument();
-    });
-  });
-
   it('should display job queue and activity log side by side', async () => {
     renderWithRouter({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
 
@@ -252,17 +207,6 @@ describe('WorkflowsPage', () => {
       const workflowButton = screen.getByRole('button', { name: /PROJ-123/ });
       expect(workflowButton).toBeInTheDocument();
       expect(workflowButton).toHaveAttribute('data-selected', 'true');
-    });
-  });
-
-  it('should call buildPipelineFromEvents with workflow events', async () => {
-    renderWithRouter({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
-
-    await waitFor(() => {
-      expect(buildPipelineFromEvents).toHaveBeenCalledWith(
-        mockWorkflowDetail.recent_events,
-        { showDefaultPipeline: true }
-      );
     });
   });
 
@@ -303,11 +247,5 @@ describe('WorkflowsPage', () => {
       const pageHeader = screen.getByRole('banner');
       expect(within(pageHeader).getByText('PROJ-123')).toBeInTheDocument();
     });
-
-    // Verify buildPipelineFromEvents was called with the active workflow's events
-    expect(buildPipelineFromEvents).toHaveBeenLastCalledWith(
-      mockWorkflowDetail.recent_events,
-      { showDefaultPipeline: true }
-    );
   });
 });
