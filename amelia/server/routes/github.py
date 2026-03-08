@@ -2,20 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-import subprocess
 from datetime import datetime
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 from pydantic import BaseModel
 
-from amelia.core.types import Profile, TrackerType
+from amelia.core.types import TrackerType
 from amelia.server.database import ProfileRepository
 from amelia.server.dependencies import get_profile_repository
 
 
 router = APIRouter(prefix="/github", tags=["github"])
+
+_GH_ISSUE_FIELDS = "number,title,labels,assignees,createdAt,state"
+_GH_ISSUE_LIMIT = "50"
 
 
 class GitHubIssueLabel(BaseModel):
@@ -42,26 +46,35 @@ class GitHubIssuesResponse(BaseModel):
     issues: list[GitHubIssueSummary]
 
 
-async def _get_profile(
-    profile_name: str,
-    profile_repo: ProfileRepository | None = None,
-) -> Profile | None:
-    """Fetch a profile by name from the repository."""
-    if profile_repo is None:
-        profile_repo = get_profile_repository()
-    return await profile_repo.get_profile(profile_name)
+def _parse_issue(item: dict[str, Any]) -> GitHubIssueSummary:
+    """Parse a single raw gh JSON issue into a GitHubIssueSummary."""
+    assignees = item.get("assignees") or []
+    raw_labels = item.get("labels") or []
+    return GitHubIssueSummary(
+        number=item["number"],
+        title=item["title"],
+        labels=[
+            GitHubIssueLabel(name=label["name"], color=label.get("color", ""))
+            for label in raw_labels
+        ],
+        assignee=assignees[0]["login"] if assignees else None,
+        created_at=item["createdAt"],
+        state=item["state"],
+    )
 
 
 @router.get("/issues", response_model=GitHubIssuesResponse)
 async def list_github_issues(
     profile: str = Query(..., description="Profile name to resolve repo context"),
     search: str | None = Query(None, description="Search query for filtering issues"),
+    profile_repo: ProfileRepository = Depends(get_profile_repository),
 ) -> GitHubIssuesResponse:
     """List open GitHub issues for a profile's repository.
 
     Args:
         profile: Profile name used to resolve repo_root and validate tracker type.
         search: Optional search query passed to gh issue list --search.
+        profile_repo: Profile repository dependency.
 
     Returns:
         GitHubIssuesResponse with up to 50 open issues.
@@ -70,7 +83,7 @@ async def list_github_issues(
         HTTPException: 400 if profile doesn't use github tracker,
             404 if profile not found, 500 if gh CLI fails.
     """
-    resolved = await _get_profile(profile)
+    resolved = await profile_repo.get_profile(profile)
     if resolved is None:
         raise HTTPException(status_code=404, detail=f"Profile '{profile}' not found")
 
@@ -85,32 +98,34 @@ async def list_github_issues(
         "issue",
         "list",
         "--json",
-        "number,title,labels,assignees,createdAt,state",
+        _GH_ISSUE_FIELDS,
         "--limit",
-        "50",
+        _GH_ISSUE_LIMIT,
         "--state",
         "open",
     ]
     if search:
         cmd.extend(["--search", search])
 
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        check=False,
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
         cwd=resolved.repo_root,
     )
+    stdout_bytes, stderr_bytes = await proc.communicate()
+    stdout = stdout_bytes.decode()
+    stderr = stderr_bytes.decode()
 
-    if result.returncode != 0:
-        logger.error("gh issue list failed", stderr=result.stderr, profile=profile)
+    if proc.returncode != 0:
+        logger.error("gh issue list failed", stderr=stderr, profile=profile)
         raise HTTPException(
             status_code=500,
-            detail=f"GitHub CLI failed: {result.stderr.strip()}",
+            detail=f"GitHub CLI failed: {stderr.strip()}",
         )
 
     try:
-        raw_issues = json.loads(result.stdout)
+        raw_issues = json.loads(stdout)
     except json.JSONDecodeError as e:
         logger.error("Failed to parse gh output", error=str(e), profile=profile)
         raise HTTPException(
@@ -118,21 +133,6 @@ async def list_github_issues(
             detail="Failed to parse GitHub CLI output",
         ) from e
 
-    issues = []
-    for item in raw_issues:
-        assignees = item.get("assignees") or []
-        issues.append(
-            GitHubIssueSummary(
-                number=item["number"],
-                title=item["title"],
-                labels=[
-                    GitHubIssueLabel(name=label["name"], color=label.get("color", ""))
-                    for label in (item.get("labels") or [])
-                ],
-                assignee=assignees[0]["login"] if assignees else None,
-                created_at=item["createdAt"],
-                state=item["state"],
-            )
-        )
-
-    return GitHubIssuesResponse(issues=issues)
+    return GitHubIssuesResponse(
+        issues=[_parse_issue(item) for item in raw_issues],
+    )
