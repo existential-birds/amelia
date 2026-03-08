@@ -389,7 +389,7 @@ describe('API Client', () => {
         expect.any(Object),
       );
       expect(result.issues).toHaveLength(1);
-      expect(result.issues[0].number).toBe(42);
+      expect(result.issues[0]!.number).toBe(42);
     });
 
     it('should pass search param when provided', async () => {

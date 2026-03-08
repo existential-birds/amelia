@@ -89,7 +89,7 @@ describe('DevelopPage', () => {
       repo_root: '/tmp/repo',
       active_profile: 'test',
       max_concurrent: 3,
-      active_profile_info: { driver: 'cli:claude', model: 'opus' },
+      active_profile_info: { name: 'test', driver: 'cli:claude', model: 'opus' },
     });
     vi.mocked(api.validatePath).mockResolvedValue({
       exists: true,

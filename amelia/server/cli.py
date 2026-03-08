@@ -43,7 +43,7 @@ def server(
         typer.Option(
             "--working-dir",
             "-w",
-            help="Working directory for file access. Pre-fills worktree path in Quick Shot.",
+            help="Working directory for file access. Pre-fills worktree path in Develop page.",
         ),
     ] = None,
 ) -> None:
