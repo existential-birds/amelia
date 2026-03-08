@@ -574,7 +574,7 @@ PathTraversalError: Path '../../../etc/passwd' resolves to '/etc/passwd' which i
 #### Docker not running or not installed
 
 **Error:**
-```
+```text
 DockerException: Error while fetching server API version
 ```
 
@@ -590,7 +590,7 @@ docker info    # Verify Docker is running
 #### Image build failures
 
 **Error:**
-```
+```text
 Error building sandbox base image
 ```
 
@@ -612,7 +612,7 @@ Error building sandbox base image
 #### Container startup failures
 
 **Error:**
-```
+```text
 Container amelia-sandbox-<profile_name> failed to start
 ```
 
@@ -633,7 +633,7 @@ Container amelia-sandbox-<profile_name> failed to start
 #### Port conflict on 8430
 
 **Error:**
-```
+```text
 Bind for 0.0.0.0:8430 failed: port is already allocated
 ```
 
@@ -656,7 +656,7 @@ Bind for 0.0.0.0:8430 failed: port is already allocated
 #### Network allowlist blocking required hosts
 
 **Error:**
-```
+```text
 Connection refused / timeout when agent tries to reach external service
 ```
 
@@ -688,7 +688,7 @@ asyncio.run(teardown_all_sandbox_containers())
 #### Missing Daytona API key
 
 **Error:**
-```
+```text
 ConfigurationError: DAYTONA_API_KEY environment variable not set
 ```
 
@@ -704,7 +704,7 @@ export DAYTONA_API_KEY=your-daytona-api-key
 #### Sandbox creation timeout
 
 **Error:**
-```
+```text
 TimeoutError: Daytona sandbox creation timed out
 ```
 
@@ -719,7 +719,7 @@ TimeoutError: Daytona sandbox creation timed out
 #### Git clone failures in Daytona
 
 **Error:**
-```
+```text
 Error cloning repository in Daytona sandbox
 ```
 
@@ -737,7 +737,7 @@ Error cloning repository in Daytona sandbox
 #### Network allowlist not supported with Daytona
 
 **Error:**
-```
+```text
 ConfigurationError: network_allowlist_enabled is not supported with Daytona sandbox mode
 ```
 
@@ -750,7 +750,7 @@ Disable the network allowlist by setting `network_allowlist_enabled: false` in y
 #### Worker upload failures
 
 **Error:**
-```
+```text
 Error uploading worker to Daytona sandbox
 ```
 
@@ -770,11 +770,11 @@ Error uploading worker to Daytona sandbox
 #### CLI drivers don't work in sandbox mode
 
 **Error:**
-```
+```text
 ConfigurationError: Container sandbox requires API driver. CLI driver containerization is not yet supported.
 ```
 or:
-```
+```text
 ConfigurationError: Daytona sandbox requires API driver. CLI driver containerization is not yet supported.
 ```
 
@@ -790,7 +790,7 @@ amelia config profile create dev --driver api --model "anthropic/claude-sonnet-4
 #### Health check failures
 
 **Error:**
-```
+```text
 Sandbox health check failed — tearing down and recreating
 ```
 
