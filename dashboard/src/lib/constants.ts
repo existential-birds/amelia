@@ -60,6 +60,9 @@ export const AGENT_MODEL_REQUIREMENTS: Record<string, AgentRequirements> = {
   },
 };
 
+/** Primary agent keys used across the UI. */
+export const PRIMARY_AGENT_KEYS = ['architect', 'developer', 'reviewer'] as const;
+
 /** Style mapping for different agent types in activity logs and UI. */
 export const AGENT_STYLES: Record<string, { text: string; bg: string }> = {
   PM: { text: 'text-agent-pm', bg: 'bg-agent-pm-bg' },

@@ -207,7 +207,7 @@ const MODEL_OPTIONS_BY_DRIVER: Record<string, readonly string[]> = {
 
 /** Get available models for a driver, with fallback */
 const getModelsForDriver = (driver: string): readonly string[] => {
-  return MODEL_OPTIONS_BY_DRIVER[driver] ?? CLAUDE_MODELS;
+  return MODEL_OPTIONS_BY_DRIVER[driver] ?? [];
 };
 
 /**
@@ -272,8 +272,8 @@ const agentFormSchema = z.object({
   driver: z.string().min(1),
   model: z.string(),
 }).refine(
-  (data) => data.driver !== 'api' || data.model !== '',
-  { message: 'Model required for API driver', path: ['model'] }
+  (data) => data.driver === 'claude' || data.model !== '',
+  { message: 'Model is required', path: ['model'] }
 );
 
 const profileFormSchema = z.object({
@@ -781,12 +781,12 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
   };
 
   const formSandboxToApi = (): SandboxConfig => {
-    const isContainer = formData.sandbox_mode === 'container';
+    const isSandboxed = formData.sandbox_mode !== 'none';
     return {
       mode: formData.sandbox_mode,
       image: formData.sandbox_image,
-      network_allowlist_enabled: isContainer ? formData.sandbox_network_allowlist_enabled : false,
-      network_allowed_hosts: isContainer ? formData.sandbox_network_allowed_hosts : [],
+      network_allowlist_enabled: isSandboxed ? formData.sandbox_network_allowlist_enabled : false,
+      network_allowed_hosts: isSandboxed ? formData.sandbox_network_allowed_hosts : [],
       ...(formData.sandbox_mode === 'daytona' && {
         repo_url: formData.sandbox_repo_url,
         daytona_api_url: formData.sandbox_daytona_api_url,
@@ -1066,21 +1066,23 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
 
               {/* Container-specific settings */}
               {formData.sandbox_mode === 'container' && (
-                <>
-                  {/* Docker Image */}
-                  <div className="space-y-2">
-                    <Label htmlFor="sandbox_image" className="text-xs uppercase tracking-wider text-muted-foreground">
-                      Docker Image
-                    </Label>
-                    <Input
-                      id="sandbox_image"
-                      value={formData.sandbox_image}
-                      onChange={(e) => handleChange('sandbox_image', e.target.value)}
-                      placeholder="amelia-sandbox:latest"
-                      className="bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm"
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sandbox_image" className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Docker Image
+                  </Label>
+                  <Input
+                    id="sandbox_image"
+                    value={formData.sandbox_image}
+                    onChange={(e) => handleChange('sandbox_image', e.target.value)}
+                    placeholder="amelia-sandbox:latest"
+                    className="bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm"
+                  />
+                </div>
+              )}
 
+              {/* Network settings for all sandboxed modes */}
+              {formData.sandbox_mode !== 'none' && (
+                <>
                   {/* Network Allowlist Toggle */}
                   <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
                     <div className="space-y-0.5">
@@ -1115,14 +1117,6 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
 
               {formData.sandbox_mode === 'daytona' && (
                 <>
-                  {/* Network allowlist warning */}
-                  {formData.sandbox_network_allowlist_enabled && (
-                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
-                      <p className="text-xs text-amber-400">
-                        Network allowlist settings are not available in Daytona mode. Daytona manages network isolation through its own infrastructure.
-                      </p>
-                    </div>
-                  )}
 
                   {/* Daytona Image */}
                   <div className="space-y-2">

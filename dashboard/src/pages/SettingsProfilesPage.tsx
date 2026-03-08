@@ -192,7 +192,13 @@ export default function SettingsProfilesPage() {
    * Get the primary driver from a profile's agents configuration.
    */
   const getPrimaryDriver = (profile: Profile): string | undefined => {
-    return profile.agents?.architect?.driver;
+    const agents = profile.agents;
+    if (!agents) return undefined;
+    const drivers = Object.values(agents).map(a => a.driver);
+    if (drivers.length === 0) return undefined;
+    const counts = new Map<string, number>();
+    for (const d of drivers) counts.set(d, (counts.get(d) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   };
 
   // Filter profiles
