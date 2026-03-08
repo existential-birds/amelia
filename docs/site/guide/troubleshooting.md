@@ -672,7 +672,7 @@ To remove all Amelia sandbox containers at once:
 
 ```bash
 # Via Docker CLI
-docker rm -f $(docker ps -aq --filter name=amelia-sandbox-)
+docker ps -aq --filter name=amelia-sandbox- | xargs -r docker rm -f
 ```
 
 Or programmatically:
@@ -807,7 +807,7 @@ Sandbox health check failed — tearing down and recreating
 2. If the issue persists, manually clean up and restart:
    ```bash
    # For Docker
-   docker rm -f $(docker ps -aq --filter name=amelia-sandbox-)
+   docker ps -aq --filter name=amelia-sandbox- | xargs -r docker rm -f
 
    # Then restart
    amelia dev
