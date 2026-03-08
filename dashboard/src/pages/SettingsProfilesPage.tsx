@@ -198,7 +198,7 @@ export default function SettingsProfilesPage() {
     if (drivers.length === 0) return undefined;
     const counts = new Map<string, number>();
     for (const d of drivers) counts.set(d, (counts.get(d) ?? 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
   };
 
   // Filter profiles

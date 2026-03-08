@@ -59,8 +59,8 @@ const MODEL_COLORS = {
 } as const;
 
 const MODEL_TIERS: Record<string, string[]> = {
-  opus: ['opus', 'gpt-5', 'gpt-4o', 'gpt-4-turbo'],
-  sonnet: ['sonnet', 'gpt-4o-mini', 'gpt-4-mini', 'gpt-3.5'],
+  opus: ['opus', 'gpt-4-turbo', 'gpt-4', 'gpt-5'],
+  sonnet: ['sonnet', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5'],
 };
 
 const getModelColor = (model: string): string => {

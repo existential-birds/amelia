@@ -4,6 +4,17 @@
  * Centralizes version info, agent definitions, and other constants.
  */
 
+import {
+  Brain,
+  Code,
+  Search,
+  FileCheck,
+  ClipboardCheck,
+  Scale,
+  Lightbulb,
+  type LucideIcon,
+} from 'lucide-react';
+
 import packageJson from '../../package.json';
 
 /** Current application version from package.json. */
@@ -60,8 +71,85 @@ export const AGENT_MODEL_REQUIREMENTS: Record<string, AgentRequirements> = {
   },
 };
 
-/** Primary agent keys used across the UI. */
-export const PRIMARY_AGENT_KEYS = ['architect', 'developer', 'reviewer'] as const;
+// =============================================================================
+// Agent Definitions
+// =============================================================================
+
+export interface AgentDefinition {
+  key: string;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  defaultModel: string;
+  category: 'primary' | 'utility';
+}
+
+/** All agents in the system with their metadata. */
+export const AGENT_DEFINITIONS: AgentDefinition[] = [
+  // Primary agents - always visible
+  {
+    key: 'architect',
+    label: 'Architect',
+    description: 'Plans implementation strategy',
+    icon: Brain,
+    defaultModel: 'opus',
+    category: 'primary',
+  },
+  {
+    key: 'developer',
+    label: 'Developer',
+    description: 'Writes and modifies code',
+    icon: Code,
+    defaultModel: 'opus',
+    category: 'primary',
+  },
+  {
+    key: 'reviewer',
+    label: 'Reviewer',
+    description: 'Reviews code changes',
+    icon: Search,
+    defaultModel: 'sonnet',
+    category: 'primary',
+  },
+  // Utility agents - collapsed by default
+  {
+    key: 'plan_validator',
+    label: 'Plan Validator',
+    description: 'Validates plan structure',
+    icon: FileCheck,
+    defaultModel: 'haiku',
+    category: 'utility',
+  },
+  {
+    key: 'task_reviewer',
+    label: 'Task Reviewer',
+    description: 'Reviews individual tasks',
+    icon: ClipboardCheck,
+    defaultModel: 'haiku',
+    category: 'utility',
+  },
+  {
+    key: 'evaluator',
+    label: 'Evaluator',
+    description: 'Evaluates review quality',
+    icon: Scale,
+    defaultModel: 'haiku',
+    category: 'utility',
+  },
+  {
+    key: 'brainstormer',
+    label: 'Brainstormer',
+    description: 'Generates creative ideas',
+    icon: Lightbulb,
+    defaultModel: 'haiku',
+    category: 'utility',
+  },
+];
+
+/** Primary agent keys used across the UI, derived from AGENT_DEFINITIONS. */
+export const PRIMARY_AGENT_KEYS = AGENT_DEFINITIONS
+  .filter(a => a.category === 'primary')
+  .map(a => a.key) as unknown as readonly ['architect', 'developer', 'reviewer'];
 
 /** Style mapping for different agent types in activity logs and UI. */
 export const AGENT_STYLES: Record<string, { text: string; bg: string }> = {

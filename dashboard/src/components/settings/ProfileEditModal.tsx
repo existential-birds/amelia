@@ -28,100 +28,19 @@ import {
   Copy,
   Check,
   Cpu,
-  Brain,
-  Code,
   Code2,
-  Search,
-  ClipboardCheck,
-  Scale,
-  Lightbulb,
-  FileCheck,
   Wand2,
   Terminal,
   Cloud,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AGENT_DEFINITIONS, type AgentDefinition } from '@/lib/constants';
 import { createProfile, updateProfile } from '@/api/settings';
 import type { Profile, ProfileCreate, ProfileUpdate, SandboxConfig } from '@/api/settings';
 import { Switch } from '@/components/ui/switch';
 import * as toast from '@/components/Toast';
 import { ApiModelSelect } from '@/components/model-picker';
-
-// =============================================================================
-// Agent Definitions
-// =============================================================================
-
-interface AgentDefinition {
-  key: string;
-  label: string;
-  description: string;
-  icon: typeof Cpu;
-  defaultModel: string;
-  category: 'primary' | 'utility';
-}
-
-/** All agents in the system with their metadata */
-const AGENT_DEFINITIONS: AgentDefinition[] = [
-  // Primary agents - always visible
-  {
-    key: 'architect',
-    label: 'Architect',
-    description: 'Plans implementation strategy',
-    icon: Brain,
-    defaultModel: 'opus',
-    category: 'primary',
-  },
-  {
-    key: 'developer',
-    label: 'Developer',
-    description: 'Writes and modifies code',
-    icon: Code,
-    defaultModel: 'opus',
-    category: 'primary',
-  },
-  {
-    key: 'reviewer',
-    label: 'Reviewer',
-    description: 'Reviews code changes',
-    icon: Search,
-    defaultModel: 'sonnet',
-    category: 'primary',
-  },
-  // Utility agents - collapsed by default
-  {
-    key: 'plan_validator',
-    label: 'Plan Validator',
-    description: 'Validates plan structure',
-    icon: FileCheck,
-    defaultModel: 'haiku',
-    category: 'utility',
-  },
-  {
-    key: 'task_reviewer',
-    label: 'Task Reviewer',
-    description: 'Reviews individual tasks',
-    icon: ClipboardCheck,
-    defaultModel: 'haiku',
-    category: 'utility',
-  },
-  {
-    key: 'evaluator',
-    label: 'Evaluator',
-    description: 'Evaluates review quality',
-    icon: Scale,
-    defaultModel: 'haiku',
-    category: 'utility',
-  },
-  {
-    key: 'brainstormer',
-    label: 'Brainstormer',
-    description: 'Generates creative ideas',
-    icon: Lightbulb,
-    defaultModel: 'haiku',
-    category: 'utility',
-  },
-];
 
 const PRIMARY_AGENTS = AGENT_DEFINITIONS.filter(a => a.category === 'primary');
 const UTILITY_AGENTS = AGENT_DEFINITIONS.filter(a => a.category === 'utility');
@@ -207,7 +126,7 @@ const MODEL_OPTIONS_BY_DRIVER: Record<string, readonly string[]> = {
 
 /** Get available models for a driver, with fallback */
 const getModelsForDriver = (driver: string): readonly string[] => {
-  return MODEL_OPTIONS_BY_DRIVER[driver] ?? [];
+  return MODEL_OPTIONS_BY_DRIVER[driver] ?? CLAUDE_MODELS;
 };
 
 /**
@@ -781,12 +700,12 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
   };
 
   const formSandboxToApi = (): SandboxConfig => {
-    const isSandboxed = formData.sandbox_mode !== 'none';
+    const isContainer = formData.sandbox_mode === 'container';
     return {
       mode: formData.sandbox_mode,
       image: formData.sandbox_image,
-      network_allowlist_enabled: isSandboxed ? formData.sandbox_network_allowlist_enabled : false,
-      network_allowed_hosts: isSandboxed ? formData.sandbox_network_allowed_hosts : [],
+      network_allowlist_enabled: isContainer ? formData.sandbox_network_allowlist_enabled : false,
+      network_allowed_hosts: isContainer ? formData.sandbox_network_allowed_hosts : [],
       ...(formData.sandbox_mode === 'daytona' && {
         repo_url: formData.sandbox_repo_url,
         daytona_api_url: formData.sandbox_daytona_api_url,
@@ -1080,8 +999,8 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                 </div>
               )}
 
-              {/* Network settings for all sandboxed modes */}
-              {formData.sandbox_mode !== 'none' && (
+              {/* Network settings for container mode only */}
+              {formData.sandbox_mode === 'container' && (
                 <>
                   {/* Network Allowlist Toggle */}
                   <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
