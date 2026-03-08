@@ -664,21 +664,23 @@ Connection refused / timeout when agent tries to reach external service
 
 **Solution:**
 
-Add required hosts to `network_allowed_hosts` in your sandbox configuration:
-```bash
-amelia config profile update dev --sandbox-network-allowed-hosts "api.github.com,registry.npmjs.org"
-```
+Add required hosts to `network_allowed_hosts` in your sandbox configuration via the dashboard at **Settings → Profiles**, or programmatically via the profile API (`PUT /api/profiles/{name}`).
 
 #### Cleaning up all sandbox containers
 
 To remove all Amelia sandbox containers at once:
 
 ```bash
-# Via Python API
-teardown_all_sandbox_containers()
-
-# Or via Docker CLI
+# Via Docker CLI
 docker rm -f $(docker ps -aq --filter name=amelia-sandbox-)
+```
+
+Or programmatically:
+```python
+import asyncio
+from amelia.sandbox.teardown import teardown_all_sandbox_containers
+
+asyncio.run(teardown_all_sandbox_containers())
 ```
 
 ### Daytona Cloud Sandbox Issues
@@ -710,10 +712,7 @@ TimeoutError: Daytona sandbox creation timed out
 
 **Solutions:**
 
-1. Increase the timeout:
-   ```bash
-   amelia config profile update dev --daytona-timeout 300
-   ```
+1. Increase the timeout by setting `daytona_timeout` in your sandbox configuration via the dashboard at **Settings → Profiles**, or programmatically via the profile API (`PUT /api/profiles/{name}`). The default is 120 seconds.
 
 2. Check Daytona service status to ensure it is healthy.
 
@@ -728,10 +727,7 @@ Error cloning repository in Daytona sandbox
 
 **Solutions:**
 
-1. Ensure `repo_url` is set in your sandbox configuration:
-   ```bash
-   amelia config profile update dev --sandbox-repo-url "https://github.com/org/repo.git"
-   ```
+1. Ensure `repo_url` is set in your sandbox configuration via the dashboard at **Settings → Profiles**, or programmatically via the profile API.
 
 2. For private repositories, set the GitHub token:
    ```bash
@@ -749,10 +745,7 @@ ConfigurationError: network_allowlist_enabled is not supported with Daytona sand
 
 **Solution:**
 
-Disable the network allowlist when using Daytona:
-```bash
-amelia config profile update dev --no-sandbox-network-allowlist
-```
+Disable the network allowlist by setting `network_allowlist_enabled: false` in your sandbox configuration via the dashboard at **Settings → Profiles**, or programmatically via the profile API.
 
 #### Worker upload failures
 
@@ -778,16 +771,20 @@ Error uploading worker to Daytona sandbox
 
 **Error:**
 ```
-ConfigurationError: Sandbox mode requires 'api' driver
+ConfigurationError: Container sandbox requires API driver. CLI driver containerization is not yet supported.
+```
+or:
+```
+ConfigurationError: Daytona sandbox requires API driver. CLI driver containerization is not yet supported.
 ```
 
 **Cause:** CLI-based drivers (`claude`, `codex`) cannot be used with sandbox mode. Only the `api` driver supports sandboxed execution because it communicates with the LLM via API and proxies requests through the sandbox.
 
 **Solution:**
 
-Switch to the `api` driver:
+Switch to the `api` driver in your profile configuration via the dashboard at **Settings → Profiles**, or when creating a profile:
 ```bash
-amelia config profile update dev --driver api --model "anthropic/claude-sonnet-4"
+amelia config profile create dev --driver api --model "anthropic/claude-sonnet-4"
 ```
 
 #### Health check failures
