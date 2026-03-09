@@ -326,7 +326,7 @@ export default function DevelopPage() {
 
       {/* Form content */}
       <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="max-w-xl mx-auto space-y-5">
+        <div className="max-w-4xl mx-auto space-y-5">
           {/* Design document import zone */}
           <Card
             data-testid="import-zone"
