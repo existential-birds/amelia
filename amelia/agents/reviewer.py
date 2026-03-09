@@ -79,28 +79,18 @@ class Reviewer:
 
     """
 
-    AGENTIC_REVIEW_PROMPT = f"""You are an expert code reviewer. Your task is to review code changes using the appropriate review skills.
+    AGENTIC_REVIEW_PROMPT = f"""You are an expert code reviewer.
+
+## Review Guidelines
+
+{{review_guidelines}}
 
 ## Process
 
 1. **Identify Changed Files**: Run `git diff --name-only {{base_commit}}` to see what files changed
-
-2. **Detect Technologies**: Based on file extensions and imports, identify the stack:
-   - Python files (.py): Look for FastAPI, Pydantic-AI, SQLAlchemy, pytest
-   - Go files (.go): Look for BubbleTea, Wish, Prometheus
-   - TypeScript/React (.tsx, .ts): Look for React Router, shadcn/ui, Zustand, React Flow
-
-3. **Load Review Skills**: Use the `Skill` tool to load appropriate review skills:
-   - Python: `beagle-python:review-python` (FastAPI, pytest, Pydantic)
-   - Go: `beagle-go:review-go` (error handling, concurrency, interfaces)
-   - Frontend: `beagle-react:review-frontend` (React, TypeScript, CSS)
-   - TUI: `beagle-go:review-tui` (BubbleTea terminal apps)
-
-4. **Get the Diff**: Run `git diff {{base_commit}}` to get the full diff
-
-5. **Review**: Follow the loaded skill's instructions to review the code
-
-6. **Output**: Provide your review in the following markdown format:
+2. **Get the Diff**: Run `git diff {{base_commit}}` to get the full diff
+3. **Review**: Evaluate the code against the review guidelines above
+4. **Output**: Provide your review in the following markdown format:
 
 ```markdown
 {REVIEW_OUTPUT_FORMAT}
@@ -108,7 +98,6 @@ class Reviewer:
 
 ## Rules
 
-- Load skills BEFORE reviewing (not after)
 - Number every issue sequentially (1, 2, 3...)
 - Include FILE:LINE for each issue
 - Separate Issue/Why/Fix clearly
@@ -123,6 +112,7 @@ class Reviewer:
         prompts: dict[str, str] | None = None,
         agent_name: str = "reviewer",
         sandbox_provider: SandboxProvider | None = None,
+        review_guidelines: str = "",
     ):
         """Initialize the Reviewer agent.
 
@@ -134,6 +124,8 @@ class Reviewer:
             agent_name: Name used in logs/events. Use "task_reviewer" for task-based
                 execution to distinguish from final review.
             sandbox_provider: Optional shared sandbox provider for sandbox reuse.
+            review_guidelines: Pre-loaded review skill content injected into
+                the system prompt. When empty, the reviewer uses generic guidelines.
 
         """
         self.driver = get_driver(
@@ -148,6 +140,7 @@ class Reviewer:
         self._event_bus = event_bus
         self._prompts = prompts or {}
         self._agent_name = agent_name
+        self._review_guidelines = review_guidelines
 
     @property
     def agentic_prompt(self) -> str:
@@ -279,8 +272,11 @@ class Reviewer:
 
 The changes are in git - diff against commit: {base_commit}"""
 
-        # Build system prompt with base_commit
-        system_prompt = self.agentic_prompt.format(base_commit=base_commit)
+        # Build system prompt with base_commit and review_guidelines
+        system_prompt = self.agentic_prompt.format(
+            base_commit=base_commit,
+            review_guidelines=self._review_guidelines,
+        )
 
         cwd = profile.repo_root
         # Always start a fresh session — the reviewer must not resume the

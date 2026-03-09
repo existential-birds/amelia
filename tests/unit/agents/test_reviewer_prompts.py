@@ -41,7 +41,7 @@ class TestReviewerPromptInjection:
         reviewer = create_reviewer()  # No prompts injected
         # Should contain agentic review markers
         assert "git diff" in reviewer.agentic_prompt
-        assert "Skill" in reviewer.agentic_prompt
+        assert "review_guidelines" in reviewer.agentic_prompt
 
     async def test_agentic_prompt_property(
         self,
