@@ -19,7 +19,7 @@ from amelia.core.types import ReviewResult
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.utils import extract_config_params
 from amelia.server.models.tokens import TokenUsage
-from amelia.skills.review import detect_stack, load_skills
+from amelia.skills.review import REVIEW_TYPE_SKILLS, detect_stack, load_skills
 from amelia.tools.git_utils import get_current_commit
 
 
@@ -83,7 +83,13 @@ async def _run_git_command(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, _ = await proc.communicate()
+    stdout, stderr = await proc.communicate()
+    if stderr:
+        logger.warning(
+            "Git command produced stderr output",
+            cmd=cmd[:3],
+            stderr=stderr.decode().strip()[:500],
+        )
     return stdout.decode()
 
 
@@ -342,6 +348,16 @@ async def call_reviewer_node(
         )
         raw_review_types = ["general"]
     review_types: list[str] = [str(rt) for rt in raw_review_types]
+
+    # Warn about unknown review types
+    unknown_types = [rt for rt in review_types if rt not in REVIEW_TYPE_SKILLS]
+    if unknown_types:
+        logger.warning(
+            "Unknown review_types will have no base skills",
+            unknown_types=unknown_types,
+            known_types=list(REVIEW_TYPE_SKILLS.keys()),
+            agent=agent_name,
+        )
 
     changed_files, diff_content = await asyncio.gather(
         _get_changed_files(base_commit, profile.repo_root, sandbox_provider),

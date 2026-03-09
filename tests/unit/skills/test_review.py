@@ -96,6 +96,14 @@ class TestLoadSkills:
         assert "Python Code Review" in content
         assert "FastAPI" in content
 
+    def test_load_react_skills(self) -> None:
+        content = load_skills({"react"}, ["general"])
+        assert "React Code Review" in content
+
+    def test_load_typescript_skills(self) -> None:
+        content = load_skills({"typescript"}, ["general"])
+        assert "TypeScript Code Review" in content
+
     def test_load_security_type(self) -> None:
         content = load_skills(set(), ["security"])
         assert "Security" in content

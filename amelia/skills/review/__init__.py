@@ -16,7 +16,8 @@ REVIEW_SKILLS: dict[str, list[str]] = {
     "sqlalchemy": ["python/sqlalchemy.md"],
     "postgres": ["python/postgres.md"],
     # React / Frontend
-    "react": ["react/shadcn.md"],
+    "react": ["react/react.md"],
+    "typescript": ["react/typescript.md"],
     "shadcn": ["react/shadcn.md"],
     "vitest": ["react/vitest.md"],
     "react-router": ["react/react-router.md"],
