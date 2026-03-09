@@ -57,4 +57,4 @@
 
 ## Before Submitting Findings
 
-Load and follow review-verification-protocol before reporting any issue.
+Follow the verification protocol guidelines provided separately before reporting any issue.

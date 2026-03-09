@@ -62,4 +62,4 @@ Only flag these issues when the specific context applies:
 
 ## Before Submitting Findings
 
-Follow the verification protocol guidelines provided separately. before reporting any issue.
+Follow the verification protocol guidelines provided separately before reporting any issue.

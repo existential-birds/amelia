@@ -64,4 +64,4 @@
 
 Use the issue format: `[FILE:LINE] ISSUE_TITLE` for each finding.
 
-Follow the verification protocol guidelines provided separately. before reporting any issue.
+Follow the verification protocol guidelines provided separately before reporting any issue.

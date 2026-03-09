@@ -65,4 +65,4 @@
 
 ## Before Submitting Findings
 
-Follow the verification protocol guidelines provided separately. before reporting any issue.
+Follow the verification protocol guidelines provided separately before reporting any issue.
