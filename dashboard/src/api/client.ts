@@ -542,7 +542,8 @@ export const api = {
     if (search) params.set('search', search);
     const response = await fetchWithTimeout(
       `${API_BASE_URL}/github/issues?${params}`,
-      { signal },
+      {},
+      signal,
     );
     return handleResponse<GitHubIssuesResponse>(response);
   },
