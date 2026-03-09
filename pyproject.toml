@@ -49,7 +49,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["amelia"]
-artifacts = ["amelia/server/static/*"]
+artifacts = ["amelia/server/static/*", "amelia/skills/**/*.md"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
