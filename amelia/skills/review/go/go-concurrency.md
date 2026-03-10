@@ -54,20 +54,31 @@ func NewWorkerPool(ctx context.Context, numWorkers int, queueSize int, logger *s
 
 func (wp *WorkerPool) worker(ctx context.Context, id int) {
     defer wp.wg.Done()
-    for job := range wp.jobs {
-        wp.logger.Info("processing job", "worker", id, "job_id", job.ID)
-        if err := job.Execute(ctx); err != nil {
-            wp.logger.Error("job failed", "worker", id, "job_id", job.ID, "err", err)
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case job := <-wp.jobs:
+            wp.logger.Info("processing job", "worker", id, "job_id", job.ID)
+            if err := job.Execute(ctx); err != nil {
+                wp.logger.Error("job failed", "worker", id, "job_id", job.ID, "err", err)
+            }
         }
     }
 }
 
-func (wp *WorkerPool) Submit(job Job) {
-    wp.jobs <- job
+func (wp *WorkerPool) Submit(ctx context.Context, job Job) error {
+    select {
+    case <-wp.ctx.Done():
+        return context.Canceled
+    case <-ctx.Done():
+        return ctx.Err()
+    case wp.jobs <- job:
+        return nil
+    }
 }
 
 func (wp *WorkerPool) Shutdown() {
-    close(wp.jobs)
     wp.cancel()
     wp.wg.Wait()
 }
@@ -84,7 +95,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
     }
 
     // Dispatch background task — never spawn raw goroutines in handlers
-    s.workers.Submit(Job{
+    _ = s.workers.Submit(r.Context(), Job{
         ID: "welcome-email-" + user.ID,
         Execute: func(ctx context.Context) error {
             return s.emailService.SendWelcome(ctx, user)
@@ -183,7 +194,7 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 // GOOD — use a worker pool
 func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
     webhook := decodeWebhook(r)
-    s.workers.Submit(Job{
+    _ = s.workers.Submit(r.Context(), Job{
         ID:      "webhook-" + webhook.ID,
         Execute: func(ctx context.Context) error {
             return s.processWebhook(ctx, webhook)
@@ -227,17 +238,25 @@ func fetchWithTimeout(ctx context.Context, url string) (*Response, error) {
     }
 }
 
-// GOOD — use buffered channel so goroutine can exit
+// GOOD — use buffered channel so goroutine can exit, propagate errors
 func fetchWithTimeout(ctx context.Context, url string) (*Response, error) {
-    ch := make(chan *Response, 1) // buffered — goroutine can always send
+    type result struct {
+        resp *Response
+        err  error
+    }
+    ch := make(chan result, 1) // buffered — goroutine can always send
     go func() {
-        req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-        resp, _ := http.DefaultClient.Do(req)
-        ch <- resp
+        req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+        if err != nil {
+            ch <- result{err: err}
+            return
+        }
+        resp, err := http.DefaultClient.Do(req)
+        ch <- result{resp: resp, err: err}
     }()
     select {
-    case resp := <-ch:
-        return resp, nil
+    case res := <-ch:
+        return res.resp, res.err
     case <-ctx.Done():
         return nil, ctx.Err()
     }
