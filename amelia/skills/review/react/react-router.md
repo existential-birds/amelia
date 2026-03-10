@@ -26,7 +26,7 @@
 
 These patterns are correct React Router usage - do not report as issues:
 
-- **useEffect for client-only data** - Loaders run server-side; localStorage, window dimensions, and browser APIs must use useEffect
+- **useEffect for client-only data** - In SSR/framework mode, loaders run server-side; localStorage, window dimensions, and browser APIs must use useEffect. In SPA mode (`createBrowserRouter`), loaders run client-side but useEffect is still appropriate for browser-only APIs
 - **navigate() in event handlers** - Link is for declarative navigation; navigate() is correct for imperative navigation in callbacks/handlers
 - **Type annotation on loader data** - `useLoaderData<typeof loader>()` is a type annotation, not a type assertion
 - **Empty errorElement at route level** - Route may intentionally rely on parent error boundary

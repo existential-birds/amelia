@@ -24,13 +24,6 @@
 - [ ] Data migrations use `op.execute()` not ORM models
 - [ ] Migration dependencies properly ordered
 
-## When to Load References
-
-- Reviewing session creation/cleanup → sessions.md
-- Reviewing model relationships → relationships.md
-- Reviewing database queries → queries.md
-- Reviewing Alembic migration files → migrations.md
-
 ## Review Questions
 
 1. Are all sessions properly managed with context managers?

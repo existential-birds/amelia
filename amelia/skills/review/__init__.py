@@ -109,7 +109,7 @@ def detect_stack(file_paths: list[str], diff_content: str) -> set[str]:
             if pattern.search(path):
                 tags.add(tag)
 
-    # Pass 2: Import patterns in diff content (only added lines)
+    # Pass 2: Import patterns in diff content
     for pattern, tag in _IMPORT_PATTERNS:
         if pattern.search(diff_content):
             tags.add(tag)

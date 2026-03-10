@@ -45,7 +45,7 @@
 - **Inline Ecto query in context** - Context owns its data access
 - **Using `action_fallback`** - Centralized error handling pattern
 - **Multiple pipelines per route** - Composition is intentional
-- **`Plug.Conn.halt/1` without send** - May be handled by fallback
+- **`Plug.Conn.halt/1` without send** - Valid when `action_fallback` handles the response
 
 ## Context-Sensitive Rules
 

@@ -23,13 +23,6 @@
 - [ ] Dynamic Type supported (no fixed font sizes)
 - [ ] .task modifier for async work (not onAppear + Task)
 
-## When to Load References
-
-- Complex view bodies or modifier chains -> view-composition.md
-- Property wrapper usage (@State, @Observable) -> state-management.md
-- List performance or view identity issues -> performance.md
-- VoiceOver or accessibility implementation -> accessibility.md
-
 ## Review Questions
 
 1. Could this large view body be split into smaller, reusable Views?

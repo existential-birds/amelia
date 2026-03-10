@@ -25,6 +25,8 @@ Use worker pools for background tasks dispatched from HTTP handlers. This bounds
 type WorkerPool struct {
     jobs   chan Job
     wg     sync.WaitGroup
+    ctx    context.Context
+    cancel context.CancelFunc
     logger *slog.Logger
 }
 
@@ -33,25 +35,28 @@ type Job struct {
     Execute func(ctx context.Context) error
 }
 
-func NewWorkerPool(numWorkers int, queueSize int, logger *slog.Logger) *WorkerPool {
+func NewWorkerPool(ctx context.Context, numWorkers int, queueSize int, logger *slog.Logger) *WorkerPool {
+    poolCtx, cancel := context.WithCancel(ctx)
     wp := &WorkerPool{
         jobs:   make(chan Job, queueSize),
+        ctx:    poolCtx,
+        cancel: cancel,
         logger: logger,
     }
 
     for i := 0; i < numWorkers; i++ {
         wp.wg.Add(1)
-        go wp.worker(i)
+        go wp.worker(poolCtx, i)
     }
 
     return wp
 }
 
-func (wp *WorkerPool) worker(id int) {
+func (wp *WorkerPool) worker(ctx context.Context, id int) {
     defer wp.wg.Done()
     for job := range wp.jobs {
         wp.logger.Info("processing job", "worker", id, "job_id", job.ID)
-        if err := job.Execute(context.Background()); err != nil {
+        if err := job.Execute(ctx); err != nil {
             wp.logger.Error("job failed", "worker", id, "job_id", job.ID, "err", err)
         }
     }
@@ -63,6 +68,7 @@ func (wp *WorkerPool) Submit(job Job) {
 
 func (wp *WorkerPool) Shutdown() {
     close(wp.jobs)
+    wp.cancel()
     wp.wg.Wait()
 }
 ```
@@ -225,7 +231,8 @@ func fetchWithTimeout(ctx context.Context, url string) (*Response, error) {
 func fetchWithTimeout(ctx context.Context, url string) (*Response, error) {
     ch := make(chan *Response, 1) // buffered — goroutine can always send
     go func() {
-        resp, _ := http.Get(url)
+        req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+        resp, _ := http.DefaultClient.Do(req)
         ch <- resp
     }()
     select {
