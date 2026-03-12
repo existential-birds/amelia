@@ -50,6 +50,7 @@ from amelia.server.models.brainstorm import (
 )
 from amelia.server.models.events import EventDomain, EventType, WorkflowEvent
 from amelia.server.models.requests import CreateWorkflowRequest
+from amelia.server.models.tokens import calculate_token_cost
 
 
 # Tool description for the write_design_doc tool (markdown-only write)
@@ -694,10 +695,22 @@ class BrainstormService:
             message_usage: MessageUsage | None = None
             driver_usage = driver.get_usage()
             if driver_usage:
+                cost = driver_usage.cost_usd or 0.0
+
+                # Compute cost from cached pricing if driver didn't provide it
+                if not cost and driver_usage.model:
+                    cost = await calculate_token_cost(
+                        model=driver_usage.model,
+                        input_tokens=driver_usage.input_tokens or 0,
+                        output_tokens=driver_usage.output_tokens or 0,
+                        cache_read_tokens=driver_usage.cache_read_tokens or 0,
+                        cache_creation_tokens=driver_usage.cache_creation_tokens or 0,
+                    )
+
                 message_usage = MessageUsage(
                     input_tokens=driver_usage.input_tokens or 0,
                     output_tokens=driver_usage.output_tokens or 0,
-                    cost_usd=driver_usage.cost_usd or 0.0,
+                    cost_usd=cost,
                 )
 
             # Save assistant message
