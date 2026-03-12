@@ -1,193 +1,155 @@
 """Token usage tracking and cost calculation."""
 
+import asyncio
+import os
+import time
 import uuid
 from datetime import datetime
 from uuid import uuid4
 
+import httpx
+from loguru import logger
 from pydantic import BaseModel, Field
 
 
-# Pricing per million tokens
-# Sources: https://www.anthropic.com/pricing, https://openrouter.ai/pricing (last updated: 2026-01-19)
-# Note: Update this when providers change pricing. Short aliases map to full model IDs.
-# Cache pricing varies by provider:
-# - Anthropic: cache_read = 0.1× input (90% discount), cache_write = 1.25× input (25% premium)
-# - OpenAI: cache_read = 0.5× input, cache_write = 0 (free)
-# - Google: cache_read = 0.25× input, cache_write = 0 (free)
-# - DeepSeek: cache_read = 0.1× input, cache_write = 1× input
-MODEL_PRICING: dict[str, dict[str, float]] = {
-    # ==========================================================================
-    # Anthropic Claude 4.5 (current generation - 2026)
-    # ==========================================================================
-    "claude-opus-4-5-20251101": {
-        "input": 5.0,
-        "output": 25.0,
-        "cache_read": 0.5,  # 90% discount on cached input
-        "cache_write": 6.25,  # 25% premium on cache creation
-    },
-    "claude-sonnet-4-5-20251101": {
-        "input": 3.0,
-        "output": 15.0,
-        "cache_read": 0.3,
-        "cache_write": 3.75,
-    },
-    "claude-haiku-4-5-20251101": {
-        "input": 1.0,
-        "output": 5.0,
-        "cache_read": 0.1,
-        "cache_write": 1.25,
-    },
-    # ==========================================================================
-    # OpenAI (via OpenRouter)
-    # ==========================================================================
-    "openai/gpt-4o": {
-        "input": 2.5,
-        "output": 10.0,
-        "cache_read": 1.25,  # 0.5× input
-        "cache_write": 0,  # free
-    },
-    "openai/o1": {
-        "input": 15.0,
-        "output": 60.0,
-        "cache_read": 7.5,  # 0.5× input
-        "cache_write": 0,  # free
-    },
-    "openai/o3-mini": {
-        "input": 1.1,
-        "output": 4.4,
-        "cache_read": 0.55,  # 0.5× input
-        "cache_write": 0,  # free
-    },
-    # ==========================================================================
-    # Google Gemini (via OpenRouter)
-    # ==========================================================================
-    "google/gemini-2.0-flash": {
-        "input": 0.1,
-        "output": 0.4,
-        "cache_read": 0.025,  # 0.25× input
-        "cache_write": 0,  # free
-    },
-    "google/gemini-2.0-pro": {
-        "input": 1.25,
-        "output": 5.0,
-        "cache_read": 0.3125,  # 0.25× input
-        "cache_write": 0,  # free
-    },
-    # ==========================================================================
-    # DeepSeek (via OpenRouter) - Very cost-effective
-    # ==========================================================================
-    "deepseek/deepseek-coder-v3": {
-        "input": 0.14,
-        "output": 0.28,
-        "cache_read": 0.014,  # 0.1× input
-        "cache_write": 0.14,  # 1× input
-    },
-    "deepseek/deepseek-v3": {
-        "input": 0.14,
-        "output": 0.28,
-        "cache_read": 0.014,  # 0.1× input
-        "cache_write": 0.14,  # 1× input
-    },
-    # ==========================================================================
-    # Mistral (via OpenRouter)
-    # ==========================================================================
-    "mistral/codestral-latest": {
-        "input": 0.3,
-        "output": 0.9,
-        "cache_read": 0.03,
-        "cache_write": 0.3,
-    },
-    # ==========================================================================
-    # Qwen (via OpenRouter) - Open source
-    # ==========================================================================
-    "qwen/qwen-2.5-coder-32b": {
-        "input": 0.18,
-        "output": 0.18,
-        "cache_read": 0.018,
-        "cache_write": 0.18,
-    },
-    "qwen/qwen-2.5-72b": {
-        "input": 0.35,
-        "output": 0.40,
-        "cache_read": 0.035,
-        "cache_write": 0.35,
-    },
-    # ==========================================================================
-    # MiniMax (via OpenRouter)
-    # ==========================================================================
-    "minimax/minimax-m2": {
-        "input": 0.20,
-        "output": 1.00,
-        "cache_read": 0.02,
-        "cache_write": 0.20,
-    },
-    "minimax/minimax-m1": {
-        "input": 0.40,
-        "output": 2.20,
-        "cache_read": 0.04,
-        "cache_write": 0.40,
-    },
-    # ==========================================================================
-    # Legacy Anthropic models (for historical data)
-    # ==========================================================================
-    "claude-opus-4-20250514": {
-        "input": 15.0,
-        "output": 75.0,
-        "cache_read": 1.5,
-        "cache_write": 18.75,
-    },
-    "claude-sonnet-4-20250514": {
-        "input": 3.0,
-        "output": 15.0,
-        "cache_read": 0.3,
-        "cache_write": 3.75,
-    },
-    "claude-3-5-sonnet-20241022": {
-        "input": 3.0,
-        "output": 15.0,
-        "cache_read": 0.3,
-        "cache_write": 3.75,
-    },
-    "claude-3-5-haiku-20241022": {
-        "input": 0.8,
-        "output": 4.0,
-        "cache_read": 0.08,
-        "cache_write": 1.0,
-    },
-    "claude-3-opus-20240229": {
-        "input": 15.0,
-        "output": 75.0,
-        "cache_read": 1.5,
-        "cache_write": 18.75,
-    },
-    "claude-3-haiku-20240307": {
-        "input": 0.25,
-        "output": 1.25,
-        "cache_read": 0.03,
-        "cache_write": 0.30,
-    },
-    # ==========================================================================
-    # Short aliases for driver model strings
-    # ==========================================================================
-    "sonnet": {
-        "input": 3.0,
-        "output": 15.0,
-        "cache_read": 0.3,
-        "cache_write": 3.75,
-    },
-    "opus": {
-        "input": 5.0,
-        "output": 25.0,
-        "cache_read": 0.5,
-        "cache_write": 6.25,
-    },
-    "haiku": {
-        "input": 1.0,
-        "output": 5.0,
-        "cache_read": 0.1,
-        "cache_write": 1.25,
-    },
+class ModelPricing(BaseModel):
+    """Pricing rates per million tokens for a model."""
+
+    input: float
+    output: float
+    cache_read: float
+    cache_write: float
+
+
+# Static fallback pricing for Anthropic models used via direct API.
+# Only contains Anthropic models + short aliases (~12 entries).
+# Sources: https://www.anthropic.com/pricing (last updated: 2026-01-19)
+STATIC_FALLBACK_PRICING: dict[str, ModelPricing] = {
+    # Current generation (Claude 4.5)
+    "claude-opus-4-5-20251101": ModelPricing(
+        input=5.0, output=25.0, cache_read=0.5, cache_write=6.25
+    ),
+    "claude-sonnet-4-5-20251101": ModelPricing(
+        input=3.0, output=15.0, cache_read=0.3, cache_write=3.75
+    ),
+    "claude-haiku-4-5-20251101": ModelPricing(
+        input=1.0, output=5.0, cache_read=0.1, cache_write=1.25
+    ),
+    # Previous generation (Claude 4)
+    "claude-opus-4-20250514": ModelPricing(
+        input=15.0, output=75.0, cache_read=1.5, cache_write=18.75
+    ),
+    "claude-sonnet-4-20250514": ModelPricing(
+        input=3.0, output=15.0, cache_read=0.3, cache_write=3.75
+    ),
+    # Legacy models
+    "claude-3-5-sonnet-20241022": ModelPricing(
+        input=3.0, output=15.0, cache_read=0.3, cache_write=3.75
+    ),
+    "claude-3-5-haiku-20241022": ModelPricing(
+        input=0.8, output=4.0, cache_read=0.08, cache_write=1.0
+    ),
+    "claude-3-opus-20240229": ModelPricing(
+        input=15.0, output=75.0, cache_read=1.5, cache_write=18.75
+    ),
+    "claude-3-haiku-20240307": ModelPricing(
+        input=0.25, output=1.25, cache_read=0.03, cache_write=0.30
+    ),
+    # Short aliases (mapped to current-gen Anthropic pricing)
+    "sonnet": ModelPricing(input=3.0, output=15.0, cache_read=0.3, cache_write=3.75),
+    "opus": ModelPricing(input=5.0, output=25.0, cache_read=0.5, cache_write=6.25),
+    "haiku": ModelPricing(input=1.0, output=5.0, cache_read=0.1, cache_write=1.25),
 }
+
+# Module-level cache state
+_cached_pricing: dict[str, ModelPricing] = {}
+_cache_expires_at: float = 0.0
+_cache_lock: asyncio.Lock = asyncio.Lock()
+
+
+async def fetch_openrouter_pricing() -> dict[str, ModelPricing]:
+    """Fetch live model pricing from the OpenRouter API.
+
+    Returns:
+        Dict mapping model ID to ModelPricing. Empty dict on failure or missing API key.
+    """
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        return {}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                "https://openrouter.ai/api/v1/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        result: dict[str, ModelPricing] = {}
+        for model_entry in data.get("data", []):
+            model_id = model_entry.get("id")
+            pricing = model_entry.get("pricing")
+            if not model_id or not pricing:
+                continue
+
+            prompt_str = pricing.get("prompt")
+            completion_str = pricing.get("completion")
+            if not prompt_str or not completion_str:
+                continue
+
+            cache_read_str = pricing.get("cache_read")
+            cache_write_str = pricing.get("cache_write")
+
+            result[model_id] = ModelPricing(
+                input=float(prompt_str) * 1_000_000,
+                output=float(completion_str) * 1_000_000,
+                cache_read=float(cache_read_str) * 1_000_000 if cache_read_str else 0.0,
+                cache_write=float(cache_write_str) * 1_000_000 if cache_write_str else 0.0,
+            )
+
+        return result
+    except Exception as e:
+        logger.warning("Failed to fetch OpenRouter pricing", error=str(e))
+        return {}
+
+
+async def get_pricing(model: str) -> ModelPricing | None:
+    """Get pricing for a model, using cached live data or static fallback.
+
+    Uses double-checked locking to prevent concurrent fetches.
+
+    Args:
+        model: Model ID or short alias.
+
+    Returns:
+        ModelPricing if found, None otherwise.
+    """
+    global _cached_pricing, _cache_expires_at
+
+    # Fast path: cache is valid
+    if time.time() < _cache_expires_at:
+        if model in _cached_pricing:
+            return _cached_pricing[model]
+        return STATIC_FALLBACK_PRICING.get(model)
+
+    # Slow path: need to refresh cache
+    async with _cache_lock:
+        # Double-check inside lock
+        if time.time() < _cache_expires_at:
+            if model in _cached_pricing:
+                return _cached_pricing[model]
+            return STATIC_FALLBACK_PRICING.get(model)
+
+        # Fetch and update cache
+        new_pricing = await fetch_openrouter_pricing()
+        _cached_pricing = new_pricing
+        _cache_expires_at = time.time() + 86400  # 24-hour TTL
+
+    # Look up model in cached pricing, then static fallback
+    if model in _cached_pricing:
+        return _cached_pricing[model]
+    return STATIC_FALLBACK_PRICING.get(model)
 
 
 class TokenUsage(BaseModel):
@@ -267,14 +229,25 @@ class TokenSummary(BaseModel):
     breakdown: list[TokenUsage] = Field(default_factory=list)
 
 
-def calculate_token_cost(usage: TokenUsage) -> float:
+async def calculate_token_cost(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int = 0,
+    cache_creation_tokens: int = 0,
+) -> float:
     """Calculate USD cost for token usage with cache adjustments.
 
     Args:
-        usage: Token usage record with model and token counts.
+        model: Model ID or short alias.
+        input_tokens: Total input tokens (includes cache reads).
+        output_tokens: Output tokens generated.
+        cache_read_tokens: Subset of input from cache (discounted).
+        cache_creation_tokens: Tokens written to cache (premium rate).
 
     Returns:
         Total cost in USD, rounded to 6 decimal places (micro-dollars).
+        Returns 0.0 if no pricing data is found for the model.
 
     Formula:
         cost = (base_input * input_rate) + (cache_read * cache_read_rate)
@@ -282,17 +255,17 @@ def calculate_token_cost(usage: TokenUsage) -> float:
 
     Where base_input = input_tokens - cache_read_tokens (non-cached input).
     """
-    # Default to sonnet pricing if model unknown
-    rates = MODEL_PRICING.get(usage.model, MODEL_PRICING["claude-sonnet-4-5-20251101"])
+    rates = await get_pricing(model)
+    if rates is None:
+        return 0.0
 
-    # Cache reads are already included in input_tokens, so subtract them
-    base_input_tokens = usage.input_tokens - usage.cache_read_tokens
+    base_input_tokens = input_tokens - cache_read_tokens
 
     cost = (
-        (base_input_tokens * rates["input"] / 1_000_000)
-        + (usage.cache_read_tokens * rates["cache_read"] / 1_000_000)
-        + (usage.cache_creation_tokens * rates["cache_write"] / 1_000_000)
-        + (usage.output_tokens * rates["output"] / 1_000_000)
+        (base_input_tokens * rates.input / 1_000_000)
+        + (cache_read_tokens * rates.cache_read / 1_000_000)
+        + (cache_creation_tokens * rates.cache_write / 1_000_000)
+        + (output_tokens * rates.output / 1_000_000)
     )
 
     return round(cost, 6)
