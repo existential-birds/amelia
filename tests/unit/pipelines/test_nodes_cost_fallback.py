@@ -8,9 +8,13 @@ import pytest
 from amelia.pipelines.nodes import _save_token_usage
 
 
+_SENTINEL = object()
+
+
 def _make_driver(
     *,
     model: str = "claude-sonnet-4-5-20251101",
+    usage_model: object = _SENTINEL,
     input_tokens: int = 1000,
     output_tokens: int = 500,
     cache_read_tokens: int = 0,
@@ -19,9 +23,16 @@ def _make_driver(
     duration_ms: int = 100,
     num_turns: int = 1,
 ) -> MagicMock:
-    """Create a mock driver with a get_usage() method returning the given fields."""
+    """Create a mock driver with a get_usage() method returning the given fields.
+
+    Args:
+        model: The driver.model attribute (fallback when usage.model is falsy).
+        usage_model: The driver_usage.model value. Defaults to ``model`` when
+            not explicitly provided; pass ``None`` to simulate a driver that
+            doesn't report its model in usage.
+    """
     usage = MagicMock()
-    usage.model = model
+    usage.model = model if usage_model is _SENTINEL else usage_model
     usage.input_tokens = input_tokens
     usage.output_tokens = output_tokens
     usage.cache_read_tokens = cache_read_tokens
@@ -114,3 +125,67 @@ async def test_uses_driver_cost_when_provided(
     mock_calc.assert_not_called()
     saved = repository.save_token_usage.call_args[0][0]
     assert saved.cost_usd == 0.55
+
+
+async def test_falls_back_to_driver_model_when_usage_model_is_none(
+    workflow_id: uuid.UUID,
+    repository: AsyncMock,
+) -> None:
+    """When driver_usage.model is None, the fallback should use driver.model."""
+    driver = _make_driver(
+        model="claude-opus-4-20250514",
+        usage_model=None,
+        cost_usd=None,
+        input_tokens=500,
+        output_tokens=200,
+    )
+
+    with patch(
+        "amelia.pipelines.nodes.calculate_token_cost",
+        new_callable=AsyncMock,
+        return_value=0.03,
+    ) as mock_calc:
+        await _save_token_usage(driver, workflow_id, "developer", repository)
+
+    mock_calc.assert_called_once_with(
+        model="claude-opus-4-20250514",
+        input_tokens=500,
+        output_tokens=200,
+        cache_read_tokens=0,
+        cache_creation_tokens=0,
+    )
+    saved = repository.save_token_usage.call_args[0][0]
+    assert saved.model == "claude-opus-4-20250514"
+
+
+async def test_forwards_cache_tokens_to_calculate_token_cost(
+    workflow_id: uuid.UUID,
+    repository: AsyncMock,
+) -> None:
+    """Nonzero cache tokens should be forwarded to calculate_token_cost."""
+    driver = _make_driver(
+        cost_usd=None,
+        input_tokens=3000,
+        output_tokens=1000,
+        cache_read_tokens=800,
+        cache_creation_tokens=200,
+    )
+
+    with patch(
+        "amelia.pipelines.nodes.calculate_token_cost",
+        new_callable=AsyncMock,
+        return_value=0.065,
+    ) as mock_calc:
+        await _save_token_usage(driver, workflow_id, "reviewer", repository)
+
+    mock_calc.assert_called_once_with(
+        model="claude-sonnet-4-5-20251101",
+        input_tokens=3000,
+        output_tokens=1000,
+        cache_read_tokens=800,
+        cache_creation_tokens=200,
+    )
+    saved = repository.save_token_usage.call_args[0][0]
+    assert saved.cost_usd == 0.065
+    assert saved.cache_read_tokens == 800
+    assert saved.cache_creation_tokens == 200
