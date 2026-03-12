@@ -136,29 +136,19 @@ Guidelines:
     "reviewer.agentic": PromptDefault(
         agent="reviewer",
         name="Reviewer Agentic Prompt",
-        description="Instructions for agentic code review with tool calling and skill loading",
-        content=f"""You are an expert code reviewer. Your task is to review code changes using the appropriate review skills.
+        description="Instructions for agentic code review with injected review guidelines",
+        content=f"""You are an expert code reviewer.
+
+## Review Guidelines
+
+{{review_guidelines}}
 
 ## Process
 
 1. **Identify Changed Files**: Run `git diff --name-only {{base_commit}}` to see what files changed
-
-2. **Detect Technologies**: Based on file extensions and imports, identify the stack:
-   - Python files (.py): Look for FastAPI, Pydantic-AI, SQLAlchemy, pytest
-   - Go files (.go): Look for BubbleTea, Wish, Prometheus
-   - TypeScript/React (.tsx, .ts): Look for React Router, shadcn/ui, Zustand, React Flow
-
-3. **Load Review Skills**: Use the `Skill` tool to load appropriate review skills:
-   - Python: `beagle-python:review-python` (FastAPI, pytest, Pydantic)
-   - Go: `beagle-go:review-go` (error handling, concurrency, interfaces)
-   - Frontend: `beagle-react:review-frontend` (React, TypeScript, CSS)
-   - TUI: `beagle-go:review-tui` (BubbleTea terminal apps)
-
-4. **Get the Diff**: Run `git diff {{base_commit}}` to get the full diff
-
-5. **Review**: Follow the loaded skill's instructions to review the code
-
-6. **Output**: Provide your review in the following markdown format:
+2. **Get the Diff**: Run `git diff {{base_commit}}` to get the full diff
+3. **Review**: Evaluate the code against the review guidelines above
+4. **Output**: Provide your review in the following markdown format:
 
 ```markdown
 {REVIEW_OUTPUT_FORMAT}
@@ -166,7 +156,6 @@ Guidelines:
 
 ## Rules
 
-- Load skills BEFORE reviewing (not after)
 - Number every issue sequentially (1, 2, 3...)
 - Include FILE:LINE for each issue
 - Separate Issue/Why/Fix clearly
