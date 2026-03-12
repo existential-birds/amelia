@@ -36,6 +36,7 @@ from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
     DriverInterface,
+    DriverUsage,
 )
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.profile_repository import ProfileRepository
@@ -275,6 +276,32 @@ class BrainstormerFilesystemMiddleware(FilesystemMiddleware):
             self._create_grep_tool(),
             _write_design_doc_tool_generator(self),
         ]
+
+
+async def _build_message_usage(driver_usage: DriverUsage) -> MessageUsage:
+    """Build MessageUsage from driver usage, computing cost if needed.
+
+    When the driver doesn't provide cost_usd, falls back to
+    calculate_token_cost using cached pricing data. Requires
+    driver_usage.model to be set for the fallback to activate.
+    """
+    cost = driver_usage.cost_usd or 0.0
+
+    # Compute cost from cached pricing if driver didn't provide it
+    if not cost and driver_usage.model:
+        cost = await calculate_token_cost(
+            model=driver_usage.model,
+            input_tokens=driver_usage.input_tokens or 0,
+            output_tokens=driver_usage.output_tokens or 0,
+            cache_read_tokens=driver_usage.cache_read_tokens or 0,
+            cache_creation_tokens=driver_usage.cache_creation_tokens or 0,
+        )
+
+    return MessageUsage(
+        input_tokens=driver_usage.input_tokens or 0,
+        output_tokens=driver_usage.output_tokens or 0,
+        cost_usd=cost,
+    )
 
 
 class BrainstormService:
@@ -695,23 +722,7 @@ class BrainstormService:
             message_usage: MessageUsage | None = None
             driver_usage = driver.get_usage()
             if driver_usage:
-                cost = driver_usage.cost_usd or 0.0
-
-                # Compute cost from cached pricing if driver didn't provide it
-                if not cost and driver_usage.model:
-                    cost = await calculate_token_cost(
-                        model=driver_usage.model,
-                        input_tokens=driver_usage.input_tokens or 0,
-                        output_tokens=driver_usage.output_tokens or 0,
-                        cache_read_tokens=driver_usage.cache_read_tokens or 0,
-                        cache_creation_tokens=driver_usage.cache_creation_tokens or 0,
-                    )
-
-                message_usage = MessageUsage(
-                    input_tokens=driver_usage.input_tokens or 0,
-                    output_tokens=driver_usage.output_tokens or 0,
-                    cost_usd=cost,
-                )
+                message_usage = await _build_message_usage(driver_usage)
 
             # Save assistant message
             assistant_sequence = user_sequence + 1
