@@ -213,6 +213,85 @@ class TestFetchOpenRouterPricing:
         assert model.cache_read == 0.0
         assert model.cache_write == 0.0
 
+    async def test_free_model_with_zero_price_string(self) -> None:
+        """Models with price "0" are included (not skipped as falsy)."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "data": [
+                {
+                    "id": "free/model",
+                    "pricing": {
+                        "prompt": "0",
+                        "completion": "0",
+                    },
+                },
+            ]
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}),
+            patch("amelia.server.models.tokens.httpx.AsyncClient", return_value=mock_client),
+        ):
+            result = await fetch_openrouter_pricing()
+
+        assert "free/model" in result
+        free = result["free/model"]
+        assert free.input == 0.0
+        assert free.output == 0.0
+
+    async def test_malformed_entry_skipped_without_discarding_others(self) -> None:
+        """One malformed entry doesn't discard all pricing data."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "data": [
+                {
+                    "id": "good/model",
+                    "pricing": {
+                        "prompt": "0.000003",
+                        "completion": "0.000015",
+                    },
+                },
+                {
+                    "id": "bad/model",
+                    "pricing": {
+                        "prompt": "not-a-number",
+                        "completion": "0.000015",
+                    },
+                },
+                {
+                    "id": "also-good/model",
+                    "pricing": {
+                        "prompt": "0.000001",
+                        "completion": "0.000002",
+                    },
+                },
+            ]
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}),
+            patch("amelia.server.models.tokens.httpx.AsyncClient", return_value=mock_client),
+        ):
+            result = await fetch_openrouter_pricing()
+
+        assert "good/model" in result
+        assert "also-good/model" in result
+        assert "bad/model" not in result
+
     async def test_network_error_returns_empty_dict(self) -> None:
         """On network error, returns empty dict and logs warning."""
         mock_client = AsyncMock()
@@ -237,7 +316,7 @@ class TestGetPricing:
 
         tokens_mod._cached_pricing = {}
         tokens_mod._cache_expires_at = 0.0
-        tokens_mod._cache_lock = asyncio.Lock()
+        tokens_mod._cache_lock = None
 
     async def test_returns_static_fallback_when_fetch_fails(self) -> None:
         """When fetch fails, static fallback pricing is used."""
@@ -362,7 +441,7 @@ class TestCalculateTokenCost:
 
         tokens_mod._cached_pricing = {}
         tokens_mod._cache_expires_at = 0.0
-        tokens_mod._cache_lock = asyncio.Lock()
+        tokens_mod._cache_lock = None
 
     async def test_basic_cost(self) -> None:
         """Cost calculation for basic input/output tokens."""

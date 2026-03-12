@@ -64,7 +64,15 @@ STATIC_FALLBACK_PRICING: dict[str, ModelPricing] = {
 # Module-level cache state
 _cached_pricing: dict[str, ModelPricing] = {}
 _cache_expires_at: float = 0.0
-_cache_lock: asyncio.Lock = asyncio.Lock()
+_cache_lock: asyncio.Lock | None = None
+
+
+def _get_cache_lock() -> asyncio.Lock:
+    """Lazily create the cache lock to avoid deprecation on module import."""
+    global _cache_lock
+    if _cache_lock is None:
+        _cache_lock = asyncio.Lock()
+    return _cache_lock
 
 
 async def fetch_openrouter_pricing() -> dict[str, ModelPricing]:
@@ -88,25 +96,28 @@ async def fetch_openrouter_pricing() -> dict[str, ModelPricing]:
 
         result: dict[str, ModelPricing] = {}
         for model_entry in data.get("data", []):
-            model_id = model_entry.get("id")
-            pricing = model_entry.get("pricing")
-            if not model_id or not pricing:
-                continue
+            try:
+                model_id = model_entry.get("id")
+                pricing = model_entry.get("pricing")
+                if not model_id or not pricing:
+                    continue
 
-            prompt_str = pricing.get("prompt")
-            completion_str = pricing.get("completion")
-            if not prompt_str or not completion_str:
-                continue
+                prompt_str = pricing.get("prompt")
+                completion_str = pricing.get("completion")
+                if prompt_str is None or completion_str is None:
+                    continue
 
-            cache_read_str = pricing.get("cache_read")
-            cache_write_str = pricing.get("cache_write")
+                cache_read_str = pricing.get("cache_read")
+                cache_write_str = pricing.get("cache_write")
 
-            result[model_id] = ModelPricing(
-                input=float(prompt_str) * 1_000_000,
-                output=float(completion_str) * 1_000_000,
-                cache_read=float(cache_read_str) * 1_000_000 if cache_read_str else 0.0,
-                cache_write=float(cache_write_str) * 1_000_000 if cache_write_str else 0.0,
-            )
+                result[model_id] = ModelPricing(
+                    input=float(prompt_str) * 1_000_000,
+                    output=float(completion_str) * 1_000_000,
+                    cache_read=float(cache_read_str) * 1_000_000 if cache_read_str else 0.0,
+                    cache_write=float(cache_write_str) * 1_000_000 if cache_write_str else 0.0,
+                )
+            except (ValueError, KeyError, TypeError):
+                continue  # skip malformed entries
 
         return result
     except Exception as e:
@@ -134,7 +145,7 @@ async def get_pricing(model: str) -> ModelPricing | None:
         return STATIC_FALLBACK_PRICING.get(model)
 
     # Slow path: need to refresh cache
-    async with _cache_lock:
+    async with _get_cache_lock():
         # Double-check inside lock
         if time.time() < _cache_expires_at:
             if model in _cached_pricing:
