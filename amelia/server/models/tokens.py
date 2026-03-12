@@ -113,11 +113,12 @@ async def fetch_openrouter_pricing() -> dict[str, ModelPricing]:
                 result[model_id] = ModelPricing(
                     input=float(prompt_str) * 1_000_000,
                     output=float(completion_str) * 1_000_000,
-                    cache_read=float(cache_read_str) * 1_000_000 if cache_read_str else 0.0,
-                    cache_write=float(cache_write_str) * 1_000_000 if cache_write_str else 0.0,
+                    cache_read=float(cache_read_str) * 1_000_000 if cache_read_str is not None else 0.0,
+                    cache_write=float(cache_write_str) * 1_000_000 if cache_write_str is not None else 0.0,
                 )
             except (ValueError, KeyError, TypeError):
-                continue  # skip malformed entries
+                logger.debug("Skipping malformed pricing entry", model_id=model_entry.get("id"))
+                continue
 
         return result
     except Exception as e:
