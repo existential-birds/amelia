@@ -316,7 +316,7 @@ class TestGetPricing:
 
         tokens_mod._cached_pricing = {}
         tokens_mod._cache_expires_at = 0.0
-        tokens_mod._cache_lock = None
+        tokens_mod._cache_lock = asyncio.Lock()
 
     async def test_returns_static_fallback_when_fetch_fails(self) -> None:
         """When fetch fails, static fallback pricing is used."""
@@ -441,7 +441,7 @@ class TestCalculateTokenCost:
 
         tokens_mod._cached_pricing = {}
         tokens_mod._cache_expires_at = 0.0
-        tokens_mod._cache_lock = None
+        tokens_mod._cache_lock = asyncio.Lock()
 
     async def test_basic_cost(self) -> None:
         """Cost calculation for basic input/output tokens."""

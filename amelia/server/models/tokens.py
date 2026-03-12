@@ -64,15 +64,7 @@ STATIC_FALLBACK_PRICING: dict[str, ModelPricing] = {
 # Module-level cache state
 _cached_pricing: dict[str, ModelPricing] = {}
 _cache_expires_at: float = 0.0
-_cache_lock: asyncio.Lock | None = None
-
-
-def _get_cache_lock() -> asyncio.Lock:
-    """Lazily create the cache lock to avoid deprecation on module import."""
-    global _cache_lock
-    if _cache_lock is None:
-        _cache_lock = asyncio.Lock()
-    return _cache_lock
+_cache_lock: asyncio.Lock = asyncio.Lock()
 
 
 async def fetch_openrouter_pricing() -> dict[str, ModelPricing]:
@@ -146,7 +138,7 @@ async def get_pricing(model: str) -> ModelPricing | None:
         return STATIC_FALLBACK_PRICING.get(model)
 
     # Slow path: need to refresh cache
-    async with _get_cache_lock():
+    async with _cache_lock:
         # Double-check inside lock
         if time.time() < _cache_expires_at:
             if model in _cached_pricing:
