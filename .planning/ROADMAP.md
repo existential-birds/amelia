@@ -35,11 +35,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A `PRAutoFixConfig` model validates and provides defaults for all configuration fields (aggressiveness, polling interval, auto-resolve, max iterations, commit prefix)
   4. An `AggressivenessLevel` enum defines exactly three levels: critical, standard, thorough
   5. Configuration is loadable per-profile with per-PR override capability
-**Plans:** 2 plans
+**Plans:** 3 plans
 
 Plans:
 - [ ] 01-01-PLAN.md -- TDD: PR auto-fix Pydantic models and AggressivenessLevel enum
 - [ ] 01-02-PLAN.md -- Database integration: migration, repository, API routes, server settings
+- [ ] 01-03-PLAN.md -- Gap closure: fix nullable pr_autofix update via model_fields_set
 
 ### Phase 2: GitHub API Layer
 **Goal**: The system can fetch PR data from GitHub and perform git operations, providing the I/O foundation for the fix pipeline
@@ -193,7 +194,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7/8 (parallel) ->
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Data Models & Configuration | 0/2 | Not started | - |
+| 1. Data Models & Configuration | 2/3 | In progress | - |
 | 2. GitHub API Layer | 0/3 | Not started | - |
 | 3. Comment Classification | 0/2 | Not started | - |
 | 4. Core Fix Pipeline | 0/3 | Not started | - |
