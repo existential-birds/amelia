@@ -58,9 +58,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Configuration
 
-- [ ] **CONF-01**: `PRAutoFixConfig` Pydantic model with aggressiveness, polling interval, auto-resolve, max iterations, commit prefix
-- [ ] **CONF-02**: Fix aggressiveness is configurable per-profile (default: standard)
-- [ ] **CONF-03**: Fix aggressiveness can be overridden per-PR when triggering manually
+- [x] **CONF-01**: `PRAutoFixConfig` Pydantic model with aggressiveness, polling interval, auto-resolve, max iterations, commit prefix
+- [x] **CONF-02**: Fix aggressiveness is configurable per-profile (default: standard)
+- [x] **CONF-03**: Fix aggressiveness can be overridden per-PR when triggering manually
 - [ ] **CONF-04**: PR polling can be enabled/disabled globally via server settings
 
 ### Events & Dashboard
@@ -73,10 +73,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Data Models
 
-- [ ] **DATA-01**: `PRSummary` Pydantic model (number, title, head_branch, author, updated_at)
-- [ ] **DATA-02**: `PRReviewComment` Pydantic model (id, thread_id, pr_number, path, line, body, author, created_at, in_reply_to_id, diff_hunk)
-- [ ] **DATA-03**: `PRAutoFixConfig` Pydantic model (enabled, poll_interval, auto_resolve, max_iterations, commit_prefix, aggressiveness)
-- [ ] **DATA-04**: `AggressivenessLevel` enum (critical, standard, thorough, exemplary)
+- [x] **DATA-01**: `PRSummary` Pydantic model (number, title, head_branch, author, updated_at)
+- [x] **DATA-02**: `PRReviewComment` Pydantic model (id, thread_id, pr_number, path, line, body, author, created_at, in_reply_to_id, diff_hunk)
+- [x] **DATA-03**: `PRAutoFixConfig` Pydantic model (enabled, poll_interval, auto_resolve, max_iterations, commit_prefix, aggressiveness)
+- [x] **DATA-04**: `AggressivenessLevel` enum (critical, standard, thorough, exemplary)
 
 ### Git Operations
 
@@ -134,13 +134,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DATA-01 | Phase 1 | Pending |
-| DATA-02 | Phase 1 | Pending |
-| DATA-03 | Phase 1 | Pending |
-| DATA-04 | Phase 1 | Pending |
-| CONF-01 | Phase 1 | Pending |
-| CONF-02 | Phase 1 | Pending |
-| CONF-03 | Phase 1 | Pending |
+| DATA-01 | Phase 1 | Complete |
+| DATA-02 | Phase 1 | Complete |
+| DATA-03 | Phase 1 | Complete |
+| DATA-04 | Phase 1 | Complete |
+| CONF-01 | Phase 1 | Complete |
+| CONF-02 | Phase 1 | Complete |
+| CONF-03 | Phase 1 | Complete |
 | CONF-04 | Phase 1 | Pending |
 | GHAPI-01 | Phase 2 | Pending |
 | GHAPI-02 | Phase 2 | Pending |
