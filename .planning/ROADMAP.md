@@ -33,13 +33,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. A `PRSummary` model can represent any GitHub PR with number, title, head branch, author, and timestamps
   2. A `PRReviewComment` model can represent any inline or general review comment with all GitHub metadata (thread ID, path, line, diff hunk)
   3. A `PRAutoFixConfig` model validates and provides defaults for all configuration fields (aggressiveness, polling interval, auto-resolve, max iterations, commit prefix)
-  4. An `AggressivenessLevel` enum defines exactly four levels: critical, standard, thorough, exemplary
+  4. An `AggressivenessLevel` enum defines exactly three levels: critical, standard, thorough
   5. Configuration is loadable per-profile with per-PR override capability
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md -- TDD: PR auto-fix Pydantic models and AggressivenessLevel enum
+- [ ] 01-02-PLAN.md -- Database integration: migration, repository, API routes, server settings
 
 ### Phase 2: GitHub API Layer
 **Goal**: The system can fetch PR data from GitHub and perform git operations, providing the I/O foundation for the fix pipeline
