@@ -11,6 +11,7 @@ from amelia.core.types import (
     REQUIRED_AGENTS,
     AgentConfig,
     DriverType,
+    PRAutoFixConfig,
     Profile,
     SandboxConfig,
     TrackerType,
@@ -37,6 +38,7 @@ class ServerSettingsResponse(BaseModel):
     websocket_idle_timeout_seconds: float
     workflow_start_timeout_seconds: float
     max_concurrent: int
+    pr_polling_enabled: bool
 
 
 class ServerSettingsUpdate(BaseModel):
@@ -47,6 +49,7 @@ class ServerSettingsUpdate(BaseModel):
     websocket_idle_timeout_seconds: float | None = None
     workflow_start_timeout_seconds: float | None = None
     max_concurrent: int | None = None
+    pr_polling_enabled: bool | None = None
 
 
 class AgentConfigResponse(BaseModel):
@@ -71,6 +74,7 @@ class ProfileResponse(BaseModel):
     plan_path_pattern: str
     agents: dict[str, AgentConfigResponse]
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
+    pr_autofix: PRAutoFixConfig | None = None
     is_active: bool = False
 
 
@@ -95,6 +99,7 @@ class ProfileCreate(BaseModel):
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
     agents: dict[str, AgentConfigCreate]
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
+    pr_autofix: PRAutoFixConfig | None = None
 
     @field_validator("repo_root", mode="after")
     @classmethod
@@ -132,6 +137,7 @@ class ProfileUpdate(BaseModel):
     plan_path_pattern: str | None = None
     agents: dict[str, AgentConfigCreate] | None = None
     sandbox: SandboxConfig | None = None
+    pr_autofix: PRAutoFixConfig | None = None
 
     @field_validator("repo_root", mode="after")
     @classmethod
@@ -173,6 +179,7 @@ async def get_server_settings(
         websocket_idle_timeout_seconds=settings.websocket_idle_timeout_seconds,
         workflow_start_timeout_seconds=settings.workflow_start_timeout_seconds,
         max_concurrent=settings.max_concurrent,
+        pr_polling_enabled=settings.pr_polling_enabled,
     )
 
 
@@ -190,6 +197,7 @@ async def update_server_settings(
         websocket_idle_timeout_seconds=settings.websocket_idle_timeout_seconds,
         workflow_start_timeout_seconds=settings.workflow_start_timeout_seconds,
         max_concurrent=settings.max_concurrent,
+        pr_polling_enabled=settings.pr_polling_enabled,
     )
 
 
@@ -229,6 +237,7 @@ async def create_profile(
         plan_path_pattern=profile_req.plan_path_pattern,
         agents=agents,
         sandbox=profile_req.sandbox,
+        pr_autofix=profile_req.pr_autofix,
     )
 
     try:
@@ -281,6 +290,10 @@ async def update_profile(
     # Handle sandbox field - pass as dict for JSONB storage
     if updates.sandbox is not None:
         update_dict["sandbox"] = updates.sandbox.model_dump()
+
+    # Handle pr_autofix field - pass as dict for JSONB storage or None to disable
+    if updates.pr_autofix is not None:
+        update_dict["pr_autofix"] = updates.pr_autofix.model_dump()
 
     try:
         updated = await repo.update_profile(profile_id, update_dict)
@@ -343,5 +356,6 @@ def _profile_to_response(profile: Profile, is_active: bool = False) -> ProfileRe
             for name, config in profile.agents.items()
         },
         sandbox=profile.sandbox,
+        pr_autofix=profile.pr_autofix,
         is_active=is_active,
     )
