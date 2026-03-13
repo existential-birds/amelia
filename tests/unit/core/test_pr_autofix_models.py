@@ -1,6 +1,6 @@
 """Tests for PR auto-fix data models: AggressivenessLevel, PRSummary, PRReviewComment, PRAutoFixConfig."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -8,9 +8,9 @@ from pydantic import ValidationError
 from amelia.core.types import (
     AggressivenessLevel,
     PRAutoFixConfig,
+    Profile,
     PRReviewComment,
     PRSummary,
-    Profile,
     TrackerType,
 )
 
@@ -48,7 +48,7 @@ class TestPRSummary:
             title="Fix bug in auth",
             head_branch="fix/auth-bug",
             author="octocat",
-            updated_at=datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC),
         )
 
     def test_all_fields_required(self, pr_summary: PRSummary) -> None:
@@ -56,7 +56,7 @@ class TestPRSummary:
         assert pr_summary.title == "Fix bug in auth"
         assert pr_summary.head_branch == "fix/auth-bug"
         assert pr_summary.author == "octocat"
-        assert pr_summary.updated_at == datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        assert pr_summary.updated_at == datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
 
     def test_immutable(self, pr_summary: PRSummary) -> None:
         with pytest.raises(ValidationError):
@@ -81,7 +81,7 @@ class TestPRReviewComment:
             id=101,
             body="Looks good overall",
             author="reviewer1",
-            created_at=datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC),
         )
 
     @pytest.fixture()
@@ -90,7 +90,7 @@ class TestPRReviewComment:
             id=102,
             body="Use a constant here",
             author="reviewer2",
-            created_at=datetime(2026, 1, 15, 13, 0, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 1, 15, 13, 0, 0, tzinfo=UTC),
             path="src/auth.py",
             line=42,
             diff_hunk="@@ -40,3 +40,5 @@\n some code",
