@@ -18,7 +18,7 @@ from amelia.agents.reviewer import Reviewer
 from amelia.core.types import ReviewResult
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.utils import extract_config_params
-from amelia.server.models.tokens import TokenUsage
+from amelia.server.models.tokens import TokenUsage, calculate_token_cost
 from amelia.skills.review import REVIEW_TYPE_SKILLS, detect_stack, load_skills
 from amelia.tools.git_utils import get_current_commit
 
@@ -152,6 +152,19 @@ async def _save_token_usage(
         return
 
     try:
+        cost = driver_usage.cost_usd or 0.0
+
+        # Compute cost from cached pricing if driver didn't provide it
+        if not cost:
+            model = driver_usage.model or getattr(driver, "model", "unknown")
+            cost = await calculate_token_cost(
+                model=model,
+                input_tokens=driver_usage.input_tokens or 0,
+                output_tokens=driver_usage.output_tokens or 0,
+                cache_read_tokens=driver_usage.cache_read_tokens or 0,
+                cache_creation_tokens=driver_usage.cache_creation_tokens or 0,
+            )
+
         usage = TokenUsage(
             workflow_id=workflow_id,
             agent=agent,
@@ -160,7 +173,7 @@ async def _save_token_usage(
             output_tokens=driver_usage.output_tokens or 0,
             cache_read_tokens=driver_usage.cache_read_tokens or 0,
             cache_creation_tokens=driver_usage.cache_creation_tokens or 0,
-            cost_usd=driver_usage.cost_usd or 0.0,
+            cost_usd=cost,
             duration_ms=driver_usage.duration_ms or 0,
             num_turns=driver_usage.num_turns or 1,
             timestamp=datetime.now(UTC),
