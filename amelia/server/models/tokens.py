@@ -266,7 +266,7 @@ async def calculate_token_cost(
     if rates is None:
         return 0.0
 
-    base_input_tokens = input_tokens - cache_read_tokens
+    base_input_tokens = max(input_tokens - cache_read_tokens, 0)
 
     cost = (
         (base_input_tokens * rates.input / 1_000_000)
