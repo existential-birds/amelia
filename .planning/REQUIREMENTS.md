@@ -80,10 +80,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Git Operations
 
-- [ ] **GIT-01**: Utility to stage all changes and commit with a message
-- [ ] **GIT-02**: Utility to push current branch to origin
-- [ ] **GIT-03**: Pull-before-push discipline to prevent overwriting human work
-- [ ] **GIT-04**: SHA verification against remote before pushing
+- [x] **GIT-01**: Utility to stage all changes and commit with a message
+- [x] **GIT-02**: Utility to push current branch to origin
+- [x] **GIT-03**: Pull-before-push discipline to prevent overwriting human work
+- [x] **GIT-04**: SHA verification against remote before pushing
 
 ### Metrics & Benchmarking
 
@@ -147,10 +147,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GHAPI-03 | Phase 2 | Pending |
 | GHAPI-04 | Phase 2 | Pending |
 | GHAPI-05 | Phase 2 | Pending |
-| GIT-01 | Phase 2 | Pending |
-| GIT-02 | Phase 2 | Pending |
-| GIT-03 | Phase 2 | Pending |
-| GIT-04 | Phase 2 | Pending |
+| GIT-01 | Phase 2 | Complete |
+| GIT-02 | Phase 2 | Complete |
+| GIT-03 | Phase 2 | Complete |
+| GIT-04 | Phase 2 | Complete |
 | CMNT-01 | Phase 3 | Pending |
 | CMNT-02 | Phase 3 | Pending |
 | CMNT-03 | Phase 3 | Pending |
