@@ -14,6 +14,10 @@ from amelia.server.dependencies import get_config
 from amelia.server.main import app, lifespan
 
 
+async def _noop_async() -> None:
+    """No-op async function used as a stand-in for proxy_cleanup in tests."""
+
+
 @pytest.mark.integration
 class TestServerStartup:
     """Integration tests for full server startup."""
@@ -91,12 +95,14 @@ class TestLifespanStartup:
         """Lifespan picks up AMELIA_DATABASE_URL from environment."""
         database_url = os.environ.get(
             "DATABASE_URL",
-            "postgresql://amelia:amelia@localhost:5432/amelia_test",
+            "postgresql://amelia:amelia@localhost:5434/amelia_test",
         )
 
         with patch.dict(os.environ, {"AMELIA_DATABASE_URL": database_url}):
             # Create a fresh app for this test
             test_app = FastAPI(lifespan=lifespan)
+            # Lifespan expects proxy_cleanup (normally set by create_app)
+            test_app.state.proxy_cleanup = _noop_async
 
             # Run the lifespan — connects to PostgreSQL
             async with lifespan(test_app):
@@ -110,6 +116,8 @@ class TestLifespanStartup:
         deps_module._config = None
 
         test_app = FastAPI(lifespan=lifespan)
+        # Lifespan expects proxy_cleanup (normally set by create_app)
+        test_app.state.proxy_cleanup = _noop_async
 
         async with lifespan(test_app):
             # Config should be available during lifespan

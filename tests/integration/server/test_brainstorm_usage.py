@@ -12,16 +12,20 @@ Real components:
 
 Only mocked:
 - Driver (execute_agentic as async generator, get_usage returns DriverUsage)
+
+Uses httpx.AsyncClient with ASGITransport to keep the ASGI app in the
+same event loop as the asyncpg pool (TestClient creates a separate thread
+with its own event loop, causing asyncpg event loop mismatches).
 """
 
+import os
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
-from fastapi.testclient import TestClient
+from fastapi import FastAPI
 
 from amelia.drivers.base import (
     AgenticMessage,
@@ -32,6 +36,7 @@ from amelia.drivers.base import (
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.connection import Database
 from amelia.server.database.migrator import Migrator
+from amelia.server.dependencies import get_orchestrator, get_profile_repository
 from amelia.server.events.bus import EventBus
 from amelia.server.main import create_app
 from amelia.server.routes.brainstorm import (
@@ -42,8 +47,13 @@ from amelia.server.routes.brainstorm import (
 from amelia.server.services.brainstorm import BrainstormService
 from tests.conftest import create_mock_execute_agentic
 
+from .conftest import noop_lifespan
 
-DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
+
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://amelia:amelia@localhost:5434/amelia_test",
+)
 
 
 # =============================================================================
@@ -102,24 +112,31 @@ def create_mock_driver_with_usage(
     return driver
 
 
-def create_test_client(
+def _create_app_with_overrides(
     service: BrainstormService,
     driver: MagicMock,
-    tmp_path: Path,
-) -> TestClient:
-    """Create test client with real service and mock driver."""
+    cwd: str,
+) -> FastAPI:
+    """Create FastAPI app with noop lifespan and dependency overrides."""
     app = create_app()
-
-    @asynccontextmanager
-    async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-        yield
 
     app.router.lifespan_context = noop_lifespan
     app.dependency_overrides[get_brainstorm_service] = lambda: service
     app.dependency_overrides[get_driver] = lambda: driver
-    app.dependency_overrides[get_cwd] = lambda: str(tmp_path)
+    app.dependency_overrides[get_cwd] = lambda: cwd
 
-    return TestClient(app)
+    # Override dependencies that would otherwise require the database lifespan
+    mock_profile_repo = AsyncMock()
+    mock_profile_repo.get_profile = AsyncMock(return_value=None)
+    app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
+
+    mock_orch = MagicMock()
+    mock_orch.queue_workflow = AsyncMock(
+        return_value="00000000-0000-4000-8000-000000000001"
+    )
+    app.dependency_overrides[get_orchestrator] = lambda: mock_orch
+
+    return app
 
 
 # =============================================================================
@@ -131,7 +148,7 @@ def create_test_client(
 class TestMessageUsageFromDriver:
     """Test that driver usage is correctly persisted with messages."""
 
-    def test_message_usage_persists_from_driver(
+    async def test_message_usage_persists_from_driver(
         self,
         test_brainstorm_service: BrainstormService,
         tmp_path: Path,
@@ -155,42 +172,50 @@ class TestMessageUsageFromDriver:
             cost_usd=0.05,
         )
         mock_driver = create_mock_driver_with_usage(messages, usage)
-        client = create_test_client(test_brainstorm_service, mock_driver, tmp_path)
-
-        # Create session
-        create_resp = client.post(
-            "/api/brainstorm/sessions",
-            json={"profile_id": "test", "topic": "Architecture review"},
+        app = _create_app_with_overrides(
+            test_brainstorm_service, mock_driver, str(tmp_path)
         )
-        assert create_resp.status_code == 201
-        session_id = create_resp.json()["session"]["id"]
 
-        # Send message
-        msg_resp = client.post(
-            f"/api/brainstorm/sessions/{session_id}/message",
-            json={"content": "Review the current architecture"},
-        )
-        assert msg_resp.status_code == 202
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            # Create session
+            create_resp = await client.post(
+                "/api/brainstorm/sessions",
+                json={"profile_id": "test", "topic": "Architecture review"},
+            )
+            assert create_resp.status_code == 201
+            session_id = create_resp.json()["session"]["id"]
 
-        # Verify usage is persisted
-        get_resp = client.get(f"/api/brainstorm/sessions/{session_id}")
-        assert get_resp.status_code == 200
-        data = get_resp.json()
+            # Send message
+            msg_resp = await client.post(
+                f"/api/brainstorm/sessions/{session_id}/message",
+                json={"content": "Review the current architecture"},
+            )
+            assert msg_resp.status_code == 202
 
-        # Find assistant message
-        messages_data = data["messages"]
-        assistant_msg = next(
-            (m for m in messages_data if m["role"] == "assistant"), None
-        )
-        assert assistant_msg is not None
+            # Verify usage is persisted
+            get_resp = await client.get(
+                f"/api/brainstorm/sessions/{session_id}"
+            )
+            assert get_resp.status_code == 200
+            data = get_resp.json()
 
-        # Verify usage data
-        assert assistant_msg["usage"] is not None
-        assert assistant_msg["usage"]["input_tokens"] == 1500
-        assert assistant_msg["usage"]["output_tokens"] == 800
-        assert assistant_msg["usage"]["cost_usd"] == 0.05
+            # Find assistant message
+            messages_data = data["messages"]
+            assistant_msg = next(
+                (m for m in messages_data if m["role"] == "assistant"), None
+            )
+            assert assistant_msg is not None
 
-    def test_message_without_usage_has_null_usage(
+            # Verify usage data
+            assert assistant_msg["usage"] is not None
+            assert assistant_msg["usage"]["input_tokens"] == 1500
+            assert assistant_msg["usage"]["output_tokens"] == 800
+            assert assistant_msg["usage"]["cost_usd"] == 0.05
+
+    async def test_message_without_usage_has_null_usage(
         self,
         test_brainstorm_service: BrainstormService,
         tmp_path: Path,
@@ -205,39 +230,47 @@ class TestMessageUsageFromDriver:
             ),
         ]
         mock_driver = create_mock_driver_with_usage(messages, usage=None)
-        client = create_test_client(test_brainstorm_service, mock_driver, tmp_path)
-
-        # Create session and send message
-        create_resp = client.post(
-            "/api/brainstorm/sessions",
-            json={"profile_id": "test"},
+        app = _create_app_with_overrides(
+            test_brainstorm_service, mock_driver, str(tmp_path)
         )
-        assert create_resp.status_code == 201
-        session_id = create_resp.json()["session"]["id"]
 
-        msg_resp = client.post(
-            f"/api/brainstorm/sessions/{session_id}/message",
-            json={"content": "Hello"},
-        )
-        assert msg_resp.status_code == 202
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            # Create session and send message
+            create_resp = await client.post(
+                "/api/brainstorm/sessions",
+                json={"profile_id": "test"},
+            )
+            assert create_resp.status_code == 201
+            session_id = create_resp.json()["session"]["id"]
 
-        # Verify message is saved with null usage
-        get_resp = client.get(f"/api/brainstorm/sessions/{session_id}")
-        assert get_resp.status_code == 200
-        data = get_resp.json()
+            msg_resp = await client.post(
+                f"/api/brainstorm/sessions/{session_id}/message",
+                json={"content": "Hello"},
+            )
+            assert msg_resp.status_code == 202
 
-        assistant_msg = next(
-            (m for m in data["messages"] if m["role"] == "assistant"), None
-        )
-        assert assistant_msg is not None
-        assert assistant_msg["usage"] is None
+            # Verify message is saved with null usage
+            get_resp = await client.get(
+                f"/api/brainstorm/sessions/{session_id}"
+            )
+            assert get_resp.status_code == 200
+            data = get_resp.json()
+
+            assistant_msg = next(
+                (m for m in data["messages"] if m["role"] == "assistant"), None
+            )
+            assert assistant_msg is not None
+            assert assistant_msg["usage"] is None
 
 
 @pytest.mark.integration
 class TestSessionUsageSummary:
     """Test session-level usage aggregation."""
 
-    def test_session_usage_summary_aggregates_across_messages(
+    async def test_session_usage_summary_aggregates_across_messages(
         self,
         test_brainstorm_service: BrainstormService,
         tmp_path: Path,
@@ -257,22 +290,28 @@ class TestSessionUsageSummary:
             cost_usd=0.03,
         )
         mock_driver1 = create_mock_driver_with_usage(messages1, usage1)
-        client1 = create_test_client(test_brainstorm_service, mock_driver1, tmp_path)
-
-        # Create session
-        create_resp = client1.post(
-            "/api/brainstorm/sessions",
-            json={"profile_id": "test", "topic": "Multi-turn conversation"},
+        app1 = _create_app_with_overrides(
+            test_brainstorm_service, mock_driver1, str(tmp_path)
         )
-        assert create_resp.status_code == 201
-        session_id = create_resp.json()["session"]["id"]
 
-        # Send first message
-        msg_resp1 = client1.post(
-            f"/api/brainstorm/sessions/{session_id}/message",
-            json={"content": "First question"},
-        )
-        assert msg_resp1.status_code == 202
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app1),
+            base_url="http://testserver",
+        ) as client1:
+            # Create session
+            create_resp = await client1.post(
+                "/api/brainstorm/sessions",
+                json={"profile_id": "test", "topic": "Multi-turn conversation"},
+            )
+            assert create_resp.status_code == 201
+            session_id = create_resp.json()["session"]["id"]
+
+            # Send first message
+            msg_resp1 = await client1.post(
+                f"/api/brainstorm/sessions/{session_id}/message",
+                json={"content": "First question"},
+            )
+            assert msg_resp1.status_code == 202
 
         # Reconfigure driver for second message with different usage
         messages2 = [
@@ -288,43 +327,55 @@ class TestSessionUsageSummary:
             cost_usd=0.07,
         )
         mock_driver2 = create_mock_driver_with_usage(messages2, usage2)
-        client2 = create_test_client(test_brainstorm_service, mock_driver2, tmp_path)
-
-        # Send second message
-        msg_resp2 = client2.post(
-            f"/api/brainstorm/sessions/{session_id}/message",
-            json={"content": "Second question"},
+        app2 = _create_app_with_overrides(
+            test_brainstorm_service, mock_driver2, str(tmp_path)
         )
-        assert msg_resp2.status_code == 202
 
-        # Verify individual messages have their own usage
-        get_resp = client2.get(f"/api/brainstorm/sessions/{session_id}")
-        assert get_resp.status_code == 200
-        data = get_resp.json()
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app2),
+            base_url="http://testserver",
+        ) as client2:
+            # Send second message
+            msg_resp2 = await client2.post(
+                f"/api/brainstorm/sessions/{session_id}/message",
+                json={"content": "Second question"},
+            )
+            assert msg_resp2.status_code == 202
 
-        assistant_msgs = [m for m in data["messages"] if m["role"] == "assistant"]
-        assert len(assistant_msgs) == 2
+            # Verify individual messages have their own usage
+            get_resp = await client2.get(
+                f"/api/brainstorm/sessions/{session_id}"
+            )
+            assert get_resp.status_code == 200
+            data = get_resp.json()
 
-        # First assistant message (seq=2)
-        assert assistant_msgs[0]["usage"]["input_tokens"] == 1000
-        assert assistant_msgs[0]["usage"]["output_tokens"] == 500
-        assert assistant_msgs[0]["usage"]["cost_usd"] == 0.03
+            assistant_msgs = [
+                m for m in data["messages"] if m["role"] == "assistant"
+            ]
+            assert len(assistant_msgs) == 2
 
-        # Second assistant message (seq=4)
-        assert assistant_msgs[1]["usage"]["input_tokens"] == 2000
-        assert assistant_msgs[1]["usage"]["output_tokens"] == 1000
-        assert assistant_msgs[1]["usage"]["cost_usd"] == 0.07
+            # First assistant message (seq=2)
+            assert assistant_msgs[0]["usage"]["input_tokens"] == 1000
+            assert assistant_msgs[0]["usage"]["output_tokens"] == 500
+            assert assistant_msgs[0]["usage"]["cost_usd"] == 0.03
 
-        # Verify session usage summary is aggregated
-        session = data["session"]
-        assert session["usage_summary"] is not None
-        usage_summary = session["usage_summary"]
-        assert usage_summary["total_input_tokens"] == 3000  # 1000 + 2000
-        assert usage_summary["total_output_tokens"] == 1500  # 500 + 1000
-        assert usage_summary["total_cost_usd"] == pytest.approx(0.10)  # 0.03 + 0.07
-        assert usage_summary["message_count"] == 2
+            # Second assistant message (seq=4)
+            assert assistant_msgs[1]["usage"]["input_tokens"] == 2000
+            assert assistant_msgs[1]["usage"]["output_tokens"] == 1000
+            assert assistant_msgs[1]["usage"]["cost_usd"] == 0.07
 
-    def test_session_without_usage_messages_has_null_summary(
+            # Verify session usage summary is aggregated
+            session = data["session"]
+            assert session["usage_summary"] is not None
+            usage_summary = session["usage_summary"]
+            assert usage_summary["total_input_tokens"] == 3000  # 1000 + 2000
+            assert usage_summary["total_output_tokens"] == 1500  # 500 + 1000
+            assert usage_summary["total_cost_usd"] == pytest.approx(
+                0.10
+            )  # 0.03 + 0.07
+            assert usage_summary["message_count"] == 2
+
+    async def test_session_without_usage_messages_has_null_summary(
         self,
         test_brainstorm_service: BrainstormService,
         tmp_path: Path,
@@ -338,31 +389,39 @@ class TestSessionUsageSummary:
             ),
         ]
         mock_driver = create_mock_driver_with_usage(messages, usage=None)
-        client = create_test_client(test_brainstorm_service, mock_driver, tmp_path)
-
-        # Create session and send message (which will have null usage)
-        create_resp = client.post(
-            "/api/brainstorm/sessions",
-            json={"profile_id": "test"},
+        app = _create_app_with_overrides(
+            test_brainstorm_service, mock_driver, str(tmp_path)
         )
-        assert create_resp.status_code == 201
-        session_id = create_resp.json()["session"]["id"]
 
-        msg_resp = client.post(
-            f"/api/brainstorm/sessions/{session_id}/message",
-            json={"content": "Test"},
-        )
-        assert msg_resp.status_code == 202
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            # Create session and send message (which will have null usage)
+            create_resp = await client.post(
+                "/api/brainstorm/sessions",
+                json={"profile_id": "test"},
+            )
+            assert create_resp.status_code == 201
+            session_id = create_resp.json()["session"]["id"]
 
-        # Verify usage_summary is null (not 0 or empty object)
-        get_resp = client.get(f"/api/brainstorm/sessions/{session_id}")
-        assert get_resp.status_code == 200
-        data = get_resp.json()
+            msg_resp = await client.post(
+                f"/api/brainstorm/sessions/{session_id}/message",
+                json={"content": "Test"},
+            )
+            assert msg_resp.status_code == 202
 
-        session = data["session"]
-        assert session["usage_summary"] is None
+            # Verify usage_summary is null (not 0 or empty object)
+            get_resp = await client.get(
+                f"/api/brainstorm/sessions/{session_id}"
+            )
+            assert get_resp.status_code == 200
+            data = get_resp.json()
 
-    def test_new_session_has_null_usage_summary(
+            session = data["session"]
+            assert session["usage_summary"] is None
+
+    async def test_new_session_has_null_usage_summary(
         self,
         test_brainstorm_service: BrainstormService,
         tmp_path: Path,
@@ -375,30 +434,38 @@ class TestSessionUsageSummary:
             ),
         ]
         mock_driver = create_mock_driver_with_usage(messages, usage=None)
-        client = create_test_client(test_brainstorm_service, mock_driver, tmp_path)
-
-        # Create session without sending any messages
-        create_resp = client.post(
-            "/api/brainstorm/sessions",
-            json={"profile_id": "test"},
+        app = _create_app_with_overrides(
+            test_brainstorm_service, mock_driver, str(tmp_path)
         )
-        assert create_resp.status_code == 201
-        session_id = create_resp.json()["session"]["id"]
 
-        # Verify usage_summary is null for session with no messages
-        get_resp = client.get(f"/api/brainstorm/sessions/{session_id}")
-        assert get_resp.status_code == 200
-        data = get_resp.json()
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            # Create session without sending any messages
+            create_resp = await client.post(
+                "/api/brainstorm/sessions",
+                json={"profile_id": "test"},
+            )
+            assert create_resp.status_code == 201
+            session_id = create_resp.json()["session"]["id"]
 
-        assert data["session"]["usage_summary"] is None
-        assert len(data["messages"]) == 0
+            # Verify usage_summary is null for session with no messages
+            get_resp = await client.get(
+                f"/api/brainstorm/sessions/{session_id}"
+            )
+            assert get_resp.status_code == 200
+            data = get_resp.json()
+
+            assert data["session"]["usage_summary"] is None
+            assert len(data["messages"]) == 0
 
 
 @pytest.mark.integration
 class TestUsageWithPartialData:
     """Test edge cases where driver returns partial usage data."""
 
-    def test_usage_with_zero_values_persists_correctly(
+    async def test_usage_with_zero_values_persists_correctly(
         self,
         test_brainstorm_service: BrainstormService,
         tmp_path: Path,
@@ -417,38 +484,46 @@ class TestUsageWithPartialData:
             cost_usd=0.0,
         )
         mock_driver = create_mock_driver_with_usage(messages, usage)
-        client = create_test_client(test_brainstorm_service, mock_driver, tmp_path)
-
-        # Create session and send message
-        create_resp = client.post(
-            "/api/brainstorm/sessions",
-            json={"profile_id": "test"},
+        app = _create_app_with_overrides(
+            test_brainstorm_service, mock_driver, str(tmp_path)
         )
-        assert create_resp.status_code == 201
-        session_id = create_resp.json()["session"]["id"]
 
-        msg_resp = client.post(
-            f"/api/brainstorm/sessions/{session_id}/message",
-            json={"content": "Test"},
-        )
-        assert msg_resp.status_code == 202
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            # Create session and send message
+            create_resp = await client.post(
+                "/api/brainstorm/sessions",
+                json={"profile_id": "test"},
+            )
+            assert create_resp.status_code == 201
+            session_id = create_resp.json()["session"]["id"]
 
-        # Verify usage is saved (not null) with zero values
-        get_resp = client.get(f"/api/brainstorm/sessions/{session_id}")
-        assert get_resp.status_code == 200
-        data = get_resp.json()
+            msg_resp = await client.post(
+                f"/api/brainstorm/sessions/{session_id}/message",
+                json={"content": "Test"},
+            )
+            assert msg_resp.status_code == 202
 
-        assistant_msg = next(
-            (m for m in data["messages"] if m["role"] == "assistant"), None
-        )
-        assert assistant_msg is not None
-        # Zero input_tokens should result in saved usage (MessageUsage created)
-        assert assistant_msg["usage"] is not None
-        assert assistant_msg["usage"]["input_tokens"] == 0
-        assert assistant_msg["usage"]["output_tokens"] == 0
-        assert assistant_msg["usage"]["cost_usd"] == 0.0
+            # Verify usage is saved (not null) with zero values
+            get_resp = await client.get(
+                f"/api/brainstorm/sessions/{session_id}"
+            )
+            assert get_resp.status_code == 200
+            data = get_resp.json()
 
-    def test_usage_with_none_fields_defaults_to_zero(
+            assistant_msg = next(
+                (m for m in data["messages"] if m["role"] == "assistant"), None
+            )
+            assert assistant_msg is not None
+            # Zero input_tokens should result in saved usage (MessageUsage created)
+            assert assistant_msg["usage"] is not None
+            assert assistant_msg["usage"]["input_tokens"] == 0
+            assert assistant_msg["usage"]["output_tokens"] == 0
+            assert assistant_msg["usage"]["cost_usd"] == 0.0
+
+    async def test_usage_with_none_fields_defaults_to_zero(
         self,
         test_brainstorm_service: BrainstormService,
         tmp_path: Path,
@@ -467,31 +542,39 @@ class TestUsageWithPartialData:
             cost_usd=None,  # Not provided
         )
         mock_driver = create_mock_driver_with_usage(messages, usage)
-        client = create_test_client(test_brainstorm_service, mock_driver, tmp_path)
-
-        # Create session and send message
-        create_resp = client.post(
-            "/api/brainstorm/sessions",
-            json={"profile_id": "test"},
+        app = _create_app_with_overrides(
+            test_brainstorm_service, mock_driver, str(tmp_path)
         )
-        assert create_resp.status_code == 201
-        session_id = create_resp.json()["session"]["id"]
 
-        msg_resp = client.post(
-            f"/api/brainstorm/sessions/{session_id}/message",
-            json={"content": "Test"},
-        )
-        assert msg_resp.status_code == 202
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            # Create session and send message
+            create_resp = await client.post(
+                "/api/brainstorm/sessions",
+                json={"profile_id": "test"},
+            )
+            assert create_resp.status_code == 201
+            session_id = create_resp.json()["session"]["id"]
 
-        # Verify None fields default to 0
-        get_resp = client.get(f"/api/brainstorm/sessions/{session_id}")
-        assert get_resp.status_code == 200
-        data = get_resp.json()
+            msg_resp = await client.post(
+                f"/api/brainstorm/sessions/{session_id}/message",
+                json={"content": "Test"},
+            )
+            assert msg_resp.status_code == 202
 
-        assistant_msg = next(
-            (m for m in data["messages"] if m["role"] == "assistant"), None
-        )
-        assert assistant_msg is not None
-        assert assistant_msg["usage"]["input_tokens"] == 100
-        assert assistant_msg["usage"]["output_tokens"] == 0  # Defaulted from None
-        assert assistant_msg["usage"]["cost_usd"] == 0.0  # Defaulted from None
+            # Verify None fields default to 0
+            get_resp = await client.get(
+                f"/api/brainstorm/sessions/{session_id}"
+            )
+            assert get_resp.status_code == 200
+            data = get_resp.json()
+
+            assistant_msg = next(
+                (m for m in data["messages"] if m["role"] == "assistant"), None
+            )
+            assert assistant_msg is not None
+            assert assistant_msg["usage"]["input_tokens"] == 100
+            assert assistant_msg["usage"]["output_tokens"] == 0  # Defaulted from None
+            assert assistant_msg["usage"]["cost_usd"] == 0.0  # Defaulted from None

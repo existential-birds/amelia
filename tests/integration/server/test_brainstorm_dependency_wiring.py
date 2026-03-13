@@ -12,6 +12,7 @@ Test Strategy:
 - Dynamic tests verify dependencies resolve correctly with mocked external boundaries
 """
 
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -36,7 +37,10 @@ from amelia.server.routes.brainstorm import (
 from amelia.server.services.brainstorm import BrainstormService
 
 
-DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://amelia:amelia@localhost:5434/amelia_test",
+)
 
 
 # =============================================================================
@@ -189,7 +193,7 @@ class TestBrainstormDependencyResolution:
         mock_service = AsyncMock(spec=BrainstormService)
         now = datetime.now(UTC)
         mock_service.create_session.return_value = BrainstormingSession(
-            id="test-session-id",
+            id="00000000-0000-4000-8000-000000000042",
             profile_id="test",
             status=SessionStatus.ACTIVE,
             topic="Test topic",
@@ -358,7 +362,7 @@ class TestBrainstormDependencyResolution:
         mock_service = AsyncMock(spec=BrainstormService)
         now = datetime.now(UTC)
         mock_session = BrainstormingSession(
-            id="test-session-id",
+            id="00000000-0000-4000-8000-000000000042",
             profile_id="test",
             status=SessionStatus.ACTIVE,
             topic="Test topic",

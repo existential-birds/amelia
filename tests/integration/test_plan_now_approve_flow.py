@@ -178,10 +178,10 @@ class TestPlanNowApproveFlow:
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
         assert workflow.workflow_status == "blocked"
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.goal == goal, (
-            f"Goal should be synced from checkpoint. Got: {workflow.execution_state.goal}"
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.goal == goal, (
+            f"Goal should be synced from checkpoint. Got: {workflow.plan_cache.goal}"
         )
-        assert plan_markdown in (workflow.execution_state.plan_markdown or ""), (
-            f"Plan should be synced from checkpoint. Got: {workflow.execution_state.plan_markdown}"
+        assert plan_markdown in (workflow.plan_cache.plan_markdown or ""), (
+            f"Plan should be synced from checkpoint. Got: {workflow.plan_cache.plan_markdown}"
         )

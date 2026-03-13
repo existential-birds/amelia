@@ -42,7 +42,7 @@ rebuild_implementation_state()
 
 # Free model for OpenRouter integration tests (incurs no costs)
 # Must support tool use - see https://openrouter.ai/models?q=:free
-OPENROUTER_FREE_MODEL = "openrouter:meta-llama/llama-3.3-70b-instruct:free"
+OPENROUTER_FREE_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 
 
 # =============================================================================
@@ -548,7 +548,7 @@ async def mock_langgraph_for_planning(
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql://amelia:amelia@localhost:5432/amelia_test",
+    "postgresql://amelia:amelia@localhost:5434/amelia_test",
 )
 
 

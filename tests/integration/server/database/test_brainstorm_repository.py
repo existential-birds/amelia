@@ -1,6 +1,7 @@
 """Tests for BrainstormRepository."""
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 
@@ -35,7 +36,7 @@ class TestBrainstormRepository:
         """Create a sample session for testing."""
         now = datetime.now(UTC)
         return BrainstormingSession(
-            id="sess-test-123",
+            id=uuid4(),
             profile_id="work",
             status="active",
             topic="Design a caching layer",
@@ -64,7 +65,7 @@ class TestSessionCRUD(TestBrainstormRepository):
         self, repository: BrainstormRepository
     ) -> None:
         """Should return None for non-existent session."""
-        result = await repository.get_session("nonexistent")
+        result = await repository.get_session(uuid4())
         assert result is None
 
     async def test_update_session(
@@ -99,12 +100,13 @@ class TestSessionCRUD(TestBrainstormRepository):
     ) -> None:
         """Should list sessions filtered by profile."""
         now = datetime.now(UTC)
+        session1_id = uuid4()
         session1 = BrainstormingSession(
-            id="sess-1", profile_id="work", status="active",
+            id=session1_id, profile_id="work", status="active",
             created_at=now, updated_at=now,
         )
         session2 = BrainstormingSession(
-            id="sess-2", profile_id="personal", status="active",
+            id=uuid4(), profile_id="personal", status="active",
             created_at=now, updated_at=now,
         )
         await repository.create_session(session1)
@@ -112,19 +114,20 @@ class TestSessionCRUD(TestBrainstormRepository):
 
         work_sessions = await repository.list_sessions(profile_id="work")
         assert len(work_sessions) == 1
-        assert work_sessions[0].id == "sess-1"
+        assert work_sessions[0].id == session1_id
 
     async def test_list_sessions_by_status(
         self, repository: BrainstormRepository
     ) -> None:
         """Should list sessions filtered by status."""
         now = datetime.now(UTC)
+        session1_id = uuid4()
         session1 = BrainstormingSession(
-            id="sess-1", profile_id="work", status="active",
+            id=session1_id, profile_id="work", status="active",
             created_at=now, updated_at=now,
         )
         session2 = BrainstormingSession(
-            id="sess-2", profile_id="work", status="completed",
+            id=uuid4(), profile_id="work", status="completed",
             created_at=now, updated_at=now,
         )
         await repository.create_session(session1)
@@ -132,7 +135,7 @@ class TestSessionCRUD(TestBrainstormRepository):
 
         active_sessions = await repository.list_sessions(status="active")
         assert len(active_sessions) == 1
-        assert active_sessions[0].id == "sess-1"
+        assert active_sessions[0].id == session1_id
 
 
 class TestMessageCRUD(TestBrainstormRepository):
@@ -145,7 +148,7 @@ class TestMessageCRUD(TestBrainstormRepository):
         await repository.create_session(sample_session)
 
         message = Message(
-            id="msg-1",
+            id=uuid4(),
             session_id=sample_session.id,
             sequence=1,
             role="user",
@@ -165,7 +168,7 @@ class TestMessageCRUD(TestBrainstormRepository):
         await repository.create_session(sample_session)
 
         message = Message(
-            id="msg-2",
+            id=uuid4(),
             session_id=sample_session.id,
             sequence=1,
             role="assistant",
@@ -192,7 +195,7 @@ class TestMessageCRUD(TestBrainstormRepository):
 
         for i in range(3, 0, -1):  # Insert in reverse order
             msg = Message(
-                id=f"msg-{i}",
+                id=uuid4(),
                 session_id=sample_session.id,
                 sequence=i,
                 role="user" if i % 2 else "assistant",
@@ -216,7 +219,7 @@ class TestMessageCRUD(TestBrainstormRepository):
         # Add messages
         for i in range(1, 4):
             msg = Message(
-                id=f"msg-{i}",
+                id=uuid4(),
                 session_id=sample_session.id,
                 sequence=i,
                 role="user",
@@ -238,7 +241,7 @@ class TestArtifactCRUD(TestBrainstormRepository):
         await repository.create_session(sample_session)
 
         artifact = Artifact(
-            id="art-1",
+            id=uuid4(),
             session_id=sample_session.id,
             type="design",
             path="docs/plans/design.md",

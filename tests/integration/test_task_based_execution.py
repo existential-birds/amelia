@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -204,7 +205,7 @@ class TestDeveloperNodeTaskInjection:
         )
 
         config = make_config(
-            thread_id="test-session-clear",
+            thread_id=str(uuid4()),
             profile=integration_profile,
         )
 
@@ -250,7 +251,7 @@ class TestDeveloperNodeTaskInjection:
         )
 
         config = make_config(
-            thread_id="test-task-prompt",
+            thread_id=str(uuid4()),
             profile=integration_profile,
         )
 
@@ -296,7 +297,7 @@ class TestDeveloperNodeTaskInjection:
         )
 
         config = make_config(
-            thread_id="test-single-task-session",
+            thread_id=str(uuid4()),
             profile=integration_profile,
         )
 
@@ -341,7 +342,7 @@ class TestReviewerNodeTaskIteration:
         )
 
         config = make_config(
-            thread_id="test-iteration-incr",
+            thread_id=str(uuid4()),
             profile=integration_profile,
         )
 
@@ -399,7 +400,7 @@ class TestNextTaskNodeTransition:
         )
 
         config = make_config(
-            thread_id="test-next-task",
+            thread_id=str(uuid4()),
             profile=profile,
         )
 
@@ -442,7 +443,7 @@ class TestNextTaskNodeTransition:
         )
 
         config = make_config(
-            thread_id="test-commit",
+            thread_id=str(uuid4()),
             profile=profile,
         )
 
@@ -493,7 +494,7 @@ class TestPlanMarkdownPreservation:
         )
 
         config = make_config(
-            thread_id="test-preservation",
+            thread_id=str(uuid4()),
             profile=integration_profile,
         )
 
@@ -537,7 +538,7 @@ class TestPlanMarkdownPreservation:
         )
 
         config = make_config(
-            thread_id="test-extraction",
+            thread_id=str(uuid4()),
             profile=integration_profile,
         )
 

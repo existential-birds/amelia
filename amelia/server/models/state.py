@@ -95,6 +95,7 @@ class PlanCache(BaseModel):
     plan_path: str | None = None
     total_tasks: int | None = None
     current_task_index: int | None = None
+    external_plan: bool = False
 
     @classmethod
     def from_checkpoint_values(cls, values: dict[str, Any]) -> PlanCache:

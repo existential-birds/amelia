@@ -7,6 +7,7 @@ and workflow invocation with real components (mocking only at HTTP/LLM boundary)
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -54,7 +55,7 @@ class TestArchitectNodeIntegration:
         )
         issue = make_issue(id="TEST-1", title="Add feature X", description="Add a new feature X to the system")
         state = make_execution_state(issue=issue, profile=profile)
-        config = make_config(thread_id="test-wf-1", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         # Mock at driver.execute_agentic level - this is the HTTP boundary
         plan_markdown = "# Plan\n\n**Goal:** Implement feature X by modifying component Y\n\n1. Do thing A\n2. Do thing B"
@@ -91,7 +92,7 @@ class TestArchitectNodeIntegration:
         """Architect node should raise error if no issue provided."""
         profile = make_profile(repo_root=str(tmp_path))
         state = make_execution_state(issue=None, profile=profile)
-        config = make_config(thread_id="test-wf-1", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         with pytest.raises(ValueError, match="no issue provided"):
             await call_architect_node(state, cast(RunnableConfig, config))
@@ -113,7 +114,7 @@ class TestDeveloperNodeIntegration:
             goal="Create a hello.txt file with 'Hello World'",
             plan_markdown="# Plan\n\nCreate hello.txt with content 'Hello World'",
         )
-        config = make_config(thread_id="test-wf-2", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         # Mock AgenticMessage stream from the driver's execute_agentic
         mock_messages = make_agentic_messages(
@@ -138,7 +139,7 @@ class TestDeveloperNodeIntegration:
         """Developer node should raise error if no goal set."""
         profile = make_profile(repo_root=str(tmp_path))
         state = make_execution_state(profile=profile, goal=None)
-        config = make_config(thread_id="test-wf-3", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         with pytest.raises(ValueError, match="no goal"):
             await call_developer_node(state, cast(RunnableConfig, config))
@@ -160,7 +161,7 @@ class TestReviewerNodeIntegration:
             goal="Add logging to the application",
             code_changes_for_review="diff --git a/app.py b/app.py\n+import logging",
         )
-        config = make_config(thread_id="test-wf-4", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         mock_messages = make_reviewer_agentic_messages(approved=True)
 
@@ -186,7 +187,7 @@ class TestReviewerNodeIntegration:
             goal="Implement secure authentication",
             code_changes_for_review="diff --git a/auth.py\n+password = 'hardcoded'",
         )
-        config = make_config(thread_id="test-wf-5", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         mock_messages = make_reviewer_agentic_messages(
             approved=False,
@@ -220,7 +221,7 @@ class TestReviewerNodeIntegration:
             code_changes_for_review="diff --git a/fix.py\n+# partial fix",
             review_iteration=0,
         )
-        config = make_config(thread_id="test-wf-iteration", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         mock_messages = make_reviewer_agentic_messages(
             approved=False,
@@ -262,7 +263,7 @@ class TestReviewerNodeIntegration:
             code_changes_for_review="diff --git a/fix.py\n+# initial attempt",
             review_iteration=0,
         )
-        config = make_config(thread_id="test-wf-review-update", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         # Round 1: Reviewer rejects with severity "high"
         mock_messages_round1 = make_reviewer_agentic_messages(
@@ -352,7 +353,7 @@ class TestArchitectValidatorFlowIntegration:
             description="Implement JWT-based authentication for the API",
         )
         state = make_execution_state(issue=issue, profile=profile)
-        config = make_config(thread_id="test-flow-1", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         # Compute expected plan path
         plan_rel_path = resolve_plan_path(profile.plan_path_pattern, issue.id)
@@ -483,7 +484,7 @@ Add comprehensive tests for the authentication flow.
             profile=profile,
             raw_architect_output="Some content that wasn't written to disk",
         )
-        config = make_config(thread_id="test-missing-1", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         with pytest.raises(ValueError, match="Plan file not found"):
             await plan_validator_node(state, cast(RunnableConfig, config))
@@ -502,7 +503,7 @@ Add comprehensive tests for the authentication flow.
         )
         issue = make_issue(id="TEST-EMPTY-1")
         state = make_execution_state(issue=issue, profile=profile)
-        config = make_config(thread_id="test-empty-1", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         # Create empty plan file
         from amelia.core.constants import resolve_plan_path

@@ -10,21 +10,26 @@ Real components:
 
 Only mocked:
 - Driver (execute_agentic as async generator)
+
+Uses httpx.AsyncClient with ASGITransport to keep the ASGI app in the
+same event loop as the asyncpg pool (TestClient creates a separate thread
+with its own event loop, causing asyncpg event loop mismatches).
 """
 
+import os
 from collections.abc import AsyncGenerator, Callable
-from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
-from fastapi.testclient import TestClient
+from fastapi import FastAPI
 
 from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverInterface
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.connection import Database
 from amelia.server.database.migrator import Migrator
+from amelia.server.dependencies import get_orchestrator, get_profile_repository
 from amelia.server.events.bus import EventBus
 from amelia.server.main import create_app
 from amelia.server.routes.brainstorm import (
@@ -35,8 +40,13 @@ from amelia.server.routes.brainstorm import (
 from amelia.server.services.brainstorm import BrainstormService
 from tests.conftest import create_mock_execute_agentic
 
+from .conftest import AsyncClientFactory, noop_lifespan
 
-DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
+
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://amelia:amelia@localhost:5434/amelia_test",
+)
 
 
 # =============================================================================
@@ -108,25 +118,51 @@ def mock_driver_factory() -> Callable[[], MagicMock]:
     return _create
 
 
+def _create_app_with_overrides(
+    brainstorm_service: BrainstormService,
+    driver_factory: Callable[[], MagicMock],
+    cwd: str,
+) -> FastAPI:
+    """Create FastAPI app with noop lifespan and dependency overrides."""
+    app = create_app()
+
+    app.router.lifespan_context = noop_lifespan
+    app.dependency_overrides[get_brainstorm_service] = lambda: brainstorm_service
+    app.dependency_overrides[get_driver] = driver_factory
+    app.dependency_overrides[get_cwd] = lambda: cwd
+
+    # Override dependencies that would otherwise require the database lifespan
+    mock_profile_repo = AsyncMock()
+    mock_profile_repo.get_profile = AsyncMock(return_value=None)
+    app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
+
+    mock_orch = MagicMock()
+    mock_orch.queue_workflow = AsyncMock(
+        return_value="00000000-0000-4000-8000-000000000001"
+    )
+    app.dependency_overrides[get_orchestrator] = lambda: mock_orch
+
+    return app
+
+
 @pytest.fixture
-def test_client(
+async def test_client(
     test_brainstorm_service: BrainstormService,
     mock_driver_factory: Callable[[], MagicMock],
     tmp_path: Path,
-) -> TestClient:
-    """Create test client that returns a new mock driver for each request."""
-    app = create_app()
+    async_client_factory: AsyncClientFactory,
+) -> AsyncGenerator[httpx.AsyncClient, None]:
+    """Create async test client that returns a new mock driver for each request.
 
-    @asynccontextmanager
-    async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-        yield
+    Uses httpx.AsyncClient with ASGITransport so the ASGI app runs in the
+    same event loop as the asyncpg pool created by test_db.
+    """
+    app = _create_app_with_overrides(
+        test_brainstorm_service, mock_driver_factory, str(tmp_path)
+    )
 
-    app.router.lifespan_context = noop_lifespan
-    app.dependency_overrides[get_brainstorm_service] = lambda: test_brainstorm_service
-    app.dependency_overrides[get_driver] = mock_driver_factory
-    app.dependency_overrides[get_cwd] = lambda: str(tmp_path)
-
-    return TestClient(app)
+    async with async_client_factory(app) as client:
+        yield client
 
 
 # =============================================================================
@@ -138,29 +174,29 @@ def test_client(
 class TestMultiMessageSequence:
     """Test that multiple messages maintain correct sequence numbers."""
 
-    def test_three_messages_have_correct_sequences(
+    async def test_three_messages_have_correct_sequences(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """Sending 3 messages should produce user/assistant pairs with seq 1-6."""
         # Create session
-        create_resp = test_client.post(
+        create_resp = await test_client.post(
             "/api/brainstorm/sessions",
             json={"profile_id": "test", "topic": "Multi-turn conversation"},
         )
         assert create_resp.status_code == 201
-        session_id = create_resp.json()["id"]
+        session_id = create_resp.json()["session"]["id"]
 
         # Send 3 messages sequentially
         for i in range(1, 4):
-            msg_resp = test_client.post(
+            msg_resp = await test_client.post(
                 f"/api/brainstorm/sessions/{session_id}/message",
                 json={"content": f"Message {i}"},
             )
             assert msg_resp.status_code == 202
 
         # Get session and verify all messages
-        get_resp = test_client.get(f"/api/brainstorm/sessions/{session_id}")
+        get_resp = await test_client.get(f"/api/brainstorm/sessions/{session_id}")
         assert get_resp.status_code == 200
         messages = get_resp.json()["messages"]
 
@@ -189,30 +225,30 @@ class TestMultiMessageSequence:
                 f"Message {i} missing expected content '{expected_content}'"
             )
 
-    def test_messages_ordered_by_sequence(
+    async def test_messages_ordered_by_sequence(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """Messages should be returned in sequence order."""
         # Create session
-        create_resp = test_client.post(
+        create_resp = await test_client.post(
             "/api/brainstorm/sessions",
             json={"profile_id": "test"},
         )
-        session_id = create_resp.json()["id"]
+        session_id = create_resp.json()["session"]["id"]
 
         # Send 2 messages
-        test_client.post(
+        await test_client.post(
             f"/api/brainstorm/sessions/{session_id}/message",
             json={"content": "First"},
         )
-        test_client.post(
+        await test_client.post(
             f"/api/brainstorm/sessions/{session_id}/message",
             json={"content": "Second"},
         )
 
         # Get session
-        get_resp = test_client.get(f"/api/brainstorm/sessions/{session_id}")
+        get_resp = await test_client.get(f"/api/brainstorm/sessions/{session_id}")
         messages = get_resp.json()["messages"]
 
         # Verify messages are in order
@@ -220,52 +256,52 @@ class TestMultiMessageSequence:
         assert sequences == sorted(sequences), "Messages not in sequence order"
         assert sequences == [1, 2, 3, 4], f"Unexpected sequences: {sequences}"
 
-    def test_user_messages_have_odd_sequences(
+    async def test_user_messages_have_odd_sequences(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """User messages should have odd sequence numbers (1, 3, 5)."""
         # Create session and send 3 messages
-        create_resp = test_client.post(
+        create_resp = await test_client.post(
             "/api/brainstorm/sessions",
             json={"profile_id": "test"},
         )
-        session_id = create_resp.json()["id"]
+        session_id = create_resp.json()["session"]["id"]
 
         for i in range(3):
-            test_client.post(
+            await test_client.post(
                 f"/api/brainstorm/sessions/{session_id}/message",
                 json={"content": f"User message {i+1}"},
             )
 
         # Get session
-        get_resp = test_client.get(f"/api/brainstorm/sessions/{session_id}")
+        get_resp = await test_client.get(f"/api/brainstorm/sessions/{session_id}")
         messages = get_resp.json()["messages"]
 
         user_messages = [m for m in messages if m["role"] == "user"]
         user_sequences = [m["sequence"] for m in user_messages]
         assert user_sequences == [1, 3, 5], f"User sequences wrong: {user_sequences}"
 
-    def test_assistant_messages_have_even_sequences(
+    async def test_assistant_messages_have_even_sequences(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """Assistant messages should have even sequence numbers (2, 4, 6)."""
         # Create session and send 3 messages
-        create_resp = test_client.post(
+        create_resp = await test_client.post(
             "/api/brainstorm/sessions",
             json={"profile_id": "test"},
         )
-        session_id = create_resp.json()["id"]
+        session_id = create_resp.json()["session"]["id"]
 
         for i in range(3):
-            test_client.post(
+            await test_client.post(
                 f"/api/brainstorm/sessions/{session_id}/message",
                 json={"content": f"User message {i+1}"},
             )
 
         # Get session
-        get_resp = test_client.get(f"/api/brainstorm/sessions/{session_id}")
+        get_resp = await test_client.get(f"/api/brainstorm/sessions/{session_id}")
         messages = get_resp.json()["messages"]
 
         assistant_messages = [m for m in messages if m["role"] == "assistant"]
@@ -274,41 +310,41 @@ class TestMultiMessageSequence:
             f"Assistant sequences wrong: {assistant_sequences}"
         )
 
-    def test_conversation_continuity_across_messages(
+    async def test_conversation_continuity_across_messages(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """Verify that session maintains driver_session_id across messages."""
         # Create session
-        create_resp = test_client.post(
+        create_resp = await test_client.post(
             "/api/brainstorm/sessions",
             json={"profile_id": "test"},
         )
-        session_id = create_resp.json()["id"]
+        session_id = create_resp.json()["session"]["id"]
 
         # Initially no driver_session_id
-        get_resp = test_client.get(f"/api/brainstorm/sessions/{session_id}")
+        get_resp = await test_client.get(f"/api/brainstorm/sessions/{session_id}")
         assert get_resp.json()["session"]["driver_session_id"] is None
 
         # Send first message
-        test_client.post(
+        await test_client.post(
             f"/api/brainstorm/sessions/{session_id}/message",
             json={"content": "First message"},
         )
 
         # driver_session_id should be set after first message
-        get_resp = test_client.get(f"/api/brainstorm/sessions/{session_id}")
+        get_resp = await test_client.get(f"/api/brainstorm/sessions/{session_id}")
         driver_session_id = get_resp.json()["session"]["driver_session_id"]
         assert driver_session_id is not None
 
         # Send second message
-        test_client.post(
+        await test_client.post(
             f"/api/brainstorm/sessions/{session_id}/message",
             json={"content": "Second message"},
         )
 
         # driver_session_id should remain the same
-        get_resp = test_client.get(f"/api/brainstorm/sessions/{session_id}")
+        get_resp = await test_client.get(f"/api/brainstorm/sessions/{session_id}")
         assert get_resp.json()["session"]["driver_session_id"] == driver_session_id
 
 
@@ -316,25 +352,25 @@ class TestMultiMessageSequence:
 class TestSequenceEdgeCases:
     """Test edge cases in message sequencing."""
 
-    def test_single_message_sequence(
+    async def test_single_message_sequence(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """Single message should produce user=1, assistant=2."""
         # Create session and send one message
-        create_resp = test_client.post(
+        create_resp = await test_client.post(
             "/api/brainstorm/sessions",
             json={"profile_id": "test"},
         )
-        session_id = create_resp.json()["id"]
+        session_id = create_resp.json()["session"]["id"]
 
-        test_client.post(
+        await test_client.post(
             f"/api/brainstorm/sessions/{session_id}/message",
             json={"content": "Only message"},
         )
 
         # Get session
-        get_resp = test_client.get(f"/api/brainstorm/sessions/{session_id}")
+        get_resp = await test_client.get(f"/api/brainstorm/sessions/{session_id}")
         messages = get_resp.json()["messages"]
 
         assert len(messages) == 2
@@ -343,20 +379,20 @@ class TestSequenceEdgeCases:
         assert messages[1]["sequence"] == 2
         assert messages[1]["role"] == "assistant"
 
-    def test_empty_session_has_no_messages(
+    async def test_empty_session_has_no_messages(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """New session should have no messages."""
         # Create session but don't send any messages
-        create_resp = test_client.post(
+        create_resp = await test_client.post(
             "/api/brainstorm/sessions",
             json={"profile_id": "test"},
         )
-        session_id = create_resp.json()["id"]
+        session_id = create_resp.json()["session"]["id"]
 
         # Get session
-        get_resp = test_client.get(f"/api/brainstorm/sessions/{session_id}")
+        get_resp = await test_client.get(f"/api/brainstorm/sessions/{session_id}")
         messages = get_resp.json()["messages"]
 
         assert messages == []

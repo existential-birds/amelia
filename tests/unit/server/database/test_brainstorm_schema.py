@@ -82,18 +82,19 @@ class TestBrainstormMessagesTable:
 
     async def test_unique_constraint_on_session_sequence(self, db_with_schema: Database) -> None:
         """(session_id, sequence) is unique in brainstorm_messages."""
-        await db_with_schema.execute("""
+        session_id = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+        await db_with_schema.execute(f"""
             INSERT INTO brainstorm_sessions (id, profile_id, status, created_at, updated_at)
-            VALUES ('session-1', 'profile-1', 'active', NOW(), NOW())
+            VALUES ('{session_id}', 'profile-1', 'active', NOW(), NOW())
         """)
-        await db_with_schema.execute("""
+        await db_with_schema.execute(f"""
             INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at)
-            VALUES ('msg-1', 'session-1', 1, 'user', 'Hello', NOW())
+            VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a21', '{session_id}', 1, 'user', 'Hello', NOW())
         """)
         with pytest.raises(asyncpg.exceptions.UniqueViolationError):
-            await db_with_schema.execute("""
+            await db_with_schema.execute(f"""
                 INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at)
-                VALUES ('msg-2', 'session-1', 1, 'assistant', 'Hi there', NOW())
+                VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', '{session_id}', 1, 'assistant', 'Hi there', NOW())
             """)
 
 
@@ -122,44 +123,46 @@ class TestBrainstormCascadeDeletes:
 
     async def test_deleting_session_deletes_messages(self, db_with_schema: Database) -> None:
         """Deleting a session cascades to delete its messages."""
-        await db_with_schema.execute("""
+        session_id = "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+        await db_with_schema.execute(f"""
             INSERT INTO brainstorm_sessions (id, profile_id, status, created_at, updated_at)
-            VALUES ('session-1', 'profile-1', 'active', NOW(), NOW())
+            VALUES ('{session_id}', 'profile-1', 'active', NOW(), NOW())
         """)
-        await db_with_schema.execute("""
+        await db_with_schema.execute(f"""
             INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at)
-            VALUES ('msg-1', 'session-1', 1, 'user', 'Hello', NOW())
+            VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a21', '{session_id}', 1, 'user', 'Hello', NOW())
         """)
-        await db_with_schema.execute("""
+        await db_with_schema.execute(f"""
             INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at)
-            VALUES ('msg-2', 'session-1', 2, 'assistant', 'Hi', NOW())
+            VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', '{session_id}', 2, 'assistant', 'Hi', NOW())
         """)
         messages = await db_with_schema.fetch_all(
-            "SELECT id FROM brainstorm_messages WHERE session_id = 'session-1'"
+            f"SELECT id FROM brainstorm_messages WHERE session_id = '{session_id}'"
         )
         assert len(messages) == 2
-        await db_with_schema.execute("DELETE FROM brainstorm_sessions WHERE id = 'session-1'")
+        await db_with_schema.execute(f"DELETE FROM brainstorm_sessions WHERE id = '{session_id}'")
         messages = await db_with_schema.fetch_all(
-            "SELECT id FROM brainstorm_messages WHERE session_id = 'session-1'"
+            f"SELECT id FROM brainstorm_messages WHERE session_id = '{session_id}'"
         )
         assert len(messages) == 0
 
     async def test_deleting_session_deletes_artifacts(self, db_with_schema: Database) -> None:
         """Deleting a session cascades to delete its artifacts."""
-        await db_with_schema.execute("""
+        session_id = "c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+        await db_with_schema.execute(f"""
             INSERT INTO brainstorm_sessions (id, profile_id, status, created_at, updated_at)
-            VALUES ('session-1', 'profile-1', 'active', NOW(), NOW())
+            VALUES ('{session_id}', 'profile-1', 'active', NOW(), NOW())
         """)
-        await db_with_schema.execute("""
+        await db_with_schema.execute(f"""
             INSERT INTO brainstorm_artifacts (id, session_id, type, path, title, created_at)
-            VALUES ('art-1', 'session-1', 'spec', '/path/to/spec.md', 'Feature Spec', NOW())
+            VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a21', '{session_id}', 'spec', '/path/to/spec.md', 'Feature Spec', NOW())
         """)
         artifacts = await db_with_schema.fetch_all(
-            "SELECT id FROM brainstorm_artifacts WHERE session_id = 'session-1'"
+            f"SELECT id FROM brainstorm_artifacts WHERE session_id = '{session_id}'"
         )
         assert len(artifacts) == 1
-        await db_with_schema.execute("DELETE FROM brainstorm_sessions WHERE id = 'session-1'")
+        await db_with_schema.execute(f"DELETE FROM brainstorm_sessions WHERE id = '{session_id}'")
         artifacts = await db_with_schema.fetch_all(
-            "SELECT id FROM brainstorm_artifacts WHERE session_id = 'session-1'"
+            f"SELECT id FROM brainstorm_artifacts WHERE session_id = '{session_id}'"
         )
         assert len(artifacts) == 0

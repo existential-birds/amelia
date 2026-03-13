@@ -138,7 +138,7 @@ class TestAPIResponseSchemas:
         assert isinstance(response, CreateWorkflowResponse)
 
         # Verify only the minimal fields are present
-        assert response.id == "00000000-0000-4000-8000-000000000123"
+        assert str(response.id) == "00000000-0000-4000-8000-000000000123"
         assert response.status == "pending"
         assert "TEST-123" in response.message
 
@@ -181,7 +181,7 @@ class TestAPIResponseSchemas:
 
         # Verify correct response type with full details
         assert isinstance(response, WorkflowResponse)
-        assert response.id == "00000000-0000-4000-8000-000000000123"
+        assert str(response.id) == "00000000-0000-4000-8000-000000000123"
         assert response.issue_id == "TEST-456"
         assert response.worktree_path == "/test/path"
         assert response.status == "pending"

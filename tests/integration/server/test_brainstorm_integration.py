@@ -14,6 +14,7 @@ same event loop as the asyncpg pool (TestClient creates a separate thread
 with its own event loop, causing asyncpg event loop mismatches).
 """
 
+import os
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
@@ -32,7 +33,10 @@ from amelia.server.services.brainstorm import BrainstormService
 from .conftest import AsyncClientFactory, noop_lifespan
 
 
-DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://amelia:amelia@localhost:5434/amelia_test",
+)
 
 
 # =============================================================================
@@ -176,7 +180,9 @@ class TestBrainstormIntegration:
         self, test_client: httpx.AsyncClient
     ) -> None:
         """Getting a non-existent session should return 404."""
-        response = await test_client.get("/api/brainstorm/sessions/nonexistent-id")
+        response = await test_client.get(
+            "/api/brainstorm/sessions/00000000-0000-4000-8000-000000000099"
+        )
         assert response.status_code == 404
 
     async def test_delete_session_returns_204(

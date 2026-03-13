@@ -17,9 +17,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from fastapi import status
-from fastapi.testclient import TestClient
 
 from amelia.core.constants import resolve_plan_path
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
@@ -62,11 +62,11 @@ async def setup_test_profile(test_profile_repository: ProfileRepository) -> Prof
 
 
 @pytest.fixture
-def test_client(
+async def test_client(
     test_orchestrator: OrchestratorService,
     test_repository: WorkflowRepository,
-) -> TestClient:
-    """Create test client with real dependencies."""
+) -> AsyncGenerator[httpx.AsyncClient, None]:
+    """Create async test client with real dependencies."""
     app = create_app()
 
     # Create a no-op lifespan that doesn't initialize database/orchestrator
@@ -78,8 +78,9 @@ def test_client(
     app.dependency_overrides[get_orchestrator] = lambda: test_orchestrator
     app.dependency_overrides[get_repository] = lambda: test_repository
 
-    # Don't raise server exceptions - let the exception handlers return proper responses
-    return TestClient(app, raise_server_exceptions=False)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
 
 
 # =============================================================================
@@ -96,7 +97,7 @@ class TestExternalPlanAtCreation:
 
     async def test_create_workflow_with_plan_content_sets_external_flag(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
         tmp_path: Path,
@@ -110,7 +111,7 @@ class TestExternalPlanAtCreation:
 
         plan_content = "**Goal:** Do thing\n\n### Task 1: Do thing\n\nDo it."
 
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-EXT-001",
@@ -127,14 +128,14 @@ class TestExternalPlanAtCreation:
         # Verify workflow was created with external plan flag
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.external_plan is True
-        assert workflow.execution_state.goal == "Do thing"
-        assert workflow.execution_state.plan_markdown == plan_content
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.external_plan is True
+        assert workflow.plan_cache.goal == "Do thing"
+        assert workflow.plan_cache.plan_markdown == plan_content
 
     async def test_create_workflow_with_plan_file_sets_external_flag(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
         tmp_path: Path,
@@ -153,7 +154,7 @@ class TestExternalPlanAtCreation:
         plan_file = docs_dir / "plan.md"
         plan_file.write_text(plan_content)
 
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-FILE-001",
@@ -170,13 +171,13 @@ class TestExternalPlanAtCreation:
         # Verify workflow was created with external plan flag
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.external_plan is True
-        assert workflow.execution_state.goal == "Create module"
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.external_plan is True
+        assert workflow.plan_cache.goal == "Create module"
 
     async def test_create_workflow_without_plan_has_external_flag_false(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
         tmp_path: Path,
@@ -188,7 +189,7 @@ class TestExternalPlanAtCreation:
         (git_dir / ".git").mkdir()
         resolved_path = str(git_dir.resolve())
 
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-NOPLAN-001",
@@ -205,12 +206,12 @@ class TestExternalPlanAtCreation:
         # Verify workflow was created without external plan flag
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.external_plan is False
+        # No plan was provided, so plan_cache should be None or have external_plan=False
+        assert workflow.plan_cache is None or workflow.plan_cache.external_plan is False
 
     async def test_queue_workflow_with_plan_file_does_not_duplicate(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
         tmp_path: Path,
@@ -227,7 +228,7 @@ class TestExternalPlanAtCreation:
         custom_plan.parent.mkdir(parents=True, exist_ok=True)
         custom_plan.write_text("**Goal:** Do it\n\n### Task 1: Do it\n\nDo the thing.\n")
 
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-999",
@@ -253,7 +254,7 @@ class TestExternalPlanAtCreation:
 
     async def test_create_workflow_with_both_plan_file_and_content_returns_422(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         tmp_path: Path,
     ) -> None:
         """Creating workflow with both plan_file and plan_content returns 422."""
@@ -263,7 +264,7 @@ class TestExternalPlanAtCreation:
         (git_dir / ".git").mkdir()
         resolved_path = str(git_dir.resolve())
 
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-BOTH-001",
@@ -288,7 +289,7 @@ class TestSetPlanEndpoint:
 
     async def test_set_plan_on_pending_workflow_succeeds(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
         tmp_path: Path,
@@ -301,7 +302,7 @@ class TestSetPlanEndpoint:
         resolved_path = str(git_dir.resolve())
 
         # Create workflow without plan
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-SETPLAN-001",
@@ -316,13 +317,13 @@ class TestSetPlanEndpoint:
         # Verify workflow starts without external plan
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.external_plan is False
+        # No plan was provided, so plan_cache should be None or have external_plan=False
+        assert workflow.plan_cache is None or workflow.plan_cache.external_plan is False
 
         # Now set the plan (uses regex extraction, no LLM)
         plan_content = "**Goal:** Implement feature\n\n### Task 1: Implement feature\n\nDo it."
 
-        response = test_client.post(
+        response = await test_client.post(
             f"/api/workflows/{workflow_id}/plan",
             json={"plan_content": plan_content},
         )
@@ -335,17 +336,17 @@ class TestSetPlanEndpoint:
         # Verify workflow now has external plan
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.external_plan is True
-        assert workflow.execution_state.goal == "Implement feature"
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.external_plan is True
+        assert workflow.plan_cache.goal == "Implement feature"
 
     async def test_set_plan_on_nonexistent_workflow_returns_404(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """Setting plan on non-existent workflow returns 404."""
-        response = test_client.post(
-            "/api/workflows/wf-nonexistent/plan",
+        response = await test_client.post(
+            "/api/workflows/00000000-0000-0000-0000-000000000000/plan",
             json={"plan_content": "# Plan"},
         )
 
@@ -353,7 +354,7 @@ class TestSetPlanEndpoint:
 
     async def test_set_plan_without_content_or_file_returns_422(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
         tmp_path: Path,
@@ -366,7 +367,7 @@ class TestSetPlanEndpoint:
         resolved_path = str(git_dir.resolve())
 
         # Create workflow
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-EMPTY-001",
@@ -378,7 +379,7 @@ class TestSetPlanEndpoint:
         workflow_id = response.json()["id"]
 
         # Try to set plan with empty body
-        response = test_client.post(
+        response = await test_client.post(
             f"/api/workflows/{workflow_id}/plan",
             json={},  # Missing both plan_file and plan_content
         )
@@ -387,7 +388,7 @@ class TestSetPlanEndpoint:
 
     async def test_set_plan_requires_force_when_plan_exists(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
         tmp_path: Path,
@@ -402,7 +403,7 @@ class TestSetPlanEndpoint:
         # Create workflow with initial plan
         plan_content = "**Goal:** First thing\n\n### Task 1: First thing"
 
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-FORCE-001",
@@ -418,7 +419,7 @@ class TestSetPlanEndpoint:
 
         # Try to set a new plan without force - should fail
         new_plan_content = "**Goal:** Second thing\n\n### Task 1: Second thing"
-        response = test_client.post(
+        response = await test_client.post(
             f"/api/workflows/{workflow_id}/plan",
             json={"plan_content": new_plan_content},  # force defaults to False
         )
@@ -426,7 +427,7 @@ class TestSetPlanEndpoint:
         assert response.status_code == status.HTTP_409_CONFLICT
 
         # Now try with force=True - should succeed
-        response = test_client.post(
+        response = await test_client.post(
             f"/api/workflows/{workflow_id}/plan",
             json={"plan_content": new_plan_content, "force": True},
         )
@@ -437,12 +438,12 @@ class TestSetPlanEndpoint:
         # Verify plan was updated
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.goal == "Second thing"
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.goal == "Second thing"
 
     async def test_set_plan_with_file_does_not_duplicate(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
         tmp_path: Path,
@@ -455,7 +456,7 @@ class TestSetPlanEndpoint:
         resolved_path = str(git_dir.resolve())
 
         # First create a pending workflow (no plan)
-        create_resp = test_client.post(
+        create_resp = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-888",
@@ -473,7 +474,7 @@ class TestSetPlanEndpoint:
         custom_plan.parent.mkdir(parents=True, exist_ok=True)
         custom_plan.write_text("**Goal:** Do it\n\n### Task 1: Do it\n\nDo the thing.\n")
 
-        response = test_client.post(
+        response = await test_client.post(
             f"/api/workflows/{workflow_id}/plan",
             json={"plan_file": str(custom_plan)},
         )
@@ -494,7 +495,7 @@ class TestExternalPlanValidation:
 
     async def test_set_plan_with_empty_content_returns_error(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
         tmp_path: Path,
@@ -507,7 +508,7 @@ class TestExternalPlanValidation:
         resolved_path = str(git_dir.resolve())
 
         # Create workflow
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-EMPTY-002",
@@ -519,7 +520,7 @@ class TestExternalPlanValidation:
         workflow_id = response.json()["id"]
 
         # Try to set plan with whitespace-only content
-        response = test_client.post(
+        response = await test_client.post(
             f"/api/workflows/{workflow_id}/plan",
             json={"plan_content": "   \n\n   "},
         )
@@ -529,7 +530,7 @@ class TestExternalPlanValidation:
 
     async def test_set_plan_with_nonexistent_file_returns_error(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
         tmp_path: Path,
@@ -542,7 +543,7 @@ class TestExternalPlanValidation:
         resolved_path = str(git_dir.resolve())
 
         # Create workflow
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-NOFILE-001",
@@ -554,7 +555,7 @@ class TestExternalPlanValidation:
         workflow_id = response.json()["id"]
 
         # Try to set plan with non-existent file
-        response = test_client.post(
+        response = await test_client.post(
             f"/api/workflows/{workflow_id}/plan",
             json={"plan_file": "nonexistent/plan.md"},
         )
@@ -569,7 +570,7 @@ class TestExternalPlanTaskCount:
 
     async def test_plan_with_multiple_tasks_counts_correctly(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
         tmp_path: Path,
@@ -597,7 +598,7 @@ Add the API routes.
 Write unit tests.
 """
 
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-TASKS-001",
@@ -614,5 +615,5 @@ Write unit tests.
         # Verify task count
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.total_tasks == 3
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.total_tasks == 3

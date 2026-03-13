@@ -14,7 +14,7 @@ from amelia.server.models.state import ServerExecutionState
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql://amelia:amelia@localhost:5432/amelia_test",
+    "postgresql://amelia:amelia@localhost:5434/amelia_test",
 )
 
 

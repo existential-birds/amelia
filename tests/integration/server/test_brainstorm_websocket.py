@@ -11,24 +11,31 @@ Real components:
 
 Only mocked:
 - Driver (execute_agentic as async generator)
+
+Uses httpx.AsyncClient with ASGITransport to keep the ASGI app in the
+same event loop as the asyncpg pool (TestClient creates a separate thread
+with its own event loop, causing asyncpg event loop mismatches).
 """
 
-from collections.abc import AsyncGenerator, Generator
-from contextlib import asynccontextmanager
+import json
+import re
+import uuid
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+import httpx
 import pytest
-from fastapi.testclient import TestClient
+from fastapi import FastAPI
 
 from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverInterface
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.connection import Database
 from amelia.server.database.profile_repository import ProfileRepository
-from amelia.server.dependencies import get_profile_repository
+from amelia.server.dependencies import get_orchestrator, get_profile_repository
 from amelia.server.events.bus import EventBus
 from amelia.server.events.connection_manager import ConnectionManager
 from amelia.server.main import create_app
@@ -40,6 +47,8 @@ from amelia.server.routes.brainstorm import (
 )
 from amelia.server.services.brainstorm import BrainstormService
 from tests.conftest import create_mock_execute_agentic
+
+from .conftest import AsyncClientFactory, noop_lifespan
 
 
 # =============================================================================
@@ -122,27 +131,51 @@ def mock_driver() -> MagicMock:
     return driver
 
 
-@pytest.fixture
-def test_client(
-    test_brainstorm_service: BrainstormService,
-    test_profile_repository: ProfileRepository,
-    mock_driver: MagicMock,
-    tmp_path: Path,
-) -> TestClient:
-    """Create test client with real dependencies."""
+def _create_app_with_overrides(
+    brainstorm_service: BrainstormService,
+    driver: MagicMock,
+    cwd: str,
+) -> FastAPI:
+    """Create FastAPI app with noop lifespan and dependency overrides."""
     app = create_app()
 
-    @asynccontextmanager
-    async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-        yield
-
     app.router.lifespan_context = noop_lifespan
-    app.dependency_overrides[get_brainstorm_service] = lambda: test_brainstorm_service
-    app.dependency_overrides[get_profile_repository] = lambda: test_profile_repository
-    app.dependency_overrides[get_driver] = lambda: mock_driver
-    app.dependency_overrides[get_cwd] = lambda: str(tmp_path)
+    app.dependency_overrides[get_brainstorm_service] = lambda: brainstorm_service
+    app.dependency_overrides[get_driver] = lambda: driver
+    app.dependency_overrides[get_cwd] = lambda: cwd
 
-    return TestClient(app)
+    # Override dependencies that would otherwise require the database lifespan
+    mock_profile_repo = AsyncMock()
+    mock_profile_repo.get_profile = AsyncMock(return_value=None)
+    app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
+
+    mock_orch = MagicMock()
+    mock_orch.queue_workflow = AsyncMock(
+        return_value="00000000-0000-4000-8000-000000000001"
+    )
+    app.dependency_overrides[get_orchestrator] = lambda: mock_orch
+
+    return app
+
+
+@pytest.fixture
+async def test_client(
+    test_brainstorm_service: BrainstormService,
+    mock_driver: MagicMock,
+    tmp_path: Path,
+    async_client_factory: AsyncClientFactory,
+) -> AsyncGenerator[httpx.AsyncClient, None]:
+    """Create async test client with real dependencies.
+
+    Uses httpx.AsyncClient with ASGITransport so the ASGI app runs in the
+    same event loop as the asyncpg pool created by test_db.
+    """
+    app = _create_app_with_overrides(
+        test_brainstorm_service, mock_driver, str(tmp_path)
+    )
+
+    async with async_client_factory(app) as client:
+        yield client
 
 
 # =============================================================================
@@ -150,31 +183,35 @@ def test_client(
 # =============================================================================
 
 
-def create_session_and_send_message(
-    client: TestClient,
+async def create_session_and_send_message(
+    client: httpx.AsyncClient,
     message: str = "Test message",
 ) -> str:
     """Create a brainstorm session and send a message.
 
     Args:
-        client: The test client to use.
+        client: The async test client to use.
         message: The message content to send.
 
     Returns:
         The session ID.
     """
-    create_resp = client.post(
+    create_resp = await client.post(
         "/api/brainstorm/sessions",
         json={"profile_id": "test"},
     )
-    assert create_resp.status_code == 201, f"Failed to create session: {create_resp.json()}"
+    assert create_resp.status_code == 201, (
+        f"Failed to create session: {create_resp.json()}"
+    )
     session_id = create_resp.json()["session"]["id"]
 
-    msg_resp = client.post(
+    msg_resp = await client.post(
         f"/api/brainstorm/sessions/{session_id}/message",
         json={"content": message},
     )
-    assert msg_resp.status_code == 202, f"Failed to send message: {msg_resp.json()}"
+    assert msg_resp.status_code == 202, (
+        f"Failed to send message: {msg_resp.json()}"
+    )
 
     return session_id
 
@@ -188,13 +225,13 @@ def create_session_and_send_message(
 class TestBrainstormEventEmission:
     """Test that brainstorm operations emit the correct events."""
 
-    def test_send_message_emits_reasoning_event(
+    async def test_send_message_emits_reasoning_event(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
         """THINKING agentic message should emit BRAINSTORM_REASONING event."""
-        create_session_and_send_message(test_client)
+        await create_session_and_send_message(test_client)
 
         # Find reasoning event
         reasoning_events = [
@@ -205,13 +242,13 @@ class TestBrainstormEventEmission:
         assert reasoning_events[0].message is not None
         assert reasoning_events[0].agent == "brainstormer"
 
-    def test_send_message_emits_tool_call_event(
+    async def test_send_message_emits_tool_call_event(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
         """TOOL_CALL agentic message should emit BRAINSTORM_TOOL_CALL event."""
-        create_session_and_send_message(test_client)
+        await create_session_and_send_message(test_client)
 
         # Find tool call event
         tool_call_events = [
@@ -221,13 +258,13 @@ class TestBrainstormEventEmission:
         assert len(tool_call_events) >= 1
         assert tool_call_events[0].tool_name == "read_file"
 
-    def test_send_message_emits_tool_result_event(
+    async def test_send_message_emits_tool_result_event(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
         """TOOL_RESULT agentic message should emit BRAINSTORM_TOOL_RESULT event."""
-        create_session_and_send_message(test_client)
+        await create_session_and_send_message(test_client)
 
         # Find tool result event
         tool_result_events = [
@@ -237,13 +274,13 @@ class TestBrainstormEventEmission:
         assert len(tool_result_events) >= 1
         assert tool_result_events[0].tool_name == "read_file"
 
-    def test_send_message_emits_text_event(
+    async def test_send_message_emits_text_event(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
         """RESULT agentic message should emit BRAINSTORM_TEXT event."""
-        create_session_and_send_message(test_client)
+        await create_session_and_send_message(test_client)
 
         # Find text event
         text_events = [
@@ -252,13 +289,13 @@ class TestBrainstormEventEmission:
         ]
         assert len(text_events) >= 1
 
-    def test_send_message_emits_message_complete_event(
+    async def test_send_message_emits_message_complete_event(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
         """Completing a message should emit BRAINSTORM_MESSAGE_COMPLETE event."""
-        create_session_and_send_message(test_client)
+        await create_session_and_send_message(test_client)
 
         # Find complete event
         complete_events = [
@@ -268,13 +305,13 @@ class TestBrainstormEventEmission:
         assert len(complete_events) == 1
         assert "message_id" in (complete_events[0].data or {})
 
-    def test_send_message_events_have_correct_workflow_id(
+    async def test_send_message_events_have_correct_workflow_id(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
         """All events should have the session_id as workflow_id."""
-        session_id = create_session_and_send_message(test_client)
+        session_id = await create_session_and_send_message(test_client)
 
         # All brainstorm events should have correct workflow_id
         brainstorm_events = [
@@ -287,7 +324,7 @@ class TestBrainstormEventEmission:
             if e.event_type != EventType.BRAINSTORM_SESSION_CREATED
         ]
         for event in message_events:
-            assert event.workflow_id == session_id
+            assert event.workflow_id == uuid.UUID(session_id)
 
 
 @pytest.mark.integration
@@ -296,64 +333,68 @@ class TestBrainstormArtifactEvents:
 
     @pytest.fixture
     def mock_driver_with_write_file(self) -> MagicMock:
-        """Create a mock driver that emits write_file tool call."""
+        """Create a mock driver that creates the plan file on disk.
+
+        The service detects artifacts by checking if the plan file exists
+        after driver execution, so the mock must actually create the file.
+        """
         driver = MagicMock(spec=DriverInterface)
         messages = [
             AgenticMessage(
-                type=AgenticMessageType.TOOL_CALL,
-                tool_name="write_file",
-                tool_input={"path": "docs/design.md", "content": "# Design"},
-                tool_call_id="call-write",
-            ),
-            AgenticMessage(
-                type=AgenticMessageType.TOOL_RESULT,
-                tool_name="write_file",
-                tool_output="Written successfully",
-                tool_call_id="call-write",
-                is_error=False,
+                type=AgenticMessageType.THINKING,
+                content="I'll create a design document...",
             ),
             AgenticMessage(
                 type=AgenticMessageType.RESULT,
                 content="Created the document.",
+                session_id="driver-session-artifact",
             ),
         ]
-        driver.execute_agentic = create_mock_execute_agentic(messages)
+
+        async def mock_execute_agentic(
+            *args: Any, **kwargs: Any
+        ) -> AsyncGenerator[AgenticMessage, None]:
+            # Extract cwd and instructions to create the plan file on disk
+            cwd = kwargs.get("cwd", "")
+            instructions = kwargs.get("instructions", "")
+            match = re.search(
+                r"Write the validated design to `([^`]+)`", instructions
+            )
+            if match and cwd:
+                plan_path = match.group(1)
+                abs_path = Path(cwd) / plan_path
+                abs_path.parent.mkdir(parents=True, exist_ok=True)
+                abs_path.write_text("# Design\n\nOverview...")
+
+            for msg in messages:
+                yield msg
+
+        driver.execute_agentic = mock_execute_agentic
         return driver
 
     @pytest.fixture
-    def test_client_with_write_file(
+    async def test_client_with_write_file(
         self,
         test_brainstorm_service: BrainstormService,
-        test_profile_repository: ProfileRepository,
         mock_driver_with_write_file: MagicMock,
         tmp_path: Path,
-    ) -> TestClient:
-        """Create test client with driver that emits write_file."""
-        app = create_app()
-
-        @asynccontextmanager
-        async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-            yield
-
-        app.router.lifespan_context = noop_lifespan
-        app.dependency_overrides[get_brainstorm_service] = (
-            lambda: test_brainstorm_service
+        async_client_factory: AsyncClientFactory,
+    ) -> AsyncGenerator[httpx.AsyncClient, None]:
+        """Create async test client with driver that emits write_file."""
+        app = _create_app_with_overrides(
+            test_brainstorm_service, mock_driver_with_write_file, str(tmp_path)
         )
-        app.dependency_overrides[get_profile_repository] = (
-            lambda: test_profile_repository
-        )
-        app.dependency_overrides[get_driver] = lambda: mock_driver_with_write_file
-        app.dependency_overrides[get_cwd] = lambda: str(tmp_path)
 
-        return TestClient(app)
+        async with async_client_factory(app) as client:
+            yield client
 
-    def test_write_file_emits_artifact_created_event(
+    async def test_write_file_emits_artifact_created_event(
         self,
-        test_client_with_write_file: TestClient,
+        test_client_with_write_file: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
         """Successful write_file should emit BRAINSTORM_ARTIFACT_CREATED event."""
-        session_id = create_session_and_send_message(
+        session_id = await create_session_and_send_message(
             test_client_with_write_file, message="Create design doc"
         )
 
@@ -365,9 +406,10 @@ class TestBrainstormArtifactEvents:
         assert len(artifact_events) == 1
 
         event = artifact_events[0]
-        assert event.workflow_id == session_id
+        assert event.workflow_id == uuid.UUID(session_id)
         assert event.data is not None
-        assert event.data["path"] == "docs/design.md"
+        assert "docs/plans/" in event.data["path"]
+        assert event.data["path"].endswith(".md")
         assert "id" in event.data
 
 
@@ -375,51 +417,13 @@ class TestBrainstormArtifactEvents:
 class TestBrainstormWebSocketBroadcast:
     """Test that events are broadcast to WebSocket clients."""
 
-    @pytest.fixture
-    def websocket_app(
+    async def test_event_bus_connection_manager_wiring(
         self,
         test_brainstorm_service: BrainstormService,
-        test_profile_repository: ProfileRepository,
         test_event_bus: EventBus,
         mock_driver: MagicMock,
         tmp_path: Path,
-    ) -> Generator[TestClient, None, None]:
-        """Create app with WebSocket broadcasting enabled."""
-        app = create_app()
-
-        # Create a connection manager and link it to the event bus
-        cm = ConnectionManager()
-        test_event_bus.set_connection_manager(cm)
-
-        @asynccontextmanager
-        async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-            yield
-
-        app.router.lifespan_context = noop_lifespan
-        app.dependency_overrides[get_brainstorm_service] = (
-            lambda: test_brainstorm_service
-        )
-        app.dependency_overrides[get_profile_repository] = (
-            lambda: test_profile_repository
-        )
-        app.dependency_overrides[get_driver] = lambda: mock_driver
-        app.dependency_overrides[get_cwd] = lambda: str(tmp_path)
-
-        # Replace global connection manager with our test one
-        import amelia.server.routes.websocket as ws_module
-        original_cm = ws_module.connection_manager
-        ws_module.connection_manager = cm
-
-        client = TestClient(app)
-        yield client
-
-        # Restore
-        ws_module.connection_manager = original_cm
-
-    async def test_event_bus_connection_manager_wiring(
-        self,
-        websocket_app: TestClient,
-        test_event_bus: EventBus,
+        async_client_factory: AsyncClientFactory,
     ) -> None:
         """Verify EventBus is wired to ConnectionManager for WebSocket broadcast.
 
@@ -431,11 +435,20 @@ class TestBrainstormWebSocketBroadcast:
         The actual event emission is tested in TestBrainstormEventEmission.
         This test focuses on the WebSocket infrastructure being correctly wired.
         """
+        # Create a connection manager and link it to the event bus
+        cm = ConnectionManager()
+        test_event_bus.set_connection_manager(cm)
+
         # Verify the event bus has a connection manager set
         assert test_event_bus._connection_manager is not None
 
-        # Create session and send message to trigger event flow
-        create_session_and_send_message(websocket_app, message="Hello")
+        app = _create_app_with_overrides(
+            test_brainstorm_service, mock_driver, str(tmp_path)
+        )
+
+        async with async_client_factory(app) as client:
+            # Create session and send message to trigger event flow
+            await create_session_and_send_message(client, message="Hello")
 
         # Wait for any pending broadcasts to complete
         await test_event_bus.wait_for_broadcasts()
@@ -456,14 +469,14 @@ class TestBrainstormEventDataField:
         "event_type",
         [EventType.BRAINSTORM_TEXT, EventType.BRAINSTORM_REASONING],
     )
-    def test_event_has_session_id_in_data(
+    async def test_event_has_session_id_in_data(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
         event_type: EventType,
     ) -> None:
         """Brainstorm events must have session_id in data for wire format."""
-        session_id = create_session_and_send_message(test_client)
+        session_id = await create_session_and_send_message(test_client)
 
         # Find events of the specified type
         matching_events = [
@@ -478,13 +491,13 @@ class TestBrainstormEventDataField:
         assert "session_id" in event.data, "Event must have session_id in data"
         assert event.data["session_id"] == session_id
 
-    def test_message_complete_event_has_session_id_and_message_id(
+    async def test_message_complete_event_has_session_id_and_message_id(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
         """BRAINSTORM_MESSAGE_COMPLETE must have session_id and message_id in data."""
-        session_id = create_session_and_send_message(test_client)
+        session_id = await create_session_and_send_message(test_client)
 
         # Find complete event
         complete_events = [
@@ -497,7 +510,7 @@ class TestBrainstormEventDataField:
         event = complete_events[0]
         assert event.data is not None, "Event data field must not be None"
         assert "session_id" in event.data, "Event must have session_id in data"
-        assert event.data["session_id"] == session_id
+        assert event.data["session_id"] == uuid.UUID(session_id)
         assert "message_id" in event.data, "Event must have message_id in data"
 
 
@@ -509,7 +522,7 @@ class TestBrainstormWireFormat:
     def mock_websocket(self) -> AsyncMock:
         """Create a mock WebSocket connection."""
         ws = AsyncMock()
-        ws.send_json = AsyncMock()
+        ws.send_text = AsyncMock()
         return ws
 
     @pytest.fixture
@@ -548,12 +561,12 @@ class TestBrainstormWireFormat:
         await connection_manager.broadcast(event)
 
         # Verify the wire format
-        mock_websocket.send_json.assert_called_once()
-        payload = mock_websocket.send_json.call_args[0][0]
+        mock_websocket.send_text.assert_called_once()
+        payload = json.loads(mock_websocket.send_text.call_args[0][0])
 
         assert payload["type"] == "brainstorm"
         assert payload["event_type"] == "text"  # brainstorm_ prefix stripped
-        assert payload["session_id"] == "session-123"
+        assert payload["session_id"] == str(event.workflow_id)
         assert payload["message_id"] == "msg-1"
         assert payload["data"]["text"] == "Hello world"
         assert "timestamp" in payload
@@ -580,12 +593,12 @@ class TestBrainstormWireFormat:
 
         await connection_manager.broadcast(event)
 
-        mock_websocket.send_json.assert_called_once()
-        payload = mock_websocket.send_json.call_args[0][0]
+        mock_websocket.send_text.assert_called_once()
+        payload = json.loads(mock_websocket.send_text.call_args[0][0])
 
         assert payload["type"] == "event"
         assert "payload" in payload
-        assert payload["payload"]["id"] == event.id
+        assert payload["payload"]["id"] == str(event.id)
 
     async def test_brainstorm_message_complete_event(
         self,
@@ -614,7 +627,8 @@ class TestBrainstormWireFormat:
 
         await connection_manager.broadcast(event)
 
-        payload = mock_websocket.send_json.call_args[0][0]
+        mock_websocket.send_text.assert_called_once()
+        payload = json.loads(mock_websocket.send_text.call_args[0][0])
 
         assert payload["type"] == "brainstorm"
         assert payload["event_type"] == "message_complete"

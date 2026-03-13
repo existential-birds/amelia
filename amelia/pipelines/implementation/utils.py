@@ -242,7 +242,7 @@ def _extract_key_files_from_plan(plan_content: str) -> list[str]:
     # - Test: `tests/path/test.py`
     file_patterns = [
         r"(?:Create|Modify|Test|Edit|Update|Delete):\s*`([^`]+)`",
-        r"(?:Create|Modify|Test|Edit|Update|Delete):\s*(\S+\.(?:py|ts|tsx|js|jsx|go|rs|md))",
+        r"(?:Create|Modify|Test|Edit|Update|Delete):\s*(?!`)(\S+\.(?:py|ts|tsx|js|jsx|go|rs|md))",
     ]
 
     for pattern in file_patterns:

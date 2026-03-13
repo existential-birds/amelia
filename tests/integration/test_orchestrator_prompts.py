@@ -5,6 +5,7 @@ Tests that prompts flow from orchestrator config through to agents.
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -53,7 +54,7 @@ class TestOrchestratorPromptInjection:
         )
         issue = make_issue(id="TEST-1", title="Test feature")
         state = make_execution_state(issue=issue, profile=profile)
-        config = make_config(thread_id="test-wf-1", profile=profile, prompts=prompts)
+        config = make_config(thread_id=str(uuid4()), profile=profile, prompts=prompts)
 
         # The architect now uses execute_agentic which yields AgenticMessage events
         plan_content = "**Goal:** Test goal\n\n# Test Plan"
@@ -91,7 +92,7 @@ class TestOrchestratorPromptInjection:
             code_changes_for_review="diff content",
             base_commit="abc123",
         )
-        config = make_config(thread_id="test-wf-2", profile=profile, prompts=prompts)
+        config = make_config(thread_id=str(uuid4()), profile=profile, prompts=prompts)
 
         mock_messages = make_reviewer_agentic_messages(approved=True)
         captured_kwargs: list[dict[str, Any]] = []
@@ -121,7 +122,7 @@ class TestOrchestratorPromptInjection:
             goal="Implement feature",
             plan_markdown="# Plan\n\n## Phase 1\n\n### Task 1: Build\n\nDo it.",
         )
-        config = make_config(thread_id="test-wf-dev-1", profile=profile, prompts=prompts)
+        config = make_config(thread_id=str(uuid4()), profile=profile, prompts=prompts)
 
         mock_messages = [
             AgenticMessage(
@@ -155,7 +156,7 @@ class TestOrchestratorPromptInjection:
         issue = make_issue(id="TEST-1", title="Test feature")
         state = make_execution_state(issue=issue, profile=profile)
         # No prompts in config
-        config = make_config(thread_id="test-wf-3", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         # The architect uses execute_agentic which takes instructions parameter
         plan_content = "**Goal:** Test goal\n\n# Test Plan"
@@ -190,7 +191,7 @@ class TestOrchestratorPromptInjection:
         issue = make_issue(id="TEST-1", title="Test feature")
         state = make_execution_state(issue=issue, profile=profile)
         # Empty prompts dict
-        config = make_config(thread_id="test-wf-4", profile=profile, prompts={})
+        config = make_config(thread_id=str(uuid4()), profile=profile, prompts={})
 
         # The architect uses execute_agentic which takes instructions parameter
         plan_content = "**Goal:** Test goal\n\n# Test Plan"
@@ -235,7 +236,7 @@ class TestOrchestratorPromptInjection:
             code_changes_for_review="diff content",
             last_reviews=[review_result],
         )
-        config = make_config(thread_id="test-wf-5", profile=profile, prompts=prompts)
+        config = make_config(thread_id=str(uuid4()), profile=profile, prompts=prompts)
 
         mock_llm_response = EvaluationOutput(
             evaluated_items=[
@@ -279,7 +280,7 @@ class TestOrchestratorPromptInjection:
             last_reviews=[review_result],
         )
         # No prompts in config
-        config = make_config(thread_id="test-wf-6", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         mock_llm_response = EvaluationOutput(
             evaluated_items=[

@@ -1,5 +1,7 @@
 """Tests for schema migrator."""
 
+import os
+
 import pytest
 
 from amelia.server.database.connection import Database
@@ -8,7 +10,10 @@ from amelia.server.database.migrator import Migrator
 
 pytestmark = pytest.mark.integration
 
-DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://amelia:amelia@localhost:5434/amelia_test",
+)
 
 
 @pytest.fixture
@@ -59,7 +64,7 @@ async def test_migrator_records_version(db):
     migrator = Migrator(db)
     await migrator.run()
     version = await db.fetch_scalar("SELECT MAX(version) FROM schema_migrations")
-    assert version == 1
+    assert version == 8
 
 
 async def test_migrator_is_idempotent(db):
@@ -67,4 +72,4 @@ async def test_migrator_is_idempotent(db):
     await migrator.run()
     await migrator.run()  # Should not fail
     version = await db.fetch_scalar("SELECT MAX(version) FROM schema_migrations")
-    assert version == 1
+    assert version == 8

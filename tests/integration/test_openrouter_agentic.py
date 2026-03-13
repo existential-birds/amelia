@@ -7,36 +7,52 @@ Note: Free models may be rate-limited or occasionally fail. These tests are mark
 as integration tests and excluded from the default test run. Run explicitly with:
     pytest -m integration
 """
+import asyncio
 import os
 from pathlib import Path
 
 import pytest
-from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 
+from amelia.core.exceptions import ModelProviderError
 from amelia.drivers.api.deepagents import ApiDriver
+from amelia.drivers.base import AgenticMessage, AgenticMessageType
 
 from .conftest import OPENROUTER_FREE_MODEL
 
 
 # Maximum retries for flaky free model API calls
-MAX_RETRIES = 3
+MAX_RETRIES = 5
 
 
 async def _execute_with_retry(
     driver: ApiDriver,
     prompt: str,
-) -> list[BaseMessage]:
+    cwd: str | None = None,
+) -> list[AgenticMessage]:
     """Execute agentic call with retry logic for flaky free models."""
+    effective_cwd = cwd or driver.cwd or "."
+    messages: list[AgenticMessage] = []
     for attempt in range(MAX_RETRIES):
-        messages: list[BaseMessage] = []
-        async for message in driver.execute_agentic(prompt):
-            messages.append(message)
+        messages = []
+        try:
+            async for message in driver.execute_agentic(prompt, cwd=effective_cwd):
+                messages.append(message)
+        except (ModelProviderError, RuntimeError) as exc:
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(min(2 ** (attempt + 2), 30))
+                continue
+            # Free models are frequently rate-limited or quota-exceeded; skip rather than fail
+            exc_str = str(exc).lower()
+            if "429" in str(exc) or "402" in str(exc) or "rate" in exc_str or "limit" in exc_str:
+                pytest.skip(f"OpenRouter free model unavailable after {MAX_RETRIES} retries: {exc}")
+            raise
 
-        # Success if we got a ToolMessage (model used tools as expected)
-        if any(isinstance(m, ToolMessage) for m in messages):
+        # Success if we got a tool call (model used tools as expected)
+        if any(m.type == AgenticMessageType.TOOL_CALL for m in messages):
             return messages
         # If no tool use, retry
         if attempt < MAX_RETRIES - 1:
+            await asyncio.sleep(1)
             continue
 
     # Return last attempt's messages for assertion
@@ -64,11 +80,11 @@ class TestOpenRouterAgenticIntegration:
             prompt="Run 'echo hello' and tell me the output",
         )
 
-        # Should have AIMessage and ToolMessage
-        has_ai_message = any(isinstance(m, AIMessage) for m in messages)
-        has_tool_message = any(isinstance(m, ToolMessage) for m in messages)
-        assert has_ai_message, f"Expected AIMessage, got: {[type(m).__name__ for m in messages]}"
-        assert has_tool_message, f"Expected ToolMessage, got: {[type(m).__name__ for m in messages]}"
+        # Should have TOOL_CALL and RESULT messages
+        has_tool_call = any(m.type == AgenticMessageType.TOOL_CALL for m in messages)
+        has_result = any(m.type == AgenticMessageType.RESULT for m in messages)
+        assert has_tool_call, f"Expected TOOL_CALL, got: {[m.type for m in messages]}"
+        assert has_result, f"Expected RESULT, got: {[m.type for m in messages]}"
 
     async def test_file_write(self, tmp_path: Path) -> None:
         """Should write a file via OpenRouter."""
@@ -84,8 +100,8 @@ class TestOpenRouterAgenticIntegration:
         assert hello_file.exists(), "File should have been created"
         assert "Hello" in hello_file.read_text()
 
-        # Should have AIMessage and ToolMessage
-        has_ai_message = any(isinstance(m, AIMessage) for m in messages)
-        has_tool_message = any(isinstance(m, ToolMessage) for m in messages)
-        assert has_ai_message
-        assert has_tool_message
+        # Should have TOOL_CALL and RESULT messages
+        has_tool_call = any(m.type == AgenticMessageType.TOOL_CALL for m in messages)
+        has_result = any(m.type == AgenticMessageType.RESULT for m in messages)
+        assert has_tool_call
+        assert has_result

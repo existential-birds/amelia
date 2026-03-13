@@ -62,9 +62,9 @@ class TestReplanFlow:
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
         assert workflow.workflow_status == WorkflowStatus.BLOCKED
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.goal == "Original goal from architect"
-        assert "Original Plan" in (workflow.execution_state.plan_markdown or "")
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.goal == "Original goal from architect"
+        assert "Original Plan" in (workflow.plan_cache.plan_markdown or "")
 
         # Phase 2: replan -> PENDING -> BLOCKED (with new plan)
         async with mock_langgraph_for_planning(
@@ -81,9 +81,9 @@ class TestReplanFlow:
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
         assert workflow.workflow_status == WorkflowStatus.BLOCKED
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.goal == "New goal after replan"
-        assert "Revised Plan" in (workflow.execution_state.plan_markdown or "")
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.goal == "New goal after replan"
+        assert "Revised Plan" in (workflow.plan_cache.plan_markdown or "")
 
         # Verify events include replanning stage
         stage_events = [
@@ -170,8 +170,8 @@ class TestReplanFlow:
         # Verify old plan is set
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.goal == "Old goal"
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.goal == "Old goal"
 
         # Phase 2: replan with new plan
         async with mock_langgraph_for_planning(
@@ -185,9 +185,9 @@ class TestReplanFlow:
         # Verify new plan replaced old one
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.goal == "Fresh goal"
-        assert "Fresh Plan" in (workflow.execution_state.plan_markdown or "")
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.goal == "Fresh goal"
+        assert "Fresh Plan" in (workflow.plan_cache.plan_markdown or "")
         # Old plan should be gone
-        assert "Old goal" not in (workflow.execution_state.goal or "")
-        assert "Old Plan" not in (workflow.execution_state.plan_markdown or "")
+        assert "Old goal" not in (workflow.plan_cache.goal or "")
+        assert "Old Plan" not in (workflow.plan_cache.plan_markdown or "")

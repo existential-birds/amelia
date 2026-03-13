@@ -671,6 +671,7 @@ class OrchestratorService:
                 plan_markdown=plan_result.plan_markdown,
                 plan_path=str(plan_result.plan_path),
                 total_tasks=plan_result.total_tasks,
+                external_plan=True,
             )
 
         # Create ServerExecutionState in pending status (not started)
@@ -2911,6 +2912,7 @@ class OrchestratorService:
             plan_markdown=plan_result.plan_markdown,
             plan_path=str(plan_result.plan_path),
             total_tasks=plan_result.total_tasks,
+            external_plan=True,
         )
         await self._repository.update_plan_cache(workflow_id, plan_cache)
 

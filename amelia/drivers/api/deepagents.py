@@ -901,6 +901,12 @@ class ApiDriver(DriverInterface):
                 provider_name="openai-compatible",
                 original_message=str(e),
             ) from e
+        except openai.APIStatusError as e:
+            raise ModelProviderError(
+                f"API error (status {e.status_code}): {e.message}",
+                provider_name="openai-compatible",
+                original_message=str(e),
+            ) from e
         except Exception as e:
             raise RuntimeError(f"Agentic execution failed: {e}") from e
 

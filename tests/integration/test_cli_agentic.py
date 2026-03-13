@@ -386,7 +386,7 @@ class TestStatusCommand:
             result = runner.invoke(app, ["status"])
 
         assert result.exit_code == 0
-        assert "wf-status" in result.stdout or "TEST-STATUS" in result.stdout
+        assert "TEST-STATUS" in result.stdout or "TEST-S" in result.stdout
 
     def test_status_command_all_worktrees(self, tmp_path: Path) -> None:
         """amelia status --all should show all workflows."""
@@ -419,9 +419,9 @@ class TestStatusCommand:
 
         assert result.exit_code == 0
         assert "2" in result.stdout  # Total count
-        # Verify both worktrees appear
-        assert "worktree-1" in result.stdout or "wf-1" in result.stdout
-        assert "worktree-2" in result.stdout or "wf-2" in result.stdout
+        # Verify both workflows appear (by issue_id since worktree paths may be truncated)
+        assert "TEST-1" in result.stdout
+        assert "TEST-2" in result.stdout
 
     def test_status_command_no_workflows(
         self, tmp_path: Path, mock_worktree_context: MagicMock

@@ -1,5 +1,7 @@
 # tests/integration/server/database/test_prompt_schema.py
 """Tests for prompt database schema."""
+import uuid
+
 import asyncpg
 import pytest
 
@@ -52,12 +54,13 @@ async def test_can_insert_prompt_version(test_db: Database) -> None:
            VALUES ($1, $2, $3, $4)""",
         "architect.system", "architect", "Architect System", "Description",
     )
+    version_id = uuid.uuid4()
     await test_db.execute(
         """INSERT INTO prompt_versions (id, prompt_id, version_number, content, change_note)
            VALUES ($1, $2, $3, $4, $5)""",
-        "v-123", "architect.system", 1, "You are an architect...", "Initial",
+        version_id, "architect.system", 1, "You are an architect...", "Initial",
     )
-    result = await test_db.fetch_one("SELECT * FROM prompt_versions WHERE id = $1", "v-123")
+    result = await test_db.fetch_one("SELECT * FROM prompt_versions WHERE id = $1", version_id)
     assert result is not None
     assert result["version_number"] == 1
 
@@ -70,12 +73,12 @@ async def test_version_unique_constraint(test_db: Database) -> None:
     )
     await test_db.execute(
         "INSERT INTO prompt_versions (id, prompt_id, version_number, content) VALUES ($1, $2, $3, $4)",
-        "v1", "test.prompt", 1, "Content",
+        uuid.uuid4(), "test.prompt", 1, "Content",
     )
     with pytest.raises(asyncpg.exceptions.UniqueViolationError):
         await test_db.execute(
             "INSERT INTO prompt_versions (id, prompt_id, version_number, content) VALUES ($1, $2, $3, $4)",
-            "v2", "test.prompt", 1, "Duplicate version number",
+            uuid.uuid4(), "test.prompt", 1, "Duplicate version number",
         )
 
 
@@ -91,14 +94,15 @@ async def test_workflow_prompt_version_foreign_keys(test_db: Database) -> None:
         "INSERT INTO prompts (id, agent, name) VALUES ($1, $2, $3)",
         "test.prompt", "test", "Test",
     )
+    version_id = uuid.uuid4()
     await test_db.execute(
         "INSERT INTO prompt_versions (id, prompt_id, version_number, content) VALUES ($1, $2, $3, $4)",
-        "v1", "test.prompt", 1, "Content",
+        version_id, "test.prompt", 1, "Content",
     )
     await test_db.execute(
         """INSERT INTO workflow_prompt_versions (workflow_id, prompt_id, version_id)
            VALUES ($1, $2, $3)""",
-        wf_id, "test.prompt", "v1",
+        wf_id, "test.prompt", version_id,
     )
     result = await test_db.fetch_one(
         "SELECT * FROM workflow_prompt_versions WHERE workflow_id = $1", wf_id

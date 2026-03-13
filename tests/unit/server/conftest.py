@@ -17,7 +17,7 @@ from amelia.server.dependencies import get_repository
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql://amelia:amelia@localhost:5432/amelia_test",
+    "postgresql://amelia:amelia@localhost:5434/amelia_test",
 )
 
 

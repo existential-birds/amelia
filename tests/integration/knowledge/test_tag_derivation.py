@@ -53,9 +53,9 @@ This guide covers deploying applications to Kubernetes clusters.
 2. Apply the configuration
 """)
 
-    # Mock embedding client
+    # Mock embedding client - return one embedding per input text
     mock_embedding = AsyncMock(spec=EmbeddingClient)
-    mock_embedding.embed_batch.return_value = [[0.1] * 1536] * 3  # 3 chunks
+    mock_embedding.embed_batch.side_effect = lambda texts, **kw: [[0.1] * 1536] * len(texts)
 
     # Create pipeline with tag derivation enabled
     pipeline = IngestionPipeline(
@@ -66,7 +66,7 @@ This guide covers deploying applications to Kubernetes clusters.
     )
 
     # Mock only the LLM call for tag extraction
-    with patch("amelia.knowledge.ingestion.extract_structured") as mock_extract:
+    with patch("amelia.core.extraction.extract_structured") as mock_extract:
         mock_extract.return_value = TagExtractionOutput(
             tags=["kubernetes", "deployment", "docker", "containers", "kubectl"],
             reasoning="Document is a technical guide for deploying to Kubernetes",
@@ -121,9 +121,9 @@ async def test_tag_derivation_disabled(
 Learn Python basics.
 """)
 
-    # Mock embedding client
+    # Mock embedding client - return one embedding per input text
     mock_embedding = AsyncMock(spec=EmbeddingClient)
-    mock_embedding.embed_batch.return_value = [[0.1] * 1536] * 2
+    mock_embedding.embed_batch.side_effect = lambda texts, **kw: [[0.1] * 1536] * len(texts)
 
     # Create pipeline with tag derivation DISABLED
     pipeline = IngestionPipeline(
@@ -134,7 +134,7 @@ Learn Python basics.
     )
 
     # Run ingestion - should not call extract_structured
-    with patch("amelia.knowledge.ingestion.extract_structured") as mock_extract:
+    with patch("amelia.core.extraction.extract_structured") as mock_extract:
         result = await pipeline.ingest_document(
             document_id=doc.id,
             file_path=test_file,
@@ -179,9 +179,9 @@ async def test_tag_derivation_failure_non_blocking(
 Learn React components.
 """)
 
-    # Mock embedding client
+    # Mock embedding client - return one embedding per input text
     mock_embedding = AsyncMock(spec=EmbeddingClient)
-    mock_embedding.embed_batch.return_value = [[0.1] * 1536] * 2
+    mock_embedding.embed_batch.side_effect = lambda texts, **kw: [[0.1] * 1536] * len(texts)
 
     # Create pipeline with tag derivation enabled
     pipeline = IngestionPipeline(
@@ -192,7 +192,7 @@ Learn React components.
     )
 
     # Mock extract_structured to raise an exception
-    with patch("amelia.knowledge.ingestion.extract_structured") as mock_extract:
+    with patch("amelia.core.extraction.extract_structured") as mock_extract:
         mock_extract.side_effect = Exception("LLM API error")
 
         # Run ingestion - should complete despite tag derivation failure
@@ -244,9 +244,9 @@ Deploy serverless functions to AWS Lambda using Python.
 - Python 3.12
 """)
 
-    # Mock embedding client
+    # Mock embedding client - return one embedding per input text
     mock_embedding = AsyncMock(spec=EmbeddingClient)
-    mock_embedding.embed_batch.return_value = [[0.1] * 1536] * 3
+    mock_embedding.embed_batch.side_effect = lambda texts, **kw: [[0.1] * 1536] * len(texts)
 
     # Create pipeline with tag derivation enabled
     pipeline = IngestionPipeline(
@@ -257,7 +257,7 @@ Deploy serverless functions to AWS Lambda using Python.
     )
 
     # Mock LLM to derive additional tags
-    with patch("amelia.knowledge.ingestion.extract_structured") as mock_extract:
+    with patch("amelia.core.extraction.extract_structured") as mock_extract:
         mock_extract.return_value = TagExtractionOutput(
             tags=["lambda", "python", "deployment", "cloud", "functions"],
             reasoning="Guide covers Lambda deployment with Python",
