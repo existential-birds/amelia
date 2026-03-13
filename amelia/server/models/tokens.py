@@ -89,9 +89,11 @@ async def fetch_openrouter_pricing() -> dict[str, ModelPricing]:
         result: dict[str, ModelPricing] = {}
         for model_entry in data.get("data", []):
             try:
+                if not isinstance(model_entry, dict):
+                    continue
                 model_id = model_entry.get("id")
                 pricing = model_entry.get("pricing")
-                if not model_id or not pricing:
+                if not model_id or not isinstance(pricing, dict):
                     continue
 
                 prompt_str = pricing.get("prompt")
@@ -108,8 +110,8 @@ async def fetch_openrouter_pricing() -> dict[str, ModelPricing]:
                     cache_read=float(cache_read_str) * 1_000_000 if cache_read_str is not None else 0.0,
                     cache_write=float(cache_write_str) * 1_000_000 if cache_write_str is not None else 0.0,
                 )
-            except (ValueError, KeyError, TypeError):
-                logger.debug("Skipping malformed pricing entry", model_id=model_entry.get("id"))
+            except (AttributeError, ValueError, KeyError, TypeError):
+                logger.debug("Skipping malformed pricing entry", model_id=model_entry.get("id") if isinstance(model_entry, dict) else None)
                 continue
 
         return result
@@ -145,9 +147,10 @@ async def get_pricing(model: str) -> ModelPricing | None:
                 return _cached_pricing[model]
             return STATIC_FALLBACK_PRICING.get(model)
 
-        # Fetch and update cache
+        # Fetch and update cache, keeping last good data on failure
         new_pricing = await fetch_openrouter_pricing()
-        _cached_pricing = new_pricing
+        if new_pricing or not _cached_pricing:
+            _cached_pricing = new_pricing
         _cache_expires_at = time.time() + 86400  # 24-hour TTL
 
     # Look up model in cached pricing, then static fallback

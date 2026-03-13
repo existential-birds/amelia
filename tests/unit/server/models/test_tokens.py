@@ -292,6 +292,43 @@ class TestFetchOpenRouterPricing:
         assert "also-good/model" in result
         assert "bad/model" not in result
 
+    async def test_non_dict_entry_skipped(self) -> None:
+        """Non-dict entries in data array are skipped without affecting others."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "data": [
+                "not-a-dict",
+                None,
+                {
+                    "id": "good/model",
+                    "pricing": {
+                        "prompt": "0.000003",
+                        "completion": "0.000015",
+                    },
+                },
+                {
+                    "id": "bad-pricing",
+                    "pricing": "not-a-dict",
+                },
+            ]
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}),
+            patch("amelia.server.models.tokens.httpx.AsyncClient", return_value=mock_client),
+        ):
+            result = await fetch_openrouter_pricing()
+
+        assert "good/model" in result
+        assert len(result) == 1
+
     async def test_network_error_returns_empty_dict(self) -> None:
         """On network error, returns empty dict and logs warning."""
         mock_client = AsyncMock()
@@ -416,6 +453,24 @@ class TestGetPricing:
             await get_pricing("anything")
             # TTL should be set even though fetch returned empty
             assert tokens_mod._cache_expires_at > time.time()
+
+    async def test_preserves_cache_on_empty_refresh(self) -> None:
+        """When fetch returns empty, previous cached pricing is preserved."""
+        self._reset_cache()
+        import amelia.server.models.tokens as tokens_mod
+
+        old_pricing = ModelPricing(input=3.0, output=15.0, cache_read=0.3, cache_write=3.75)
+        tokens_mod._cached_pricing = {"anthropic/claude-sonnet-4": old_pricing}
+        tokens_mod._cache_expires_at = time.time() - 1  # expired
+
+        with patch(
+            "amelia.server.models.tokens.fetch_openrouter_pricing",
+            new_callable=AsyncMock,
+            return_value={},  # fetch failure
+        ):
+            pricing = await get_pricing("anthropic/claude-sonnet-4")
+            assert pricing is not None
+            assert pricing.input == 3.0  # preserved from old cache
 
     async def test_cached_pricing_preferred_over_static(self) -> None:
         """Cached (live) pricing is preferred over static fallback."""

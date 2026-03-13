@@ -278,19 +278,23 @@ class BrainstormerFilesystemMiddleware(FilesystemMiddleware):
         ]
 
 
-async def _build_message_usage(driver_usage: DriverUsage) -> MessageUsage:
+async def _build_message_usage(
+    driver_usage: DriverUsage,
+    fallback_model: str | None = None,
+) -> MessageUsage:
     """Build MessageUsage from driver usage, computing cost if needed.
 
     When the driver doesn't provide cost_usd, falls back to
-    calculate_token_cost using cached pricing data. Requires
-    driver_usage.model to be set for the fallback to activate.
+    calculate_token_cost using cached pricing data. Uses fallback_model
+    when driver_usage.model is not set.
     """
     cost = driver_usage.cost_usd or 0.0
 
     # Compute cost from cached pricing if driver didn't provide it
-    if not cost and driver_usage.model:
+    model = driver_usage.model or fallback_model
+    if not cost and model:
         cost = await calculate_token_cost(
-            model=driver_usage.model,
+            model=model,
             input_tokens=driver_usage.input_tokens or 0,
             output_tokens=driver_usage.output_tokens or 0,
             cache_read_tokens=driver_usage.cache_read_tokens or 0,
@@ -722,7 +726,10 @@ class BrainstormService:
             message_usage: MessageUsage | None = None
             driver_usage = driver.get_usage()
             if driver_usage:
-                message_usage = await _build_message_usage(driver_usage)
+                message_usage = await _build_message_usage(
+                    driver_usage,
+                    fallback_model=getattr(driver, "model", None),
+                )
 
             # Save assistant message
             assistant_sequence = user_sequence + 1

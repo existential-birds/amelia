@@ -128,3 +128,28 @@ class TestBrainstormCostFallback:
 
         assert result.cost_usd > 0.0
         mock_calc.assert_awaited_once()
+
+    @patch("amelia.server.services.brainstorm.calculate_token_cost", new_callable=AsyncMock)
+    async def test_fallback_model_used_when_driver_usage_model_is_none(
+        self, mock_calc: AsyncMock
+    ):
+        """When driver_usage.model is None but fallback_model is provided, cost is calculated."""
+        mock_calc.return_value = 0.0105
+
+        usage = _make_driver_usage(
+            input_tokens=1000,
+            output_tokens=500,
+            cost_usd=None,
+            model=None,
+        )
+
+        result = await _build_message_usage(usage, fallback_model="claude-sonnet-4-5-20251101")
+
+        assert result.cost_usd == pytest.approx(0.0105, abs=1e-6)
+        mock_calc.assert_awaited_once_with(
+            model="claude-sonnet-4-5-20251101",
+            input_tokens=1000,
+            output_tokens=500,
+            cache_read_tokens=0,
+            cache_creation_tokens=0,
+        )
