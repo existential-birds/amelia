@@ -134,13 +134,68 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated by roadmap) | | |
+| DATA-01 | Phase 1 | Pending |
+| DATA-02 | Phase 1 | Pending |
+| DATA-03 | Phase 1 | Pending |
+| DATA-04 | Phase 1 | Pending |
+| CONF-01 | Phase 1 | Pending |
+| CONF-02 | Phase 1 | Pending |
+| CONF-03 | Phase 1 | Pending |
+| CONF-04 | Phase 1 | Pending |
+| GHAPI-01 | Phase 2 | Pending |
+| GHAPI-02 | Phase 2 | Pending |
+| GHAPI-03 | Phase 2 | Pending |
+| GHAPI-04 | Phase 2 | Pending |
+| GHAPI-05 | Phase 2 | Pending |
+| GIT-01 | Phase 2 | Pending |
+| GIT-02 | Phase 2 | Pending |
+| GIT-03 | Phase 2 | Pending |
+| GIT-04 | Phase 2 | Pending |
+| CMNT-01 | Phase 3 | Pending |
+| CMNT-02 | Phase 3 | Pending |
+| CMNT-03 | Phase 3 | Pending |
+| CMNT-04 | Phase 3 | Pending |
+| CMNT-05 | Phase 3 | Pending |
+| PIPE-01 | Phase 4 | Pending |
+| PIPE-02 | Phase 4 | Pending |
+| PIPE-03 | Phase 4 | Pending |
+| PIPE-04 | Phase 4 | Pending |
+| PIPE-05 | Phase 4 | Pending |
+| PIPE-06 | Phase 5 | Pending |
+| PIPE-07 | Phase 5 | Pending |
+| PIPE-08 | Phase 5 | Pending |
+| ORCH-01 | Phase 6 | Pending |
+| ORCH-02 | Phase 6 | Pending |
+| ORCH-03 | Phase 6 | Pending |
+| TRIG-01 | Phase 7 | Pending |
+| TRIG-02 | Phase 7 | Pending |
+| TRIG-03 | Phase 7 | Pending |
+| TRIG-04 | Phase 7 | Pending |
+| TRIG-05 | Phase 7 | Pending |
+| POLL-01 | Phase 8 | Pending |
+| POLL-02 | Phase 8 | Pending |
+| POLL-03 | Phase 8 | Pending |
+| POLL-04 | Phase 8 | Pending |
+| POLL-05 | Phase 8 | Pending |
+| DASH-01 | Phase 9 | Pending |
+| DASH-02 | Phase 9 | Pending |
+| DASH-03 | Phase 9 | Pending |
+| DASH-04 | Phase 9 | Pending |
+| DASH-05 | Phase 9 | Pending |
+| METR-01 | Phase 10 | Pending |
+| METR-02 | Phase 10 | Pending |
+| METR-03 | Phase 10 | Pending |
+| METR-04 | Phase 10 | Pending |
+| METR-05 | Phase 10 | Pending |
+| METR-06 | Phase 10 | Pending |
+| METR-07 | Phase 10 | Pending |
+| METR-08 | Phase 10 | Pending |
 
 **Coverage:**
-- v1 requirements: 50 total
-- Mapped to phases: 0
-- Unmapped: 50 ⚠️
+- v1 requirements: 56 total
+- Mapped to phases: 56
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-13*
-*Last updated: 2026-03-13 after initial definition*
+*Last updated: 2026-03-13 after roadmap creation*
