@@ -1,0 +1,291 @@
+"""GitHub PR service for review comment operations via gh CLI.
+
+Provides async methods for fetching review comments, listing PRs,
+resolving threads, and replying to comments. All GitHub API calls
+use the ``gh`` CLI via ``asyncio.create_subprocess_exec``.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from pathlib import Path
+from typing import Any
+
+from loguru import logger
+
+from amelia.core.types import PRReviewComment, PRSummary
+
+
+AMELIA_FOOTER = "_Amelia (automated fix)_"
+
+_GRAPHQL_REVIEW_THREADS = """
+query($owner: String!, $repo: String!, $pr: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $pr) {
+      reviewThreads(first: 100) {
+        pageInfo { hasNextPage }
+        nodes {
+          id
+          isResolved
+          comments(first: 1) {
+            nodes { databaseId }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+_GRAPHQL_RESOLVE_THREAD = """
+mutation($threadId: ID!) {
+  resolveReviewThread(input: {threadId: $threadId}) {
+    thread { isResolved }
+  }
+}
+"""
+
+
+class GitHubPRService:
+    """Async service for GitHub PR operations via gh CLI.
+
+    All methods use ``asyncio.create_subprocess_exec`` to call the ``gh`` CLI,
+    which handles authentication and pagination transparently.
+    """
+
+    def __init__(self, repo_root: str | Path) -> None:
+        self._repo_root = str(repo_root)
+
+    async def _run_gh(
+        self,
+        *args: str,
+        timeout: float = 30.0,
+    ) -> str:
+        """Run a gh CLI command and return stdout.
+
+        Args:
+            *args: Arguments to pass to ``gh``.
+            timeout: Timeout in seconds (default 30).
+
+        Returns:
+            Decoded stdout string.
+
+        Raises:
+            ValueError: On non-zero exit code or timeout.
+        """
+        proc = await asyncio.create_subprocess_exec(
+            "gh",
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=self._repo_root,
+        )
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=timeout,
+            )
+        except TimeoutError as exc:
+            proc.kill()
+            await proc.wait()
+            raise ValueError(
+                f"gh command timed out after {timeout}s: gh {' '.join(args)}"
+            ) from exc
+
+        if proc.returncode != 0:
+            raise ValueError(
+                f"gh command failed: {stderr_bytes.decode().strip()}"
+            )
+        return stdout_bytes.decode()
+
+    def _should_skip_comment(
+        self,
+        comment_body: str,
+        comment_author: str,
+        ignore_authors: list[str],
+    ) -> bool:
+        """Check if a comment should be skipped.
+
+        Args:
+            comment_body: The comment body text.
+            comment_author: The comment author login.
+            ignore_authors: List of author logins to ignore.
+
+        Returns:
+            True if the comment should be skipped.
+        """
+        if AMELIA_FOOTER in comment_body:
+            return True
+        return comment_author in ignore_authors
+
+    async def fetch_review_comments(
+        self,
+        pr_number: int,
+        ignore_authors: list[str] | None = None,
+    ) -> list[PRReviewComment]:
+        """Fetch unresolved review comments on a PR.
+
+        Two-step approach: REST for comment data, GraphQL for thread
+        resolution status. Filters out resolved threads, self-authored
+        comments (Amelia footer), and ignore-listed authors.
+
+        Args:
+            pr_number: The PR number to fetch comments for.
+            ignore_authors: Optional list of author logins to skip.
+
+        Returns:
+            List of PRReviewComment instances for unresolved, non-skipped comments.
+        """
+        effective_ignore = ignore_authors or []
+
+        # Step 1: REST -- fetch all review comments
+        rest_raw = await self._run_gh(
+            "api", "--paginate",
+            f"/repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments",
+        )
+        comments_data: list[dict[str, Any]] = json.loads(rest_raw)
+
+        # Step 2: GraphQL -- get thread IDs and resolution status
+        graphql_raw = await self._run_gh(
+            "api", "graphql",
+            "-f", f"query={_GRAPHQL_REVIEW_THREADS}",
+            "-F", f"pr={pr_number}",
+            "-f", "owner={owner}",
+            "-f", "repo={repo}",
+        )
+        graphql_data = json.loads(graphql_raw)
+
+        # Build mapping: comment database ID -> thread info
+        threads = (
+            graphql_data
+            .get("data", {})
+            .get("repository", {})
+            .get("pullRequest", {})
+            .get("reviewThreads", {})
+        )
+
+        thread_nodes = threads.get("nodes", [])
+
+        if threads.get("pageInfo", {}).get("hasNextPage", False):
+            logger.warning(
+                "PR has more than 100 review threads; some may be missed",
+                pr_number=pr_number,
+            )
+
+        # Map comment databaseId -> (thread_id, is_resolved)
+        comment_thread_map: dict[int, tuple[str, bool]] = {}
+        for thread in thread_nodes:
+            thread_id = thread["id"]
+            is_resolved = thread["isResolved"]
+            for comment_node in thread.get("comments", {}).get("nodes", []):
+                db_id = comment_node.get("databaseId")
+                if db_id is not None:
+                    comment_thread_map[db_id] = (thread_id, is_resolved)
+
+        # Build PRReviewComment instances, filtering as needed
+        result: list[PRReviewComment] = []
+        for comment in comments_data:
+            comment_id = comment["id"]
+            body = comment.get("body", "")
+            author = comment.get("user", {}).get("login", "")
+
+            # Filter: resolved threads
+            thread_info = comment_thread_map.get(comment_id)
+            if thread_info is not None:
+                thread_id, is_resolved = thread_info
+                if is_resolved:
+                    continue
+            else:
+                thread_id = None
+
+            # Filter: self-comments and ignored authors
+            if self._should_skip_comment(body, author, effective_ignore):
+                continue
+
+            result.append(
+                PRReviewComment(
+                    id=comment_id,
+                    body=body,
+                    author=author,
+                    created_at=comment["created_at"],
+                    path=comment.get("path"),
+                    line=comment.get("line"),
+                    diff_hunk=comment.get("diff_hunk"),
+                    in_reply_to_id=comment.get("in_reply_to_id"),
+                    thread_id=thread_id,
+                    node_id=comment.get("node_id"),
+                    pr_number=pr_number,
+                ),
+            )
+
+        return result
+
+    async def list_open_prs(self) -> list[PRSummary]:
+        """List open PRs for the repository.
+
+        Returns:
+            List of PRSummary instances.
+        """
+        raw = await self._run_gh(
+            "pr", "list",
+            "--json", "number,title,headRefName,author,updatedAt",
+            "--state", "open",
+            "--limit", "100",
+        )
+        pr_data: list[dict[str, Any]] = json.loads(raw)
+
+        return [
+            PRSummary(
+                number=pr["number"],
+                title=pr["title"],
+                head_branch=pr["headRefName"],
+                author=pr["author"]["login"],
+                updated_at=pr["updatedAt"],
+            )
+            for pr in pr_data
+        ]
+
+    async def resolve_thread(self, thread_node_id: str) -> None:
+        """Resolve a review thread via GraphQL mutation.
+
+        Args:
+            thread_node_id: The GraphQL node ID of the review thread.
+
+        Raises:
+            ValueError: If the mutation fails.
+        """
+        await self._run_gh(
+            "api", "graphql",
+            "-f", f"query={_GRAPHQL_RESOLVE_THREAD}",
+            "-f", f"threadId={thread_node_id}",
+        )
+
+    async def reply_to_comment(
+        self,
+        pr_number: int,
+        comment_id: int,
+        body: str,
+        in_reply_to_id: int | None = None,
+    ) -> None:
+        """Reply to a review comment with Amelia footer.
+
+        Uses the parent comment ID when replying to a reply (Pitfall 7:
+        the reply endpoint requires the top-level comment ID).
+
+        Args:
+            pr_number: The PR number.
+            comment_id: The comment ID to reply to.
+            body: The reply body text.
+            in_reply_to_id: Parent comment ID if this is a nested reply.
+        """
+        full_body = f"{body}\n\n---\n{AMELIA_FOOTER}"
+
+        # Use parent ID if available (Pitfall 7)
+        target_id = in_reply_to_id if in_reply_to_id is not None else comment_id
+
+        await self._run_gh(
+            "api", "--method", "POST",
+            f"/repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments/{target_id}/replies",
+            "-f", f"body={full_body}",
+        )
