@@ -52,12 +52,11 @@ Plans:
   3. System can resolve a review thread via GraphQL and reply to a comment via REST
   4. System correctly detects and filters out bot-authored and self-authored comments
   5. System can stage, commit, pull-before-push, verify SHA, and push to a branch without overwriting human work
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
-- [ ] 02-03: TBD
+- [ ] 02-01-PLAN.md -- TDD: GitHubPRService (fetch comments, list PRs, resolve threads, reply, bot detection)
+- [ ] 02-02-PLAN.md -- TDD: GitOperations (stage/commit, safe push with divergence detection and branch protection)
 
 ### Phase 3: Comment Classification
 **Goal**: The system can take raw review comments and classify each as actionable or non-actionable based on the configured aggressiveness level
@@ -195,7 +194,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7/8 (parallel) ->
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Data Models & Configuration | 3/3 | Complete   | 2026-03-13 |
-| 2. GitHub API Layer | 0/3 | Not started | - |
+| 2. GitHub API Layer | 0/2 | Not started | - |
 | 3. Comment Classification | 0/2 | Not started | - |
 | 4. Core Fix Pipeline | 0/3 | Not started | - |
 | 5. Thread Resolution & Composition | 0/2 | Not started | - |
