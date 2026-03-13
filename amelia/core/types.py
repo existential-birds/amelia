@@ -233,6 +233,7 @@ class PRAutoFixConfig(BaseModel):
         auto_resolve: Whether to auto-resolve review threads after fix.
         max_iterations: Maximum fix attempts per review thread (1--10).
         commit_prefix: Prefix for auto-fix commit messages.
+        ignore_authors: Comment authors to ignore (exact username match).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -242,6 +243,10 @@ class PRAutoFixConfig(BaseModel):
     auto_resolve: bool = Field(default=True, description="Auto-resolve threads after fix")
     max_iterations: int = Field(default=3, ge=1, le=10, description="Max fix attempts per thread")
     commit_prefix: str = Field(default="fix(review):", description="Commit message prefix")
+    ignore_authors: list[str] = Field(
+        default_factory=list,
+        description="Comment authors to ignore (exact username match)",
+    )
 
     @field_validator("aggressiveness", mode="before")
     @classmethod
