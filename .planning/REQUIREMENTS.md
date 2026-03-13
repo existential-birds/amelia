@@ -9,11 +9,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### GitHub API
 
-- [ ] **GHAPI-01**: System can fetch unresolved review comments on a PR via `gh api` REST endpoint
-- [ ] **GHAPI-02**: System can list open PRs for a profile's repository via `gh pr list`
-- [ ] **GHAPI-03**: System can resolve review threads via `gh api graphql` mutation (`resolveReviewThread`)
-- [ ] **GHAPI-04**: System can reply to review comments with fix explanation via `gh api` REST endpoint
-- [ ] **GHAPI-05**: System can detect and skip bot/self-authored comments to prevent infinite loops
+- [x] **GHAPI-01**: System can fetch unresolved review comments on a PR via `gh api` REST endpoint
+- [x] **GHAPI-02**: System can list open PRs for a profile's repository via `gh pr list`
+- [x] **GHAPI-03**: System can resolve review threads via `gh api graphql` mutation (`resolveReviewThread`)
+- [x] **GHAPI-04**: System can reply to review comments with fix explanation via `gh api` REST endpoint
+- [x] **GHAPI-05**: System can detect and skip bot/self-authored comments to prevent infinite loops
 
 ### Comment Processing
 
@@ -142,11 +142,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONF-02 | Phase 1 | Complete |
 | CONF-03 | Phase 1 | Complete |
 | CONF-04 | Phase 1 | Complete |
-| GHAPI-01 | Phase 2 | Pending |
-| GHAPI-02 | Phase 2 | Pending |
-| GHAPI-03 | Phase 2 | Pending |
-| GHAPI-04 | Phase 2 | Pending |
-| GHAPI-05 | Phase 2 | Pending |
+| GHAPI-01 | Phase 2 | Complete |
+| GHAPI-02 | Phase 2 | Complete |
+| GHAPI-03 | Phase 2 | Complete |
+| GHAPI-04 | Phase 2 | Complete |
+| GHAPI-05 | Phase 2 | Complete |
 | GIT-01 | Phase 2 | Complete |
 | GIT-02 | Phase 2 | Complete |
 | GIT-03 | Phase 2 | Complete |

@@ -13,7 +13,7 @@ Amelia's PR Auto-Fix feature autonomously detects GitHub review comments, classi
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Data Models & Configuration** - Pydantic models and config structures that every other component depends on (completed 2026-03-13)
-- [ ] **Phase 2: GitHub API Layer** - Fetch PR comments, list PRs, and execute git operations via `gh` CLI
+- [x] **Phase 2: GitHub API Layer** - Fetch PR comments, list PRs, and execute git operations via `gh` CLI (completed 2026-03-13)
 - [ ] **Phase 3: Comment Classification** - LLM-based classification with aggressiveness spectrum
 - [ ] **Phase 4: Core Fix Pipeline** - LangGraph pipeline wiring classify, develop, and commit/push into a state machine
 - [ ] **Phase 5: Thread Resolution & Composition** - Reply to comments, resolve threads, handle partial fixes, compose with review pipeline
@@ -52,7 +52,7 @@ Plans:
   3. System can resolve a review thread via GraphQL and reply to a comment via REST
   4. System correctly detects and filters out bot-authored and self-authored comments
   5. System can stage, commit, pull-before-push, verify SHA, and push to a branch without overwriting human work
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 02-01-PLAN.md -- TDD: GitHubPRService (fetch comments, list PRs, resolve threads, reply, bot detection)
@@ -194,7 +194,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7/8 (parallel) ->
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Data Models & Configuration | 3/3 | Complete   | 2026-03-13 |
-| 2. GitHub API Layer | 0/2 | Not started | - |
+| 2. GitHub API Layer | 2/2 | Complete   | 2026-03-13 |
 | 3. Comment Classification | 0/2 | Not started | - |
 | 4. Core Fix Pipeline | 0/3 | Not started | - |
 | 5. Thread Resolution & Composition | 0/2 | Not started | - |
