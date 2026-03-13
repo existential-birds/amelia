@@ -7,7 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from amelia.core.types import AgentConfig, DriverType, PRAutoFixConfig, Profile, TrackerType
+from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.database import ServerSettings
 from amelia.server.dependencies import get_profile_repository, get_settings_repository
 from amelia.server.routes.settings import router

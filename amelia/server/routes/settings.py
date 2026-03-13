@@ -287,13 +287,17 @@ async def update_profile(
             for name, config in updates.agents.items()
         }
 
-    # Handle sandbox field - pass as dict for JSONB storage
-    if updates.sandbox is not None:
-        update_dict["sandbox"] = updates.sandbox.model_dump()
+    # Handle sandbox field - use model_fields_set to distinguish omission from explicit null
+    if "sandbox" in updates.model_fields_set:
+        update_dict["sandbox"] = (
+            updates.sandbox.model_dump() if updates.sandbox is not None else None
+        )
 
-    # Handle pr_autofix field - pass as dict for JSONB storage or None to disable
-    if updates.pr_autofix is not None:
-        update_dict["pr_autofix"] = updates.pr_autofix.model_dump()
+    # Handle pr_autofix field - use model_fields_set to distinguish omission from explicit null
+    if "pr_autofix" in updates.model_fields_set:
+        update_dict["pr_autofix"] = (
+            updates.pr_autofix.model_dump() if updates.pr_autofix is not None else None
+        )
 
     try:
         updated = await repo.update_profile(profile_id, update_dict)
