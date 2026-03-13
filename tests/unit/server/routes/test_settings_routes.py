@@ -7,7 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
+from amelia.core.types import AgentConfig, DriverType, PRAutoFixConfig, Profile, TrackerType
 from amelia.server.database import ServerSettings
 from amelia.server.dependencies import get_profile_repository, get_settings_repository
 from amelia.server.routes.settings import router
@@ -462,3 +462,57 @@ class TestProfileRoutes:
             },
         )
         assert response.status_code == 201
+
+    def test_update_profile_pr_autofix_explicit_null_clears_config(
+        self, profile_client: TestClient, mock_profile_repo: MagicMock
+    ) -> None:
+        """PUT with pr_autofix=null passes None to repository (clears config)."""
+        mock_profile_repo.update_profile.return_value = make_test_profile(name="dev")
+
+        response = profile_client.put(
+            "/api/profiles/dev",
+            json={"pr_autofix": None},
+        )
+        assert response.status_code == 200
+
+        # Verify the repository received pr_autofix: None in update_dict
+        call_args = mock_profile_repo.update_profile.call_args
+        update_dict = call_args[0][1]  # second positional arg
+        assert "pr_autofix" in update_dict
+        assert update_dict["pr_autofix"] is None
+
+    def test_update_profile_pr_autofix_omitted_preserves_existing(
+        self, profile_client: TestClient, mock_profile_repo: MagicMock
+    ) -> None:
+        """PUT without pr_autofix field does NOT include it in update_dict (preserves existing)."""
+        mock_profile_repo.update_profile.return_value = make_test_profile(name="dev")
+
+        response = profile_client.put(
+            "/api/profiles/dev",
+            json={"tracker": "github"},
+        )
+        assert response.status_code == 200
+
+        # Verify the repository did NOT receive pr_autofix key
+        call_args = mock_profile_repo.update_profile.call_args
+        update_dict = call_args[0][1]
+        assert "pr_autofix" not in update_dict
+
+    def test_update_profile_pr_autofix_with_config_passes_dict(
+        self, profile_client: TestClient, mock_profile_repo: MagicMock
+    ) -> None:
+        """PUT with pr_autofix config passes serialized dict to repository."""
+        mock_profile_repo.update_profile.return_value = make_test_profile(name="dev")
+
+        response = profile_client.put(
+            "/api/profiles/dev",
+            json={"pr_autofix": {"aggressiveness": "standard"}},
+        )
+        assert response.status_code == 200
+
+        # Verify the repository received the serialized config dict
+        call_args = mock_profile_repo.update_profile.call_args
+        update_dict = call_args[0][1]
+        assert "pr_autofix" in update_dict
+        assert isinstance(update_dict["pr_autofix"], dict)
+        assert update_dict["pr_autofix"]["aggressiveness"] == "standard"
