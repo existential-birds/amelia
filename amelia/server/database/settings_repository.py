@@ -16,6 +16,7 @@ class ServerSettings(BaseModel):
     websocket_idle_timeout_seconds: float
     workflow_start_timeout_seconds: float
     max_concurrent: int
+    pr_polling_enabled: bool
     created_at: datetime
     updated_at: datetime
 
@@ -74,6 +75,7 @@ class SettingsRepository:
             "websocket_idle_timeout_seconds",
             "workflow_start_timeout_seconds",
             "max_concurrent",
+            "pr_polling_enabled",
         }
         invalid = set(updates.keys()) - valid_fields
         if invalid:
@@ -111,6 +113,7 @@ class SettingsRepository:
             websocket_idle_timeout_seconds=row["websocket_idle_timeout_seconds"],
             workflow_start_timeout_seconds=row["workflow_start_timeout_seconds"],
             max_concurrent=row["max_concurrent"],
+            pr_polling_enabled=row["pr_polling_enabled"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

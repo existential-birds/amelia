@@ -48,6 +48,7 @@ class TestSettingsRoutes:
             websocket_idle_timeout_seconds=300.0,
             workflow_start_timeout_seconds=60.0,
             max_concurrent=5,
+            pr_polling_enabled=False,
             created_at=datetime(2024, 1, 1, 12, 0, 0),
             updated_at=datetime(2024, 1, 1, 12, 0, 0),
         )
@@ -68,6 +69,7 @@ class TestSettingsRoutes:
             websocket_idle_timeout_seconds=300.0,
             workflow_start_timeout_seconds=60.0,
             max_concurrent=10,
+            pr_polling_enabled=False,
             created_at=datetime(2024, 1, 1, 12, 0, 0),
             updated_at=datetime(2024, 1, 1, 12, 0, 0),
         )
