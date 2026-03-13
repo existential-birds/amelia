@@ -61,7 +61,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **CONF-01**: `PRAutoFixConfig` Pydantic model with aggressiveness, polling interval, auto-resolve, max iterations, commit prefix
 - [x] **CONF-02**: Fix aggressiveness is configurable per-profile (default: standard)
 - [x] **CONF-03**: Fix aggressiveness can be overridden per-PR when triggering manually
-- [ ] **CONF-04**: PR polling can be enabled/disabled globally via server settings
+- [x] **CONF-04**: PR polling can be enabled/disabled globally via server settings
 
 ### Events & Dashboard
 
@@ -141,7 +141,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONF-01 | Phase 1 | Complete |
 | CONF-02 | Phase 1 | Complete |
 | CONF-03 | Phase 1 | Complete |
-| CONF-04 | Phase 1 | Pending |
+| CONF-04 | Phase 1 | Complete |
 | GHAPI-01 | Phase 2 | Pending |
 | GHAPI-02 | Phase 2 | Pending |
 | GHAPI-03 | Phase 2 | Pending |
