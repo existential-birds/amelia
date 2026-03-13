@@ -368,7 +368,7 @@ class ApiDriver(DriverInterface):
         try:
             chat_model = _create_chat_model(self.model, provider=self.provider)
             # Use FilesystemBackend for non-agentic generation - no shell execution needed
-            backend = FilesystemBackend(root_dir=self.cwd or ".")
+            backend = FilesystemBackend(root_dir=self.cwd or ".", virtual_mode=False)
 
             # Configure structured output via ToolStrategy when schema is provided
             agent_kwargs: dict[str, Any] = {
