@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 01-data-models-configuration
 source: [01-01-SUMMARY.md, 01-02-SUMMARY.md]
 started: 2026-03-13T16:00:00Z
@@ -49,7 +49,13 @@ skipped: 0
   reason: "User reported: Setting pr_autofix to null via PUT did not clear it — the response still shows the previous config. The null update is being ignored rather than applied. Classic optional-nullable ambiguity: ProfileUpdate can't distinguish 'field not provided' from 'field explicitly set to null' since both arrive as None."
   severity: major
   test: 3
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Route handler in settings.py line 295 uses `if updates.pr_autofix is not None:` which skips both omitted fields and explicitly-null fields. ProfileUpdate.pr_autofix defaults to None, so Pydantic produces None in both cases. Repository layer would correctly set NULL if passed — bug is entirely in the route handler filtering."
+  artifacts:
+    - path: "amelia/server/routes/settings.py"
+      issue: "Line 295: `if updates.pr_autofix is not None` guard prevents null from reaching update dict"
+    - path: "amelia/server/routes/settings.py"
+      issue: "Line 140: ProfileUpdate.pr_autofix typed as `PRAutoFixConfig | None = None`"
+  missing:
+    - "Use model_fields_set to distinguish 'field omitted' from 'field explicitly set to null'"
+    - "Replace guard with: `if 'pr_autofix' in updates.model_fields_set:` and serialize accordingly"
+  debug_session: ".planning/debug/pr-autofix-null-update-ignored.md"
