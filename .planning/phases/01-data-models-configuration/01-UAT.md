@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 phase: 01-data-models-configuration
 source: [01-01-SUMMARY.md, 01-02-SUMMARY.md]
 started: 2026-03-13T16:00:00Z
-updated: 2026-03-13T16:10:00Z
+updated: 2026-03-13T17:00:00Z
 ---
 
 ## Current Test
@@ -45,7 +45,7 @@ skipped: 0
 ## Gaps
 
 - truth: "Setting pr_autofix to null disables the feature"
-  status: failed
+  status: resolved
   reason: "User reported: Setting pr_autofix to null via PUT did not clear it — the response still shows the previous config. The null update is being ignored rather than applied. Classic optional-nullable ambiguity: ProfileUpdate can't distinguish 'field not provided' from 'field explicitly set to null' since both arrive as None."
   severity: major
   test: 3
