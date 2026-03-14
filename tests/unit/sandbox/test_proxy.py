@@ -183,6 +183,57 @@ class TestProxyForwarding:
         assert response.status_code == 429
 
 
+class TestProxyErrorSanitization:
+    """Upstream errors must not leak internal details to the caller."""
+
+    def test_connect_error_is_generic(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            raise httpx.ConnectError("Connection refused: 10.0.0.5:443")
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={"X-Amelia-Profile": "work"},
+        )
+        assert response.status_code == 502
+        detail = response.json()["detail"]
+        assert "10.0.0.5" not in detail
+        assert "Connection refused" not in detail
+
+    def test_timeout_error_is_generic(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            raise httpx.ReadTimeout("Read timed out on host api.openrouter.ai:443")
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={"X-Amelia-Profile": "work"},
+        )
+        assert response.status_code == 504
+        detail = response.json()["detail"]
+        assert "openrouter" not in detail
+
+    def test_http_error_is_generic(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            raise httpx.DecodingError("Invalid chunk encoding from 10.0.0.5")
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={"X-Amelia-Profile": "work"},
+        )
+        assert response.status_code == 502
+        detail = response.json()["detail"]
+        assert "10.0.0.5" not in detail
+        assert "DecodingError" not in detail
+
+
 class TestProxyCleanup:
     async def test_cleanup_closes_http_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Verify cleanup() closes the httpx.AsyncClient."""

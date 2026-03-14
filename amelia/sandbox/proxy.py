@@ -185,20 +185,22 @@ def create_proxy_router(
             )
             upstream_response = await http_client.send(upstream_request, stream=True)
         except httpx.ConnectError as e:
+            logger.warning("Upstream connect failed", error=str(e))
             raise HTTPException(
                 status_code=502,
-                detail=f"Failed to connect to upstream provider: {e}",
+                detail="Upstream provider unavailable",
             ) from e
         except httpx.TimeoutException as e:
+            logger.warning("Upstream request timed out", error=str(e))
             raise HTTPException(
                 status_code=504,
-                detail=f"Upstream provider request timed out: {e}",
+                detail="Upstream provider request timed out",
             ) from e
         except httpx.HTTPError as e:
-            logger.debug("Upstream request failed", exc_class=type(e).__name__, error=str(e))
+            logger.warning("Upstream request failed", error=str(e))
             raise HTTPException(
                 status_code=502,
-                detail=f"Upstream provider request failed ({type(e).__name__}): {e}",
+                detail="Upstream provider request failed",
             ) from e
 
         # Pass through the upstream response
