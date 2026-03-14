@@ -210,6 +210,7 @@ class TestDaytonaFullStack:
         sandbox = SandboxConfig(
             mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
+            network_allowlist_enabled=False,
         )
         with patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key", "OPENROUTER_API_KEY": "test-openrouter-key"}):
             driver = get_driver(

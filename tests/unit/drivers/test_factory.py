@@ -59,7 +59,7 @@ class TestGetDriverContainerBranch:
             mock_provider_cls.assert_called_once_with(
                 profile_name="work",
                 image="test:latest",
-                network_allowlist_enabled=False,
+                network_allowlist_enabled=True,
                 network_allowed_hosts=sandbox.network_allowed_hosts,
             )
             mock_driver_cls.assert_called_once_with(
@@ -136,6 +136,7 @@ class TestGetDriverDaytonaBranch:
         sandbox = SandboxConfig(
             mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
+            network_allowlist_enabled=False,
             daytona_api_url="https://test.daytona.io/api",
             daytona_target="eu",
         )
@@ -177,14 +178,14 @@ class TestGetDriverDaytonaBranch:
             )
 
     def test_daytona_mode_missing_api_key_raises(self) -> None:
-        sandbox = SandboxConfig(mode=SandboxMode.DAYTONA, repo_url="https://github.com/org/repo.git")
+        sandbox = SandboxConfig(mode=SandboxMode.DAYTONA, repo_url="https://github.com/org/repo.git", network_allowlist_enabled=False)
         with patch.dict(os.environ, {}, clear=True), \
              pytest.raises(ValueError, match="DAYTONA_API_KEY"):
             get_driver("api", sandbox_config=sandbox, profile_name="test")
 
     @pytest.mark.parametrize("driver_key", ["claude", "codex"])
     def test_daytona_mode_rejects_cli_wrappers(self, driver_key: str) -> None:
-        sandbox = SandboxConfig(mode=SandboxMode.DAYTONA, repo_url="https://github.com/org/repo.git")
+        sandbox = SandboxConfig(mode=SandboxMode.DAYTONA, repo_url="https://github.com/org/repo.git", network_allowlist_enabled=False)
         with patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}), \
              pytest.raises(ValueError, match="Daytona sandbox requires API driver"):
             get_driver(driver_key, sandbox_config=sandbox, profile_name="test")
@@ -205,6 +206,7 @@ class TestGetDriverDaytonaBranch:
         sandbox = SandboxConfig(
             mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
+            network_allowlist_enabled=False,
             daytona_image="ubuntu:22.04",
         )
         with patch("amelia.sandbox.daytona.DaytonaSandboxProvider") as mock_provider_cls, \
@@ -236,6 +238,7 @@ class TestGetDriverDaytonaBranch:
         sandbox = SandboxConfig(
             mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
+            network_allowlist_enabled=False,
         )
         with patch("amelia.sandbox.daytona.DaytonaSandboxProvider") as mock_provider_cls, \
              patch("amelia.sandbox.driver.ContainerDriver") as mock_driver_cls, \
@@ -249,6 +252,7 @@ class TestGetDriverDaytonaBranch:
         sandbox = SandboxConfig(
             mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
+            network_allowlist_enabled=False,
         )
         with patch("amelia.sandbox.daytona.DaytonaSandboxProvider"), \
              patch("amelia.sandbox.driver.ContainerDriver"), \
@@ -261,6 +265,7 @@ class TestGetDriverDaytonaBranch:
         sandbox = SandboxConfig(
             mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
+            network_allowlist_enabled=False,
         )
         with patch("amelia.sandbox.daytona.DaytonaSandboxProvider") as mock_provider_cls, \
              patch("amelia.sandbox.driver.ContainerDriver") as mock_driver_cls, \
@@ -287,6 +292,7 @@ class TestGetDriverDaytonaBranch:
         sandbox = SandboxConfig(
             mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
+            network_allowlist_enabled=False,
         )
         with patch("amelia.sandbox.daytona.DaytonaSandboxProvider"), \
              patch("amelia.sandbox.driver.ContainerDriver"), \
@@ -352,7 +358,7 @@ class TestCreateDaytonaProvider:
     def test_creates_provider_with_required_fields(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("DAYTONA_API_KEY", "test-key")
         monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
-        sandbox = SandboxConfig(mode="daytona", repo_url="https://github.com/test/repo")
+        sandbox = SandboxConfig(mode="daytona", repo_url="https://github.com/test/repo", network_allowlist_enabled=False)
         with patch("amelia.sandbox.daytona.DaytonaSandboxProvider") as mock_cls:
             mock_cls.return_value = MagicMock()
             provider, worker_env = create_daytona_provider(sandbox)
@@ -362,7 +368,7 @@ class TestCreateDaytonaProvider:
 
     def test_raises_without_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("DAYTONA_API_KEY", raising=False)
-        sandbox = SandboxConfig(mode="daytona", repo_url="https://github.com/test/repo")
+        sandbox = SandboxConfig(mode="daytona", repo_url="https://github.com/test/repo", network_allowlist_enabled=False)
         with pytest.raises(ValueError, match="DAYTONA_API_KEY"):
             create_daytona_provider(sandbox)
 

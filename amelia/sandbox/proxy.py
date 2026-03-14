@@ -7,6 +7,7 @@ X-Amelia-Profile header to resolve which upstream provider to use.
 
 from __future__ import annotations
 
+import inspect
 import os
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, NamedTuple
@@ -24,6 +25,7 @@ from starlette.responses import StreamingResponse
 # but connection issues should fail fast.
 PROXY_CONNECT_TIMEOUT = 30.0  # Connect/write/pool timeout
 PROXY_READ_TIMEOUT = 300.0  # Read timeout for streaming responses
+PROXY_MAX_BODY_BYTES = int(os.environ.get("AMELIA_PROXY_MAX_BODY_MB", "10")) * 1024 * 1024
 
 
 class ProviderConfig(BaseModel):
@@ -40,6 +42,9 @@ class ProviderConfig(BaseModel):
 
 # Type alias for the provider resolver function
 type ProviderResolver = Callable[[str], Coroutine[Any, Any, ProviderConfig | None]]
+
+# Type alias for the token validator function (sync or async)
+type TokenValidator = Callable[[str], bool] | Callable[[str], Coroutine[Any, Any, bool]]
 
 
 class ProxyRouter(NamedTuple):
@@ -96,15 +101,17 @@ async def _resolve_provider_or_raise(
     """
     config = await resolve_provider(profile)
     if config is None:
+        logger.debug("Unknown profile requested", profile=profile)
         raise HTTPException(
             status_code=404,
-            detail=f"No provider configuration for profile '{profile}'",
+            detail="Unknown or unconfigured profile",
         )
     return config
 
 
 def create_proxy_router(
     resolve_provider: ProviderResolver,
+    token_validator: TokenValidator | None = None,
 ) -> ProxyRouter:
     """Create the proxy router with injected provider resolver.
 
@@ -127,6 +134,17 @@ def create_proxy_router(
         """Close the HTTP client."""
         await http_client.aclose()
 
+    async def _validate_proxy_token(request: Request) -> None:
+        """Validate the X-Amelia-Proxy-Token header if a validator is configured."""
+        if token_validator is None:
+            return
+        token = request.headers.get("X-Amelia-Proxy-Token", "")
+        result = token_validator(token)
+        # Handle both sync and async validators
+        is_valid = await result if inspect.iscoroutine(result) else result
+        if not is_valid:
+            raise HTTPException(status_code=401, detail="Invalid or missing proxy token")
+
     async def forward_request(
         request: Request,
         provider: ProviderConfig,
@@ -142,7 +160,29 @@ def create_proxy_router(
         Returns:
             Proxied response from the upstream provider.
         """
+        # Check content-length header for early rejection
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                length = int(content_length)
+            except ValueError as err:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid Content-Length header",
+                ) from err
+            if length > PROXY_MAX_BODY_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Request body too large (limit: {PROXY_MAX_BODY_BYTES // (1024 * 1024)} MB)",
+                )
+
         body = await request.body()
+        if len(body) > PROXY_MAX_BODY_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Request body too large (limit: {PROXY_MAX_BODY_BYTES // (1024 * 1024)} MB)",
+            )
+
         upstream_url = f"{provider.base_url.rstrip('/')}{path}"
 
         # Forward original headers, replacing auth and removing internal headers
@@ -152,6 +192,7 @@ def create_proxy_router(
         for h in (
             "host",
             "x-amelia-profile",
+            "x-amelia-proxy-token",
             "content-length",
             "connection",
             "keep-alive",
@@ -184,20 +225,22 @@ def create_proxy_router(
             )
             upstream_response = await http_client.send(upstream_request, stream=True)
         except httpx.ConnectError as e:
+            logger.warning("Upstream connect failed", error=str(e))
             raise HTTPException(
                 status_code=502,
-                detail=f"Failed to connect to upstream provider: {e}",
+                detail="Upstream provider unavailable",
             ) from e
         except httpx.TimeoutException as e:
+            logger.warning("Upstream request timed out", error=str(e))
             raise HTTPException(
                 status_code=504,
-                detail=f"Upstream provider request timed out: {e}",
+                detail="Upstream provider request timed out",
             ) from e
         except httpx.HTTPError as e:
-            logger.debug("Upstream request failed", exc_class=type(e).__name__, error=str(e))
+            logger.warning("Upstream request failed", error=str(e))
             raise HTTPException(
                 status_code=502,
-                detail=f"Upstream provider request failed ({type(e).__name__}): {e}",
+                detail="Upstream provider request failed",
             ) from e
 
         # Pass through the upstream response
@@ -214,6 +257,7 @@ def create_proxy_router(
     )
     async def proxy_chat_completions(request: Request) -> Response:
         """Forward chat completion requests to the upstream LLM provider."""
+        await _validate_proxy_token(request)
         profile = _get_profile_header(request)
         provider = await _resolve_provider_or_raise(profile, resolve_provider)
         return await forward_request(request, provider, "/chat/completions")
@@ -224,6 +268,7 @@ def create_proxy_router(
     )
     async def proxy_embeddings(request: Request) -> Response:
         """Forward embedding requests to the upstream LLM provider."""
+        await _validate_proxy_token(request)
         profile = _get_profile_header(request)
         provider = await _resolve_provider_or_raise(profile, resolve_provider)
         return await forward_request(request, provider, "/embeddings")
@@ -235,6 +280,7 @@ def create_proxy_router(
         MVP: returns 501 Not Implemented. Full implementation in PR 2
         when the container actually needs git access.
         """
+        await _validate_proxy_token(request)
         _get_profile_header(request)
         return Response(
             status_code=501,

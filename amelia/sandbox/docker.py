@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import secrets
 import time
 from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
@@ -35,7 +36,7 @@ class DockerSandboxProvider(SandboxProvider):
         profile_name: str,
         image: str = "amelia-sandbox:latest",
         proxy_port: int = 8430,
-        network_allowlist_enabled: bool = False,
+        network_allowlist_enabled: bool = True,
         network_allowed_hosts: Sequence[str] | None = None,
     ) -> None:
         self.profile_name = profile_name
@@ -45,6 +46,7 @@ class DockerSandboxProvider(SandboxProvider):
         self.network_allowed_hosts: list[str] = list(network_allowed_hosts or [])
 
         self.container_name = f"amelia-sandbox-{profile_name}"
+        self.proxy_token = secrets.token_urlsafe(32)
 
     async def ensure_running(self) -> None:
         """Ensure the sandbox container is ready. Start if not running."""
@@ -242,21 +244,28 @@ class DockerSandboxProvider(SandboxProvider):
                 "Restarted existing container",
                 container=self.container_name,
             )
+            # Sync proxy_token with the token baked into the container's env.
+            # On restart the container keeps its original env vars, so the
+            # provider must read the token back to stay in sync.
+            await self._sync_proxy_token_from_container()
             return
 
         cmd = [
             "docker", "run", "-d",
             "--name", self.container_name,
             "--add-host=host.docker.internal:host-gateway",
+        ]
+        if self.network_allowlist_enabled:
             # NET_ADMIN + NET_RAW required for iptables-based network allowlist
             # that restricts outbound connections to approved hosts only.
-            "--cap-add", "NET_ADMIN",
-            "--cap-add", "NET_RAW",
+            cmd.extend(["--cap-add", "NET_ADMIN", "--cap-add", "NET_RAW"])
+        cmd.extend([
             "-e", f"LLM_PROXY_URL=http://host.docker.internal:{self.proxy_port}/proxy/v1",
             "-e", f"AMELIA_PROFILE={self.profile_name}",
+            "-e", f"AMELIA_PROXY_TOKEN={self.proxy_token}",
             self.image,
             "sleep", "infinity",
-        ]
+        ])
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -272,6 +281,48 @@ class DockerSandboxProvider(SandboxProvider):
             container=self.container_name,
             image=self.image,
         )
+
+    async def _sync_proxy_token_from_container(self) -> None:
+        """Read AMELIA_PROXY_TOKEN from a running container's env.
+
+        Updates self.proxy_token if the token is found. On failure,
+        keeps the current token (graceful degradation).
+        """
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "inspect",
+                "--format", "{{range .Config.Env}}{{println .}}{{end}}",
+                self.container_name,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            if proc.returncode != 0:
+                logger.warning(
+                    "Failed to inspect container env, keeping current proxy token",
+                    container=self.container_name,
+                )
+                return
+
+            for line in stdout.decode().splitlines():
+                if line.startswith("AMELIA_PROXY_TOKEN="):
+                    self.proxy_token = line.split("=", 1)[1]
+                    logger.debug(
+                        "Synced proxy token from container",
+                        container=self.container_name,
+                    )
+                    return
+
+            logger.warning(
+                "AMELIA_PROXY_TOKEN not found in container env, keeping current token",
+                container=self.container_name,
+            )
+        except OSError:
+            logger.warning(
+                "Failed to read proxy token from container, keeping current token",
+                container=self.container_name,
+                exc_info=True,
+            )
 
     async def _wait_for_ready(self, timeout: float = 30.0) -> None:
         """Wait for the container to become healthy.

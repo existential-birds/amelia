@@ -23,9 +23,9 @@ class TestSandboxConfig:
         config = SandboxConfig()
         assert config.image == "amelia-sandbox:latest"
 
-    def test_network_allowlist_disabled_by_default(self) -> None:
+    def test_network_allowlist_enabled_by_default(self) -> None:
         config = SandboxConfig()
-        assert config.network_allowlist_enabled is False
+        assert config.network_allowlist_enabled is True
 
     def test_default_allowed_hosts(self) -> None:
         config = SandboxConfig()
@@ -42,6 +42,7 @@ class TestDaytonaSandboxConfig:
         config = SandboxConfig(
             mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
+            network_allowlist_enabled=False,
         )
         assert config.mode == SandboxMode.DAYTONA
 
@@ -59,6 +60,7 @@ class TestDaytonaSandboxConfig:
         config = SandboxConfig(
             mode=SandboxMode.DAYTONA,
             repo_url="https://github.com/org/repo.git",
+            network_allowlist_enabled=False,
             daytona_api_url="https://custom.daytona.io/api",
             daytona_target="eu",
             daytona_resources=DaytonaResources(cpu=4),
