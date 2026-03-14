@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3: Comment Classification** - LLM-based classification with aggressiveness spectrum
 - [ ] **Phase 4: Core Fix Pipeline** - LangGraph pipeline wiring classify, develop, and commit/push into a state machine
 - [x] **Phase 5: Thread Resolution & Composition** - Reply to comments, resolve threads, handle partial fixes, compose with review pipeline (completed 2026-03-14)
-- [ ] **Phase 6: Orchestration & Safety** - Per-PR concurrency control, queuing, and branch safety guards
+- [x] **Phase 6: Orchestration & Safety** - Per-PR concurrency control, queuing, and branch safety guards (completed 2026-03-14)
 - [ ] **Phase 7: CLI & API Triggers** - Manual trigger points: CLI commands and REST API endpoints
 - [ ] **Phase 8: Polling Service** - Background polling for new unresolved comments with rate limit awareness
 - [ ] **Phase 9: Events & Dashboard** - Event types for PR auto-fix lifecycle and dashboard UI integration
@@ -113,7 +113,7 @@ Plans:
   1. Only one auto-fix workflow runs per PR at a time; concurrent triggers for the same PR are queued
   2. New comments arriving during an active fix cycle are captured and processed in the next cycle, not lost
   3. The Developer agent always operates on the PR's head branch with a fresh pull before making changes
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 06-01-PLAN.md -- Config extension: cooldown fields on PRAutoFixConfig, new EventType values for orchestration
@@ -197,7 +197,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7/8 (parallel) ->
 | 3. Comment Classification | 0/2 | Not started | - |
 | 4. Core Fix Pipeline | 0/2 | Not started | - |
 | 5. Thread Resolution & Composition | 2/2 | Complete   | 2026-03-14 |
-| 6. Orchestration & Safety | 0/2 | Not started | - |
+| 6. Orchestration & Safety | 2/2 | Complete   | 2026-03-14 |
 | 7. CLI & API Triggers | 0/3 | Not started | - |
 | 8. Polling Service | 0/2 | Not started | - |
 | 9. Events & Dashboard | 0/3 | Not started | - |
