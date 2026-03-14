@@ -83,6 +83,21 @@ export interface SandboxConfig {
 }
 
 /**
+ * PR Auto-Fix configuration for automated review comment resolution.
+ */
+export interface PRAutoFixConfig {
+  aggressiveness: 'critical' | 'standard' | 'thorough' | 'exemplary';
+  poll_interval: number;
+  auto_resolve: boolean;
+  resolve_no_changes: boolean;
+  max_iterations: number;
+  commit_prefix: string;
+  post_push_cooldown_seconds: number;
+  max_cooldown_seconds: number;
+  poll_label: string | null;
+}
+
+/**
  * Profile configuration for workflow execution.
  * Each agent (architect, developer, reviewer) has its own driver/model config.
  */
@@ -94,6 +109,7 @@ export interface Profile {
   plan_path_pattern: string;
   agents: Record<string, AgentConfig>;
   sandbox?: SandboxConfig;
+  pr_autofix?: PRAutoFixConfig | null;
   is_active: boolean;
 }
 
@@ -117,6 +133,7 @@ export interface ProfileCreate {
   plan_path_pattern?: string;
   agents: Record<string, AgentConfigInput>;
   sandbox?: SandboxConfig;
+  pr_autofix?: PRAutoFixConfig | null;
 }
 
 /**
@@ -129,6 +146,7 @@ export interface ProfileUpdate {
   plan_path_pattern?: string;
   agents?: Record<string, AgentConfigInput>;
   sandbox?: SandboxConfig;
+  pr_autofix?: PRAutoFixConfig | null;
 }
 
 // =============================================================================
