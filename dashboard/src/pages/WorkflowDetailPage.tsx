@@ -6,7 +6,9 @@ import { useLoaderData } from 'react-router-dom';
 import { RotateCcw } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
+import { TypeBadge } from '@/components/TypeBadge';
 import { RequestReviewDialog } from '@/components/RequestReviewDialog';
+import { PRCommentSection } from '@/components/PRCommentSection';
 import { ActivityLog } from '@/components/ActivityLog';
 import { ApprovalControls } from '@/components/ApprovalControls';
 import { UsageCard } from '@/components/UsageCard';
@@ -113,6 +115,7 @@ export default function WorkflowDetailPage() {
 
         <PageHeader.Right>
           <RequestReviewDialog workflowId={workflow.id} />
+          <TypeBadge type={workflow.pipeline_type ?? null} />
           <StatusBadge status={workflow.status} />
         </PageHeader.Right>
       </PageHeader>
@@ -160,6 +163,13 @@ export default function WorkflowDetailPage() {
               <p className="text-sm text-foreground">{workflow.goal}</p>
             </div>
           )}
+
+          {/* PR Comment Section - shown for pr_auto_fix workflows with comments */}
+          {workflow.pipeline_type === 'pr_auto_fix' &&
+            workflow.pr_comments &&
+            workflow.pr_comments.length > 0 && (
+              <PRCommentSection comments={workflow.pr_comments} />
+            )}
 
           {/* Usage card - shows token usage breakdown by agent */}
           <UsageCard tokenUsage={workflow.token_usage} className="border-l-2 border-l-primary" />

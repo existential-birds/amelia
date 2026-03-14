@@ -120,6 +120,15 @@ function validateToolCall(data: unknown): Pick<ToolCall, 'tool_call_id' | 'tool_
 }
 
 /**
+ * Module-level timestamp for deduplicating pr_poll_error toast notifications.
+ * Only show toast if more than 30 seconds since the last one.
+ */
+let lastPollErrorToastMs = 0;
+
+/** Minimum interval between pr_poll_error toasts (30 seconds). */
+const POLL_ERROR_TOAST_INTERVAL_MS = 30_000;
+
+/**
  * Derive WebSocket URL from window.location.
  * Converts HTTP protocol to WS, HTTPS to WSS. Uses current host with /ws/events path.
  * Falls back to localhost:8420 in SSR/test environments where window is undefined.
@@ -356,6 +365,15 @@ export function useWebSocket() {
 
       // Add to store
       addEvent(event);
+
+      // Show deduplicated toast for pr_poll_error events
+      if (event.event_type === 'pr_poll_error') {
+        const now = Date.now();
+        if (now - lastPollErrorToastMs > POLL_ERROR_TOAST_INTERVAL_MS) {
+          lastPollErrorToastMs = now;
+          Toast.error(event.message || 'PR polling error');
+        }
+      }
 
       // Dispatch custom event for revalidation hints
       window.dispatchEvent(
