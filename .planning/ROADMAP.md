@@ -113,11 +113,11 @@ Plans:
   1. Only one auto-fix workflow runs per PR at a time; concurrent triggers for the same PR are queued
   2. New comments arriving during an active fix cycle are captured and processed in the next cycle, not lost
   3. The Developer agent always operates on the PR's head branch with a fresh pull before making changes
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
+- [ ] 06-01-PLAN.md -- Config extension: cooldown fields on PRAutoFixConfig, new EventType values for orchestration
+- [ ] 06-02-PLAN.md -- TDD: PRAutoFixOrchestrator with per-PR locking, cooldown timer, divergence recovery
 
 ### Phase 7: CLI & API Triggers
 **Goal**: Users can trigger PR auto-fix manually from the command line or via HTTP API
