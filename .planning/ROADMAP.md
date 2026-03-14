@@ -99,11 +99,11 @@ Plans:
   2. After replying, the pipeline resolves the corresponding review thread via GraphQL
   3. For comments the Developer agent cannot fix, the pipeline replies explaining why and marks them as needing human attention (does not resolve the thread)
   4. The existing review pipeline can optionally invoke PR_AUTO_FIX when PR context is available
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
+- [ ] 05-01-PLAN.md -- TDD: reply_resolve_node with per-comment replies, conditional thread resolution, error isolation
+- [ ] 05-02-PLAN.md -- Document PIPE-08 deferral (review pipeline composition deferred to future phase)
 
 ### Phase 6: Orchestration & Safety
 **Goal**: The system safely handles concurrent and repeated fix attempts without race conditions, infinite loops, or branch corruption
