@@ -75,3 +75,24 @@ class TestGenerateAllowlistRules:
         rules = generate_allowlist_rules(allowed_hosts=[])
 
         assert rules.startswith("#!/bin/sh\nset -e\n")
+
+    def test_dns_restricted_to_docker_resolver(self) -> None:
+        """DNS rules must only allow Docker's internal resolver, not any destination."""
+        from amelia.sandbox.network import generate_allowlist_rules
+
+        rules = generate_allowlist_rules(allowed_hosts=[])
+
+        # Must target Docker's internal DNS
+        assert "-d 127.0.0.11" in rules
+        # Must NOT have open DNS rules (no -d restriction)
+        for line in rules.strip().split("\n"):
+            if "--dport 53" in line and "iptables" in line:
+                assert "-d " in line, f"DNS rule missing destination restriction: {line}"
+
+    def test_custom_dns_server(self) -> None:
+        """Should use custom DNS server when specified."""
+        from amelia.sandbox.network import generate_allowlist_rules
+
+        rules = generate_allowlist_rules(allowed_hosts=[], dns_server="8.8.8.8")
+        assert "-d 8.8.8.8" in rules
+        assert "127.0.0.11" not in rules
