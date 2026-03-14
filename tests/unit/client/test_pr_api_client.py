@@ -108,8 +108,7 @@ class TestListPRs:
                     "title": "Fix bug",
                     "author": "user1",
                     "head_branch": "fix-bug",
-                    "base_branch": "main",
-                    "url": "https://github.com/org/repo/pull/42",
+                    "updated_at": "2026-01-01T00:00:00Z",
                 }
             ]
         }
@@ -152,7 +151,7 @@ class TestGetPRComments:
                     "path": "src/main.py",
                     "line": 10,
                     "diff_hunk": "@@ -1,3 +1,4 @@",
-                    "user": "reviewer",
+                    "author": "reviewer",
                     "created_at": "2026-01-01T00:00:00Z",
                     "in_reply_to_id": None,
                     "pr_number": 42,

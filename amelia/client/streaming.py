@@ -123,14 +123,33 @@ _CUSTOM_FORMATTERS: dict[str, EventFormatter] = {
 }
 
 
+class WorkflowSummary(BaseModel):
+    """Summary of a workflow run collected from streaming events.
+
+    Attributes:
+        fixed: Number of comments successfully fixed.
+        skipped: Number of comments skipped.
+        failed: Number of comments that failed to fix.
+        commit_sha: The commit SHA from the fix push, if available.
+    """
+
+    fixed: int = 0
+    skipped: int = 0
+    failed: int = 0
+    commit_sha: str | None = None
+
+
 async def stream_workflow_events(
     workflow_id: str | uuid.UUID,
     base_url: str = "http://localhost:8420",
-) -> None:
+    *,
+    display: bool = True,
+) -> WorkflowSummary:
     """Stream workflow events via WebSocket and display in terminal.
 
     Connects to the workflow WebSocket endpoint and prints formatted events
     to the console. Automatically exits when the workflow completes or fails.
+    Collects summary data from events and returns a WorkflowSummary.
 
     The WebSocket protocol works as follows:
     1. Client connects to /ws/events
@@ -141,9 +160,18 @@ async def stream_workflow_events(
     Args:
         workflow_id: The workflow ID to stream events for.
         base_url: The Amelia API base URL. Defaults to http://localhost:8420.
+        display: Whether to print events to console. Defaults to True.
+
+    Returns:
+        WorkflowSummary with counts of fixed/skipped/failed comments and commit SHA.
     """
-    console = Console()
+    console = Console() if display else None
     ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://") + "/ws/events"
+
+    fixed = 0
+    skipped = 0
+    failed = 0
+    commit_sha: str | None = None
 
     async with websockets.connect(ws_url) as ws:
         await ws.send(json.dumps({"type": "subscribe", "workflow_id": str(workflow_id)}))
@@ -158,15 +186,38 @@ async def stream_workflow_events(
 
             if message_type == "event":
                 event = data.get("payload", {})
-                _display_event(console, event)
+                if console:
+                    _display_event(console, event)
 
                 event_type = event.get("event_type")
+
+                # Collect summary data from stage_completed events
+                if event_type == "stage_completed":
+                    event_data = event.get("data", {}) or {}
+                    result = event_data.get("result", {}) or {}
+                    status = result.get("status")
+                    if status == "fixed":
+                        fixed += 1
+                    elif status == "skipped":
+                        skipped += 1
+                    elif status == "failed":
+                        failed += 1
+
+                # Collect commit SHA from workflow_completed
+                if event_type == "workflow_completed":
+                    event_data = event.get("data", {}) or {}
+                    commit_sha = event_data.get("commit_sha") or None
+
                 if event_type in {"workflow_completed", "workflow_failed", "workflow_cancelled"}:
                     break
             elif message_type == "backfill_complete":
-                console.print(f"[dim]Backfill complete: {data.get('count', 0)} events[/dim]")
+                if console:
+                    console.print(f"[dim]Backfill complete: {data.get('count', 0)} events[/dim]")
             elif message_type == "backfill_expired":
-                console.print(f"[yellow]Warning: {data.get('message', 'Backfill expired')}[/yellow]")
+                if console:
+                    console.print(f"[yellow]Warning: {data.get('message', 'Backfill expired')}[/yellow]")
+
+    return WorkflowSummary(fixed=fixed, skipped=skipped, failed=failed, commit_sha=commit_sha)
 
 
 def _display_event(console: Console, event: dict[str, Any]) -> None:

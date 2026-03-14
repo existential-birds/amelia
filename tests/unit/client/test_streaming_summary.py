@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -16,6 +17,22 @@ def _make_ws_messages(events: list[dict]) -> list[str]:
     for event in events:
         messages.append(json.dumps({"type": "event", "payload": event}))
     return messages
+
+
+class _AsyncIter:
+    """Wraps a list into an async iterator for mocking websocket messages."""
+
+    def __init__(self, items: list[str]) -> None:
+        self._items = iter(items)
+
+    def __aiter__(self) -> AsyncIterator[str]:
+        return self  # type: ignore[return-value]
+
+    async def __anext__(self) -> str:
+        try:
+            return next(self._items)
+        except StopIteration:
+            raise StopAsyncIteration
 
 
 class TestStreamWorkflowSummary:
@@ -53,9 +70,8 @@ class TestStreamWorkflowSummary:
         ]
         messages = _make_ws_messages(events)
 
-        mock_ws = AsyncMock()
-        mock_ws.__aiter__ = lambda self: iter(messages).__aiter__()
-        mock_ws.send = AsyncMock()
+        mock_ws = _AsyncIter(messages)
+        mock_ws.send = AsyncMock()  # type: ignore[attr-defined]
 
         with patch("websockets.connect") as mock_connect:
             mock_connect.return_value.__aenter__ = AsyncMock(return_value=mock_ws)
@@ -86,9 +102,8 @@ class TestStreamWorkflowSummary:
         ]
         messages = _make_ws_messages(events)
 
-        mock_ws = AsyncMock()
-        mock_ws.__aiter__ = lambda self: iter(messages).__aiter__()
-        mock_ws.send = AsyncMock()
+        mock_ws = _AsyncIter(messages)
+        mock_ws.send = AsyncMock()  # type: ignore[attr-defined]
 
         with patch("websockets.connect") as mock_connect:
             mock_connect.return_value.__aenter__ = AsyncMock(return_value=mock_ws)
@@ -118,9 +133,8 @@ class TestStreamWorkflowSummary:
         ]
         messages = _make_ws_messages(events)
 
-        mock_ws = AsyncMock()
-        mock_ws.__aiter__ = lambda self: iter(messages).__aiter__()
-        mock_ws.send = AsyncMock()
+        mock_ws = _AsyncIter(messages)
+        mock_ws.send = AsyncMock()  # type: ignore[attr-defined]
 
         with patch("websockets.connect") as mock_connect:
             mock_connect.return_value.__aenter__ = AsyncMock(return_value=mock_ws)
@@ -148,9 +162,8 @@ class TestStreamWorkflowSummary:
             }),
         ]
 
-        mock_ws = AsyncMock()
-        mock_ws.__aiter__ = lambda self: iter(raw_messages).__aiter__()
-        mock_ws.send = AsyncMock()
+        mock_ws = _AsyncIter(raw_messages)
+        mock_ws.send = AsyncMock()  # type: ignore[attr-defined]
 
         with patch("websockets.connect") as mock_connect:
             mock_connect.return_value.__aenter__ = AsyncMock(return_value=mock_ws)

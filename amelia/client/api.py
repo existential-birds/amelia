@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
+from pydantic import BaseModel
 
 from amelia.client.models import (
     BatchStartResponse,
@@ -15,6 +16,7 @@ from amelia.client.models import (
     WorkflowListResponse,
     WorkflowResponse,
 )
+from amelia.core.types import PRAutoFixConfig, PRReviewComment, PRSummary
 
 
 class AmeliaClientError(Exception):
@@ -63,6 +65,32 @@ class InvalidRequestError(AmeliaClientError):
     """Raised when request validation fails (400/422)."""
 
     pass
+
+
+class TriggerPRAutoFixResponse(BaseModel):
+    """Response from triggering PR auto-fix."""
+
+    workflow_id: str
+    message: str
+
+
+class PRAutoFixStatusResponse(BaseModel):
+    """Response with PR auto-fix configuration status."""
+
+    enabled: bool
+    config: PRAutoFixConfig | None = None
+
+
+class PRListResponse(BaseModel):
+    """Response containing a list of open PRs."""
+
+    prs: list[PRSummary]
+
+
+class PRCommentsResponse(BaseModel):
+    """Response containing PR review comments."""
+
+    comments: list[PRReviewComment]
 
 
 class AmeliaClient:
@@ -466,3 +494,138 @@ class AmeliaClient:
 
         # This should never be reached, but mypy needs it
         raise RuntimeError("Unexpected code path in start_batch")
+
+    async def trigger_pr_autofix(
+        self,
+        pr_number: int,
+        profile: str,
+        aggressiveness: str | None = None,
+    ) -> TriggerPRAutoFixResponse:
+        """Trigger a PR auto-fix cycle.
+
+        Args:
+            pr_number: PR number to fix.
+            profile: Profile name.
+            aggressiveness: Optional aggressiveness override (critical/standard/thorough).
+
+        Returns:
+            TriggerPRAutoFixResponse with workflow_id and message.
+
+        Raises:
+            ServerUnreachableError: If server is not running.
+            InvalidRequestError: If request validation fails.
+        """
+        async with self._http_client() as client:
+            kwargs: dict[str, Any] = {
+                "params": {"profile": profile},
+            }
+            if aggressiveness is not None:
+                kwargs["json"] = {"aggressiveness": aggressiveness}
+
+            response = await client.post(
+                f"{self.base_url}/api/github/prs/{pr_number}/auto-fix",
+                **kwargs,
+            )
+
+            if response.status_code == 202:
+                return TriggerPRAutoFixResponse.model_validate(response.json())
+
+            self._handle_workflow_create_errors(response)
+
+        raise RuntimeError("Unexpected code path in trigger_pr_autofix")
+
+    async def list_prs(self, profile: str) -> PRListResponse:
+        """List open PRs for a profile's repository.
+
+        Args:
+            profile: Profile name.
+
+        Returns:
+            PRListResponse with list of open PRs.
+
+        Raises:
+            WorkflowNotFoundError: If profile not found (404).
+            InvalidRequestError: On other errors.
+            ServerUnreachableError: If server is not running.
+        """
+        async with self._http_client() as client:
+            response = await client.get(
+                f"{self.base_url}/api/github/prs",
+                params={"profile": profile},
+            )
+
+            if response.status_code == 200:
+                return PRListResponse.model_validate(response.json())
+            elif response.status_code == 404:
+                raise WorkflowNotFoundError(
+                    f"Profile '{profile}' not found"
+                )
+            else:
+                raise InvalidRequestError(f"Failed to list PRs: {response.json()}")
+
+        raise RuntimeError("Unexpected code path in list_prs")
+
+    async def get_pr_comments(
+        self, pr_number: int, profile: str
+    ) -> PRCommentsResponse:
+        """Get unresolved review comments for a PR.
+
+        Args:
+            pr_number: PR number.
+            profile: Profile name.
+
+        Returns:
+            PRCommentsResponse with list of review comments.
+
+        Raises:
+            InvalidRequestError: On error responses.
+            ServerUnreachableError: If server is not running.
+        """
+        async with self._http_client() as client:
+            response = await client.get(
+                f"{self.base_url}/api/github/prs/{pr_number}/comments",
+                params={"profile": profile},
+            )
+
+            if response.status_code == 200:
+                return PRCommentsResponse.model_validate(response.json())
+            elif response.status_code == 404:
+                raise WorkflowNotFoundError(
+                    f"PR #{pr_number} or profile '{profile}' not found"
+                )
+            else:
+                raise InvalidRequestError(
+                    f"Failed to get PR comments: {response.json()}"
+                )
+
+        raise RuntimeError("Unexpected code path in get_pr_comments")
+
+    async def get_pr_autofix_status(self, profile: str) -> PRAutoFixStatusResponse:
+        """Get PR auto-fix configuration status for a profile.
+
+        Args:
+            profile: Profile name.
+
+        Returns:
+            PRAutoFixStatusResponse with enabled flag and config.
+
+        Raises:
+            WorkflowNotFoundError: If profile not found (404).
+            ServerUnreachableError: If server is not running.
+        """
+        async with self._http_client() as client:
+            response = await client.get(
+                f"{self.base_url}/api/github/prs/config",
+                params={"profile": profile},
+            )
+
+            if response.status_code == 200:
+                return PRAutoFixStatusResponse.model_validate(response.json())
+            elif response.status_code == 404:
+                raise WorkflowNotFoundError(
+                    f"Profile '{profile}' not found"
+                )
+            else:
+                response.raise_for_status()
+
+        raise RuntimeError("Unexpected code path in get_pr_autofix_status")
