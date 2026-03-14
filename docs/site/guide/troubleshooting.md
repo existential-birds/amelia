@@ -666,6 +666,38 @@ Connection refused / timeout when agent tries to reach external service
 
 Add required hosts to `network_allowed_hosts` in your sandbox configuration via the dashboard at **Settings → Profiles**, or programmatically via the profile API (`PUT /api/profiles/{name}`).
 
+#### Proxy returns 401 Unauthorized
+
+**Error:**
+```text
+Invalid or missing proxy token
+```
+
+**Cause:** The sandbox container's request to the LLM proxy is missing or has an invalid `X-Amelia-Proxy-Token` header. This can happen if the container was started outside of the normal provisioning flow, or if the token registry is out of sync.
+
+**Solution:**
+
+1. Restart the sandbox container — a fresh token is generated on each startup:
+   ```bash
+   docker rm -f amelia-sandbox-<profile>
+   ```
+   Then re-run the workflow; the orchestrator will provision a new container with a valid token.
+
+2. If running the worker manually for debugging, ensure `AMELIA_PROXY_TOKEN` is set in the container's environment and matches a registered token in the server.
+
+#### Proxy returns 413 Request Entity Too Large
+
+**Error:**
+```text
+Request body too large
+```
+
+**Cause:** The request body exceeds the proxy's 10 MB size limit. This typically happens with extremely large prompts or base64-encoded file content.
+
+**Solution:**
+
+Reduce the request body size by splitting large inputs into smaller chunks, or remove unnecessary base64-encoded content from the prompt.
+
 #### Cleaning up all sandbox containers
 
 To remove all Amelia sandbox containers at once:

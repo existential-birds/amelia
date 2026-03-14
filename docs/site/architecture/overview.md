@@ -156,14 +156,14 @@ sequenceDiagram
 
 **`SandboxProvider` protocol** ([`amelia/sandbox/provider.py`](https://github.com/existential-birds/amelia/blob/main/amelia/sandbox/provider.py)) — Transport-agnostic interface for sandbox lifecycle (`ensure_running`, `exec_stream`, `teardown`, `write_file`, `health_check`). Two implementations:
 
-- **`DockerSandboxProvider`** ([`amelia/sandbox/docker.py`](https://github.com/existential-birds/amelia/blob/main/amelia/sandbox/docker.py)) — Local Docker containers, one per profile, with iptables network filtering to restrict outbound access.
+- **`DockerSandboxProvider`** ([`amelia/sandbox/docker.py`](https://github.com/existential-birds/amelia/blob/main/amelia/sandbox/docker.py)) — Local Docker containers, one per profile. Generates a unique proxy authentication token per container, applies iptables network filtering (with DNS restricted to Docker's internal resolver) when enabled, and only grants `NET_ADMIN`/`NET_RAW` capabilities when network filtering is active.
 - **`DaytonaSandboxProvider`** ([`amelia/sandbox/daytona.py`](https://github.com/existential-birds/amelia/blob/main/amelia/sandbox/daytona.py)) — Ephemeral cloud sandboxes via the Daytona SDK with session-based command streaming.
 
 **`ContainerDriver`** ([`amelia/sandbox/driver.py`](https://github.com/existential-birds/amelia/blob/main/amelia/sandbox/driver.py)) — Implements `DriverInterface`, delegates LLM operations to the sandboxed worker via `SandboxProvider.exec_stream()`. Parses JSON-line `AgenticMessage` objects from the worker's stdout.
 
 **`Worker`** ([`amelia/sandbox/worker.py`](https://github.com/existential-birds/amelia/blob/main/amelia/sandbox/worker.py)) — Standalone script that runs inside the sandbox. Receives prompts, runs agentic or single-turn LLM calls, and streams `AgenticMessage` objects as JSON lines to stdout. The worker is self-contained — it inlines its own type definitions to avoid importing the `amelia` package inside the container.
 
-**LLM Proxy** ([`amelia/sandbox/proxy.py`](https://github.com/existential-birds/amelia/blob/main/amelia/sandbox/proxy.py)) — Host-side FastAPI router that intercepts LLM requests from the sandbox. Reads the `X-Amelia-Profile` header to resolve which upstream provider to use, injects the API key, and forwards the request. API keys never enter the sandbox environment.
+**LLM Proxy** ([`amelia/sandbox/proxy.py`](https://github.com/existential-birds/amelia/blob/main/amelia/sandbox/proxy.py)) — Host-side FastAPI router that intercepts LLM requests from the sandbox. Authenticates requests via per-container `X-Amelia-Proxy-Token` headers, reads the `X-Amelia-Profile` header to resolve which upstream provider to use, injects the API key, and forwards the request. The proxy enforces a 10 MB request body limit, sanitizes upstream error messages to prevent information leakage, and strips internal headers before forwarding. API keys never enter the sandbox environment.
 
 **`WorktreeManager`** ([`amelia/sandbox/worktree.py`](https://github.com/existential-birds/amelia/blob/main/amelia/sandbox/worktree.py)) — Manages per-workflow git worktree isolation inside sandboxes. Uses a bare clone at `/workspace/repo` as the shared base, with each workflow getting a worktree under `/workspace/worktrees/{workflow_id}`.
 
@@ -179,7 +179,8 @@ A single `SandboxProvider` instance is shared across all agents (Architect, Deve
 2. **Key isolation**: API keys never enter the sandbox; the host-side LLM proxy injects credentials per-request
 3. **Reproducibility**: Clean container environments ensure consistent behavior across runs
 4. **Provider flexibility**: The `SandboxProvider` protocol makes it easy to swap between local Docker and cloud (Daytona) without changing agent code
-5. **Network control**: Docker sandboxes use iptables filtering to restrict outbound access to only the LLM proxy
+5. **Network control**: Docker sandboxes use iptables filtering to restrict outbound access, with DNS locked to Docker's internal resolver (127.0.0.11). `NET_ADMIN`/`NET_RAW` capabilities are only granted when network filtering is enabled.
+6. **Proxy authentication**: Each sandbox container receives a unique token, preventing cross-container request forgery through the LLM proxy
 
 ### Why the Driver Abstraction?
 
