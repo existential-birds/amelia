@@ -53,7 +53,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Orchestration
 
 - [ ] **ORCH-01**: Only one auto-fix workflow runs per PR at a time
-- [ ] **ORCH-02**: New comments arriving during an active fix are queued for the next cycle
+- [x] **ORCH-02**: New comments arriving during an active fix are queued for the next cycle
 - [ ] **ORCH-03**: Developer agent operates on the PR's head branch, not main
 
 ### Configuration
@@ -165,7 +165,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PIPE-07 | Phase 5 | Complete |
 | PIPE-08 | Phase 5 | Complete |
 | ORCH-01 | Phase 6 | Pending |
-| ORCH-02 | Phase 6 | Pending |
+| ORCH-02 | Phase 6 | Complete |
 | ORCH-03 | Phase 6 | Pending |
 | TRIG-01 | Phase 7 | Pending |
 | TRIG-02 | Phase 7 | Pending |
