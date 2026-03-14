@@ -1,8 +1,9 @@
 """Node functions for the PR auto-fix pipeline.
 
 Implements classify_node (classification orchestration), develop_node
-(Developer agent bridge with per-group execution), and commit_push_node
-(git commit and push).
+(Developer agent bridge with per-group execution), commit_push_node
+(git commit and push), and reply_resolve_node (reply to reviewers and
+resolve threads).
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from amelia.pipelines.pr_auto_fix.state import (
     GroupFixResult,
     GroupFixStatus,
     PRAutoFixState,
+    ResolutionResult,
 )
 from amelia.pipelines.utils import extract_config_params
 from amelia.services.classifier import (
@@ -30,6 +32,7 @@ from amelia.services.classifier import (
     filter_comments,
     group_comments_by_file,
 )
+from amelia.services.github_pr import GitHubPRService
 from amelia.tools.git_utils import GitOperations
 
 
@@ -324,3 +327,134 @@ async def commit_push_node(
     except ValueError as e:
         logger.error("Git operation failed", error=str(e))
         return {"status": "failed", "error": str(e)}
+
+
+def _build_reply_body(
+    status: GroupFixStatus,
+    author: str,
+    commit_sha: str | None,
+    error: str | None,
+) -> str:
+    """Build reply body for a comment based on fix status.
+
+    Does NOT include the Amelia footer -- reply_to_comment appends it.
+
+    Args:
+        status: The fix outcome status.
+        author: Comment author login for @mention.
+        commit_sha: Commit SHA for fixed comments.
+        error: Error message for failed comments.
+
+    Returns:
+        Reply body string.
+    """
+    short_sha = commit_sha[:7] if commit_sha else "unknown"
+
+    if status == GroupFixStatus.FIXED:
+        return f"@{author} Fixed in {short_sha}."
+    if status == GroupFixStatus.FAILED:
+        return f"@{author} Could not auto-fix: {error or 'Unknown error'}. Flagging for human review."
+    # NO_CHANGES
+    return f"@{author} Reviewed this comment -- no code changes needed."
+
+
+async def reply_resolve_node(
+    state: PRAutoFixState,
+    config: RunnableConfig | None = None,
+) -> dict[str, Any]:
+    """Reply to reviewers and resolve threads after fixes are pushed.
+
+    For each comment addressed by a group result:
+    - Posts a per-comment reply with @mention and status info
+    - Conditionally resolves the thread (FIXED always, NO_CHANGES if config allows)
+    - Isolates errors per-comment so one failure doesn't block others
+
+    Returns dict with status and resolution_results for state update.
+    """
+    _event_bus, _workflow_id, profile = extract_config_params(config or {})
+
+    github_service = GitHubPRService(profile.repo_root)
+
+    # Build comment lookup
+    comments_by_id: dict[int, PRReviewComment] = {
+        c.id: c for c in state.comments
+    }
+
+    resolution_results: list[ResolutionResult] = []
+
+    for group_result in state.group_results:
+        for comment_id in group_result.comment_ids:
+            comment = comments_by_id.get(comment_id)
+            if comment is None:
+                logger.warning(
+                    "Comment not found in state, skipping",
+                    comment_id=comment_id,
+                )
+                continue
+
+            replied = False
+            resolved = False
+            error_msg: str | None = None
+
+            # Post reply
+            body = _build_reply_body(
+                group_result.status,
+                comment.author,
+                state.commit_sha,
+                group_result.error,
+            )
+            try:
+                await github_service.reply_to_comment(
+                    state.pr_number,
+                    comment.id,
+                    body,
+                    in_reply_to_id=comment.in_reply_to_id,
+                )
+                replied = True
+            except Exception as e:
+                logger.error(
+                    "Failed to reply to comment",
+                    comment_id=comment.id,
+                    error=str(e),
+                )
+                error_msg = str(e)
+
+            # Determine if we should resolve
+            should_resolve = (
+                group_result.status == GroupFixStatus.FIXED
+                or (
+                    group_result.status == GroupFixStatus.NO_CHANGES
+                    and state.autofix_config.resolve_no_changes
+                )
+            )
+
+            # Resolve thread
+            if should_resolve:
+                if comment.thread_id:
+                    try:
+                        await github_service.resolve_thread(comment.thread_id)
+                        resolved = True
+                    except Exception as e:
+                        logger.error(
+                            "Failed to resolve thread",
+                            comment_id=comment.id,
+                            thread_id=comment.thread_id,
+                            error=str(e),
+                        )
+                        error_msg = str(e)
+                else:
+                    logger.warning(
+                        "No thread_id for comment, skipping resolve",
+                        comment_id=comment.id,
+                    )
+
+            resolution_results.append(
+                ResolutionResult(
+                    comment_id=comment.id,
+                    replied=replied,
+                    resolved=resolved,
+                    error=error_msg,
+                )
+            )
+
+    return {"status": "completed", "resolution_results": resolution_results}

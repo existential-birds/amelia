@@ -32,7 +32,6 @@ from amelia.pipelines.pr_auto_fix.state import (
     GroupFixResult,
     GroupFixStatus,
     PRAutoFixState,
-    ResolutionResult,
 )
 
 

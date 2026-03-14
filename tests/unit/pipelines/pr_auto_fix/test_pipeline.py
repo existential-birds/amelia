@@ -72,11 +72,11 @@ class TestPRAutoFixGraph:
         node_names = set(graph.get_graph().nodes.keys())
         assert "commit_push_node" in node_names
 
-    def test_graph_has_three_nodes(self) -> None:
-        """Graph should have exactly 3 real nodes (plus __start__ and __end__)."""
+    def test_graph_has_four_nodes(self) -> None:
+        """Graph should have exactly 4 real nodes (plus __start__ and __end__)."""
         graph = create_pr_auto_fix_graph()
         node_names = set(graph.get_graph().nodes.keys()) - {"__start__", "__end__"}
-        assert len(node_names) == 3
+        assert len(node_names) == 4
 
     def test_graph_entry_is_classify_node(self) -> None:
         """Entry point should route to classify_node."""
@@ -88,13 +88,14 @@ class TestPRAutoFixGraph:
         assert start_edges[0].target == "classify_node"
 
     def test_graph_linear_topology(self) -> None:
-        """Graph should have linear edges: classify -> develop -> commit_push -> END."""
+        """Graph should have linear edges: classify -> develop -> commit_push -> reply_resolve -> END."""
         graph = create_pr_auto_fix_graph()
         draw = graph.get_graph()
         edges = {(e.source, e.target) for e in draw.edges}
         assert ("classify_node", "develop_node") in edges
         assert ("develop_node", "commit_push_node") in edges
-        assert ("commit_push_node", "__end__") in edges
+        assert ("commit_push_node", "reply_resolve_node") in edges
+        assert ("reply_resolve_node", "__end__") in edges
 
 
 class TestRegistryIntegration:
