@@ -112,6 +112,13 @@ class EventType(StrEnum):
     PLAN_VALIDATED = "plan_validated"
     PLAN_VALIDATION_FAILED = "plan_validation_failed"
 
+    # PR Auto-Fix orchestration
+    PR_FIX_QUEUED = "pr_fix_queued"
+    PR_FIX_DIVERGED = "pr_fix_diverged"
+    PR_FIX_COOLDOWN_STARTED = "pr_fix_cooldown_started"
+    PR_FIX_COOLDOWN_RESET = "pr_fix_cooldown_reset"
+    PR_FIX_RETRIES_EXHAUSTED = "pr_fix_retries_exhausted"
+
 
 # Persisted event types (written to workflow log)
 PERSISTED_TYPES: frozenset[EventType] = frozenset({

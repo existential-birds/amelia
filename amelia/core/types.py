@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from enum import IntEnum, StrEnum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from loguru import logger
 from pydantic import (
@@ -257,6 +257,27 @@ class PRAutoFixConfig(BaseModel):
         le=1.0,
         description="Minimum confidence to act on a classification",
     )
+    post_push_cooldown_seconds: int = Field(
+        default=300,
+        ge=0,
+        le=3600,
+        description="Seconds to wait after push before next cycle",
+    )
+    max_cooldown_seconds: int = Field(
+        default=900,
+        ge=0,
+        le=7200,
+        description="Maximum cooldown duration (caps resets)",
+    )
+
+    @model_validator(mode="after")
+    def _validate_cooldown_bounds(self) -> Self:
+        if self.post_push_cooldown_seconds > self.max_cooldown_seconds:
+            raise ValueError(
+                f"post_push_cooldown_seconds ({self.post_push_cooldown_seconds}) "
+                f"must not exceed max_cooldown_seconds ({self.max_cooldown_seconds})"
+            )
+        return self
 
     @field_validator("aggressiveness", mode="before")
     @classmethod
