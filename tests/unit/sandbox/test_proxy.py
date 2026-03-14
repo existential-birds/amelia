@@ -8,7 +8,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from amelia.sandbox.proxy import ProviderConfig, create_proxy_router
+from amelia.sandbox.proxy import PROXY_MAX_BODY_BYTES, ProviderConfig, create_proxy_router
 
 
 @pytest.fixture
@@ -232,6 +232,40 @@ class TestProxyErrorSanitization:
         detail = response.json()["detail"]
         assert "10.0.0.5" not in detail
         assert "DecodingError" not in detail
+
+
+class TestProxyBodySizeLimit:
+    """Proxy must reject oversized request bodies."""
+
+    def test_content_length_exceeding_limit_returns_413(
+        self, client: TestClient,
+    ) -> None:
+        """Request with Content-Length > limit is rejected before reading body."""
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            content=b"x",
+            headers={
+                "X-Amelia-Profile": "work",
+                "Content-Length": str(PROXY_MAX_BODY_BYTES + 1),
+            },
+        )
+        assert response.status_code == 413
+
+    def test_normal_request_passes_size_check(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Normal-sized request passes through."""
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            return _streaming_response(200, b'{"choices": []}', request)
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": [{"role": "user", "content": "hi"}]},
+            headers={"X-Amelia-Profile": "work"},
+        )
+        assert response.status_code == 200
 
 
 class TestProxyCleanup:

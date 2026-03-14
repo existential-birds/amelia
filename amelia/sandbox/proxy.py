@@ -24,6 +24,7 @@ from starlette.responses import StreamingResponse
 # but connection issues should fail fast.
 PROXY_CONNECT_TIMEOUT = 30.0  # Connect/write/pool timeout
 PROXY_READ_TIMEOUT = 300.0  # Read timeout for streaming responses
+PROXY_MAX_BODY_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 class ProviderConfig(BaseModel):
@@ -143,7 +144,15 @@ def create_proxy_router(
         Returns:
             Proxied response from the upstream provider.
         """
+        # Check content-length header for early rejection
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > PROXY_MAX_BODY_BYTES:
+            raise HTTPException(status_code=413, detail="Request body too large")
+
         body = await request.body()
+        if len(body) > PROXY_MAX_BODY_BYTES:
+            raise HTTPException(status_code=413, detail="Request body too large")
+
         upstream_url = f"{provider.base_url.rstrip('/')}{path}"
 
         # Forward original headers, replacing auth and removing internal headers
