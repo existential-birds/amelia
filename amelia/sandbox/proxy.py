@@ -24,7 +24,7 @@ from starlette.responses import StreamingResponse
 # but connection issues should fail fast.
 PROXY_CONNECT_TIMEOUT = 30.0  # Connect/write/pool timeout
 PROXY_READ_TIMEOUT = 300.0  # Read timeout for streaming responses
-PROXY_MAX_BODY_BYTES = 10 * 1024 * 1024  # 10 MB
+PROXY_MAX_BODY_BYTES = int(os.environ.get("AMELIA_PROXY_MAX_BODY_MB", "10")) * 1024 * 1024
 
 
 class ProviderConfig(BaseModel):
@@ -137,8 +137,8 @@ def create_proxy_router(
         """Validate the X-Amelia-Proxy-Token header if a validator is configured."""
         if token_validator is None:
             return
-        token = request.headers.get("X-Amelia-Proxy-Token")
-        if not token or not await token_validator(token):
+        token = request.headers.get("X-Amelia-Proxy-Token", "")
+        if not await token_validator(token):
             raise HTTPException(status_code=401, detail="Invalid or missing proxy token")
 
     async def forward_request(
@@ -158,12 +158,26 @@ def create_proxy_router(
         """
         # Check content-length header for early rejection
         content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > PROXY_MAX_BODY_BYTES:
-            raise HTTPException(status_code=413, detail="Request body too large")
+        if content_length:
+            try:
+                length = int(content_length)
+            except ValueError as err:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid Content-Length header",
+                ) from err
+            if length > PROXY_MAX_BODY_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Request body too large (limit: {PROXY_MAX_BODY_BYTES // (1024 * 1024)} MB)",
+                )
 
         body = await request.body()
         if len(body) > PROXY_MAX_BODY_BYTES:
-            raise HTTPException(status_code=413, detail="Request body too large")
+            raise HTTPException(
+                status_code=413,
+                detail=f"Request body too large (limit: {PROXY_MAX_BODY_BYTES // (1024 * 1024)} MB)",
+            )
 
         upstream_url = f"{provider.base_url.rstrip('/')}{path}"
 

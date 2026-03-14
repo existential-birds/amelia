@@ -251,6 +251,47 @@ class TestProxyBodySizeLimit:
         )
         assert response.status_code == 413
 
+    def test_invalid_content_length_returns_400(
+        self, client: TestClient,
+    ) -> None:
+        """Malformed Content-Length header returns 400."""
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            content=b"x",
+            headers={
+                "X-Amelia-Profile": "work",
+                "Content-Length": "abc",
+            },
+        )
+        assert response.status_code == 400
+        assert "Content-Length" in response.json()["detail"]
+
+    def test_actual_body_exceeding_limit_returns_413(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Actual body size (not just Content-Length) is checked."""
+        import amelia.sandbox.proxy as proxy_module
+
+        monkeypatch.setattr(proxy_module, "PROXY_MAX_BODY_BYTES", 50)
+
+        app = FastAPI()
+
+        async def _resolve(name: str) -> ProviderConfig | None:
+            if name == "work":
+                return ProviderConfig(base_url="https://example.com/v1", api_key="k")
+            return None
+
+        proxy = create_proxy_router(resolve_provider=_resolve)
+        app.include_router(proxy.router, prefix="/proxy/v1")
+
+        with TestClient(app) as c:
+            response = c.post(
+                "/proxy/v1/chat/completions",
+                content=b"x" * 100,
+                headers={"X-Amelia-Profile": "work"},
+            )
+        assert response.status_code == 413
+
     def test_normal_request_passes_size_check(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -371,6 +412,28 @@ class TestProxyTokenAuth:
             headers={"X-Amelia-Profile": "work"},
         )
         assert response.status_code == 200
+
+
+class TestProxyBodyLimitConfigurable:
+    """Body size limit is configurable via AMELIA_PROXY_MAX_BODY_MB."""
+
+    def test_body_limit_configurable_via_env(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AMELIA_PROXY_MAX_BODY_MB env var controls the body size limit."""
+        monkeypatch.setenv("AMELIA_PROXY_MAX_BODY_MB", "5")
+
+        import importlib
+
+        import amelia.sandbox.proxy as proxy_module
+
+        importlib.reload(proxy_module)
+
+        try:
+            assert proxy_module.PROXY_MAX_BODY_BYTES == 5 * 1024 * 1024
+        finally:
+            monkeypatch.delenv("AMELIA_PROXY_MAX_BODY_MB", raising=False)
+            importlib.reload(proxy_module)
 
 
 class TestProxyCleanup:
