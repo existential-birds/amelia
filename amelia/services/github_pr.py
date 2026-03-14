@@ -221,6 +221,31 @@ class GitHubPRService:
 
         return result
 
+    async def get_pr_summary(self, pr_number: int) -> PRSummary:
+        """Get summary metadata for a single PR.
+
+        Args:
+            pr_number: The PR number to look up.
+
+        Returns:
+            PRSummary with number, title, head_branch, author, updated_at.
+
+        Raises:
+            ValueError: If PR not found or gh CLI fails.
+        """
+        raw = await self._run_gh(
+            "pr", "view", str(pr_number),
+            "--json", "number,title,headRefName,author,updatedAt",
+        )
+        data = json.loads(raw)
+        return PRSummary(
+            number=data["number"],
+            title=data["title"],
+            head_branch=data["headRefName"],
+            author=data["author"]["login"],
+            updated_at=data["updatedAt"],
+        )
+
     async def list_open_prs(self) -> list[PRSummary]:
         """List open PRs for the repository.
 
