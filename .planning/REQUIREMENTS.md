@@ -38,9 +38,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **TRIG-01**: CLI `fix-pr <number>` command triggers one-shot fix for a PR's unresolved comments
 - [ ] **TRIG-02**: CLI `watch-pr <number>` command polls a single PR at configurable interval
-- [ ] **TRIG-03**: API endpoint `POST /api/github/prs/{number}/auto-fix` triggers fix manually
-- [ ] **TRIG-04**: API endpoint `GET /api/github/prs` lists open PRs for a profile
-- [ ] **TRIG-05**: API endpoint `GET /api/github/prs/{number}/comments` returns unresolved comments
+- [x] **TRIG-03**: API endpoint `POST /api/github/prs/{number}/auto-fix` triggers fix manually
+- [x] **TRIG-04**: API endpoint `GET /api/github/prs` lists open PRs for a profile
+- [x] **TRIG-05**: API endpoint `GET /api/github/prs/{number}/comments` returns unresolved comments
 
 ### Polling Service
 
@@ -169,9 +169,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ORCH-03 | Phase 6 | Complete |
 | TRIG-01 | Phase 7 | Pending |
 | TRIG-02 | Phase 7 | Pending |
-| TRIG-03 | Phase 7 | Pending |
-| TRIG-04 | Phase 7 | Pending |
-| TRIG-05 | Phase 7 | Pending |
+| TRIG-03 | Phase 7 | Complete |
+| TRIG-04 | Phase 7 | Complete |
+| TRIG-05 | Phase 7 | Complete |
 | POLL-01 | Phase 8 | Pending |
 | POLL-02 | Phase 8 | Pending |
 | POLL-03 | Phase 8 | Pending |
