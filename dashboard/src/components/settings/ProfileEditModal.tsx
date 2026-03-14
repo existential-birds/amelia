@@ -37,9 +37,10 @@ import {
 import { cn } from '@/lib/utils';
 import { AGENT_DEFINITIONS, type AgentDefinition } from '@/lib/constants';
 import { createProfile, updateProfile } from '@/api/settings';
-import type { Profile, ProfileCreate, ProfileUpdate, SandboxConfig } from '@/api/settings';
+import type { Profile, ProfileCreate, ProfileUpdate, SandboxConfig, PRAutoFixConfig } from '@/api/settings';
 import { Switch } from '@/components/ui/switch';
 import * as toast from '@/components/Toast';
+import { PRAutoFixSection } from './PRAutoFixSection';
 import { ApiModelSelect } from '@/components/model-picker';
 
 const PRIMARY_AGENTS = AGENT_DEFINITIONS.filter(a => a.category === 'primary');
@@ -86,6 +87,8 @@ interface ProfileFormData {
   sandbox_daytona_memory: number;
   sandbox_daytona_disk: number;
   sandbox_daytona_image: string;
+  // PR Auto-Fix
+  pr_autofix: PRAutoFixConfig | null;
 }
 
 // =============================================================================
@@ -184,6 +187,7 @@ const DEFAULT_FORM_DATA: ProfileFormData = {
   sandbox_daytona_memory: 4,
   sandbox_daytona_disk: 10,
   sandbox_daytona_image: 'ghcr.io/existential-birds/amelia-sandbox:latest',
+  pr_autofix: null,
 };
 
 /** Zod schema for profile form validation */
@@ -262,6 +266,7 @@ const profileToFormData = (profile: Profile): ProfileFormData => {
     sandbox_daytona_memory: profile.sandbox?.daytona_resources?.memory ?? 4,
     sandbox_daytona_disk: profile.sandbox?.daytona_resources?.disk ?? 10,
     sandbox_daytona_image: profile.sandbox?.daytona_image ?? 'ghcr.io/existential-birds/amelia-sandbox:latest',
+    pr_autofix: profile.pr_autofix ?? null,
   };
 };
 
@@ -736,6 +741,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
           plan_path_pattern: formData.plan_path_pattern,
           agents: formAgentsToApi(),
           sandbox: formSandboxToApi(),
+          pr_autofix: formData.pr_autofix,
         };
         await updateProfile(profile!.id, updates);
         toast.success('Profile updated');
@@ -748,6 +754,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
           plan_path_pattern: formData.plan_path_pattern,
           agents: formAgentsToApi(),
           sandbox: formSandboxToApi(),
+          pr_autofix: formData.pr_autofix,
         };
         await createProfile(newProfile);
         toast.success('Profile created');
@@ -790,6 +797,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="agents">Agents</TabsTrigger>
               <TabsTrigger value="sandbox">Sandbox</TabsTrigger>
+              <TabsTrigger value="autofix">Auto-Fix</TabsTrigger>
             </TabsList>
 
             {/* General Tab */}
@@ -1139,6 +1147,14 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                   </p>
                 </>
               )}
+            </TabsContent>
+
+            <TabsContent value="autofix" className="space-y-4 pt-4">
+              <PRAutoFixSection
+                enabled={formData.pr_autofix !== null}
+                config={formData.pr_autofix}
+                onChange={(config) => setFormData((prev) => ({ ...prev, pr_autofix: config }))}
+              />
             </TabsContent>
           </Tabs>
 
