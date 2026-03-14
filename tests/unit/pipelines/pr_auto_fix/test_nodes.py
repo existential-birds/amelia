@@ -26,11 +26,13 @@ from amelia.pipelines.pr_auto_fix.nodes import (
     classify_node,
     commit_push_node,
     develop_node,
+    reply_resolve_node,
 )
 from amelia.pipelines.pr_auto_fix.state import (
     GroupFixResult,
     GroupFixStatus,
     PRAutoFixState,
+    ResolutionResult,
 )
 
 
@@ -43,18 +45,23 @@ def _make_comment(
     *,
     id: int = 1,
     body: str = "Fix this bug",
+    author: str = "reviewer1",
     path: str | None = "src/app.py",
     line: int | None = 42,
     diff_hunk: str | None = "@@ -1,3 +1,4 @@\n+new line",
+    thread_id: str | None = None,
+    in_reply_to_id: int | None = None,
 ) -> PRReviewComment:
     return PRReviewComment(
         id=id,
         body=body,
-        author="reviewer1",
+        author=author,
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
         path=path,
         line=line,
         diff_hunk=diff_hunk,
+        thread_id=thread_id,
+        in_reply_to_id=in_reply_to_id,
     )
 
 
@@ -66,18 +73,28 @@ def _make_state(
     pr_number: int = 123,
     head_branch: str = "feat/my-feature",
     repo: str = "owner/repo",
+    commit_sha: str | None = None,
+    group_results: list[GroupFixResult] | None = None,
+    autofix_config: PRAutoFixConfig | None = None,
 ) -> PRAutoFixState:
-    return PRAutoFixState(
-        workflow_id=uuid.uuid4(),
-        profile_id="test",
-        created_at=datetime(2026, 1, 1, tzinfo=UTC),
-        pr_number=pr_number,
-        head_branch=head_branch,
-        repo=repo,
-        comments=comments or [],
-        file_groups=file_groups or {},
-        classified_comments=classified_comments or [],
-    )
+    kwargs: dict[str, Any] = {
+        "workflow_id": uuid.uuid4(),
+        "profile_id": "test",
+        "created_at": datetime(2026, 1, 1, tzinfo=UTC),
+        "pr_number": pr_number,
+        "head_branch": head_branch,
+        "repo": repo,
+        "comments": comments or [],
+        "file_groups": file_groups or {},
+        "classified_comments": classified_comments or [],
+    }
+    if commit_sha is not None:
+        kwargs["commit_sha"] = commit_sha
+    if group_results is not None:
+        kwargs["group_results"] = group_results
+    if autofix_config is not None:
+        kwargs["autofix_config"] = autofix_config
+    return PRAutoFixState(**kwargs)
 
 
 def _make_profile() -> Profile:
@@ -513,3 +530,290 @@ class TestCommitPushNode:
         assert "Fix null check" in commit_msg
         assert "src/utils.py:20" in commit_msg
         assert "Add validation" in commit_msg
+
+
+# ---------------------------------------------------------------------------
+# reply_resolve_node tests
+# ---------------------------------------------------------------------------
+
+
+class TestReplyResolveNode:
+    """Tests for reply_resolve_node."""
+
+    @pytest.mark.asyncio
+    async def test_fixed_comment_gets_reply_and_resolve(self) -> None:
+        """Fixed GroupFixResult -> reply_to_comment called with commit SHA, resolve_thread called."""
+        c1 = _make_comment(id=1, author="reviewer1", thread_id="T_abc123")
+        state = _make_state(
+            comments=[c1],
+            commit_sha="abc1234567890",
+            group_results=[
+                GroupFixResult(
+                    file_path="src/app.py",
+                    status=GroupFixStatus.FIXED,
+                    comment_ids=[1],
+                ),
+            ],
+        )
+        config = _make_config()
+
+        with patch(
+            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
+        ) as mock_gh_cls:
+            mock_gh = AsyncMock()
+            mock_gh_cls.return_value = mock_gh
+
+            result = await reply_resolve_node(state, config)
+
+        mock_gh.reply_to_comment.assert_called_once()
+        call_kwargs = mock_gh.reply_to_comment.call_args
+        body = call_kwargs.kwargs.get("body") or call_kwargs[1].get("body") or call_kwargs[0][2]
+        assert "abc1234" in body  # short SHA (7 chars)
+
+        mock_gh.resolve_thread.assert_called_once_with("T_abc123")
+
+        assert result["status"] == "completed"
+        assert len(result["resolution_results"]) == 1
+        assert result["resolution_results"][0].replied is True
+        assert result["resolution_results"][0].resolved is True
+
+    @pytest.mark.asyncio
+    async def test_fixed_reply_includes_commit_sha(self) -> None:
+        """Reply body for fixed comment contains short SHA (first 7 chars)."""
+        c1 = _make_comment(id=1, author="reviewer1", thread_id="T_abc123")
+        state = _make_state(
+            comments=[c1],
+            commit_sha="deadbeef1234567",
+            group_results=[
+                GroupFixResult(
+                    file_path="src/app.py",
+                    status=GroupFixStatus.FIXED,
+                    comment_ids=[1],
+                ),
+            ],
+        )
+        config = _make_config()
+
+        with patch(
+            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
+        ) as mock_gh_cls:
+            mock_gh = AsyncMock()
+            mock_gh_cls.return_value = mock_gh
+
+            await reply_resolve_node(state, config)
+
+        body = mock_gh.reply_to_comment.call_args[0][2]
+        assert "deadbee" in body  # first 7 chars of SHA
+
+    @pytest.mark.asyncio
+    async def test_reply_mentions_author(self) -> None:
+        """Reply body starts with @{author}."""
+        c1 = _make_comment(id=1, author="octocat", thread_id="T_abc123")
+        state = _make_state(
+            comments=[c1],
+            commit_sha="abc1234567890",
+            group_results=[
+                GroupFixResult(
+                    file_path="src/app.py",
+                    status=GroupFixStatus.FIXED,
+                    comment_ids=[1],
+                ),
+            ],
+        )
+        config = _make_config()
+
+        with patch(
+            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
+        ) as mock_gh_cls:
+            mock_gh = AsyncMock()
+            mock_gh_cls.return_value = mock_gh
+
+            await reply_resolve_node(state, config)
+
+        body = mock_gh.reply_to_comment.call_args[0][2]
+        assert body.startswith("@octocat")
+
+    @pytest.mark.asyncio
+    async def test_failed_comment_reply_no_resolve(self) -> None:
+        """Failed GroupFixResult -> reply posted with error, resolve NOT called."""
+        c1 = _make_comment(id=1, author="reviewer1", thread_id="T_abc123")
+        state = _make_state(
+            comments=[c1],
+            commit_sha="abc1234567890",
+            group_results=[
+                GroupFixResult(
+                    file_path="src/app.py",
+                    status=GroupFixStatus.FAILED,
+                    error="Syntax error in generated code",
+                    comment_ids=[1],
+                ),
+            ],
+        )
+        config = _make_config()
+
+        with patch(
+            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
+        ) as mock_gh_cls:
+            mock_gh = AsyncMock()
+            mock_gh_cls.return_value = mock_gh
+
+            result = await reply_resolve_node(state, config)
+
+        mock_gh.reply_to_comment.assert_called_once()
+        body = mock_gh.reply_to_comment.call_args[0][2]
+        assert "Syntax error in generated code" in body
+
+        mock_gh.resolve_thread.assert_not_called()
+
+        assert result["resolution_results"][0].replied is True
+        assert result["resolution_results"][0].resolved is False
+
+    @pytest.mark.asyncio
+    async def test_no_changes_resolve_config_gated(self) -> None:
+        """No_changes with resolve_no_changes=True -> resolves; with False -> does not."""
+        c1 = _make_comment(id=1, author="reviewer1", thread_id="T_abc123")
+
+        # Test with resolve_no_changes=True (default)
+        state_resolve = _make_state(
+            comments=[c1],
+            commit_sha="abc1234567890",
+            group_results=[
+                GroupFixResult(
+                    file_path="src/app.py",
+                    status=GroupFixStatus.NO_CHANGES,
+                    comment_ids=[1],
+                ),
+            ],
+            autofix_config=PRAutoFixConfig(resolve_no_changes=True),
+        )
+        config = _make_config()
+
+        with patch(
+            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
+        ) as mock_gh_cls:
+            mock_gh = AsyncMock()
+            mock_gh_cls.return_value = mock_gh
+
+            result = await reply_resolve_node(state_resolve, config)
+
+        mock_gh.resolve_thread.assert_called_once_with("T_abc123")
+        assert result["resolution_results"][0].resolved is True
+
+        # Test with resolve_no_changes=False
+        c2 = _make_comment(id=2, author="reviewer1", thread_id="T_def456")
+        state_no_resolve = _make_state(
+            comments=[c2],
+            commit_sha="abc1234567890",
+            group_results=[
+                GroupFixResult(
+                    file_path="src/app.py",
+                    status=GroupFixStatus.NO_CHANGES,
+                    comment_ids=[2],
+                ),
+            ],
+            autofix_config=PRAutoFixConfig(resolve_no_changes=False),
+        )
+
+        with patch(
+            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
+        ) as mock_gh_cls:
+            mock_gh = AsyncMock()
+            mock_gh_cls.return_value = mock_gh
+
+            result = await reply_resolve_node(state_no_resolve, config)
+
+        mock_gh.resolve_thread.assert_not_called()
+        assert result["resolution_results"][0].resolved is False
+
+    @pytest.mark.asyncio
+    async def test_missing_thread_id_skips_resolve(self) -> None:
+        """Comment with thread_id=None -> reply posted, resolve skipped, warning logged."""
+        c1 = _make_comment(id=1, author="reviewer1", thread_id=None)
+        state = _make_state(
+            comments=[c1],
+            commit_sha="abc1234567890",
+            group_results=[
+                GroupFixResult(
+                    file_path="src/app.py",
+                    status=GroupFixStatus.FIXED,
+                    comment_ids=[1],
+                ),
+            ],
+        )
+        config = _make_config()
+
+        with patch(
+            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
+        ) as mock_gh_cls:
+            mock_gh = AsyncMock()
+            mock_gh_cls.return_value = mock_gh
+
+            result = await reply_resolve_node(state, config)
+
+        mock_gh.reply_to_comment.assert_called_once()
+        mock_gh.resolve_thread.assert_not_called()
+
+        assert result["resolution_results"][0].replied is True
+        assert result["resolution_results"][0].resolved is False
+
+    @pytest.mark.asyncio
+    async def test_resolve_failure_nonfatal(self) -> None:
+        """resolve_thread raises Exception -> logged, remaining comments still processed."""
+        c1 = _make_comment(id=1, author="reviewer1", thread_id="T_abc123")
+        c2 = _make_comment(id=2, author="reviewer2", thread_id="T_def456")
+        state = _make_state(
+            comments=[c1, c2],
+            commit_sha="abc1234567890",
+            group_results=[
+                GroupFixResult(
+                    file_path="src/app.py",
+                    status=GroupFixStatus.FIXED,
+                    comment_ids=[1],
+                ),
+                GroupFixResult(
+                    file_path="src/utils.py",
+                    status=GroupFixStatus.FIXED,
+                    comment_ids=[2],
+                ),
+            ],
+        )
+        config = _make_config()
+
+        with patch(
+            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
+        ) as mock_gh_cls:
+            mock_gh = AsyncMock()
+            mock_gh_cls.return_value = mock_gh
+            # First resolve fails, second succeeds
+            mock_gh.resolve_thread.side_effect = [
+                Exception("GraphQL error"),
+                None,
+            ]
+
+            result = await reply_resolve_node(state, config)
+
+        # Both comments got replies
+        assert mock_gh.reply_to_comment.call_count == 2
+        # Both resolves were attempted
+        assert mock_gh.resolve_thread.call_count == 2
+
+        # First failed resolve, second succeeded
+        assert len(result["resolution_results"]) == 2
+        res1 = result["resolution_results"][0]
+        res2 = result["resolution_results"][1]
+        assert res1.replied is True
+        assert res1.resolved is False
+        assert res1.error is not None
+        assert res2.replied is True
+        assert res2.resolved is True
+
+    @pytest.mark.asyncio
+    async def test_graph_includes_reply_resolve(self) -> None:
+        """Compiled graph has reply_resolve_node wired commit_push -> reply_resolve -> END."""
+        from amelia.pipelines.pr_auto_fix.graph import create_pr_auto_fix_graph
+
+        graph = create_pr_auto_fix_graph()
+
+        # Get node names from the graph
+        node_names = set(graph.nodes.keys())
+        assert "reply_resolve_node" in node_names

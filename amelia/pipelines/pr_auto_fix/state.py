@@ -25,6 +25,24 @@ class GroupFixStatus(StrEnum):
     NO_CHANGES = "no_changes"
 
 
+class ResolutionResult(BaseModel):
+    """Result of replying to and resolving a single comment thread.
+
+    Attributes:
+        comment_id: GitHub comment ID that was processed.
+        replied: Whether a reply was successfully posted.
+        resolved: Whether the thread was successfully resolved.
+        error: Error message if reply or resolve failed.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    comment_id: int
+    replied: bool = False
+    resolved: bool = False
+    error: str | None = None
+
+
 class GroupFixResult(BaseModel):
     """Result of fixing a single file group.
 
@@ -85,6 +103,7 @@ class PRAutoFixState(BasePipelineState):
     # Results
     commit_sha: str | None = None
     group_results: list[GroupFixResult] = Field(default_factory=list)
+    resolution_results: list[ResolutionResult] = Field(default_factory=list)
 
     # Configuration
     autofix_config: PRAutoFixConfig = Field(default_factory=PRAutoFixConfig)

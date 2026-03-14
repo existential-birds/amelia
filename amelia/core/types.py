@@ -247,6 +247,10 @@ class PRAutoFixConfig(BaseModel):
         default_factory=list,
         description="Comment authors to ignore (exact username match)",
     )
+    resolve_no_changes: bool = Field(
+        default=True,
+        description="Resolve threads for no-changes comments",
+    )
     confidence_threshold: float = Field(
         default=0.7,
         ge=0.0,
