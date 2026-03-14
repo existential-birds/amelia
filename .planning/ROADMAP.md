@@ -161,12 +161,12 @@ Plans:
   3. Users can see which specific PR comments triggered a given workflow
   4. Each comment shows its resolution status: fixed, failed, or skipped
   5. Users can view and configure fix aggressiveness per profile from the dashboard
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 09-01: TBD
-- [ ] 09-02: TBD
-- [ ] 09-03: TBD
+- [ ] 09-01-PLAN.md -- Backend: event types, WorkflowType extension, pipeline_type on responses, orchestrator DB records
+- [ ] 09-02-PLAN.md -- Frontend: TypeBadge, tab-filtered workflow list, PR comment section, poll error toast
+- [ ] 09-03-PLAN.md -- Frontend: PR Auto-Fix config section in profile edit modal
 
 ### Phase 10: Metrics & Benchmarking
 **Goal**: The system tracks and exposes performance data so users can evaluate fix quality and tune aggressiveness settings
