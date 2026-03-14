@@ -68,11 +68,11 @@ Plans:
   3. System tracks which comment IDs have been processed and skips them on subsequent runs
   4. System enforces a configurable max fix iteration count per thread (default 3) and stops retrying after the limit
   5. Comments are grouped by file/function for efficient batching to the Developer agent
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md -- TDD: Classification schemas, CATEGORY_THRESHOLD mapping, is_actionable helper, config update, prompt registration
+- [ ] 03-02-PLAN.md -- TDD: Classifier service with pre-filtering, LLM classification, post-filtering, and file grouping
 
 ### Phase 4: Core Fix Pipeline
 **Goal**: A working LangGraph pipeline that takes classified comments, feeds them to the Developer agent, and produces a commit with fixes pushed to the PR branch
