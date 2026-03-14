@@ -414,6 +414,68 @@ class TestProxyTokenAuth:
         assert response.status_code == 200
 
 
+class TestProxySyncTokenValidator:
+    """Sync token validators work without async overhead."""
+
+    @pytest.fixture
+    async def sync_authed_app(self) -> AsyncIterator[FastAPI]:
+        """App with sync token validation enabled."""
+        app = FastAPI()
+
+        async def _resolve_provider(profile_name: str) -> ProviderConfig | None:
+            if profile_name == "work":
+                return ProviderConfig(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key="sk-or-test-key",
+                )
+            return None
+
+        def _validate_token(token: str) -> bool:
+            """Sync validator - no async overhead for dict lookups."""
+            return token == "sync-valid-token"
+
+        proxy = create_proxy_router(
+            resolve_provider=_resolve_provider,
+            token_validator=_validate_token,
+        )
+        app.include_router(proxy.router, prefix="/proxy/v1")
+        yield app
+        await proxy.cleanup()
+
+    @pytest.fixture
+    def sync_authed_client(self, sync_authed_app: FastAPI) -> TestClient:
+        return TestClient(sync_authed_app)
+
+    def test_sync_validator_rejects_invalid_token(self, sync_authed_client: TestClient) -> None:
+        response = sync_authed_client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={
+                "X-Amelia-Profile": "work",
+                "X-Amelia-Proxy-Token": "wrong-token",
+            },
+        )
+        assert response.status_code == 401
+
+    def test_sync_validator_accepts_valid_token(
+        self, sync_authed_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            return _streaming_response(200, b'{"choices": []}', request)
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = sync_authed_client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={
+                "X-Amelia-Profile": "work",
+                "X-Amelia-Proxy-Token": "sync-valid-token",
+            },
+        )
+        assert response.status_code == 200
+
+
 class TestProxyBodyLimitConfigurable:
     """Body size limit is configurable via AMELIA_PROXY_MAX_BODY_MB."""
 

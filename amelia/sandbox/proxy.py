@@ -7,6 +7,7 @@ X-Amelia-Profile header to resolve which upstream provider to use.
 
 from __future__ import annotations
 
+import inspect
 import os
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, NamedTuple
@@ -42,8 +43,8 @@ class ProviderConfig(BaseModel):
 # Type alias for the provider resolver function
 type ProviderResolver = Callable[[str], Coroutine[Any, Any, ProviderConfig | None]]
 
-# Type alias for the token validator function
-type TokenValidator = Callable[[str], Coroutine[Any, Any, bool]]
+# Type alias for the token validator function (sync or async)
+type TokenValidator = Callable[[str], bool] | Callable[[str], Coroutine[Any, Any, bool]]
 
 
 class ProxyRouter(NamedTuple):
@@ -138,7 +139,10 @@ def create_proxy_router(
         if token_validator is None:
             return
         token = request.headers.get("X-Amelia-Proxy-Token", "")
-        if not await token_validator(token):
+        result = token_validator(token)
+        # Handle both sync and async validators
+        is_valid = await result if inspect.iscoroutine(result) else result
+        if not is_valid:
             raise HTTPException(status_code=401, detail="Invalid or missing proxy token")
 
     async def forward_request(

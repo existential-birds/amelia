@@ -481,7 +481,7 @@ def create_app() -> FastAPI:
     application.state.register_proxy_token = register_proxy_token
     application.state.unregister_proxy_token = unregister_proxy_token
 
-    async def _validate_proxy_token(token: str) -> bool:
+    def _validate_proxy_token(token: str) -> bool:
         if not proxy_tokens:
             return True  # No tokens registered yet — allow (registration wired in future PR)
         if not token:

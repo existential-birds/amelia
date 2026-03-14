@@ -5,6 +5,7 @@ hosts only. The generated script is applied inside the container by
 setup-network.sh.
 """
 
+import ipaddress
 import shlex
 
 
@@ -32,7 +33,15 @@ def generate_allowlist_rules(
 
     Returns:
         Shell script string with iptables rules.
+
+    Raises:
+        ValueError: If dns_server is not a valid IP address.
     """
+    try:
+        ipaddress.ip_address(dns_server)
+    except ValueError as err:
+        raise ValueError(f"dns_server must be a valid IP address, got: {dns_server!r}") from err
+
     lines = [
         "#!/bin/sh",
         "set -e",

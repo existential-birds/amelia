@@ -1,5 +1,7 @@
 """Unit tests for network allowlist rule generation."""
 
+import pytest
+
 
 class TestGenerateAllowlistRules:
     """Tests for generate_allowlist_rules()."""
@@ -96,3 +98,16 @@ class TestGenerateAllowlistRules:
         rules = generate_allowlist_rules(allowed_hosts=[], dns_server="8.8.8.8")
         assert "-d 8.8.8.8" in rules
         assert "127.0.0.11" not in rules
+
+    def test_invalid_dns_server_raises_error(self) -> None:
+        """Should raise ValueError for invalid DNS server IP address."""
+        from amelia.sandbox.network import generate_allowlist_rules
+
+        with pytest.raises(ValueError, match="dns_server must be a valid IP address"):
+            generate_allowlist_rules(allowed_hosts=[], dns_server="not-an-ip")
+
+        with pytest.raises(ValueError, match="dns_server must be a valid IP address"):
+            generate_allowlist_rules(allowed_hosts=[], dns_server="8.8.8.8; rm -rf /")
+
+        with pytest.raises(ValueError, match="dns_server must be a valid IP address"):
+            generate_allowlist_rules(allowed_hosts=[], dns_server="")

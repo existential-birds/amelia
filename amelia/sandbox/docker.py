@@ -317,10 +317,11 @@ class DockerSandboxProvider(SandboxProvider):
                 "AMELIA_PROXY_TOKEN not found in container env, keeping current token",
                 container=self.container_name,
             )
-        except Exception:
+        except OSError:
             logger.warning(
                 "Failed to read proxy token from container, keeping current token",
                 container=self.container_name,
+                exc_info=True,
             )
 
     async def _wait_for_ready(self, timeout: float = 30.0) -> None:
