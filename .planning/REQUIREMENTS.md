@@ -32,7 +32,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **PIPE-05**: Pipeline pushes commit to the PR's head branch (never main)
 - [x] **PIPE-06**: Pipeline replies to each fixed comment and resolves the thread
 - [x] **PIPE-07**: Pipeline handles partial fixes — replies to unfixable comments explaining why, marks as needing human attention
-- [ ] **PIPE-08**: Existing review pipeline can optionally invoke PR_AUTO_FIX when PR context is available
+- [x] **PIPE-08**: Existing review pipeline can optionally invoke PR_AUTO_FIX when PR context is available
 
 ### Triggers
 
@@ -163,7 +163,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PIPE-05 | Phase 4 | Complete |
 | PIPE-06 | Phase 5 | Complete |
 | PIPE-07 | Phase 5 | Complete |
-| PIPE-08 | Phase 5 | Pending |
+| PIPE-08 | Phase 5 | Complete |
 | ORCH-01 | Phase 6 | Pending |
 | ORCH-02 | Phase 6 | Pending |
 | ORCH-03 | Phase 6 | Pending |
