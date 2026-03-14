@@ -62,6 +62,7 @@ from amelia.knowledge.repository import KnowledgeRepository
 from amelia.knowledge.service import KnowledgeService
 from amelia.logging import configure_logging, log_server_startup
 from amelia.pipelines.implementation.state import rebuild_implementation_state
+from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.sandbox.proxy import ProviderConfig, create_proxy_router
 from amelia.sandbox.teardown import teardown_all_sandbox_containers
 from amelia.server.config import ServerConfig
@@ -83,6 +84,7 @@ from amelia.server.dependencies import (
 )
 from amelia.server.events.bus import EventBus
 from amelia.server.lifecycle.health_checker import WorktreeHealthChecker
+from amelia.server.lifecycle.pr_poller import PRCommentPoller
 from amelia.server.lifecycle.retention import LogRetentionService
 from amelia.server.lifecycle.server import ServerLifecycle
 from amelia.server.orchestrator.service import OrchestratorService
@@ -112,6 +114,7 @@ from amelia.server.routes.settings import router as settings_router
 from amelia.server.routes.websocket import connection_manager
 from amelia.server.routes.workflows import configure_exception_handlers
 from amelia.server.services.brainstorm import BrainstormService
+from amelia.services.github_pr import GitHubPRService
 
 
 def create_driver_cleanup_callback() -> Callable[[str, str], Awaitable[bool]]:
@@ -273,11 +276,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log_retention=log_retention,
     )
     health_checker = WorktreeHealthChecker(orchestrator=orchestrator)
+
+    # Create PR auto-fix orchestrator for polling service
+    # GitHubPRService needs a repo_root; the orchestrator uses it only for
+    # create_issue_comment on divergence failure. The poller creates per-profile
+    # services for actual PR listing and comment fetching.
+    # Use a placeholder -- profiles provide real repo_roots at poll time.
+    pr_fix_orchestrator = PRAutoFixOrchestrator(
+        event_bus=event_bus,
+        github_pr_service=GitHubPRService("."),
+    )
+    pr_poller = PRCommentPoller(
+        profile_repo=profile_repo,
+        settings_repo=settings_repo,
+        orchestrator=pr_fix_orchestrator,
+        event_bus=event_bus,
+    )
+
     app.state.lifecycle = lifecycle
 
     # Start lifecycle components
     await lifecycle.startup()
     await health_checker.start()
+    await pr_poller.start()
 
     # Log server startup with styled banner
     log_server_startup(
@@ -296,6 +317,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Close WebSocket connections
     await connection_manager.close_all(code=1001, reason="Server shutting down")
 
+    await pr_poller.stop()
     await health_checker.stop()
     await lifecycle.shutdown()
     if knowledge_service is not None:
