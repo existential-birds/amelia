@@ -94,6 +94,7 @@ from amelia.server.routes import (
     github_router,
     health_router,
     knowledge_router,
+    metrics_router,
     paths_router,
     usage_router,
     websocket_router,
@@ -373,6 +374,7 @@ def create_app() -> FastAPI:
     application.include_router(files_router, prefix="/api")
     application.include_router(github_router, prefix="/api")
     application.include_router(health_router, prefix="/api")
+    application.include_router(metrics_router, prefix="/api")
     application.include_router(paths_router, prefix="/api")
     application.include_router(usage_router, prefix="/api")
     application.include_router(workflows_router, prefix="/api")
