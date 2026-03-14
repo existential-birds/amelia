@@ -292,6 +292,8 @@ class TestPersistedTypes:
             EventType.AGENT_MESSAGE,
             EventType.DOCUMENT_INGESTION_PROGRESS,
             EventType.PR_POLL_RATE_LIMITED,
+            EventType.PR_COMMENTS_DETECTED,
+            EventType.PR_COMMENTS_RESOLVED,
         }
         classified = PERSISTED_TYPES | stream_only
         unclassified = all_types - classified

@@ -17,8 +17,8 @@ from amelia.core.types import (
     Profile,
     TrackerType,
 )
-from amelia.server.database import ProfileRepository
-from amelia.server.dependencies import get_profile_repository
+from amelia.server.database import ProfileRepository, WorkflowRepository
+from amelia.server.dependencies import get_profile_repository, get_repository
 from amelia.server.events.bus import EventBus
 from amelia.server.routes.github import router
 
@@ -38,6 +38,10 @@ def app(mock_profile_repo: AsyncMock, event_bus: EventBus) -> FastAPI:
     application = FastAPI()
     application.include_router(router, prefix="/api")
     application.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
+    mock_workflow_repo = MagicMock(spec=WorkflowRepository)
+    mock_workflow_repo.create = AsyncMock()
+    mock_workflow_repo.update = AsyncMock()
+    application.dependency_overrides[get_repository] = lambda: mock_workflow_repo
     application.state.event_bus = event_bus
     return application
 

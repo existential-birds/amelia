@@ -285,6 +285,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     pr_fix_orchestrator = PRAutoFixOrchestrator(
         event_bus=event_bus,
         github_pr_service=GitHubPRService("."),
+        workflow_repo=repository,
     )
     pr_poller = PRCommentPoller(
         profile_repo=profile_repo,

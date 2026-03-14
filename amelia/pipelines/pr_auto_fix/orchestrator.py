@@ -6,14 +6,21 @@ Prevents race conditions, infinite loops, and branch corruption.
 
 import asyncio
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from loguru import logger
 
 from amelia.core.types import PRAutoFixConfig, Profile
 from amelia.pipelines.pr_auto_fix.pipeline import PRAutoFixPipeline
+from amelia.server.database import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.models.events import EventType, WorkflowEvent
+from amelia.server.models.state import (
+    ServerExecutionState,
+    WorkflowStatus,
+    WorkflowType,
+)
 from amelia.services.github_pr import GitHubPRService
 from amelia.tools.git_utils import GitOperations
 
@@ -36,15 +43,18 @@ class PRAutoFixOrchestrator:
     - Cooldown timer between pending cycles with reset-on-new-comments
     - Divergence recovery with retry on push failures
     - Repo-level git serialization across PRs sharing the same repo_path
+    - Workflow DB record creation for dashboard visibility
     """
 
     def __init__(
         self,
         event_bus: EventBus,
         github_pr_service: GitHubPRService,
+        workflow_repo: WorkflowRepository | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._github_pr_service = github_pr_service
+        self._workflow_repo = workflow_repo
 
         # Per-PR concurrency control
         self._pr_locks: dict[int, asyncio.Lock] = {}
@@ -224,6 +234,26 @@ class PRAutoFixOrchestrator:
                 )
                 return
 
+    async def _fetch_pr_title(self, pr_number: int) -> str:
+        """Fetch PR title from GitHub, with fallback.
+
+        Args:
+            pr_number: GitHub PR number.
+
+        Returns:
+            PR title string, or fallback "PR #{pr_number}" on error.
+        """
+        try:
+            summary = await self._github_pr_service.get_pr_summary(pr_number)
+            return summary.title
+        except Exception as exc:
+            logger.warning(
+                "Failed to fetch PR title, using fallback",
+                pr_number=pr_number,
+                error=str(exc),
+            )
+            return f"PR #{pr_number}"
+
     async def _execute_pipeline(
         self,
         pr_number: int,
@@ -232,12 +262,10 @@ class PRAutoFixOrchestrator:
         config: PRAutoFixConfig,
         head_branch: str = "",
     ) -> None:
-        """Execute the PR auto-fix pipeline.
+        """Execute the PR auto-fix pipeline with workflow record tracking.
 
-        Creates a PRAutoFixPipeline instance, builds the graph, and
-        invokes it with the initial state. This method exists as a seam
-        for testing -- tests mock this to verify orchestration logic
-        without running the real pipeline.
+        Creates a workflow DB record before pipeline execution and updates
+        it with results after completion or failure. Emits lifecycle events.
 
         Args:
             pr_number: GitHub PR number.
@@ -246,16 +274,153 @@ class PRAutoFixOrchestrator:
             config: Auto-fix configuration.
             head_branch: PR head branch name.
         """
-        pipeline = PRAutoFixPipeline()
-        graph = pipeline.create_graph()
-        initial_state = pipeline.get_initial_state(
-            workflow_id=self._get_workflow_id(pr_number),
+        # Fetch PR title for the workflow record
+        pr_title = await self._fetch_pr_title(pr_number)
+
+        # Create workflow record for dashboard visibility
+        workflow_id = uuid4()
+        now = datetime.now(UTC)
+        issue_cache: dict[str, Any] = {
+            "pr_number": pr_number,
+            "pr_title": pr_title,
+            "comment_count": 0,  # Updated after pipeline if data available
+            "repo": repo,
+            "head_branch": head_branch,
+        }
+
+        state = ServerExecutionState(
+            id=workflow_id,
+            issue_id=f"PR-{pr_number}",
+            worktree_path=profile.repo_root,
+            workflow_type=WorkflowType.PR_AUTO_FIX,
             profile_id=profile.name,
-            pr_number=pr_number,
-            head_branch=head_branch,
-            repo=repo,
+            workflow_status=WorkflowStatus.IN_PROGRESS,
+            started_at=now,
+            issue_cache=issue_cache,
         )
-        await graph.ainvoke(initial_state)
+
+        if self._workflow_repo is not None:
+            await self._workflow_repo.create(state)
+
+        # Emit started event
+        self._emit_event(
+            EventType.PR_AUTO_FIX_STARTED,
+            pr_number,
+            f"PR auto-fix started for PR #{pr_number}",
+            data={"workflow_id": str(workflow_id)},
+        )
+
+        try:
+            # Run the pipeline
+            pipeline = PRAutoFixPipeline()
+            graph = pipeline.create_graph()
+            initial_state = pipeline.get_initial_state(
+                workflow_id=self._get_workflow_id(pr_number),
+                profile_id=profile.name,
+                pr_number=pr_number,
+                head_branch=head_branch,
+                repo=repo,
+            )
+            final_state = await graph.ainvoke(initial_state)
+
+            # Build pr_comments from final state for issue_cache
+            pr_comments = self._build_pr_comments(final_state)
+            comments_raw = final_state.get("comments", []) if isinstance(final_state, dict) else []
+            issue_cache["comment_count"] = len(comments_raw)
+            issue_cache["pr_comments"] = pr_comments
+
+            # Update workflow record as completed
+            state = state.model_copy(
+                update={
+                    "workflow_status": WorkflowStatus.COMPLETED,
+                    "completed_at": datetime.now(UTC),
+                    "issue_cache": issue_cache,
+                },
+            )
+            if self._workflow_repo is not None:
+                await self._workflow_repo.update(state)
+
+            # Emit completed event
+            self._emit_event(
+                EventType.PR_AUTO_FIX_COMPLETED,
+                pr_number,
+                f"PR auto-fix completed for PR #{pr_number}",
+                data={"workflow_id": str(workflow_id)},
+            )
+
+        except Exception as exc:
+            # Update workflow record as failed
+            state = state.model_copy(
+                update={
+                    "workflow_status": WorkflowStatus.FAILED,
+                    "completed_at": datetime.now(UTC),
+                    "failure_reason": str(exc),
+                },
+            )
+            if self._workflow_repo is not None:
+                await self._workflow_repo.update(state)
+            raise
+
+    def _build_pr_comments(self, final_state: Any) -> list[dict[str, Any]]:
+        """Build pr_comments list from pipeline final state.
+
+        Extracts comments and their resolution status from the final
+        pipeline state for storage in issue_cache.
+
+        Args:
+            final_state: Final state dict from graph.ainvoke().
+
+        Returns:
+            List of comment dicts with resolution status.
+        """
+        if not isinstance(final_state, dict):
+            return []
+
+        comments = final_state.get("comments", [])
+        group_results = final_state.get("group_results", [])
+        resolution_results = final_state.get("resolution_results", [])
+
+        # Build lookup maps
+        # comment_id -> group fix status
+        comment_fix_status: dict[int, str] = {}
+        for result in group_results:
+            result_dict = result if isinstance(result, dict) else result.model_dump() if hasattr(result, "model_dump") else {}
+            for cid in result_dict.get("comment_ids", []):
+                comment_fix_status[cid] = result_dict.get("status", "unknown")
+
+        # comment_id -> resolution result
+        resolution_map: dict[int, dict[str, Any]] = {}
+        for result in resolution_results:
+            result_dict = result if isinstance(result, dict) else result.model_dump() if hasattr(result, "model_dump") else {}
+            cid = result_dict.get("comment_id")
+            if cid is not None:
+                resolution_map[cid] = result_dict
+
+        pr_comments: list[dict[str, Any]] = []
+        for comment in comments:
+            comment_dict = comment if isinstance(comment, dict) else comment.model_dump() if hasattr(comment, "model_dump") else {}
+            cid = comment_dict.get("id")
+            if cid is None:
+                continue
+
+            body = comment_dict.get("body", "")
+            truncated_body = body[:200] if body else ""
+
+            status = comment_fix_status.get(cid, "skipped")
+            resolution = resolution_map.get(cid, {})
+
+            pr_comments.append({
+                "comment_id": cid,
+                "file_path": comment_dict.get("path"),
+                "line": comment_dict.get("line"),
+                "body": truncated_body,
+                "author": comment_dict.get("user", {}).get("login") if isinstance(comment_dict.get("user"), dict) else None,
+                "status": status,
+                "resolved": resolution.get("resolved", False),
+                "replied": resolution.get("replied", False),
+            })
+
+        return pr_comments
 
     async def _run_cooldown(
         self,

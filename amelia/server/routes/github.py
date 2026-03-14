@@ -22,8 +22,8 @@ from amelia.core.types import (
     TrackerType,
 )
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
-from amelia.server.database import ProfileRepository
-from amelia.server.dependencies import get_profile_repository
+from amelia.server.database import ProfileRepository, WorkflowRepository
+from amelia.server.dependencies import get_profile_repository, get_repository
 from amelia.services.github_pr import GitHubPRService
 
 
@@ -327,6 +327,7 @@ async def trigger_pr_autofix(
     profile: str = Query(..., description="Profile name"),
     body: TriggerPRAutoFixRequest | None = None,
     profile_repo: ProfileRepository = Depends(get_profile_repository),
+    workflow_repo: WorkflowRepository = Depends(get_repository),
 ) -> JSONResponse:
     """Trigger a PR auto-fix cycle.
 
@@ -369,6 +370,7 @@ async def trigger_pr_autofix(
     orchestrator = PRAutoFixOrchestrator(
         event_bus=request.app.state.event_bus,
         github_pr_service=service,
+        workflow_repo=workflow_repo,
     )
     workflow_id = orchestrator._get_workflow_id(number)
 
