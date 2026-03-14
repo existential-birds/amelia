@@ -224,6 +224,10 @@ async def list_workflows(
                     else None
                 ),
                 total_duration_ms=token_summary.total_duration_ms if token_summary else None,
+                pipeline_type=w.workflow_type,
+                pr_number=w.issue_cache.get("pr_number") if w.issue_cache else None,
+                pr_title=w.issue_cache.get("pr_title") if w.issue_cache else None,
+                pr_comment_count=w.issue_cache.get("comment_count") if w.issue_cache else None,
             )
         )
 
@@ -280,6 +284,10 @@ async def list_active_workflows(
                     else None
                 ),
                 total_duration_ms=token_summary.total_duration_ms if token_summary else None,
+                pipeline_type=w.workflow_type,
+                pr_number=w.issue_cache.get("pr_number") if w.issue_cache else None,
+                pr_title=w.issue_cache.get("pr_title") if w.issue_cache else None,
+                pr_comment_count=w.issue_cache.get("comment_count") if w.issue_cache else None,
             )
         )
 
@@ -375,6 +383,11 @@ async def get_workflow(
         plan_path=plan_path,
         token_usage=token_usage,
         recent_events=recent_events,
+        pipeline_type=workflow.workflow_type,
+        pr_number=workflow.issue_cache.get("pr_number") if workflow.issue_cache else None,
+        pr_title=workflow.issue_cache.get("pr_title") if workflow.issue_cache else None,
+        pr_comment_count=workflow.issue_cache.get("comment_count") if workflow.issue_cache else None,
+        pr_comments=workflow.issue_cache.get("pr_comments") if workflow.issue_cache else None,
     )
 
 

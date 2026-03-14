@@ -29,6 +29,7 @@ class WorkflowType(StrEnum):
 
     FULL = "full"  # Standard full workflow
     REVIEW = "review"  # Review-only workflow
+    PR_AUTO_FIX = "pr_auto_fix"  # PR auto-fix pipeline
 
 
 # State machine validation - prevents invalid transitions

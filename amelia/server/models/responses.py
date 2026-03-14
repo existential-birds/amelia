@@ -70,6 +70,22 @@ class WorkflowSummary(BaseModel):
         int | None,
         Field(default=None, description="Total execution duration in milliseconds"),
     ] = None
+    pipeline_type: Annotated[
+        str | None,
+        Field(default=None, description="Pipeline type (e.g. full, review, pr_auto_fix)"),
+    ] = None
+    pr_number: Annotated[
+        int | None,
+        Field(default=None, description="PR number for PR Fix workflows"),
+    ] = None
+    pr_title: Annotated[
+        str | None,
+        Field(default=None, description="PR title for PR Fix workflows"),
+    ] = None
+    pr_comment_count: Annotated[
+        int | None,
+        Field(default=None, description="Comment count for PR Fix workflows"),
+    ] = None
 
 
 class WorkflowListResponse(BaseModel):
@@ -160,6 +176,26 @@ class WorkflowDetailResponse(BaseModel):
     final_response: Annotated[
         str | None,
         Field(default=None, description="Final response from the agent"),
+    ] = None
+    pipeline_type: Annotated[
+        str | None,
+        Field(default=None, description="Pipeline type (e.g. full, review, pr_auto_fix)"),
+    ] = None
+    pr_number: Annotated[
+        int | None,
+        Field(default=None, description="PR number for PR Fix workflows"),
+    ] = None
+    pr_title: Annotated[
+        str | None,
+        Field(default=None, description="PR title for PR Fix workflows"),
+    ] = None
+    pr_comment_count: Annotated[
+        int | None,
+        Field(default=None, description="Comment count for PR Fix workflows"),
+    ] = None
+    pr_comments: Annotated[
+        list[dict[str, Any]] | None,
+        Field(default=None, description="PR comment resolution data from issue_cache"),
     ] = None
 
 
