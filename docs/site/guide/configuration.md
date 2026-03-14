@@ -147,7 +147,6 @@ Only the `api` driver works inside sandboxes. The `claude` and `codex` drivers a
 | `image` | string | `amelia-sandbox:latest` | Docker image for the sandbox container |
 | `network_allowlist_enabled` | bool | `true` | Enable iptables-based outbound network filtering |
 | `network_allowed_hosts` | list | See below | Hosts allowed when network filtering is enabled |
-| `dns_server` | string | `127.0.0.11` | DNS server for allowlist rules (Docker's internal resolver) |
 
 Default allowed hosts when `network_allowlist_enabled` is `true`:
 

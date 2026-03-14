@@ -35,12 +35,14 @@ def generate_allowlist_rules(
         Shell script string with iptables rules.
 
     Raises:
-        ValueError: If dns_server is not a valid IP address.
+        ValueError: If dns_server is not a valid IPv4 address.
     """
     try:
-        ipaddress.ip_address(dns_server)
+        addr = ipaddress.ip_address(dns_server)
     except ValueError as err:
-        raise ValueError(f"dns_server must be a valid IP address, got: {dns_server!r}") from err
+        raise ValueError(f"dns_server must be a valid IPv4 address, got: {dns_server!r}") from err
+    if addr.version != 4:
+        raise ValueError(f"dns_server must be IPv4 (iptables does not support IPv6), got: {dns_server!r}")
 
     lines = [
         "#!/bin/sh",
@@ -77,6 +79,9 @@ def generate_allowlist_rules(
             lines.append("fi")
 
     lines.extend([
+        "",
+        "# Block all IPv6 outbound (iptables only covers IPv4)",
+        "ip6tables -P OUTPUT DROP 2>/dev/null || true",
         "",
         "# Drop everything else",
         "iptables -A OUTPUT -j DROP",
