@@ -1,10 +1,11 @@
 """Unit tests for PR auto-fix state models."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 
 import pytest
+from pydantic import ValidationError
 
 from amelia.pipelines.pr_auto_fix.state import (
     GroupFixResult,
@@ -71,7 +72,7 @@ class TestGroupFixResult:
             file_path="a.py",
             status=GroupFixStatus.FIXED,
         )
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             result.status = GroupFixStatus.FAILED  # type: ignore[misc]
 
 
@@ -84,7 +85,7 @@ class TestPRAutoFixState:
         return PRAutoFixState(
             workflow_id=uuid.uuid4(),
             profile_id="test-profile",
-            created_at=datetime.now(tz=timezone.utc),
+            created_at=datetime.now(tz=UTC),
             pr_number=42,
             head_branch="fix/typo",
             repo="owner/repo",
@@ -130,7 +131,7 @@ class TestPRAutoFixState:
         assert minimal_state.comments == []
 
     def test_is_frozen(self, minimal_state: PRAutoFixState) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             minimal_state.pr_number = 99  # type: ignore[misc]
 
     def test_extends_base_pipeline_state(self) -> None:
