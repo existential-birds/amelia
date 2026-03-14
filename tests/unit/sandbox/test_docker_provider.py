@@ -238,7 +238,7 @@ class TestNetworkAllowlist:
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """When network_allowlist_enabled=False, no docker exec is invoked."""
-        provider = DockerSandboxProvider(profile_name="test")
+        provider = DockerSandboxProvider(profile_name="test", network_allowlist_enabled=False)
         assert provider.network_allowlist_enabled is False
 
         with patch("asyncio.create_subprocess_exec") as mock_exec:
