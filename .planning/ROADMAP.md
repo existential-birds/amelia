@@ -178,12 +178,12 @@ Plans:
   3. LLM classification decisions are logged with comment text for auditability
   4. Metrics are persisted to database and exposed via `GET /api/github/pr-autofix/metrics`
   5. Dashboard shows fix success rates, latency trends, and per-aggressiveness-level breakdown
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 10-01: TBD
-- [ ] 10-02: TBD
-- [ ] 10-03: TBD
+- [ ] 10-01-PLAN.md -- Backend data layer: migration, models, MetricsRepository, metrics collection in orchestrator and classify_node
+- [ ] 10-02-PLAN.md -- API endpoints for metrics and classifications, dashboard API client methods
+- [ ] 10-03-PLAN.md -- Dashboard Analytics page with PR Fix Metrics tab, charts, and classification audit log
 
 ## Progress
 
