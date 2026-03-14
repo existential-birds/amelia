@@ -81,6 +81,7 @@ class PRAutoFixOrchestrator:
         pr_number: int,
         repo: str,
         profile: Profile,
+        head_branch: str = "",
         config: PRAutoFixConfig | None = None,
     ) -> None:
         """Trigger a fix cycle for a PR with concurrency control.
@@ -93,6 +94,8 @@ class PRAutoFixOrchestrator:
             pr_number: GitHub PR number.
             repo: Repository in 'owner/repo' format.
             profile: Execution profile with repo_root and config.
+            head_branch: PR head branch name. Empty string skips checkout/reset
+                (deferred to Phase 7).
             config: Optional config override (defaults to profile.pr_autofix).
         """
         effective_config = config or profile.pr_autofix or PRAutoFixConfig()
@@ -126,6 +129,7 @@ class PRAutoFixOrchestrator:
                 repo=repo,
                 profile=profile,
                 config=effective_config,
+                head_branch=head_branch,
             )
 
             # Process pending cycle if any (with cooldown between)
@@ -136,6 +140,7 @@ class PRAutoFixOrchestrator:
                     repo=repo,
                     profile=profile,
                     config=effective_config,
+                    head_branch=head_branch,
                 )
 
     async def _run_fix_cycle(
@@ -144,6 +149,7 @@ class PRAutoFixOrchestrator:
         repo: str,
         profile: Profile,
         config: PRAutoFixConfig,
+        head_branch: str = "",
     ) -> None:
         """Run a single fix cycle with divergence recovery.
 
@@ -155,8 +161,9 @@ class PRAutoFixOrchestrator:
             repo: Repository in 'owner/repo' format.
             profile: Execution profile.
             config: Auto-fix configuration.
+            head_branch: PR head branch name. Empty string skips checkout/reset
+                (deferred to Phase 7).
         """
-        head_branch = ""  # Will be set from PR metadata in real usage
 
         for attempt in range(_MAX_DIVERGENCE_RETRIES + 1):
             try:

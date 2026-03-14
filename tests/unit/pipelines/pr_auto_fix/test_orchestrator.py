@@ -575,10 +575,36 @@ class TestDivergenceRecovery:
 
         github_pr_service.create_issue_comment.assert_awaited_once()
         call_args = github_pr_service.create_issue_comment.call_args
-        assert call_args[1]["pr_number"] == 42 or call_args[0][1] == 42
-        # Check the body contains the expected message
-        body = call_args[1].get("body") or call_args[0][2]
-        assert "Could not apply fixes" in body
+        assert call_args.kwargs["pr_number"] == 42
+        assert "Could not apply fixes" in call_args.kwargs["body"]
+
+    async def test_head_branch_threaded_to_reset(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        mock_git_operations: MagicMock,
+        profile: Profile,
+    ) -> None:
+        """head_branch parameter is passed through to _reset_to_remote."""
+        git_commands: list[tuple[str, ...]] = []
+
+        async def track_git(*args: str, **kwargs: object) -> str:
+            git_commands.append(args)
+            return ""
+
+        mock_git_operations._run_git = AsyncMock(side_effect=track_git)
+        orchestrator._execute_pipeline = AsyncMock()  # type: ignore[method-assign]
+
+        await orchestrator.trigger_fix_cycle(
+            pr_number=42,
+            repo="owner/repo",
+            profile=profile,
+            head_branch="feat/my-branch",
+        )
+
+        # Should have done fetch, checkout feat/my-branch, reset --hard origin/feat/my-branch
+        assert ("fetch", "origin") in git_commands
+        assert ("checkout", "feat/my-branch") in git_commands
+        assert ("reset", "--hard", "origin/feat/my-branch") in git_commands
 
     async def test_non_divergence_error_not_retried(
         self,
