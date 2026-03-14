@@ -247,6 +247,12 @@ class PRAutoFixConfig(BaseModel):
         default_factory=list,
         description="Comment authors to ignore (exact username match)",
     )
+    confidence_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence to act on a classification",
+    )
 
     @field_validator("aggressiveness", mode="before")
     @classmethod
