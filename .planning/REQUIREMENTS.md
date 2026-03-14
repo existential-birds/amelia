@@ -69,7 +69,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **DASH-02**: PR auto-fix workflows appear in dashboard workflow list with distinct badge/icon
 - [ ] **DASH-03**: Dashboard shows which PR comments triggered a workflow
 - [ ] **DASH-04**: Dashboard shows resolution status per comment (fixed / failed / skipped)
-- [ ] **DASH-05**: Dashboard UI for viewing and configuring fix aggressiveness per profile
+- [x] **DASH-05**: Dashboard UI for viewing and configuring fix aggressiveness per profile
 
 ### Data Models
 
@@ -181,7 +181,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-02 | Phase 9 | Pending |
 | DASH-03 | Phase 9 | Pending |
 | DASH-04 | Phase 9 | Pending |
-| DASH-05 | Phase 9 | Pending |
+| DASH-05 | Phase 9 | Complete |
 | METR-01 | Phase 10 | Pending |
 | METR-02 | Phase 10 | Pending |
 | METR-03 | Phase 10 | Pending |
