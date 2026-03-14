@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from io import StringIO
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -117,3 +118,33 @@ class TestWorkerUsageEmission:
         assert parsed.type == AgenticMessageType.USAGE
         assert parsed.usage is not None
         assert parsed.usage.input_tokens == 100
+
+
+class TestCreateWorkerChatModel:
+    """Tests for _create_worker_chat_model()."""
+
+    def test_proxy_token_added_to_headers(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When AMELIA_PROXY_TOKEN is set, it should be included in default_headers."""
+        monkeypatch.setenv("AMELIA_PROXY_TOKEN", "test-secret-token")
+        monkeypatch.setenv("AMELIA_PROFILE", "work")
+
+        mock_init = MagicMock(return_value="mock-model")
+        with patch("langchain.chat_models.init_chat_model", mock_init):
+            from amelia.sandbox.worker import _create_worker_chat_model
+            _create_worker_chat_model(model="test-model", base_url="http://localhost:8430/proxy/v1")
+
+        call_kwargs = mock_init.call_args[1]
+        assert call_kwargs["default_headers"]["X-Amelia-Proxy-Token"] == "test-secret-token"
+
+    def test_no_proxy_token_when_env_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When AMELIA_PROXY_TOKEN is not set, header should not be present."""
+        monkeypatch.delenv("AMELIA_PROXY_TOKEN", raising=False)
+        monkeypatch.setenv("AMELIA_PROFILE", "work")
+
+        mock_init = MagicMock(return_value="mock-model")
+        with patch("langchain.chat_models.init_chat_model", mock_init):
+            from amelia.sandbox.worker import _create_worker_chat_model
+            _create_worker_chat_model(model="test-model", base_url="http://localhost:8430/proxy/v1")
+
+        call_kwargs = mock_init.call_args[1]
+        assert "X-Amelia-Proxy-Token" not in call_kwargs["default_headers"]
