@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** When a reviewer leaves comments on a PR, Amelia detects them, fixes the code, pushes the update, and resolves the comments -- without manual intervention.
-**Current focus:** Phase 9: Events Dashboard
+**Current focus:** Phase 10: Metrics & Benchmarking
 
 ## Current Position
 
-Phase: 9 of 10 (Events Dashboard)
-Plan: 2 of 3 in current phase
+Phase: 10 of 10 (Metrics & Benchmarking)
+Plan: 1 of 3 in current phase
 Status: In Progress
-Last activity: 2026-03-14 -- Completed Plan 09-02 (Dashboard PR Auto-Fix UI)
+Last activity: 2026-03-14 -- Completed Plan 10-01 (Metrics Data Layer)
 
 Progress: [██████████] 100%
 
@@ -71,6 +71,7 @@ Progress: [██████████] 100%
 | Phase 09 P01 | 12min | 2 tasks | 11 files |
 | Phase 09 P03 | 4min | 1 tasks | 5 files |
 | Phase 09 P02 | 10min | 2 tasks | 17 files |
+| Phase 10 P01 | 7min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -124,6 +125,11 @@ Recent decisions affecting current work:
 - [Phase 09]: TypeBadge uses shadcn Badge outline variant with color utility classes (blue/purple/orange)
 - [Phase 09]: pr_comments_detected and pr_comments_resolved excluded from activity log via HIDDEN_EVENT_TYPES blocklist
 - [Phase 09]: pr_poll_error toast deduplication uses module-level timestamp with 30s interval
+- [Phase 10]: MetricsRepository in separate file (metrics_repository.py) matching existing *_repository.py pattern
+- [Phase 10]: Metrics persistence failures isolated -- warning log, no pipeline crash
+- [Phase 10]: Per-comment counting via comment_ids iteration, not group-level counting (Pitfall 3)
+- [Phase 10]: Prompt hash uses SHA-256 of stripped system prompt, first 16 hex chars
+- [Phase 10]: Classification audit data flows through RunnableConfig configurable dict
 
 ### Pending Todos
 
@@ -136,6 +142,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T22:55:09.913Z
-Stopped at: Phase 10 context gathered
-Resume file: .planning/phases/10-metrics-benchmarking/10-CONTEXT.md
+Last session: 2026-03-14T23:27:20Z
+Stopped at: Completed 10-01-PLAN.md
+Resume file: .planning/phases/10-metrics-benchmarking/10-02-PLAN.md
