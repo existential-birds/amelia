@@ -84,12 +84,11 @@ Plans:
   3. The Developer agent receives review comment context including file path, line number, diff hunk, and comment body
   4. All fixes from one pipeline run are committed in a single commit with configurable message prefix
   5. The commit is pushed to the PR's head branch, never to main
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
-- [ ] 04-03: TBD
+- [ ] 04-01-PLAN.md -- TDD: State models, pipeline shell, graph topology, registry entry, PR-fix prompt
+- [ ] 04-02-PLAN.md -- TDD: Node implementations (classify, develop, commit/push)
 
 ### Phase 5: Thread Resolution & Composition
 **Goal**: The pipeline completes the feedback loop by replying to reviewers, resolving fixed threads, and gracefully handling comments it cannot fix
@@ -196,7 +195,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7/8 (parallel) ->
 | 1. Data Models & Configuration | 3/3 | Complete   | 2026-03-13 |
 | 2. GitHub API Layer | 2/2 | Complete   | 2026-03-13 |
 | 3. Comment Classification | 0/2 | Not started | - |
-| 4. Core Fix Pipeline | 0/3 | Not started | - |
+| 4. Core Fix Pipeline | 0/2 | Not started | - |
 | 5. Thread Resolution & Composition | 0/2 | Not started | - |
 | 6. Orchestration & Safety | 0/2 | Not started | - |
 | 7. CLI & API Triggers | 0/3 | Not started | - |
