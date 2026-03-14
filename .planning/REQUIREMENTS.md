@@ -25,8 +25,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Fix Pipeline
 
-- [ ] **PIPE-01**: New PR_AUTO_FIX LangGraph pipeline registered in pipeline registry
-- [ ] **PIPE-02**: Pipeline nodes: classify → develop → commit/push → reply/resolve
+- [x] **PIPE-01**: New PR_AUTO_FIX LangGraph pipeline registered in pipeline registry
+- [x] **PIPE-02**: Pipeline nodes: classify → develop → commit/push → reply/resolve
 - [ ] **PIPE-03**: Developer agent receives PR review comments with file path, line number, diff hunk, and comment body as context
 - [ ] **PIPE-04**: Pipeline commits all fixes in a single commit with configurable message prefix (default `fix(review):`)
 - [ ] **PIPE-05**: Pipeline pushes commit to the PR's head branch (never main)
@@ -156,8 +156,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CMNT-03 | Phase 3 | Complete |
 | CMNT-04 | Phase 3 | Complete |
 | CMNT-05 | Phase 3 | Complete |
-| PIPE-01 | Phase 4 | Pending |
-| PIPE-02 | Phase 4 | Pending |
+| PIPE-01 | Phase 4 | Complete |
+| PIPE-02 | Phase 4 | Complete |
 | PIPE-03 | Phase 4 | Pending |
 | PIPE-04 | Phase 4 | Pending |
 | PIPE-05 | Phase 4 | Pending |
