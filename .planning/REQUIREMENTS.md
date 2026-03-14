@@ -94,7 +94,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **METR-05**: Track per-pipeline-run metrics: comments processed, fixes applied, commits pushed, threads resolved
 - [x] **METR-06**: Persist metrics to database for historical analysis and trend reporting
 - [x] **METR-07**: Expose metrics via API endpoint `GET /api/github/pr-autofix/metrics`
-- [ ] **METR-08**: Dashboard view showing fix success rates, latency trends, and per-aggressiveness-level breakdown
+- [x] **METR-08**: Dashboard view showing fix success rates, latency trends, and per-aggressiveness-level breakdown
 
 ## v2 Requirements
 
@@ -189,7 +189,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | METR-05 | Phase 10 | Complete |
 | METR-06 | Phase 10 | Complete |
 | METR-07 | Phase 10 | Complete |
-| METR-08 | Phase 10 | Pending |
+| METR-08 | Phase 10 | Complete |
 
 **Coverage:**
 - v1 requirements: 56 total

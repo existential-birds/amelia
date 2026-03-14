@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 7: CLI & API Triggers** - Manual trigger points: CLI commands and REST API endpoints (completed 2026-03-14)
 - [ ] **Phase 8: Polling Service** - Background polling for new unresolved comments with rate limit awareness
 - [ ] **Phase 9: Events & Dashboard** - Event types for PR auto-fix lifecycle and dashboard UI integration
-- [ ] **Phase 10: Metrics & Benchmarking** - Track fix latency, success rates, classification accuracy, and expose via API/dashboard
+- [x] **Phase 10: Metrics & Benchmarking** - Track fix latency, success rates, classification accuracy, and expose via API/dashboard (completed 2026-03-14)
 
 ## Phase Details
 
@@ -178,7 +178,7 @@ Plans:
   3. LLM classification decisions are logged with comment text for auditability
   4. Metrics are persisted to database and exposed via `GET /api/github/pr-autofix/metrics`
   5. Dashboard shows fix success rates, latency trends, and per-aggressiveness-level breakdown
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 10-01-PLAN.md -- Backend data layer: migration, models, MetricsRepository, metrics collection in orchestrator and classify_node
@@ -201,4 +201,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7/8 (parallel) ->
 | 7. CLI & API Triggers | 2/2 | Complete   | 2026-03-14 |
 | 8. Polling Service | 0/2 | Not started | - |
 | 9. Events & Dashboard | 0/3 | Not started | - |
-| 10. Metrics & Benchmarking | 2/3 | In Progress|  |
+| 10. Metrics & Benchmarking | 3/3 | Complete   | 2026-03-14 |
