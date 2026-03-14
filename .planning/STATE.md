@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** When a reviewer leaves comments on a PR, Amelia detects them, fixes the code, pushes the update, and resolves the comments -- without manual intervention.
-**Current focus:** Phase 8: Polling Service
+**Current focus:** Phase 9: Events Dashboard
 
 ## Current Position
 
-Phase: 8 of 10 (Polling Service)
-Plan: 2 of 2 in current phase
-Status: Phase Complete
-Last activity: 2026-03-14 -- Completed Plan 08-02 (Server Lifespan Integration)
+Phase: 9 of 10 (Events Dashboard)
+Plan: 1 of 3 in current phase
+Status: In Progress
+Last activity: 2026-03-14 -- Completed Plan 09-01 (Backend PR Auto-Fix Dashboard Visibility)
 
 Progress: [██████████] 100%
 
@@ -68,6 +68,7 @@ Progress: [██████████] 100%
 | Phase 07 P02 | 6min | 2 tasks | 7 files |
 | Phase 08 P01 | 5min | 2 tasks | 6 files |
 | Phase 08 P02 | 2min | 1 tasks | 1 files |
+| Phase 09 P01 | 12min | 2 tasks | 11 files |
 | Phase 09 P03 | 4min | 1 tasks | 5 files |
 
 ## Accumulated Context
@@ -113,6 +114,10 @@ Recent decisions affecting current work:
 - [Phase 08]: time.monotonic() for schedule tracking (NTP-immune), time.time() only for rate limit reset comparison
 - [Phase 08]: next_poll set BEFORE _poll_profile call to prevent overlap when cycles run long
 - [Phase 08]: Placeholder GitHubPRService for PRAutoFixOrchestrator; poller stops before health_checker during shutdown
+- [Phase 09]: WorkflowRepository is optional param on PRAutoFixOrchestrator for backward compatibility
+- [Phase 09]: PR_COMMENTS_DETECTED and PR_COMMENTS_RESOLVED are non-persisted ephemeral events
+- [Phase 09]: issue_cache stores pr_number, pr_title, comment_count, pr_comments for API response enrichment
+- [Phase 09]: Each _execute_pipeline creates fresh workflow_id separate from per-PR synthetic orchestration ID
 - [Phase 09]: PRAutoFixSection extracted as standalone component in own Auto-Fix tab rather than inlined in sandbox tab
 - [Phase 09]: Added pointer capture polyfills to global test setup for Radix Select jsdom compatibility
 
@@ -127,6 +132,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T21:40:06.807Z
-Stopped at: Completed 09-03-PLAN.md
-Resume file: None
+Last session: 2026-03-14T21:46:11Z
+Stopped at: Completed 09-01-PLAN.md
+Resume file: .planning/phases/09-events-dashboard/09-01-SUMMARY.md

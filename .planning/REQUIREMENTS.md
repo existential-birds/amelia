@@ -65,10 +65,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Events & Dashboard
 
-- [ ] **DASH-01**: New event types: `pr_comments_detected`, `pr_auto_fix_started`, `pr_auto_fix_completed`, `pr_comments_resolved`, `pr_poll_error`
-- [ ] **DASH-02**: PR auto-fix workflows appear in dashboard workflow list with distinct badge/icon
-- [ ] **DASH-03**: Dashboard shows which PR comments triggered a workflow
-- [ ] **DASH-04**: Dashboard shows resolution status per comment (fixed / failed / skipped)
+- [x] **DASH-01**: New event types: `pr_comments_detected`, `pr_auto_fix_started`, `pr_auto_fix_completed`, `pr_comments_resolved`, `pr_poll_error`
+- [x] **DASH-02**: PR auto-fix workflows appear in dashboard workflow list with distinct badge/icon
+- [x] **DASH-03**: Dashboard shows which PR comments triggered a workflow
+- [x] **DASH-04**: Dashboard shows resolution status per comment (fixed / failed / skipped)
 - [x] **DASH-05**: Dashboard UI for viewing and configuring fix aggressiveness per profile
 
 ### Data Models
@@ -177,10 +177,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | POLL-03 | Phase 8 | Complete |
 | POLL-04 | Phase 8 | Complete |
 | POLL-05 | Phase 8 | Complete |
-| DASH-01 | Phase 9 | Pending |
-| DASH-02 | Phase 9 | Pending |
-| DASH-03 | Phase 9 | Pending |
-| DASH-04 | Phase 9 | Pending |
+| DASH-01 | Phase 9 | Complete |
+| DASH-02 | Phase 9 | Complete |
+| DASH-03 | Phase 9 | Complete |
+| DASH-04 | Phase 9 | Complete |
 | DASH-05 | Phase 9 | Complete |
 | METR-01 | Phase 10 | Pending |
 | METR-02 | Phase 10 | Pending |
