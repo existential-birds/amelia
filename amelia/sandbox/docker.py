@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import secrets
 import time
 from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
@@ -45,6 +46,7 @@ class DockerSandboxProvider(SandboxProvider):
         self.network_allowed_hosts: list[str] = list(network_allowed_hosts or [])
 
         self.container_name = f"amelia-sandbox-{profile_name}"
+        self.proxy_token = secrets.token_urlsafe(32)
 
     async def ensure_running(self) -> None:
         """Ensure the sandbox container is ready. Start if not running."""
@@ -256,6 +258,7 @@ class DockerSandboxProvider(SandboxProvider):
         cmd.extend([
             "-e", f"LLM_PROXY_URL=http://host.docker.internal:{self.proxy_port}/proxy/v1",
             "-e", f"AMELIA_PROFILE={self.profile_name}",
+            "-e", f"AMELIA_PROXY_TOKEN={self.proxy_token}",
             self.image,
             "sleep", "infinity",
         ])

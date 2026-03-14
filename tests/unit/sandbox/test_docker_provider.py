@@ -303,6 +303,42 @@ class TestNetworkAllowlist:
             await provider._apply_network_allowlist()
 
 
+class TestProxyTokenGeneration:
+    """Docker provider generates a unique proxy token per container."""
+
+    def test_proxy_token_generated_on_init(self) -> None:
+        provider = DockerSandboxProvider(profile_name="test")
+        assert provider.proxy_token is not None
+        assert len(provider.proxy_token) > 20  # secrets.token_urlsafe(32) is 43 chars
+
+    def test_proxy_token_unique_per_instance(self) -> None:
+        p1 = DockerSandboxProvider(profile_name="test")
+        p2 = DockerSandboxProvider(profile_name="test")
+        assert p1.proxy_token != p2.proxy_token
+
+    async def test_token_passed_as_env_var(self) -> None:
+        provider = DockerSandboxProvider(
+            profile_name="test", network_allowlist_enabled=False,
+        )
+        mock_restart = AsyncMock()
+        mock_restart.returncode = 1
+        mock_restart.wait = AsyncMock()
+
+        mock_run = AsyncMock()
+        mock_run.communicate.return_value = (b"container-id", b"")
+        mock_run.returncode = 0
+
+        with patch("asyncio.create_subprocess_exec", side_effect=[mock_restart, mock_run]) as mock_exec:
+            await provider._start_container()
+
+        run_args = mock_exec.call_args_list[1][0]
+        # Find the AMELIA_PROXY_TOKEN env var
+        env_pairs = list(zip(run_args, run_args[1:]))
+        token_envs = [v for k, v in env_pairs if k == "-e" and v.startswith("AMELIA_PROXY_TOKEN=")]
+        assert len(token_envs) == 1
+        assert token_envs[0] == f"AMELIA_PROXY_TOKEN={provider.proxy_token}"
+
+
 class TestContainerCapabilities:
     """NET_ADMIN/NET_RAW should only be added when allowlist is enabled."""
 
