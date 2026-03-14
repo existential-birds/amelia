@@ -36,8 +36,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Triggers
 
-- [ ] **TRIG-01**: CLI `fix-pr <number>` command triggers one-shot fix for a PR's unresolved comments
-- [ ] **TRIG-02**: CLI `watch-pr <number>` command polls a single PR at configurable interval
+- [x] **TRIG-01**: CLI `fix-pr <number>` command triggers one-shot fix for a PR's unresolved comments
+- [x] **TRIG-02**: CLI `watch-pr <number>` command polls a single PR at configurable interval
 - [x] **TRIG-03**: API endpoint `POST /api/github/prs/{number}/auto-fix` triggers fix manually
 - [x] **TRIG-04**: API endpoint `GET /api/github/prs` lists open PRs for a profile
 - [x] **TRIG-05**: API endpoint `GET /api/github/prs/{number}/comments` returns unresolved comments
@@ -167,8 +167,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ORCH-01 | Phase 6 | Complete |
 | ORCH-02 | Phase 6 | Complete |
 | ORCH-03 | Phase 6 | Complete |
-| TRIG-01 | Phase 7 | Pending |
-| TRIG-02 | Phase 7 | Pending |
+| TRIG-01 | Phase 7 | Complete |
+| TRIG-02 | Phase 7 | Complete |
 | TRIG-03 | Phase 7 | Complete |
 | TRIG-04 | Phase 7 | Complete |
 | TRIG-05 | Phase 7 | Complete |

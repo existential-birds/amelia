@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Core Fix Pipeline** - LangGraph pipeline wiring classify, develop, and commit/push into a state machine
 - [x] **Phase 5: Thread Resolution & Composition** - Reply to comments, resolve threads, handle partial fixes, compose with review pipeline (completed 2026-03-14)
 - [x] **Phase 6: Orchestration & Safety** - Per-PR concurrency control, queuing, and branch safety guards (completed 2026-03-14)
-- [ ] **Phase 7: CLI & API Triggers** - Manual trigger points: CLI commands and REST API endpoints
+- [x] **Phase 7: CLI & API Triggers** - Manual trigger points: CLI commands and REST API endpoints (completed 2026-03-14)
 - [ ] **Phase 8: Polling Service** - Background polling for new unresolved comments with rate limit awareness
 - [ ] **Phase 9: Events & Dashboard** - Event types for PR auto-fix lifecycle and dashboard UI integration
 - [ ] **Phase 10: Metrics & Benchmarking** - Track fix latency, success rates, classification accuracy, and expose via API/dashboard
@@ -130,7 +130,7 @@ Plans:
   3. `POST /api/github/prs/{number}/auto-fix` triggers the fix pipeline and returns a workflow ID
   4. `GET /api/github/prs` returns a list of open PRs for the current profile
   5. `GET /api/github/prs/{number}/comments` returns unresolved comments for a specific PR
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 07-01-PLAN.md -- API endpoints (list PRs, get comments, trigger fix), get_pr_summary helper, wire _execute_pipeline
@@ -198,7 +198,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7/8 (parallel) ->
 | 4. Core Fix Pipeline | 0/2 | Not started | - |
 | 5. Thread Resolution & Composition | 2/2 | Complete   | 2026-03-14 |
 | 6. Orchestration & Safety | 2/3 | In Progress | - |
-| 7. CLI & API Triggers | 0/2 | Not started | - |
+| 7. CLI & API Triggers | 2/2 | Complete   | 2026-03-14 |
 | 8. Polling Service | 0/2 | Not started | - |
 | 9. Events & Dashboard | 0/3 | Not started | - |
 | 10. Metrics & Benchmarking | 0/3 | Not started | - |
