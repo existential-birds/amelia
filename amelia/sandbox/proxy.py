@@ -96,9 +96,10 @@ async def _resolve_provider_or_raise(
     """
     config = await resolve_provider(profile)
     if config is None:
+        logger.debug("Unknown profile requested", profile=profile)
         raise HTTPException(
             status_code=404,
-            detail=f"No provider configuration for profile '{profile}'",
+            detail="Unknown or unconfigured profile",
         )
     return config
 

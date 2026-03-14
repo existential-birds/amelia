@@ -70,7 +70,9 @@ class TestProxyProfileResolution:
             headers={"X-Amelia-Profile": "nonexistent"},
         )
         assert response.status_code == 404
-        assert "nonexistent" in response.json()["detail"]
+        # Must NOT leak the profile name
+        assert "nonexistent" not in response.json()["detail"]
+        assert "unconfigured" in response.json()["detail"].lower()
 
 
 class TestProxyGitCredentials:
