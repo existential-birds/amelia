@@ -130,12 +130,11 @@ Plans:
   3. `POST /api/github/prs/{number}/auto-fix` triggers the fix pipeline and returns a workflow ID
   4. `GET /api/github/prs` returns a list of open PRs for the current profile
   5. `GET /api/github/prs/{number}/comments` returns unresolved comments for a specific PR
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 07-01: TBD
-- [ ] 07-02: TBD
-- [ ] 07-03: TBD
+- [ ] 07-01-PLAN.md -- API endpoints (list PRs, get comments, trigger fix), get_pr_summary helper, wire _execute_pipeline
+- [ ] 07-02-PLAN.md -- AmeliaClient PR methods, fix-pr CLI command, watch-pr CLI command with polling loop
 
 ### Phase 8: Polling Service
 **Goal**: The system autonomously detects new review comments across all configured profiles without manual intervention
@@ -199,7 +198,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7/8 (parallel) ->
 | 4. Core Fix Pipeline | 0/2 | Not started | - |
 | 5. Thread Resolution & Composition | 2/2 | Complete   | 2026-03-14 |
 | 6. Orchestration & Safety | 2/3 | In Progress | - |
-| 7. CLI & API Triggers | 0/3 | Not started | - |
+| 7. CLI & API Triggers | 0/2 | Not started | - |
 | 8. Polling Service | 0/2 | Not started | - |
 | 9. Events & Dashboard | 0/3 | Not started | - |
 | 10. Metrics & Benchmarking | 0/3 | Not started | - |
