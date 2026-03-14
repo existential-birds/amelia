@@ -88,12 +88,12 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Metrics & Benchmarking
 
 - [x] **METR-01**: Track time from comment detection to fix pushed (end-to-end latency)
-- [ ] **METR-02**: Track fix success rate per aggressiveness level (fixed / failed / skipped per comment)
+- [x] **METR-02**: Track fix success rate per aggressiveness level (fixed / failed / skipped per comment)
 - [x] **METR-03**: Track classification accuracy — log LLM classification decisions with comment text for review
-- [ ] **METR-04**: Track fix acceptance rate — whether resolved comments stay resolved or get re-opened with new feedback
+- [x] **METR-04**: Track fix acceptance rate — whether resolved comments stay resolved or get re-opened with new feedback
 - [x] **METR-05**: Track per-pipeline-run metrics: comments processed, fixes applied, commits pushed, threads resolved
 - [x] **METR-06**: Persist metrics to database for historical analysis and trend reporting
-- [ ] **METR-07**: Expose metrics via API endpoint `GET /api/github/pr-autofix/metrics`
+- [x] **METR-07**: Expose metrics via API endpoint `GET /api/github/pr-autofix/metrics`
 - [ ] **METR-08**: Dashboard view showing fix success rates, latency trends, and per-aggressiveness-level breakdown
 
 ## v2 Requirements
@@ -183,12 +183,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-04 | Phase 9 | Complete |
 | DASH-05 | Phase 9 | Complete |
 | METR-01 | Phase 10 | Complete |
-| METR-02 | Phase 10 | Pending |
+| METR-02 | Phase 10 | Complete |
 | METR-03 | Phase 10 | Complete |
-| METR-04 | Phase 10 | Pending |
+| METR-04 | Phase 10 | Complete |
 | METR-05 | Phase 10 | Complete |
 | METR-06 | Phase 10 | Complete |
-| METR-07 | Phase 10 | Pending |
+| METR-07 | Phase 10 | Complete |
 | METR-08 | Phase 10 | Pending |
 
 **Coverage:**
