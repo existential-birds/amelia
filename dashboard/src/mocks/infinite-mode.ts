@@ -152,12 +152,20 @@ function getPastCreatedAt(daysAgo: number): string {
   return timestamp.toISOString();
 }
 
+/** Default PR fields for WorkflowSummary (null = not a PR workflow). */
+const PR_DEFAULTS = {
+  pipeline_type: null as string | null,
+  pr_number: null as number | null,
+  pr_title: null as string | null,
+  pr_comment_count: null as number | null,
+};
+
 // ============================================================================
 // Active Workflows (8 items - includes completed ones)
 // ============================================================================
 
 export function getMockActiveWorkflows(): WorkflowSummary[] {
-  return [
+  return ([
     // Completed workflows first (most recent first)
     {
       id: generateUUID('NAV-777'),
@@ -265,7 +273,7 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       total_tokens: 900000,
       total_duration_ms: 210000,
     },
-  ];
+  ] as Omit<WorkflowSummary, keyof typeof PR_DEFAULTS>[]).map(w => ({ ...PR_DEFAULTS, ...w }));
 }
 
 // ============================================================================
@@ -273,7 +281,7 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
 // ============================================================================
 
 export function getMockHistoryWorkflows(): WorkflowSummary[] {
-  return [
+  return ([
     {
       id: generateUUID('CRUD-1000000'),
       issue_id: 'CRUD-1000000',
@@ -404,7 +412,7 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       total_tokens: 1694000,
       total_duration_ms: 180000,
     },
-  ];
+  ] as Omit<WorkflowSummary, keyof typeof PR_DEFAULTS>[]).map(w => ({ ...PR_DEFAULTS, ...w }));
 }
 
 // ============================================================================
@@ -1215,5 +1223,6 @@ export function getMockWorkflowDetail(id: string): WorkflowDetail | null {
     goal: executionPlan?.goal ?? null,
     plan_markdown: executionPlan ? planToMarkdown(executionPlan) : null,
     plan_path: executionPlan ? `/docs/plans/${summary.issue_id.toLowerCase()}-plan.md` : null,
+    pr_comments: null,
   };
 }

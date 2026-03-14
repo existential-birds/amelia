@@ -48,6 +48,10 @@ describe('WorkflowsPage pending workflow actions', () => {
     total_cost_usd: null,
     total_tokens: null,
     total_duration_ms: null,
+    pipeline_type: null,
+    pr_number: null,
+    pr_title: null,
+    pr_comment_count: null,
   };
 
   const pendingWorkflowDetail: WorkflowDetail = {
@@ -60,6 +64,7 @@ describe('WorkflowsPage pending workflow actions', () => {
     goal: null,
     plan_markdown: null,
     plan_path: null,
+    pr_comments: null,
   };
 
   beforeEach(() => {

@@ -42,6 +42,10 @@ const mockWorkflowSummary: WorkflowSummary = {
   total_cost_usd: null,
   total_tokens: null,
   total_duration_ms: null,
+  pipeline_type: null,
+  pr_number: null,
+  pr_title: null,
+  pr_comment_count: null,
 };
 
 const mockWorkflowDetail: WorkflowDetail = {
@@ -56,6 +60,7 @@ const mockWorkflowDetail: WorkflowDetail = {
   goal: null,
   plan_markdown: null,
   plan_path: null,
+  pr_comments: null,
 };
 
 // Second workflow for testing selection behavior
@@ -70,6 +75,10 @@ const mockSecondWorkflowSummary: WorkflowSummary = {
   total_cost_usd: null,
   total_tokens: null,
   total_duration_ms: null,
+  pipeline_type: null,
+  pr_number: null,
+  pr_title: null,
+  pr_comment_count: null,
 };
 
 const mockSecondWorkflowDetail: WorkflowDetail = {
@@ -84,6 +93,7 @@ const mockSecondWorkflowDetail: WorkflowDetail = {
   goal: 'Fix the login bug',
   plan_markdown: '## Plan\n\n1. Identify the issue\n2. Fix the bug',
   plan_path: null,
+  pr_comments: null,
 };
 
 /**

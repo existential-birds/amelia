@@ -17,6 +17,10 @@ const mockWorkflows: WorkflowSummary[] = [
     total_duration_ms: 154000, // 2m 34s
     total_tokens: 15200, // 15.2K
     total_cost_usd: 0.42, // $0.42
+    pipeline_type: null,
+    pr_number: null,
+    pr_title: null,
+    pr_comment_count: null,
   },
   {
     id: 'wf-002',
@@ -30,6 +34,10 @@ const mockWorkflows: WorkflowSummary[] = [
     total_duration_ms: null,
     total_tokens: null,
     total_cost_usd: null,
+    pipeline_type: null,
+    pr_number: null,
+    pr_title: null,
+    pr_comment_count: null,
   },
 ];
 

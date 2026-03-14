@@ -15,6 +15,10 @@ function createWorkflow(overrides: Partial<WorkflowSummary> = {}): WorkflowSumma
     total_cost_usd: null,
     total_tokens: null,
     total_duration_ms: null,
+    pipeline_type: null,
+    pr_number: null,
+    pr_title: null,
+    pr_comment_count: null,
     ...overrides,
   };
 }

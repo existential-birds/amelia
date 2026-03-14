@@ -64,6 +64,18 @@ export interface WorkflowSummary {
 
   /** Total duration in milliseconds, or null if not available. */
   total_duration_ms: number | null;
+
+  /** Pipeline type: "full", "review", "pr_auto_fix", or null for legacy workflows. */
+  pipeline_type: string | null;
+
+  /** PR number for PR Fix workflows, null otherwise. */
+  pr_number: number | null;
+
+  /** PR title for PR Fix workflows, null otherwise. */
+  pr_title: string | null;
+
+  /** Comment count for PR Fix workflows, null otherwise. */
+  pr_comment_count: number | null;
 }
 
 /**
@@ -95,6 +107,43 @@ export interface WorkflowDetail extends WorkflowSummary {
 
   /** Path to the markdown plan file, if generated. */
   plan_path: string | null;
+
+  /** PR comments with resolution status, only present for pr_auto_fix workflows. */
+  pr_comments: PRCommentData[] | null;
+}
+
+// ============================================================================
+// PR Comment Types
+// ============================================================================
+
+/**
+ * Data for a single PR review comment with resolution status.
+ * Used in the PR auto-fix workflow detail view.
+ */
+export interface PRCommentData {
+  /** GitHub comment ID. */
+  comment_id: number;
+
+  /** File path the comment is attached to, or null for general comments. */
+  file_path: string | null;
+
+  /** Line number the comment is attached to, or null for general comments. */
+  line: number | null;
+
+  /** Comment body text (truncated to 200 chars). */
+  body: string;
+
+  /** GitHub username of the comment author. */
+  author: string;
+
+  /** Resolution status of the comment. */
+  status: 'fixed' | 'failed' | 'skipped';
+
+  /** Reason for the resolution status, or null if not applicable. */
+  status_reason: string | null;
+
+  /** GitHub URL for the comment. */
+  html_url: string;
 }
 
 // ============================================================================
@@ -206,7 +255,20 @@ export type EventType =
   | 'document_ingestion_failed'
   // Plan validation
   | 'plan_validated'
-  | 'plan_validation_failed';
+  | 'plan_validation_failed'
+  // PR auto-fix lifecycle
+  | 'pr_comments_detected'
+  | 'pr_auto_fix_started'
+  | 'pr_auto_fix_completed'
+  | 'pr_comments_resolved'
+  | 'pr_poll_error'
+  // PR auto-fix orchestration
+  | 'pr_fix_queued'
+  | 'pr_fix_diverged'
+  | 'pr_fix_cooldown_started'
+  | 'pr_fix_cooldown_reset'
+  | 'pr_fix_retries_exhausted'
+  | 'pr_poll_rate_limited';
 
 /**
  * Domain of event origin.

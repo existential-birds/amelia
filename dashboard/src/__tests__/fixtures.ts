@@ -34,6 +34,10 @@ export function createMockWorkflowSummary(
     total_cost_usd: null,
     total_tokens: null,
     total_duration_ms: null,
+    pipeline_type: null,
+    pr_number: null,
+    pr_title: null,
+    pr_comment_count: null,
     ...overrides,
   };
 }
@@ -131,12 +135,17 @@ export function createMockWorkflowDetail(
     total_cost_usd: null,
     total_tokens: null,
     total_duration_ms: null,
+    pipeline_type: null,
+    pr_number: null,
+    pr_title: null,
+    pr_comment_count: null,
     token_usage: null,
     recent_events: [],
     // Agentic execution fields
     goal: 'Test goal for implementation',
     plan_markdown: null,
     plan_path: null,
+    pr_comments: null,
     ...overrides,
   };
 }

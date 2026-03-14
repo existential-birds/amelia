@@ -19,7 +19,12 @@ import type { WorkflowSummary } from '@/types';
  * @property defaultCollapsed - Initial collapsed state when collapsible is true (default: false)
  */
 interface JobQueueProps {
-  workflows?: Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_path' | 'status'>[];
+  workflows?: (Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_path' | 'status'> & {
+    pipeline_type?: string | null;
+    pr_number?: number | null;
+    pr_title?: string | null;
+    pr_comment_count?: number | null;
+  })[];
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
   className?: string;
