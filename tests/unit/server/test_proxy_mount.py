@@ -27,9 +27,9 @@ class TestProxyMount:
             "/proxy/v1/chat/completions",
             json={"model": "test", "messages": []},
         )
-        # Should get 400 (missing profile header), not 404 (route missing)
-        assert response.status_code == 400
-        assert "X-Amelia-Profile" in response.json()["detail"]
+        # Should get 401 (missing/invalid proxy token), not 404 (route missing).
+        # Token validation now runs before profile header check.
+        assert response.status_code == 401
 
     def test_proxy_embeddings_route_exists(self, app_client):
         """Verify /proxy/v1/embeddings route is mounted."""
@@ -37,8 +37,8 @@ class TestProxyMount:
             "/proxy/v1/embeddings",
             json={"model": "test", "input": "hello"},
         )
-        assert response.status_code == 400
-        assert "X-Amelia-Profile" in response.json()["detail"]
+        # Should get 401 (missing/invalid proxy token), not 404 (route missing).
+        assert response.status_code == 401
 
     def test_proxy_git_credentials_route_exists(self, app_client):
         """Verify /proxy/v1/git/credentials route is mounted."""
@@ -46,5 +46,5 @@ class TestProxyMount:
             "/proxy/v1/git/credentials",
             content="host=github.com\n",
         )
-        assert response.status_code == 400
-        assert "X-Amelia-Profile" in response.json()["detail"]
+        # Should get 401 (missing/invalid proxy token), not 404 (route missing).
+        assert response.status_code == 401

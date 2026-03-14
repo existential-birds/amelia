@@ -462,7 +462,19 @@ def create_app() -> FastAPI:
 
         return ProviderConfig(base_url=base_url, api_key=api_key)
 
-    proxy = create_proxy_router(resolve_provider=_resolve_provider)
+    # Token registry: maps proxy tokens to container names.
+    # Populated when sandbox providers are created via DockerSandboxProvider.
+    # Registration of tokens happens during sandbox provisioning (not in this PR).
+    proxy_tokens: dict[str, str] = {}
+    application.state.proxy_tokens = proxy_tokens
+
+    async def _validate_proxy_token(token: str) -> bool:
+        return token in proxy_tokens
+
+    proxy = create_proxy_router(
+        resolve_provider=_resolve_provider,
+        token_validator=_validate_proxy_token,
+    )
     application.include_router(proxy.router, prefix="/proxy/v1")
     application.state.proxy_cleanup = proxy.cleanup
 
