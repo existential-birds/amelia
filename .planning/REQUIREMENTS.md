@@ -19,9 +19,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **CMNT-01**: System classifies review comments as actionable vs non-actionable using LLM
 - [x] **CMNT-02**: Classification respects configurable aggressiveness level (critical-only / standard / thorough / exemplary)
-- [ ] **CMNT-03**: System tracks processed comment IDs to prevent re-fixing already-handled comments
-- [ ] **CMNT-04**: System enforces max fix iterations per thread (configurable, default 3) to prevent infinite loops
-- [ ] **CMNT-05**: System groups comments by file/function for efficient batching to Developer agent
+- [x] **CMNT-03**: System tracks processed comment IDs to prevent re-fixing already-handled comments
+- [x] **CMNT-04**: System enforces max fix iterations per thread (configurable, default 3) to prevent infinite loops
+- [x] **CMNT-05**: System groups comments by file/function for efficient batching to Developer agent
 
 ### Fix Pipeline
 
@@ -153,9 +153,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GIT-04 | Phase 2 | Complete |
 | CMNT-01 | Phase 3 | Complete |
 | CMNT-02 | Phase 3 | Complete |
-| CMNT-03 | Phase 3 | Pending |
-| CMNT-04 | Phase 3 | Pending |
-| CMNT-05 | Phase 3 | Pending |
+| CMNT-03 | Phase 3 | Complete |
+| CMNT-04 | Phase 3 | Complete |
+| CMNT-05 | Phase 3 | Complete |
 | PIPE-01 | Phase 4 | Pending |
 | PIPE-02 | Phase 4 | Pending |
 | PIPE-03 | Phase 4 | Pending |
