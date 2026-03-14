@@ -145,11 +145,11 @@ Plans:
   2. The polling service follows the start/stop lifecycle pattern and is registered in the server lifespan
   3. The service is resilient to exceptions -- it logs errors and continues polling, never crashes
   4. The service respects GitHub API rate limits and backs off when limits are approached
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md -- TDD: Config extensions (poll_label, EventType), label-filtered PR listing, PRCommentPoller service
+- [ ] 08-02-PLAN.md -- Register PRCommentPoller in server lifespan
 
 ### Phase 9: Events & Dashboard
 **Goal**: Users can see PR auto-fix activity in real-time through the dashboard with clear status for each comment and workflow
