@@ -42,6 +42,9 @@ class ProviderConfig(BaseModel):
 # Type alias for the provider resolver function
 type ProviderResolver = Callable[[str], Coroutine[Any, Any, ProviderConfig | None]]
 
+# Type alias for the token validator function
+type TokenValidator = Callable[[str], Coroutine[Any, Any, bool]]
+
 
 class ProxyRouter(NamedTuple):
     """Proxy router with cleanup function.
@@ -107,6 +110,7 @@ async def _resolve_provider_or_raise(
 
 def create_proxy_router(
     resolve_provider: ProviderResolver,
+    token_validator: TokenValidator | None = None,
 ) -> ProxyRouter:
     """Create the proxy router with injected provider resolver.
 
@@ -128,6 +132,14 @@ def create_proxy_router(
     async def cleanup() -> None:
         """Close the HTTP client."""
         await http_client.aclose()
+
+    async def _validate_proxy_token(request: Request) -> None:
+        """Validate the X-Amelia-Proxy-Token header if a validator is configured."""
+        if token_validator is None:
+            return
+        token = request.headers.get("X-Amelia-Proxy-Token")
+        if not token or not await token_validator(token):
+            raise HTTPException(status_code=401, detail="Invalid or missing proxy token")
 
     async def forward_request(
         request: Request,
@@ -162,6 +174,7 @@ def create_proxy_router(
         for h in (
             "host",
             "x-amelia-profile",
+            "x-amelia-proxy-token",
             "content-length",
             "connection",
             "keep-alive",
@@ -226,6 +239,7 @@ def create_proxy_router(
     )
     async def proxy_chat_completions(request: Request) -> Response:
         """Forward chat completion requests to the upstream LLM provider."""
+        await _validate_proxy_token(request)
         profile = _get_profile_header(request)
         provider = await _resolve_provider_or_raise(profile, resolve_provider)
         return await forward_request(request, provider, "/chat/completions")
@@ -236,6 +250,7 @@ def create_proxy_router(
     )
     async def proxy_embeddings(request: Request) -> Response:
         """Forward embedding requests to the upstream LLM provider."""
+        await _validate_proxy_token(request)
         profile = _get_profile_header(request)
         provider = await _resolve_provider_or_raise(profile, resolve_provider)
         return await forward_request(request, provider, "/embeddings")
@@ -247,6 +262,7 @@ def create_proxy_router(
         MVP: returns 501 Not Implemented. Full implementation in PR 2
         when the container actually needs git access.
         """
+        await _validate_proxy_token(request)
         _get_profile_header(request)
         return Response(
             status_code=501,

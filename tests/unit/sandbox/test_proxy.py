@@ -268,6 +268,111 @@ class TestProxyBodySizeLimit:
         assert response.status_code == 200
 
 
+class TestProxyTokenAuth:
+    """Per-container proxy token authentication."""
+
+    @pytest.fixture
+    async def authed_app(self) -> AsyncIterator[FastAPI]:
+        """App with token validation enabled."""
+        app = FastAPI()
+
+        async def _resolve_provider(profile_name: str) -> ProviderConfig | None:
+            if profile_name == "work":
+                return ProviderConfig(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key="sk-or-test-key",
+                )
+            return None
+
+        async def _validate_token(token: str) -> bool:
+            return token == "valid-secret-token"
+
+        proxy = create_proxy_router(
+            resolve_provider=_resolve_provider,
+            token_validator=_validate_token,
+        )
+        app.include_router(proxy.router, prefix="/proxy/v1")
+        yield app
+        await proxy.cleanup()
+
+    @pytest.fixture
+    def authed_client(self, authed_app: FastAPI) -> TestClient:
+        return TestClient(authed_app)
+
+    def test_missing_token_returns_401(self, authed_client: TestClient) -> None:
+        response = authed_client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={"X-Amelia-Profile": "work"},
+        )
+        assert response.status_code == 401
+
+    def test_wrong_token_returns_401(self, authed_client: TestClient) -> None:
+        response = authed_client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={
+                "X-Amelia-Profile": "work",
+                "X-Amelia-Proxy-Token": "wrong-token",
+            },
+        )
+        assert response.status_code == 401
+
+    def test_valid_token_passes_through(
+        self, authed_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            return _streaming_response(200, b'{"choices": []}', request)
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = authed_client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={
+                "X-Amelia-Profile": "work",
+                "X-Amelia-Proxy-Token": "valid-secret-token",
+            },
+        )
+        assert response.status_code == 200
+
+    def test_token_not_forwarded_upstream(
+        self, authed_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Proxy token must be stripped before forwarding."""
+        captured_headers: dict[str, str] = {}
+
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            captured_headers.update(dict(request.headers))
+            return _streaming_response(200, b'{"choices": []}', request)
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        authed_client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={
+                "X-Amelia-Profile": "work",
+                "X-Amelia-Proxy-Token": "valid-secret-token",
+            },
+        )
+        assert "x-amelia-proxy-token" not in captured_headers
+
+    def test_no_validator_skips_token_check(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When no token_validator is set, requests pass without a token."""
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            return _streaming_response(200, b'{"choices": []}', request)
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={"X-Amelia-Profile": "work"},
+        )
+        assert response.status_code == 200
+
+
 class TestProxyCleanup:
     async def test_cleanup_closes_http_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Verify cleanup() closes the httpx.AsyncClient."""
