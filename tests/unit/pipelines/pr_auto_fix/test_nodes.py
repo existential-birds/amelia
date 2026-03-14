@@ -19,10 +19,14 @@ from amelia.core.types import (
     AgentConfig,
     DriverType,
     PRAutoFixConfig,
-    PRReviewComment,
     Profile,
+    PRReviewComment,
 )
-from amelia.pipelines.pr_auto_fix.nodes import classify_node, develop_node
+from amelia.pipelines.pr_auto_fix.nodes import (
+    classify_node,
+    commit_push_node,
+    develop_node,
+)
 from amelia.pipelines.pr_auto_fix.state import (
     GroupFixResult,
     GroupFixStatus,
@@ -378,3 +382,134 @@ class TestDevelopNode:
 
         assert result["agentic_status"] == AgenticStatus.FAILED
         assert all(r.status == GroupFixStatus.FAILED for r in result["group_results"])
+
+
+# ---------------------------------------------------------------------------
+# commit_push_node tests
+# ---------------------------------------------------------------------------
+
+
+class TestCommitPushNode:
+    """Tests for commit_push_node."""
+
+    @pytest.mark.asyncio
+    async def test_commit_push_with_changes(self) -> None:
+        """commit_push_node stages, commits, and pushes when changes exist."""
+        c1 = _make_comment(id=1, path="src/app.py", line=42, body="Fix this bug")
+        state = _make_state(
+            comments=[c1],
+            file_groups={"src/app.py": [1]},
+        )
+        # Add group_results to state
+        state = state.model_copy(update={
+            "group_results": [
+                GroupFixResult(
+                    file_path="src/app.py",
+                    status=GroupFixStatus.FIXED,
+                    comment_ids=[1],
+                ),
+            ],
+        })
+        config = _make_config()
+
+        with patch(
+            "amelia.pipelines.pr_auto_fix.nodes.GitOperations"
+        ) as mock_git_cls:
+            mock_git = AsyncMock()
+            mock_git_cls.return_value = mock_git
+            mock_git._run_git.return_value = " M src/app.py"  # porcelain output
+            mock_git.stage_and_commit.return_value = "abc123def456"
+            mock_git.safe_push.return_value = "abc123def456"
+
+            result = await commit_push_node(state, config)
+
+        assert result["status"] == "completed"
+        assert result["commit_sha"] == "abc123def456"
+        mock_git.stage_and_commit.assert_called_once()
+        mock_git.safe_push.assert_called_once_with("feat/my-feature")
+
+        # Verify commit message includes prefix and comment info
+        commit_msg = mock_git.stage_and_commit.call_args[0][0]
+        assert "fix(review):" in commit_msg
+        assert "src/app.py:42" in commit_msg
+
+    @pytest.mark.asyncio
+    async def test_commit_push_no_changes_skips(self) -> None:
+        """commit_push_node skips commit/push when no files changed."""
+        state = _make_state()
+        config = _make_config()
+
+        with patch(
+            "amelia.pipelines.pr_auto_fix.nodes.GitOperations"
+        ) as mock_git_cls:
+            mock_git = AsyncMock()
+            mock_git_cls.return_value = mock_git
+            mock_git._run_git.return_value = ""  # empty porcelain = no changes
+
+            result = await commit_push_node(state, config)
+
+        assert result["status"] == "completed"
+        assert result["commit_sha"] is None
+        mock_git.stage_and_commit.assert_not_called()
+        mock_git.safe_push.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_commit_push_git_error_returns_failed(self) -> None:
+        """commit_push_node returns failed status on git error."""
+        state = _make_state()
+        config = _make_config()
+
+        with patch(
+            "amelia.pipelines.pr_auto_fix.nodes.GitOperations"
+        ) as mock_git_cls:
+            mock_git = AsyncMock()
+            mock_git_cls.return_value = mock_git
+            mock_git._run_git.return_value = " M src/app.py"
+            mock_git.stage_and_commit.side_effect = ValueError("nothing to commit")
+
+            result = await commit_push_node(state, config)
+
+        assert result["status"] == "failed"
+        assert "nothing to commit" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_commit_message_format(self) -> None:
+        """Commit message uses configurable prefix and lists addressed comments."""
+        c1 = _make_comment(id=1, path="src/app.py", line=10, body="Fix null check")
+        c2 = _make_comment(id=2, path="src/utils.py", line=20, body="Add validation")
+        state = _make_state(comments=[c1, c2])
+        state = state.model_copy(update={
+            "group_results": [
+                GroupFixResult(
+                    file_path="src/app.py",
+                    status=GroupFixStatus.FIXED,
+                    comment_ids=[1],
+                ),
+                GroupFixResult(
+                    file_path="src/utils.py",
+                    status=GroupFixStatus.FIXED,
+                    comment_ids=[2],
+                ),
+            ],
+            "autofix_config": PRAutoFixConfig(commit_prefix="chore(review):"),
+        })
+        config = _make_config()
+
+        with patch(
+            "amelia.pipelines.pr_auto_fix.nodes.GitOperations"
+        ) as mock_git_cls:
+            mock_git = AsyncMock()
+            mock_git_cls.return_value = mock_git
+            mock_git._run_git.return_value = " M src/app.py\n M src/utils.py"
+            mock_git.stage_and_commit.return_value = "abc123"
+            mock_git.safe_push.return_value = "abc123"
+
+            await commit_push_node(state, config)
+
+        commit_msg = mock_git.stage_and_commit.call_args[0][0]
+        assert "chore(review):" in commit_msg
+        assert "address PR review comments" in commit_msg
+        assert "src/app.py:10" in commit_msg
+        assert "Fix null check" in commit_msg
+        assert "src/utils.py:20" in commit_msg
+        assert "Add validation" in commit_msg
