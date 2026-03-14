@@ -7,6 +7,7 @@ and file-based grouping.
 
 from __future__ import annotations
 
+import hashlib
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
@@ -282,3 +283,22 @@ def group_comments_by_file(
         groups[comment.path].append(comment)
 
     return dict(groups)
+
+
+def get_prompt_hash(aggressiveness_level: str) -> str:
+    """Compute SHA-256 hash prefix of the classification system prompt.
+
+    Builds the same prompt that classify_comments uses, normalizes
+    whitespace, and returns the first 16 hex characters of the SHA-256.
+
+    Args:
+        aggressiveness_level: The aggressiveness level name to format into the prompt.
+
+    Returns:
+        16-character hex digest string.
+    """
+    system_prompt_template = PROMPT_DEFAULTS["classifier.system"].content
+    system_prompt = system_prompt_template.format(
+        aggressiveness_level=aggressiveness_level,
+    )
+    return hashlib.sha256(system_prompt.strip().encode()).hexdigest()[:16]

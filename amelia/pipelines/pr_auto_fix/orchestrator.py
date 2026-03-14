@@ -5,6 +5,7 @@ Prevents race conditions, infinite loops, and branch corruption.
 """
 
 import asyncio
+import time
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -13,7 +14,8 @@ from loguru import logger
 
 from amelia.core.types import PRAutoFixConfig, Profile
 from amelia.pipelines.pr_auto_fix.pipeline import PRAutoFixPipeline
-from amelia.server.database import WorkflowRepository
+from amelia.pipelines.pr_auto_fix.state import GroupFixStatus
+from amelia.server.database import MetricsRepository, WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.state import (
@@ -21,6 +23,7 @@ from amelia.server.models.state import (
     WorkflowStatus,
     WorkflowType,
 )
+from amelia.services.classifier import get_prompt_hash
 from amelia.services.github_pr import GitHubPRService
 from amelia.tools.git_utils import GitOperations
 
@@ -51,10 +54,12 @@ class PRAutoFixOrchestrator:
         event_bus: EventBus,
         github_pr_service: GitHubPRService,
         workflow_repo: WorkflowRepository | None = None,
+        metrics_repo: MetricsRepository | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._github_pr_service = github_pr_service
         self._workflow_repo = workflow_repo
+        self._metrics_repo = metrics_repo
 
         # Per-PR concurrency control
         self._pr_locks: dict[int, asyncio.Lock] = {}
@@ -311,7 +316,9 @@ class PRAutoFixOrchestrator:
         )
 
         try:
-            # Run the pipeline
+            # Run the pipeline with timing
+            start_time = time.monotonic()
+
             pipeline = PRAutoFixPipeline()
             graph = pipeline.create_graph()
             initial_state = pipeline.get_initial_state(
@@ -322,6 +329,8 @@ class PRAutoFixOrchestrator:
                 repo=repo,
             )
             final_state = await graph.ainvoke(initial_state)
+
+            duration_seconds = time.monotonic() - start_time
 
             # Build pr_comments from final state for issue_cache
             pr_comments = self._build_pr_comments(final_state)
@@ -339,6 +348,71 @@ class PRAutoFixOrchestrator:
             )
             if self._workflow_repo is not None:
                 await self._workflow_repo.update(state)
+
+            # Persist run metrics (isolated -- failure does not crash pipeline)
+            if self._metrics_repo is not None:
+                try:
+                    group_results = (
+                        final_state.get("group_results", [])
+                        if isinstance(final_state, dict) else []
+                    )
+                    resolution_results = (
+                        final_state.get("resolution_results", [])
+                        if isinstance(final_state, dict) else []
+                    )
+
+                    # Count per-comment (iterate comment_ids, not groups -- Pitfall 3)
+                    fixed = 0
+                    failed = 0
+                    for result in group_results:
+                        result_dict = (
+                            result if isinstance(result, dict)
+                            else result.model_dump() if hasattr(result, "model_dump")
+                            else {}
+                        )
+                        status = result_dict.get("status", "")
+                        comment_count = len(result_dict.get("comment_ids", []))
+                        if status == GroupFixStatus.FIXED:
+                            fixed += comment_count
+                        elif status == GroupFixStatus.FAILED:
+                            failed += comment_count
+
+                    comments_processed = len(comments_raw)
+                    skipped = comments_processed - fixed - failed
+
+                    commits_pushed = 1 if (
+                        isinstance(final_state, dict) and final_state.get("commit_sha")
+                    ) else 0
+
+                    threads_resolved = sum(
+                        1 for r in resolution_results
+                        if (r if isinstance(r, dict) else r.model_dump() if hasattr(r, "model_dump") else {}).get("resolved", False)
+                    )
+
+                    run_id = uuid4()
+                    prompt_hash = get_prompt_hash(config.aggressiveness.name)
+
+                    await self._metrics_repo.save_run_metrics(
+                        run_id=run_id,
+                        workflow_id=workflow_id,
+                        profile_id=profile.name,
+                        pr_number=pr_number,
+                        aggressiveness_level=config.aggressiveness.name,
+                        comments_processed=comments_processed,
+                        fixes_applied=fixed,
+                        fixes_failed=failed,
+                        fixes_skipped=skipped,
+                        commits_pushed=commits_pushed,
+                        threads_resolved=threads_resolved,
+                        duration_seconds=duration_seconds,
+                        prompt_hash=prompt_hash,
+                    )
+                except Exception as metrics_exc:
+                    logger.warning(
+                        "Failed to persist run metrics (non-fatal)",
+                        pr_number=pr_number,
+                        error=str(metrics_exc),
+                    )
 
             # Emit completed event
             self._emit_event(
