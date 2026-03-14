@@ -30,8 +30,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **PIPE-03**: Developer agent receives PR review comments with file path, line number, diff hunk, and comment body as context
 - [x] **PIPE-04**: Pipeline commits all fixes in a single commit with configurable message prefix (default `fix(review):`)
 - [x] **PIPE-05**: Pipeline pushes commit to the PR's head branch (never main)
-- [ ] **PIPE-06**: Pipeline replies to each fixed comment and resolves the thread
-- [ ] **PIPE-07**: Pipeline handles partial fixes — replies to unfixable comments explaining why, marks as needing human attention
+- [x] **PIPE-06**: Pipeline replies to each fixed comment and resolves the thread
+- [x] **PIPE-07**: Pipeline handles partial fixes — replies to unfixable comments explaining why, marks as needing human attention
 - [ ] **PIPE-08**: Existing review pipeline can optionally invoke PR_AUTO_FIX when PR context is available
 
 ### Triggers
@@ -161,8 +161,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PIPE-03 | Phase 4 | Complete |
 | PIPE-04 | Phase 4 | Complete |
 | PIPE-05 | Phase 4 | Complete |
-| PIPE-06 | Phase 5 | Pending |
-| PIPE-07 | Phase 5 | Pending |
+| PIPE-06 | Phase 5 | Complete |
+| PIPE-07 | Phase 5 | Complete |
 | PIPE-08 | Phase 5 | Pending |
 | ORCH-01 | Phase 6 | Pending |
 | ORCH-02 | Phase 6 | Pending |

@@ -99,7 +99,7 @@ Plans:
   2. After replying, the pipeline resolves the corresponding review thread via GraphQL
   3. For comments the Developer agent cannot fix, the pipeline replies explaining why and marks them as needing human attention (does not resolve the thread)
   4. The existing review pipeline can optionally invoke PR_AUTO_FIX when PR context is available
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 05-01-PLAN.md -- TDD: reply_resolve_node with per-comment replies, conditional thread resolution, error isolation
@@ -196,7 +196,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7/8 (parallel) ->
 | 2. GitHub API Layer | 2/2 | Complete   | 2026-03-13 |
 | 3. Comment Classification | 0/2 | Not started | - |
 | 4. Core Fix Pipeline | 0/2 | Not started | - |
-| 5. Thread Resolution & Composition | 0/2 | Not started | - |
+| 5. Thread Resolution & Composition | 1/2 | In Progress|  |
 | 6. Orchestration & Safety | 0/2 | Not started | - |
 | 7. CLI & API Triggers | 0/3 | Not started | - |
 | 8. Polling Service | 0/2 | Not started | - |
