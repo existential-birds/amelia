@@ -333,7 +333,7 @@ class TestProxyTokenGeneration:
 
         run_args = mock_exec.call_args_list[1][0]
         # Find the AMELIA_PROXY_TOKEN env var
-        env_pairs = list(zip(run_args, run_args[1:]))
+        env_pairs = list(zip(run_args, run_args[1:], strict=False))
         token_envs = [v for k, v in env_pairs if k == "-e" and v.startswith("AMELIA_PROXY_TOKEN=")]
         assert len(token_envs) == 1
         assert token_envs[0] == f"AMELIA_PROXY_TOKEN={provider.proxy_token}"
