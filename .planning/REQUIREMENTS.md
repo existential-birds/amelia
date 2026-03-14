@@ -44,11 +44,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Polling Service
 
-- [ ] **POLL-01**: Background service polls all GitHub-type profiles for new unresolved PR comments
-- [ ] **POLL-02**: Polling interval is configurable (default 60 seconds)
+- [x] **POLL-01**: Background service polls all GitHub-type profiles for new unresolved PR comments
+- [x] **POLL-02**: Polling interval is configurable (default 60 seconds)
 - [ ] **POLL-03**: Poller uses start/stop lifecycle pattern (registered in server lifespan)
-- [ ] **POLL-04**: Poller is resilient to exceptions (logs and continues, does not crash)
-- [ ] **POLL-05**: Poller respects GitHub API rate limits with backoff
+- [x] **POLL-04**: Poller is resilient to exceptions (logs and continues, does not crash)
+- [x] **POLL-05**: Poller respects GitHub API rate limits with backoff
 
 ### Orchestration
 
@@ -172,11 +172,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRIG-03 | Phase 7 | Complete |
 | TRIG-04 | Phase 7 | Complete |
 | TRIG-05 | Phase 7 | Complete |
-| POLL-01 | Phase 8 | Pending |
-| POLL-02 | Phase 8 | Pending |
+| POLL-01 | Phase 8 | Complete |
+| POLL-02 | Phase 8 | Complete |
 | POLL-03 | Phase 8 | Pending |
-| POLL-04 | Phase 8 | Pending |
-| POLL-05 | Phase 8 | Pending |
+| POLL-04 | Phase 8 | Complete |
+| POLL-05 | Phase 8 | Complete |
 | DASH-01 | Phase 9 | Pending |
 | DASH-02 | Phase 9 | Pending |
 | DASH-03 | Phase 9 | Pending |
