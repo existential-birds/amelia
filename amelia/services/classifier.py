@@ -8,11 +8,22 @@ and file-based grouping.
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from amelia.core.types import PRReviewComment
+from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
+from amelia.agents.schemas.classifier import (
+    ClassificationOutput,
+    CommentClassification,
+    is_actionable,
+)
+from amelia.core.types import PRAutoFixConfig, PRReviewComment
 from amelia.services.github_pr import AMELIA_FOOTER
+
+
+if TYPE_CHECKING:
+    from amelia.drivers.base import DriverInterface
 
 
 def filter_top_level(comments: list[PRReviewComment]) -> list[PRReviewComment]:
@@ -91,14 +102,8 @@ def should_skip_thread(
     if amelia_count == 0:
         return False
 
-    new_feedback = has_new_feedback_after_amelia(thread_comments)
-
-    if new_feedback:
-        # Fresh feedback resets iteration tracking
-        return False
-
-    # Amelia replied but no new feedback -- skip
-    return True
+    # Fresh feedback resets iteration tracking; otherwise skip
+    return not has_new_feedback_after_amelia(thread_comments)
 
 
 def filter_comments(
@@ -143,3 +148,137 @@ def filter_comments(
         result.append(comment)
 
     return result
+
+
+def _build_user_prompt(comments: list[PRReviewComment]) -> str:
+    """Build the user prompt listing each comment for classification.
+
+    Args:
+        comments: Comments to include in the prompt.
+
+    Returns:
+        Formatted prompt string with comment details.
+    """
+    lines: list[str] = ["Classify the following PR review comments:\n"]
+    for c in comments:
+        lines.append(f"---\nComment ID: {c.id}")
+        lines.append(f"Body: {c.body}")
+        if c.path is not None:
+            lines.append(f"Path: {c.path}")
+        if c.line is not None:
+            lines.append(f"Line: {c.line}")
+        if c.diff_hunk is not None:
+            lines.append(f"Diff hunk:\n{c.diff_hunk}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+async def classify_comments(
+    comments: list[PRReviewComment],
+    driver: DriverInterface,
+    config: PRAutoFixConfig,
+) -> dict[int, CommentClassification]:
+    """Classify PR review comments using LLM with post-filtering.
+
+    1. Loads system prompt from PROMPT_DEFAULTS, formatted with aggressiveness level
+    2. Builds user prompt with comment details
+    3. Calls driver.generate with schema=ClassificationOutput
+    4. Applies confidence threshold filter
+    5. Applies aggressiveness filter via is_actionable
+
+    Args:
+        comments: Pre-filtered list of comments to classify.
+        driver: LLM driver implementing DriverInterface.
+        config: PR auto-fix configuration with aggressiveness and thresholds.
+
+    Returns:
+        Mapping of comment_id to final CommentClassification.
+    """
+    if len(comments) > 50:
+        logger.warning(
+            "Large batch of comments for classification",
+            count=len(comments),
+        )
+
+    # Build prompts
+    system_prompt_template = PROMPT_DEFAULTS["classifier.system"].content
+    system_prompt = system_prompt_template.format(
+        aggressiveness_level=config.aggressiveness.name,
+    )
+    user_prompt = _build_user_prompt(comments)
+
+    # Call LLM
+    output, _session_id = await driver.generate(
+        prompt=user_prompt,
+        system_prompt=system_prompt,
+        schema=ClassificationOutput,
+    )
+
+    # Process classifications
+    result: dict[int, CommentClassification] = {}
+    classification_output: ClassificationOutput = output
+
+    for classification in classification_output.classifications:
+        final = classification
+
+        # Apply confidence threshold
+        if classification.confidence < config.confidence_threshold:
+            logger.debug(
+                "Classification below confidence threshold",
+                comment_id=classification.comment_id,
+                confidence=classification.confidence,
+                threshold=config.confidence_threshold,
+            )
+            if final.actionable:
+                final = final.model_copy(update={"actionable": False})
+
+        # Apply aggressiveness filter
+        if final.actionable and not is_actionable(
+            final.category, config.aggressiveness
+        ):
+            logger.debug(
+                "Classification filtered by aggressiveness level",
+                comment_id=final.comment_id,
+                category=str(final.category),
+                aggressiveness=config.aggressiveness.name,
+            )
+            final = final.model_copy(update={"actionable": False})
+
+        logger.debug(
+            "Classification result",
+            comment_id=final.comment_id,
+            category=str(final.category),
+            confidence=final.confidence,
+            actionable=final.actionable,
+        )
+
+        result[final.comment_id] = final
+
+    return result
+
+
+def group_comments_by_file(
+    comments: list[PRReviewComment],
+    classifications: dict[int, CommentClassification],
+) -> dict[str | None, list[PRReviewComment]]:
+    """Group actionable comments by file path.
+
+    Only includes comments whose classification is actionable.
+    Comments with path=None form a separate group under the None key.
+
+    Args:
+        comments: All comments to group.
+        classifications: Classification results mapping comment_id to classification.
+
+    Returns:
+        Mapping of file path (or None) to list of actionable comments.
+    """
+    groups: dict[str | None, list[PRReviewComment]] = defaultdict(list)
+
+    for comment in comments:
+        classification = classifications.get(comment.id)
+        if classification is None or not classification.actionable:
+            continue
+        groups[comment.path].append(comment)
+
+    return dict(groups)
