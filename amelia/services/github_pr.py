@@ -289,3 +289,25 @@ class GitHubPRService:
             f"/repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments/{target_id}/replies",
             "-f", f"body={full_body}",
         )
+
+    async def create_issue_comment(
+        self,
+        repo: str,
+        pr_number: int,
+        body: str,
+    ) -> None:
+        """Post an issue-level comment on a PR.
+
+        Uses the issues endpoint (not review comments) for top-level
+        PR conversation comments.
+
+        Args:
+            repo: Repository in 'owner/repo' format.
+            pr_number: The PR number.
+            body: The comment body text.
+        """
+        await self._run_gh(
+            "api", "--method", "POST",
+            f"/repos/{repo}/issues/{pr_number}/comments",
+            "-f", f"body={body}",
+        )

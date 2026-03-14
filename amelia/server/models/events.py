@@ -166,6 +166,12 @@ PERSISTED_TYPES: frozenset[EventType] = frozenset({
     # Plan validation
     EventType.PLAN_VALIDATED,
     EventType.PLAN_VALIDATION_FAILED,
+    # PR Auto-Fix orchestration
+    EventType.PR_FIX_QUEUED,
+    EventType.PR_FIX_DIVERGED,
+    EventType.PR_FIX_COOLDOWN_STARTED,
+    EventType.PR_FIX_COOLDOWN_RESET,
+    EventType.PR_FIX_RETRIES_EXHAUSTED,
 })
 
 _ERROR_TYPES: frozenset[EventType] = frozenset({
@@ -176,10 +182,12 @@ _ERROR_TYPES: frozenset[EventType] = frozenset({
     EventType.DOCUMENT_INGESTION_FAILED,
     EventType.PLAN_VALIDATION_FAILED,
     EventType.BRAINSTORM_MESSAGE_FAILED,
+    EventType.PR_FIX_RETRIES_EXHAUSTED,
 })
 
 _WARNING_TYPES: frozenset[EventType] = frozenset({
     EventType.SYSTEM_WARNING,
+    EventType.PR_FIX_DIVERGED,
 })
 
 _INFO_TYPES: frozenset[EventType] = frozenset({
@@ -197,6 +205,9 @@ _INFO_TYPES: frozenset[EventType] = frozenset({
     EventType.ORACLE_CONSULTATION_COMPLETED,
     EventType.DOCUMENT_INGESTION_STARTED,
     EventType.DOCUMENT_INGESTION_COMPLETED,
+    EventType.PR_FIX_QUEUED,
+    EventType.PR_FIX_COOLDOWN_STARTED,
+    EventType.PR_FIX_COOLDOWN_RESET,
 })
 
 
