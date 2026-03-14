@@ -246,6 +246,35 @@ class GitHubPRService:
             updated_at=data["updatedAt"],
         )
 
+    async def list_labeled_prs(self, label: str) -> list[PRSummary]:
+        """List open PRs filtered by a GitHub label.
+
+        Args:
+            label: GitHub label to filter PRs by.
+
+        Returns:
+            List of PRSummary instances matching the label.
+        """
+        raw = await self._run_gh(
+            "pr", "list",
+            "--json", "number,title,headRefName,author,updatedAt",
+            "--state", "open",
+            "--label", label,
+            "--limit", "100",
+        )
+        pr_data: list[dict[str, Any]] = json.loads(raw)
+
+        return [
+            PRSummary(
+                number=pr["number"],
+                title=pr["title"],
+                head_branch=pr["headRefName"],
+                author=pr["author"]["login"],
+                updated_at=pr["updatedAt"],
+            )
+            for pr in pr_data
+        ]
+
     async def list_open_prs(self) -> list[PRSummary]:
         """List open PRs for the repository.
 

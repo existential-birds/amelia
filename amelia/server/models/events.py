@@ -119,6 +119,9 @@ class EventType(StrEnum):
     PR_FIX_COOLDOWN_RESET = "pr_fix_cooldown_reset"
     PR_FIX_RETRIES_EXHAUSTED = "pr_fix_retries_exhausted"
 
+    # PR Polling
+    PR_POLL_RATE_LIMITED = "pr_poll_rate_limited"
+
 
 # Persisted event types (written to workflow log)
 PERSISTED_TYPES: frozenset[EventType] = frozenset({
@@ -188,6 +191,7 @@ _ERROR_TYPES: frozenset[EventType] = frozenset({
 _WARNING_TYPES: frozenset[EventType] = frozenset({
     EventType.SYSTEM_WARNING,
     EventType.PR_FIX_DIVERGED,
+    EventType.PR_POLL_RATE_LIMITED,
 })
 
 _INFO_TYPES: frozenset[EventType] = frozenset({
