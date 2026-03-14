@@ -181,5 +181,84 @@ def fix_pr(
         raise typer.Exit(code=1) from None
 
 
+@app.command(name="watch-pr")
+def watch_pr(
+    pr_number: Annotated[int, typer.Argument(help="PR number to watch")],
+    profile_name: Annotated[str, typer.Option("--profile", "-p", help="Profile name (required)")],
+    aggressiveness: Annotated[str | None, typer.Option("--aggressiveness", "-a", help="Override: critical/standard/thorough")] = None,
+    interval: Annotated[int, typer.Option("--interval", "-i", help="Polling interval in seconds")] = 60,
+    quiet: Annotated[bool, typer.Option("--quiet", "-q", help="Suppress event streaming")] = False,
+) -> None:
+    """Watch a PR and continuously fix review comments.
+
+    Validates that PR auto-fix is enabled, then loops: trigger fix cycle,
+    stream events, check unresolved comments, wait. Stops when zero
+    unresolved comments remain.
+
+    Args:
+        pr_number: PR number to watch.
+        profile_name: Profile name (required).
+        aggressiveness: Optional aggressiveness override.
+        interval: Polling interval in seconds (default 60).
+        quiet: Suppress event streaming display.
+    """
+    async def _run() -> None:
+        client = AmeliaClient()
+
+        # Validate pr_autofix is enabled
+        status = await client.get_pr_autofix_status(profile_name)
+        if not status.enabled:
+            typer.echo(
+                f"PR auto-fix not enabled on profile {profile_name}. "
+                "Configure it in the dashboard."
+            )
+            raise typer.Exit(code=1)
+
+        while True:
+            # Trigger a fix cycle
+            response = await client.trigger_pr_autofix(
+                pr_number, profile_name, aggressiveness
+            )
+            typer.echo(
+                f"Triggered auto-fix for PR #{pr_number} (workflow: {response.workflow_id})"
+            )
+
+            # Stream events and collect summary
+            summary = await stream_workflow_events(
+                response.workflow_id, display=not quiet
+            )
+
+            # Print summary line
+            summary_line = (
+                f"{summary.fixed} comments fixed, "
+                f"{summary.skipped} skipped, "
+                f"{summary.failed} failed"
+            )
+            if summary.commit_sha is not None:
+                summary_line += f" (commit: {summary.commit_sha[:8]})"
+            typer.echo(summary_line)
+
+            # Check if any unresolved comments remain
+            comments_response = await client.get_pr_comments(
+                pr_number, profile_name
+            )
+            if len(comments_response.comments) == 0:
+                typer.echo("All comments resolved. Stopping.")
+                break
+
+            typer.echo(
+                f"Waiting for new comments... next check in {interval}s"
+            )
+            await asyncio.sleep(interval)
+
+    try:
+        asyncio.run(_run())
+    except KeyboardInterrupt:
+        typer.echo("\nStopped watching.")
+    except ServerUnreachableError:
+        typer.echo("Server not running. Start with: amelia server", err=True)
+        raise typer.Exit(code=1) from None
+
+
 if __name__ == "__main__":
     app()
