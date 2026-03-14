@@ -36,6 +36,10 @@ class TestDockerProviderProtocol:
         provider = DockerSandboxProvider(profile_name="test", image="custom:v1")
         assert provider.image == "custom:v1"
 
+    def test_allowlist_enabled_by_default(self) -> None:
+        provider = DockerSandboxProvider(profile_name="test")
+        assert provider.network_allowlist_enabled is True
+
 
 class TestHealthCheck:
     """Tests for health_check() — inspects container state."""
@@ -169,11 +173,13 @@ class TestEnsureRunning:
         mock_build_image = AsyncMock()
         mock_start_container = AsyncMock()
         mock_wait_for_ready = AsyncMock()
+        mock_apply_allowlist = AsyncMock()
         monkeypatch.setattr(provider, "health_check", mock_health_check)
         monkeypatch.setattr(provider, "_image_exists", mock_image_exists)
         monkeypatch.setattr(provider, "_build_image", mock_build_image)
         monkeypatch.setattr(provider, "_start_container", mock_start_container)
         monkeypatch.setattr(provider, "_wait_for_ready", mock_wait_for_ready)
+        monkeypatch.setattr(provider, "_apply_network_allowlist", mock_apply_allowlist)
 
         await provider.ensure_running()
 
@@ -187,11 +193,13 @@ class TestEnsureRunning:
         mock_build_image = AsyncMock()
         mock_start_container = AsyncMock()
         mock_wait_for_ready = AsyncMock()
+        mock_apply_allowlist = AsyncMock()
         monkeypatch.setattr(provider, "health_check", mock_health_check)
         monkeypatch.setattr(provider, "_image_exists", mock_image_exists)
         monkeypatch.setattr(provider, "_build_image", mock_build_image)
         monkeypatch.setattr(provider, "_start_container", mock_start_container)
         monkeypatch.setattr(provider, "_wait_for_ready", mock_wait_for_ready)
+        monkeypatch.setattr(provider, "_apply_network_allowlist", mock_apply_allowlist)
 
         await provider.ensure_running()
 
@@ -381,3 +389,80 @@ class TestContainerCapabilities:
         assert "--cap-add" not in run_args
         assert "NET_ADMIN" not in run_args
         assert "NET_RAW" not in run_args
+
+
+class TestProxyTokenSyncOnRestart:
+    """Restarted containers must sync the existing AMELIA_PROXY_TOKEN."""
+
+    async def test_restarted_container_reads_existing_token(self) -> None:
+        """When a stopped container is restarted, the provider reads the token from it."""
+        provider = DockerSandboxProvider(profile_name="test")
+        original_token = provider.proxy_token
+
+        # Mock: docker start succeeds (existing container)
+        mock_restart = AsyncMock()
+        mock_restart.returncode = 0
+        mock_restart.wait = AsyncMock()
+
+        # Mock: docker inspect returns env with a different token
+        container_token = "container-baked-token-xyz"
+        env_output = (
+            f"LLM_PROXY_URL=http://host.docker.internal:8430/proxy/v1\n"
+            f"AMELIA_PROFILE=test\n"
+            f"AMELIA_PROXY_TOKEN={container_token}\n"
+        )
+        mock_inspect = AsyncMock()
+        mock_inspect.communicate.return_value = (env_output.encode(), b"")
+        mock_inspect.returncode = 0
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            side_effect=[mock_restart, mock_inspect],
+        ):
+            await provider._start_container()
+
+        assert provider.proxy_token == container_token
+        assert provider.proxy_token != original_token
+
+    async def test_restarted_container_keeps_token_on_inspect_failure(self) -> None:
+        """If docker inspect fails, the provider keeps its current token."""
+        provider = DockerSandboxProvider(profile_name="test")
+        original_token = provider.proxy_token
+
+        mock_restart = AsyncMock()
+        mock_restart.returncode = 0
+        mock_restart.wait = AsyncMock()
+
+        mock_inspect = AsyncMock()
+        mock_inspect.communicate.return_value = (b"", b"inspect error")
+        mock_inspect.returncode = 1
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            side_effect=[mock_restart, mock_inspect],
+        ):
+            await provider._start_container()
+
+        assert provider.proxy_token == original_token
+
+    async def test_restarted_container_keeps_token_when_env_var_missing(self) -> None:
+        """If AMELIA_PROXY_TOKEN isn't in the container env, keep current token."""
+        provider = DockerSandboxProvider(profile_name="test")
+        original_token = provider.proxy_token
+
+        mock_restart = AsyncMock()
+        mock_restart.returncode = 0
+        mock_restart.wait = AsyncMock()
+
+        env_output = "SOME_OTHER_VAR=value\n"
+        mock_inspect = AsyncMock()
+        mock_inspect.communicate.return_value = (env_output.encode(), b"")
+        mock_inspect.returncode = 0
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            side_effect=[mock_restart, mock_inspect],
+        ):
+            await provider._start_container()
+
+        assert provider.proxy_token == original_token

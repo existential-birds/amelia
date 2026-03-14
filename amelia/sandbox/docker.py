@@ -36,7 +36,7 @@ class DockerSandboxProvider(SandboxProvider):
         profile_name: str,
         image: str = "amelia-sandbox:latest",
         proxy_port: int = 8430,
-        network_allowlist_enabled: bool = False,
+        network_allowlist_enabled: bool = True,
         network_allowed_hosts: Sequence[str] | None = None,
     ) -> None:
         self.profile_name = profile_name
@@ -244,6 +244,10 @@ class DockerSandboxProvider(SandboxProvider):
                 "Restarted existing container",
                 container=self.container_name,
             )
+            # Sync proxy_token with the token baked into the container's env.
+            # On restart the container keeps its original env vars, so the
+            # provider must read the token back to stay in sync.
+            await self._sync_proxy_token_from_container()
             return
 
         cmd = [
@@ -277,6 +281,47 @@ class DockerSandboxProvider(SandboxProvider):
             container=self.container_name,
             image=self.image,
         )
+
+    async def _sync_proxy_token_from_container(self) -> None:
+        """Read AMELIA_PROXY_TOKEN from a running container's env.
+
+        Updates self.proxy_token if the token is found. On failure,
+        keeps the current token (graceful degradation).
+        """
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "inspect",
+                "--format", "{{range .Config.Env}}{{println .}}{{end}}",
+                self.container_name,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            if proc.returncode != 0:
+                logger.warning(
+                    "Failed to inspect container env, keeping current proxy token",
+                    container=self.container_name,
+                )
+                return
+
+            for line in stdout.decode().splitlines():
+                if line.startswith("AMELIA_PROXY_TOKEN="):
+                    self.proxy_token = line.split("=", 1)[1]
+                    logger.debug(
+                        "Synced proxy token from container",
+                        container=self.container_name,
+                    )
+                    return
+
+            logger.warning(
+                "AMELIA_PROXY_TOKEN not found in container env, keeping current token",
+                container=self.container_name,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to read proxy token from container, keeping current token",
+                container=self.container_name,
+            )
 
     async def _wait_for_ready(self, timeout: float = 30.0) -> None:
         """Wait for the container to become healthy.
