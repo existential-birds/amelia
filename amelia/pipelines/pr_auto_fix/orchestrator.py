@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from loguru import logger
 
 from amelia.core.types import PRAutoFixConfig, Profile
+from amelia.pipelines.pr_auto_fix.pipeline import PRAutoFixPipeline
 from amelia.server.events.bus import EventBus
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.services.github_pr import GitHubPRService
@@ -174,7 +175,7 @@ class PRAutoFixOrchestrator:
                     await self._reset_to_remote(git_ops, head_branch)
 
                 # Run the pipeline (classify -> develop -> commit -> push -> resolve)
-                await self._execute_pipeline(pr_number, repo, profile, config)
+                await self._execute_pipeline(pr_number, repo, profile, config, head_branch)
                 return  # Success
 
             except ValueError as exc:
@@ -229,15 +230,32 @@ class PRAutoFixOrchestrator:
         repo: str,
         profile: Profile,
         config: PRAutoFixConfig,
+        head_branch: str = "",
     ) -> None:
         """Execute the PR auto-fix pipeline.
 
-        This method exists as a seam for testing -- tests mock this
-        to verify orchestration logic without running the real pipeline.
+        Creates a PRAutoFixPipeline instance, builds the graph, and
+        invokes it with the initial state. This method exists as a seam
+        for testing -- tests mock this to verify orchestration logic
+        without running the real pipeline.
+
+        Args:
+            pr_number: GitHub PR number.
+            repo: Repository in 'owner/repo' format.
+            profile: Execution profile.
+            config: Auto-fix configuration.
+            head_branch: PR head branch name.
         """
-        # Real implementation will create and run PRAutoFixPipeline
-        # This is the integration point for Phase 7-8 triggers
-        raise NotImplementedError("Pipeline execution not yet wired up")
+        pipeline = PRAutoFixPipeline()
+        graph = pipeline.create_graph()
+        initial_state = pipeline.get_initial_state(
+            workflow_id=self._get_workflow_id(pr_number),
+            profile_id=profile.name,
+            pr_number=pr_number,
+            head_branch=head_branch,
+            repo=repo,
+        )
+        await graph.ainvoke(initial_state)
 
     async def _run_cooldown(
         self,

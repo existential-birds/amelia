@@ -714,3 +714,50 @@ class TestEventEmission:
         assert len(queued) == 1
         assert queued[0].data is not None
         assert queued[0].data["pr_number"] == 42
+
+
+# ---------------------------------------------------------------------------
+# Pipeline Wiring
+# ---------------------------------------------------------------------------
+
+
+class TestExecutePipelineWiring:
+    """Tests that _execute_pipeline creates and invokes the real pipeline."""
+
+    async def test_execute_pipeline_creates_and_invokes_graph(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        profile: Profile,
+    ) -> None:
+        """_execute_pipeline creates PRAutoFixPipeline, builds graph, and invokes it."""
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value={})
+
+        mock_pipeline = MagicMock()
+        mock_pipeline.create_graph.return_value = mock_graph
+        mock_pipeline.get_initial_state.return_value = {"mock": "state"}
+
+        with patch(
+            "amelia.pipelines.pr_auto_fix.orchestrator.PRAutoFixPipeline",
+            return_value=mock_pipeline,
+        ):
+            await orchestrator._execute_pipeline(
+                pr_number=42,
+                repo="owner/repo",
+                profile=profile,
+                config=profile.pr_autofix,
+                head_branch="feat/test",
+            )
+
+        # Verify pipeline was created and graph was built
+        mock_pipeline.create_graph.assert_called_once()
+
+        # Verify initial state was created with correct kwargs
+        init_kwargs = mock_pipeline.get_initial_state.call_args.kwargs
+        assert init_kwargs["pr_number"] == 42
+        assert init_kwargs["head_branch"] == "feat/test"
+        assert init_kwargs["repo"] == "owner/repo"
+        assert init_kwargs["profile_id"] == "test"
+
+        # Verify graph was invoked with initial state
+        mock_graph.ainvoke.assert_awaited_once_with({"mock": "state"})
