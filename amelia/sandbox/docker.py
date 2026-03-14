@@ -248,15 +248,17 @@ class DockerSandboxProvider(SandboxProvider):
             "docker", "run", "-d",
             "--name", self.container_name,
             "--add-host=host.docker.internal:host-gateway",
+        ]
+        if self.network_allowlist_enabled:
             # NET_ADMIN + NET_RAW required for iptables-based network allowlist
             # that restricts outbound connections to approved hosts only.
-            "--cap-add", "NET_ADMIN",
-            "--cap-add", "NET_RAW",
+            cmd.extend(["--cap-add", "NET_ADMIN", "--cap-add", "NET_RAW"])
+        cmd.extend([
             "-e", f"LLM_PROXY_URL=http://host.docker.internal:{self.proxy_port}/proxy/v1",
             "-e", f"AMELIA_PROFILE={self.profile_name}",
             self.image,
             "sleep", "infinity",
-        ]
+        ])
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,

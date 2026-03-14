@@ -301,3 +301,47 @@ class TestNetworkAllowlist:
             pytest.raises(RuntimeError, match="Failed to apply network allowlist"),
         ):
             await provider._apply_network_allowlist()
+
+
+class TestContainerCapabilities:
+    """NET_ADMIN/NET_RAW should only be added when allowlist is enabled."""
+
+    async def test_capabilities_present_when_allowlist_enabled(self) -> None:
+        provider = DockerSandboxProvider(
+            profile_name="test", network_allowlist_enabled=True,
+        )
+        mock_restart = AsyncMock()
+        mock_restart.returncode = 1  # No existing container to restart
+        mock_restart.wait = AsyncMock()
+
+        mock_run = AsyncMock()
+        mock_run.communicate.return_value = (b"container-id", b"")
+        mock_run.returncode = 0
+
+        with patch("asyncio.create_subprocess_exec", side_effect=[mock_restart, mock_run]) as mock_exec:
+            await provider._start_container()
+
+        run_args = mock_exec.call_args_list[1][0]
+        assert "--cap-add" in run_args
+        assert "NET_ADMIN" in run_args
+        assert "NET_RAW" in run_args
+
+    async def test_no_capabilities_when_allowlist_disabled(self) -> None:
+        provider = DockerSandboxProvider(
+            profile_name="test", network_allowlist_enabled=False,
+        )
+        mock_restart = AsyncMock()
+        mock_restart.returncode = 1
+        mock_restart.wait = AsyncMock()
+
+        mock_run = AsyncMock()
+        mock_run.communicate.return_value = (b"container-id", b"")
+        mock_run.returncode = 0
+
+        with patch("asyncio.create_subprocess_exec", side_effect=[mock_restart, mock_run]) as mock_exec:
+            await provider._start_container()
+
+        run_args = mock_exec.call_args_list[1][0]
+        assert "--cap-add" not in run_args
+        assert "NET_ADMIN" not in run_args
+        assert "NET_RAW" not in run_args
