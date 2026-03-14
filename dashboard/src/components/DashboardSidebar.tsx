@@ -26,7 +26,6 @@ import {
   Radio,
   BookOpen,
   Library,
-  Target,
   MessageSquare,
   Coins,
   Settings,
@@ -234,15 +233,9 @@ export function DashboardSidebar() {
                 label="Agent Prompts"
               />
               <SidebarNavLink
-                to="/benchmarks"
-                icon={Target}
-                label="Benchmarks"
-                comingSoon
-              />
-              <SidebarNavLink
-                to="/costs"
+                to="/analytics"
                 icon={Coins}
-                label="Costs"
+                label="Analytics"
               />
             </SidebarMenu>
           </SidebarGroupContent>
