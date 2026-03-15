@@ -40,8 +40,39 @@ from amelia.server.models.responses import (
     WorkflowListResponse,
     WorkflowSummary,
 )
-from amelia.server.models.state import WorkflowStatus
+from amelia.server.models.state import ServerExecutionState, WorkflowStatus
+from amelia.server.models.tokens import TokenSummary
 from amelia.server.orchestrator.service import OrchestratorService
+
+
+def _to_workflow_summary(
+    workflow: ServerExecutionState, token_summary: TokenSummary | None
+) -> WorkflowSummary:
+    """Convert a workflow and its token summary into a WorkflowSummary response.
+
+    Args:
+        workflow: The workflow execution state.
+        token_summary: Aggregated token usage for this workflow, or None.
+
+    Returns:
+        WorkflowSummary suitable for list responses.
+    """
+    return WorkflowSummary(
+        id=workflow.id,
+        issue_id=workflow.issue_id,
+        worktree_path=workflow.worktree_path,
+        profile=workflow.profile_id,
+        status=workflow.workflow_status,
+        created_at=workflow.created_at,
+        started_at=workflow.started_at,
+        total_cost_usd=token_summary.total_cost_usd if token_summary else None,
+        total_tokens=(
+            token_summary.total_input_tokens + token_summary.total_output_tokens
+            if token_summary
+            else None
+        ),
+        total_duration_ms=token_summary.total_duration_ms if token_summary else None,
+    )
 
 
 # Create the workflows router
@@ -204,35 +235,10 @@ async def list_workflows(
     workflow_ids = [w.id for w in workflows]
     token_summaries = await repository.get_token_summaries_batch(workflow_ids)
 
-    # Build workflow summaries with token data
-    workflow_summaries = []
-    for w in workflows:
-        token_summary = token_summaries.get(w.id)
-        workflow_summaries.append(
-            WorkflowSummary(
-                id=w.id,
-                issue_id=w.issue_id,
-                worktree_path=w.worktree_path,
-                profile=w.profile_id,
-                status=w.workflow_status,
-                created_at=w.created_at,
-                started_at=w.started_at,
-                total_cost_usd=token_summary.total_cost_usd if token_summary else None,
-                total_tokens=(
-                    token_summary.total_input_tokens + token_summary.total_output_tokens
-                    if token_summary
-                    else None
-                ),
-                total_duration_ms=token_summary.total_duration_ms if token_summary else None,
-                pipeline_type=w.workflow_type,
-                pr_number=w.issue_cache.get("pr_number") if w.issue_cache else None,
-                pr_title=w.issue_cache.get("pr_title") if w.issue_cache else None,
-                pr_comment_count=w.issue_cache.get("comment_count") if w.issue_cache else None,
-            )
-        )
-
     return WorkflowListResponse(
-        workflows=workflow_summaries,
+        workflows=[
+            _to_workflow_summary(w, token_summaries.get(w.id)) for w in workflows
+        ],
         total=total,
         cursor=next_cursor,
         has_more=has_more,
@@ -264,35 +270,10 @@ async def list_active_workflows(
     workflow_ids = [w.id for w in workflows]
     token_summaries = await repository.get_token_summaries_batch(workflow_ids)
 
-    # Build workflow summaries with token data
-    workflow_summaries = []
-    for w in workflows:
-        token_summary = token_summaries.get(w.id)
-        workflow_summaries.append(
-            WorkflowSummary(
-                id=w.id,
-                issue_id=w.issue_id,
-                worktree_path=w.worktree_path,
-                profile=w.profile_id,
-                status=w.workflow_status,
-                created_at=w.created_at,
-                started_at=w.started_at,
-                total_cost_usd=token_summary.total_cost_usd if token_summary else None,
-                total_tokens=(
-                    token_summary.total_input_tokens + token_summary.total_output_tokens
-                    if token_summary
-                    else None
-                ),
-                total_duration_ms=token_summary.total_duration_ms if token_summary else None,
-                pipeline_type=w.workflow_type,
-                pr_number=w.issue_cache.get("pr_number") if w.issue_cache else None,
-                pr_title=w.issue_cache.get("pr_title") if w.issue_cache else None,
-                pr_comment_count=w.issue_cache.get("comment_count") if w.issue_cache else None,
-            )
-        )
-
     return WorkflowListResponse(
-        workflows=workflow_summaries,
+        workflows=[
+            _to_workflow_summary(w, token_summaries.get(w.id)) for w in workflows
+        ],
         total=len(workflows),
         has_more=False,
     )

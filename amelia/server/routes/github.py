@@ -99,15 +99,7 @@ async def list_github_issues(
         HTTPException: 400 if profile doesn't use github tracker,
             404 if profile not found, 500 if gh CLI fails.
     """
-    resolved = await profile_repo.get_profile(profile)
-    if resolved is None:
-        raise HTTPException(status_code=404, detail=f"Profile '{profile}' not found")
-
-    if resolved.tracker != TrackerType.GITHUB:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Profile '{profile}' uses tracker '{resolved.tracker}', not GitHub",
-        )
+    resolved = await _resolve_github_profile(profile, profile_repo)
 
     cmd = [
         "gh",

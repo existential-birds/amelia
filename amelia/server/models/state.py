@@ -44,12 +44,7 @@ VALID_TRANSITIONS: dict[WorkflowStatus, set[WorkflowStatus]] = {
 
 
 class InvalidStateTransitionError(ValueError):
-    """Raised when attempting an invalid workflow state transition.
-
-    Attributes:
-        current: The current workflow status.
-        target: The attempted target status.
-    """
+    """Raised when attempting an invalid workflow state transition."""
 
     def __init__(self, current: WorkflowStatus, target: WorkflowStatus):
         """Initialize InvalidStateTransitionError.
@@ -82,13 +77,6 @@ class PlanCache(BaseModel):
 
     This model stores plan-related fields from ImplementationState
     for efficient access without deserializing the full checkpoint.
-
-    Attributes:
-        goal: The high-level goal for the implementation.
-        plan_markdown: The full plan in markdown format.
-        plan_path: Path to the plan file on disk.
-        total_tasks: Total number of tasks in the plan.
-        current_task_index: Index of the current task being executed.
     """
 
     goal: str | None = None
@@ -147,15 +135,6 @@ class ServerExecutionState(BaseModel):
 
     This model stores workflow metadata for persistence and tracking.
     The actual ImplementationState lives in LangGraph checkpoints.
-
-    Attributes:
-        id: Unique workflow identifier (UUID).
-        issue_id: Issue being worked on.
-        worktree_path: Absolute path to git worktree root.
-        workflow_status: Current workflow status.
-        started_at: When workflow started.
-        completed_at: When workflow ended (success or failure).
-        failure_reason: Error message when status is "failed".
     """
 
     id: uuid.UUID = Field(..., description="Unique workflow identifier")

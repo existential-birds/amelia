@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -11,291 +11,139 @@ from amelia.server.models.tokens import TokenSummary
 
 
 class CreateWorkflowResponse(BaseModel):
-    """Response from creating a new workflow.
+    """Response from creating a new workflow."""
 
-    Attributes:
-        id: Unique workflow identifier
-        status: Initial workflow status
-        message: Human-readable status message
-    """
-
-    id: Annotated[uuid.UUID, Field(description="Unique workflow identifier")]
-    status: Annotated[WorkflowStatus, Field(description="Initial workflow status")]
-    message: Annotated[str, Field(description="Human-readable status message")]
+    id: uuid.UUID = Field(description="Unique workflow identifier")
+    status: WorkflowStatus = Field(description="Initial workflow status")
+    message: str = Field(description="Human-readable status message")
 
 
 class WorkflowSummary(BaseModel):
-    """Summary of a workflow for list views.
+    """Summary of a workflow for list views."""
 
-    Attributes:
-        id: Unique workflow identifier
-        issue_id: Issue identifier
-        worktree_path: Absolute path to worktree
-        profile: Profile name used for this workflow (optional)
-        status: Current workflow status
-        started_at: When the workflow was started (optional)
-        total_cost_usd: Total cost in USD (optional)
-        total_tokens: Total tokens consumed (optional)
-        total_duration_ms: Total execution duration in milliseconds (optional)
-    """
-
-    id: Annotated[uuid.UUID, Field(description="Unique workflow identifier")]
-    issue_id: Annotated[str, Field(description="Issue identifier")]
-    worktree_path: Annotated[str, Field(description="Absolute path to worktree")]
-    profile: Annotated[
-        str | None,
-        Field(default=None, description="Profile name used for this workflow"),
-    ] = None
-    status: Annotated[WorkflowStatus, Field(description="Current workflow status")]
-    created_at: Annotated[
-        datetime,
-        Field(description="When the workflow was created/queued"),
-    ]
-    started_at: Annotated[
-        datetime | None,
-        Field(default=None, description="When the workflow was started"),
-    ] = None
-    total_cost_usd: Annotated[
-        float | None,
-        Field(default=None, description="Total cost in USD"),
-    ] = None
-    total_tokens: Annotated[
-        int | None,
-        Field(
-            default=None,
-            description="Total combined tokens (sum of input_tokens + output_tokens)",
-        ),
-    ] = None
-    total_duration_ms: Annotated[
-        int | None,
-        Field(default=None, description="Total execution duration in milliseconds"),
-    ] = None
-    pipeline_type: Annotated[
-        str | None,
-        Field(default=None, description="Pipeline type (e.g. full, review, pr_auto_fix)"),
-    ] = None
-    pr_number: Annotated[
-        int | None,
-        Field(default=None, description="PR number for PR Fix workflows"),
-    ] = None
-    pr_title: Annotated[
-        str | None,
-        Field(default=None, description="PR title for PR Fix workflows"),
-    ] = None
-    pr_comment_count: Annotated[
-        int | None,
-        Field(default=None, description="Comment count for PR Fix workflows"),
-    ] = None
+    id: uuid.UUID = Field(description="Unique workflow identifier")
+    issue_id: str = Field(description="Issue identifier")
+    worktree_path: str = Field(description="Absolute path to worktree")
+    profile: str | None = Field(default=None, description="Profile name used for this workflow")
+    status: WorkflowStatus = Field(description="Current workflow status")
+    created_at: datetime = Field(description="When the workflow was created/queued")
+    started_at: datetime | None = Field(default=None, description="When the workflow was started")
+    total_cost_usd: float | None = Field(default=None, description="Total cost in USD")
+    total_tokens: int | None = Field(
+        default=None,
+        description="Total combined tokens (sum of input_tokens + output_tokens)",
+    )
+    total_duration_ms: int | None = Field(
+        default=None, description="Total execution duration in milliseconds"
+    )
+    pipeline_type: str | None = Field(
+        default=None, description="Pipeline type (e.g. full, review, pr_auto_fix)"
+    )
+    pr_number: int | None = Field(default=None, description="PR number for PR Fix workflows")
+    pr_title: str | None = Field(default=None, description="PR title for PR Fix workflows")
+    pr_comment_count: int | None = Field(
+        default=None, description="Comment count for PR Fix workflows"
+    )
 
 
 class WorkflowListResponse(BaseModel):
-    """Response containing a list of workflows.
+    """Response containing a list of workflows."""
 
-    Attributes:
-        workflows: List of workflow summaries
-        total: Total number of workflows matching query
-        cursor: Pagination cursor for next page (optional)
-        has_more: Whether more results are available
-    """
-
-    workflows: Annotated[
-        list[WorkflowSummary],
-        Field(description="List of workflow summaries"),
-    ]
-    total: Annotated[int, Field(description="Total number of workflows")]
-    cursor: Annotated[
-        str | None,
-        Field(default=None, description="Pagination cursor for next page"),
-    ] = None
-    has_more: Annotated[
-        bool,
-        Field(default=False, description="Whether more results are available"),
-    ] = False
+    workflows: list[WorkflowSummary] = Field(description="List of workflow summaries")
+    total: int = Field(description="Total number of workflows")
+    cursor: str | None = Field(default=None, description="Pagination cursor for next page")
+    has_more: bool = Field(default=False, description="Whether more results are available")
 
 
 class WorkflowDetailResponse(BaseModel):
-    """Detailed workflow information.
+    """Detailed workflow information."""
 
-    Attributes:
-        id: Unique workflow identifier
-        issue_id: Issue identifier
-        worktree_path: Absolute path to worktree
-        status: Current workflow status
-        created_at: When the workflow was created/queued
-        started_at: When the workflow was started (optional)
-        completed_at: When the workflow ended (optional)
-        failure_reason: Error message when failed (optional)
-        goal: High-level goal for agentic execution (optional)
-        plan_markdown: Full plan markdown content from Architect (optional)
-        plan_path: Path where the plan markdown was saved (optional)
-        token_usage: Token usage summary (optional)
-        recent_events: Recent workflow events
-        final_response: Final response from the agent when complete (optional)
-    """
-
-    id: Annotated[uuid.UUID, Field(description="Unique workflow identifier")]
-    issue_id: Annotated[str, Field(description="Issue identifier")]
-    worktree_path: Annotated[str, Field(description="Absolute path to worktree")]
-    status: Annotated[WorkflowStatus, Field(description="Current workflow status")]
-    created_at: Annotated[
-        datetime,
-        Field(description="When the workflow was created/queued"),
-    ]
-    started_at: Annotated[
-        datetime | None,
-        Field(default=None, description="When the workflow was started"),
-    ] = None
-    completed_at: Annotated[
-        datetime | None,
-        Field(default=None, description="When the workflow ended"),
-    ] = None
-    failure_reason: Annotated[
-        str | None,
-        Field(default=None, description="Error message when failed"),
-    ] = None
-    goal: Annotated[
-        str | None,
-        Field(default=None, description="High-level goal for agentic execution"),
-    ] = None
-    plan_markdown: Annotated[
-        str | None,
-        Field(default=None, description="Full plan markdown content from Architect"),
-    ] = None
-    plan_path: Annotated[
-        str | None,
-        Field(default=None, description="Path where the plan markdown was saved"),
-    ] = None
-    token_usage: Annotated[
-        TokenSummary | None,
-        Field(default=None, description="Token usage summary"),
-    ] = None
-    recent_events: Annotated[
-        list[dict[str, Any]],
-        Field(description="Recent workflow events"),
-    ]
-    final_response: Annotated[
-        str | None,
-        Field(default=None, description="Final response from the agent"),
-    ] = None
-    pipeline_type: Annotated[
-        str | None,
-        Field(default=None, description="Pipeline type (e.g. full, review, pr_auto_fix)"),
-    ] = None
-    pr_number: Annotated[
-        int | None,
-        Field(default=None, description="PR number for PR Fix workflows"),
-    ] = None
-    pr_title: Annotated[
-        str | None,
-        Field(default=None, description="PR title for PR Fix workflows"),
-    ] = None
-    pr_comment_count: Annotated[
-        int | None,
-        Field(default=None, description="Comment count for PR Fix workflows"),
-    ] = None
-    pr_comments: Annotated[
-        list[dict[str, Any]] | None,
-        Field(default=None, description="PR comment resolution data from issue_cache"),
-    ] = None
+    id: uuid.UUID = Field(description="Unique workflow identifier")
+    issue_id: str = Field(description="Issue identifier")
+    worktree_path: str = Field(description="Absolute path to worktree")
+    status: WorkflowStatus = Field(description="Current workflow status")
+    created_at: datetime = Field(description="When the workflow was created/queued")
+    started_at: datetime | None = Field(default=None, description="When the workflow was started")
+    completed_at: datetime | None = Field(default=None, description="When the workflow ended")
+    failure_reason: str | None = Field(default=None, description="Error message when failed")
+    goal: str | None = Field(default=None, description="High-level goal for agentic execution")
+    plan_markdown: str | None = Field(
+        default=None, description="Full plan markdown content from Architect"
+    )
+    plan_path: str | None = Field(
+        default=None, description="Path where the plan markdown was saved"
+    )
+    token_usage: TokenSummary | None = Field(default=None, description="Token usage summary")
+    recent_events: list[dict[str, Any]] = Field(description="Recent workflow events")
+    final_response: str | None = Field(
+        default=None, description="Final response from the agent"
+    )
+    pipeline_type: str | None = Field(
+        default=None, description="Pipeline type (e.g. full, review, pr_auto_fix)"
+    )
+    pr_number: int | None = Field(default=None, description="PR number for PR Fix workflows")
+    pr_title: str | None = Field(default=None, description="PR title for PR Fix workflows")
+    pr_comment_count: int | None = Field(
+        default=None, description="Comment count for PR Fix workflows"
+    )
+    pr_comments: list[dict[str, Any]] | None = Field(
+        default=None, description="PR comment resolution data from issue_cache"
+    )
 
 
 class ActionResponse(BaseModel):
-    """Response for workflow action endpoints (approve/reject/cancel).
+    """Response for workflow action endpoints (approve/reject/cancel)."""
 
-    Attributes:
-        status: Action status (approved, rejected, cancelled)
-        workflow_id: ID of the affected workflow
-    """
-
-    status: Annotated[str, Field(description="Action status")]
-    workflow_id: Annotated[uuid.UUID, Field(description="Workflow ID")]
+    status: str = Field(description="Action status")
+    workflow_id: uuid.UUID = Field(description="Workflow ID")
 
 
 class ErrorResponse(BaseModel):
-    """Error response for failed requests.
+    """Error response for failed requests."""
 
-    Attributes:
-        error: Human-readable error message
-        code: Machine-readable error code
-        details: Optional additional error details
-    """
-
-    error: Annotated[str, Field(description="Human-readable error message")]
-    code: Annotated[str, Field(description="Machine-readable error code")]
-    details: Annotated[
-        dict[str, Any] | None,
-        Field(default=None, description="Optional additional error details"),
-    ] = None
+    error: str = Field(description="Human-readable error message")
+    code: str = Field(description="Machine-readable error code")
+    details: dict[str, Any] | None = Field(
+        default=None, description="Optional additional error details"
+    )
 
 
 class BatchStartResponse(BaseModel):
-    """Response from batch start operation.
+    """Response from batch start operation."""
 
-    Attributes:
-        started: Workflow IDs that were successfully started.
-        errors: Map of workflow_id to error message for failures.
-    """
-
-    started: Annotated[
-        list[str],
-        Field(description="Workflow IDs that were successfully started"),
-    ]
-    errors: Annotated[
-        dict[str, str],
-        Field(description="Map of workflow_id to error message for failures"),
-    ]
+    started: list[str] = Field(description="Workflow IDs that were successfully started")
+    errors: dict[str, str] = Field(
+        description="Map of workflow_id to error message for failures"
+    )
 
 
 class FileEntry(BaseModel):
-    """A file entry in a directory listing.
+    """A file entry in a directory listing."""
 
-    Attributes:
-        name: Filename.
-        relative_path: Path relative to working_dir.
-        size_bytes: File size in bytes.
-        modified_at: ISO 8601 modification timestamp.
-    """
-
-    name: Annotated[str, Field(description="Filename")]
-    relative_path: Annotated[str, Field(description="Path relative to working_dir")]
-    size_bytes: Annotated[int, Field(description="File size in bytes")]
-    modified_at: Annotated[str, Field(description="ISO 8601 modification timestamp")]
+    name: str = Field(description="Filename")
+    relative_path: str = Field(description="Path relative to working_dir")
+    size_bytes: int = Field(description="File size in bytes")
+    modified_at: str = Field(description="ISO 8601 modification timestamp")
 
 
 class FileListResponse(BaseModel):
-    """Response from listing files in a directory.
+    """Response from listing files in a directory."""
 
-    Attributes:
-        files: List of files.
-        directory: Relative directory that was listed.
-    """
-
-    files: Annotated[list[FileEntry], Field(description="List of files")]
-    directory: Annotated[str, Field(description="Relative directory that was listed")]
+    files: list[FileEntry] = Field(description="List of files")
+    directory: str = Field(description="Relative directory that was listed")
 
 
 class SetPlanResponse(BaseModel):
-    """Response from setting an external plan on a workflow.
+    """Response from setting an external plan on a workflow."""
 
-    Attributes:
-        status: 'ready' when plan is valid, 'invalid' when validation fails.
-        total_tasks: Number of tasks in the plan.
-        goal: Extracted goal from the plan.
-        key_files: Key files found in the plan.
-        validation_issues: Validation issues (present when status='invalid').
-    """
-
-    status: Annotated[
-        Literal["ready", "invalid"],
-        Field(description="'ready' when valid, 'invalid' when validation fails"),
-    ]
-    total_tasks: Annotated[int, Field(description="Number of tasks in the plan")]
-    goal: Annotated[str, Field(description="Extracted goal from the plan")]
-    key_files: Annotated[
-        list[str],
-        Field(default_factory=list, description="Key files found in the plan"),
-    ]
-    validation_issues: Annotated[
-        list[str] | None,
-        Field(default=None, description="Validation issues (present when status='invalid')"),
-    ] = None
+    status: Literal["ready", "invalid"] = Field(
+        description="'ready' when valid, 'invalid' when validation fails"
+    )
+    total_tasks: int = Field(description="Number of tasks in the plan")
+    goal: str = Field(description="Extracted goal from the plan")
+    key_files: list[str] = Field(
+        default_factory=list, description="Key files found in the plan"
+    )
+    validation_issues: list[str] | None = Field(
+        default=None, description="Validation issues (present when status='invalid')"
+    )

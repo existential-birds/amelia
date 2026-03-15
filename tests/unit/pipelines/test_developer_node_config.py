@@ -213,7 +213,7 @@ async def test_call_developer_node_updates_base_commit(
 
         with (
             patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
-            patch("amelia.pipelines.nodes.get_current_commit", new_callable=AsyncMock, return_value=current_head),
+            patch("amelia.pipelines.nodes._resolve_commit", new_callable=AsyncMock, return_value=current_head),
         ):
             result = await call_developer_node(state, cast(RunnableConfig, config))
 
@@ -266,7 +266,7 @@ async def test_call_developer_node_keeps_base_commit_on_git_failure(
 
         with (
             patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
-            patch("amelia.pipelines.nodes.get_current_commit", new_callable=AsyncMock, return_value=None),
+            patch("amelia.pipelines.nodes._resolve_commit", new_callable=AsyncMock, return_value=None),
         ):
             result = await call_developer_node(state, cast(RunnableConfig, config))
 

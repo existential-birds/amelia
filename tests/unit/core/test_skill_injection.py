@@ -70,14 +70,11 @@ class TestSkillInjection:
                 new_callable=AsyncMock,
             ),
             patch(
-                "amelia.pipelines.nodes._get_changed_files",
-                new_callable=AsyncMock,
-                return_value=["src/app.py", "src/routes.py"],
-            ),
-            patch(
-                "amelia.pipelines.nodes._get_diff_content",
-                new_callable=AsyncMock,
-                return_value="from fastapi import FastAPI\n",
+                "amelia.pipelines.nodes._run_git_command",
+                side_effect=lambda cmd, *a, **kw: (
+                    "src/app.py\nsrc/routes.py\n" if "--name-only" in cmd
+                    else "from fastapi import FastAPI\n"
+                ),
             ),
         ):
             mock_reviewer = MagicMock()
@@ -154,14 +151,10 @@ class TestSkillInjection:
                 new_callable=AsyncMock,
             ),
             patch(
-                "amelia.pipelines.nodes._get_changed_files",
-                new_callable=AsyncMock,
-                return_value=["app.py"],
-            ),
-            patch(
-                "amelia.pipelines.nodes._get_diff_content",
-                new_callable=AsyncMock,
-                return_value="",
+                "amelia.pipelines.nodes._run_git_command",
+                side_effect=lambda cmd, *a, **kw: (
+                    "app.py\n" if "--name-only" in cmd else ""
+                ),
             ),
         ):
             mock_reviewer = MagicMock()
@@ -214,12 +207,7 @@ class TestSkillInjection:
                 new_callable=AsyncMock,
             ),
             patch(
-                "amelia.pipelines.nodes._get_changed_files",
-                new_callable=AsyncMock,
-                return_value=[],
-            ),
-            patch(
-                "amelia.pipelines.nodes._get_diff_content",
+                "amelia.pipelines.nodes._run_git_command",
                 new_callable=AsyncMock,
                 return_value="",
             ),

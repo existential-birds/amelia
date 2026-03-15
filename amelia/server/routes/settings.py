@@ -1,5 +1,6 @@
 # amelia/server/routes/settings.py
 """API routes for server settings and profiles."""
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,35 @@ from amelia.server.dependencies import (
 
 
 router = APIRouter(prefix="/api", tags=["settings"])
+
+
+def _validate_repo_root_absolute(v: str | None) -> str | None:
+    """Validate that repo_root is an absolute path when provided.
+
+    Args:
+        v: Repository root path or None.
+
+    Returns:
+        The validated absolute path or None.
+    """
+    if v is not None and not Path(v).is_absolute():
+        raise ValueError("repo_root must be an absolute path")
+    return v
+
+
+def _validate_required_agents(agents: Mapping[str, object] | None) -> None:
+    """Validate that all required agents are present when agents are provided.
+
+    Args:
+        agents: Agent configuration dict or None.
+
+    Raises:
+        ValueError: If required agents are missing.
+    """
+    if agents is not None:
+        missing = REQUIRED_AGENTS - agents.keys()
+        if missing:
+            raise ValueError(f"Missing required agents: {', '.join(sorted(missing))}")
 
 
 # Response models
@@ -104,24 +134,13 @@ class ProfileCreate(BaseModel):
     @field_validator("repo_root", mode="after")
     @classmethod
     def validate_repo_root_absolute(cls, v: str) -> str:
-        """Validate that repo_root is an absolute path.
-
-        Args:
-            v: Repository root path.
-
-        Returns:
-            The validated absolute path.
-        """
-        if not Path(v).is_absolute():
-            raise ValueError("repo_root must be an absolute path")
-        return v
+        """Validate that repo_root is an absolute path."""
+        return _validate_repo_root_absolute(v)  # type: ignore[return-value]
 
     @model_validator(mode="after")
     def validate_required_agents(self) -> "ProfileCreate":
         """Validate that all required agents are present."""
-        missing = REQUIRED_AGENTS - self.agents.keys()
-        if missing:
-            raise ValueError(f"Missing required agents: {', '.join(sorted(missing))}")
+        _validate_required_agents(self.agents)
         return self
 
 
@@ -142,27 +161,13 @@ class ProfileUpdate(BaseModel):
     @field_validator("repo_root", mode="after")
     @classmethod
     def validate_repo_root_absolute(cls, v: str | None) -> str | None:
-        """Validate that repo_root is an absolute path when provided.
-
-        Args:
-            v: Repository root path or None.
-
-        Returns:
-            The validated absolute path or None.
-        """
-        if v is not None and not Path(v).is_absolute():
-            raise ValueError("repo_root must be an absolute path")
-        return v
+        """Validate that repo_root is an absolute path when provided."""
+        return _validate_repo_root_absolute(v)
 
     @model_validator(mode="after")
     def validate_required_agents(self) -> "ProfileUpdate":
         """Validate that all required agents are present when agents are provided."""
-        if self.agents is not None:
-            missing = REQUIRED_AGENTS - self.agents.keys()
-            if missing:
-                raise ValueError(
-                    f"Missing required agents: {', '.join(sorted(missing))}"
-                )
+        _validate_required_agents(self.agents)
         return self
 
 

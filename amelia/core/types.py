@@ -402,11 +402,7 @@ def collect_rejected_comments(reviews: list[ReviewResult]) -> list[str]:
     Returns:
         Flat list of comment strings from rejected reviews.
     """
-    comments: list[str] = []
-    for review in reviews:
-        if not review.approved:
-            comments.extend(review.comments)
-    return comments
+    return [c for review in reviews if not review.approved for c in review.comments]
 
 
 def collect_all_comments(reviews: list[ReviewResult]) -> list[str]:
@@ -418,10 +414,7 @@ def collect_all_comments(reviews: list[ReviewResult]) -> list[str]:
     Returns:
         Flat list of all comment strings.
     """
-    comments: list[str] = []
-    for review in reviews:
-        comments.extend(review.comments)
-    return comments
+    return [c for review in reviews for c in review.comments]
 
 
 class PlanValidationResult(BaseModel):

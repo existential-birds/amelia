@@ -89,11 +89,7 @@ class ProfileRepository:
             asyncpg.UniqueViolationError: If profile name already exists.
         """
         agents_data = {
-            name: {
-                "driver": config.driver,
-                "model": config.model,
-                "options": config.options,
-            }
+            name: config.model_dump()
             for name, config in profile.agents.items()
         }
 

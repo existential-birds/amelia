@@ -38,7 +38,7 @@ def _check_dependencies() -> None:
 _check_dependencies()
 
 import os
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -116,19 +116,6 @@ from amelia.server.routes.websocket import connection_manager
 from amelia.server.routes.workflows import configure_exception_handlers
 from amelia.server.services.brainstorm import BrainstormService
 from amelia.services.github_pr import GitHubPRService
-
-
-def create_driver_cleanup_callback() -> Callable[[str, str], Awaitable[bool]]:
-    """Create async callback for cleaning up driver sessions.
-
-    Returns:
-        Async callback that takes (driver_type, driver_session_id) and returns bool.
-    """
-
-    async def cleanup(driver_type: str, driver_session_id: str) -> bool:
-        return await cleanup_driver_session(driver_type, driver_session_id)
-
-    return cleanup
 
 
 @asynccontextmanager
@@ -219,7 +206,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     brainstorm_service = BrainstormService(
         repository=brainstorm_repo,
         event_bus=event_bus,
-        driver_cleanup=create_driver_cleanup_callback(),
+        driver_cleanup=cleanup_driver_session,
         profile_repo=profile_repo,
     )
     app.state.brainstorm_service = brainstorm_service

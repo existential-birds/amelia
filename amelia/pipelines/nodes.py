@@ -33,18 +33,15 @@ async def _resolve_commit(
     sandbox_provider: "SandboxProvider | None" = None,
 ) -> str | None:
     """Resolve the current HEAD commit, preferring the sandbox repo when available."""
-    if sandbox_provider is not None:
-        try:
-            lines: list[str] = []
-            async for line in sandbox_provider.exec_stream(
-                ["git", "rev-parse", "HEAD"],
-            ):
-                lines.append(line.strip())
-            sha = "".join(lines).strip()
-            if sha:
-                return sha
-        except (OSError, RuntimeError):
-            logger.warning("Failed to resolve commit from sandbox, falling back to host")
+    sha = (
+        await _run_git_command(
+            ["git", "rev-parse", "HEAD"],
+            profile_repo_root,
+            sandbox_provider,
+        )
+    ).strip()
+    if sha:
+        return sha
     return await get_current_commit(cwd=profile_repo_root)
 
 
@@ -91,39 +88,6 @@ async def _run_git_command(
             stderr=stderr.decode().strip()[:500],
         )
     return stdout.decode()
-
-
-async def _get_changed_files(
-    base_commit: str,
-    repo_root: str,
-    sandbox_provider: "SandboxProvider | None" = None,
-) -> list[str]:
-    """Get list of changed file paths since base_commit.
-
-    Uses sandbox when available, falls back to local subprocess.
-    """
-    output = await _run_git_command(
-        ["git", "diff", "--name-only", base_commit, "HEAD"],
-        repo_root,
-        sandbox_provider,
-    )
-    return [line for line in output.splitlines() if line.strip()]
-
-
-async def _get_diff_content(
-    base_commit: str,
-    repo_root: str,
-    sandbox_provider: "SandboxProvider | None" = None,
-) -> str:
-    """Get unified diff content since base_commit for import scanning.
-
-    Uses sandbox when available, falls back to local subprocess.
-    """
-    return await _run_git_command(
-        ["git", "diff", base_commit, "HEAD"],
-        repo_root,
-        sandbox_provider,
-    )
 
 
 async def _save_token_usage(
@@ -361,10 +325,19 @@ async def call_reviewer_node(
             agent=agent_name,
         )
 
-    changed_files, diff_content = await asyncio.gather(
-        _get_changed_files(base_commit, nc.profile.repo_root, nc.sandbox_provider),
-        _get_diff_content(base_commit, nc.profile.repo_root, nc.sandbox_provider),
+    changed_files_raw, diff_content = await asyncio.gather(
+        _run_git_command(
+            ["git", "diff", "--name-only", base_commit, "HEAD"],
+            nc.profile.repo_root,
+            nc.sandbox_provider,
+        ),
+        _run_git_command(
+            ["git", "diff", base_commit, "HEAD"],
+            nc.profile.repo_root,
+            nc.sandbox_provider,
+        ),
     )
+    changed_files = [f for f in changed_files_raw.splitlines() if f.strip()]
     tags = detect_stack(changed_files, diff_content)
 
     logger.info(

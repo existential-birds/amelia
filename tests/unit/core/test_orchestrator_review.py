@@ -39,12 +39,7 @@ def _mock_skill_detection():
     """Mock skill detection/loading for all review node tests."""
     with (
         patch(
-            "amelia.pipelines.nodes._get_changed_files",
-            new_callable=AsyncMock,
-            return_value=[],
-        ),
-        patch(
-            "amelia.pipelines.nodes._get_diff_content",
+            "amelia.pipelines.nodes._run_git_command",
             new_callable=AsyncMock,
             return_value="",
         ),
@@ -293,16 +288,15 @@ class TestCallReviewNodeMultipleReviewTypes:
                 return general_result, "session-1"
             return security_result, "session-2"
 
+        async def mock_git_cmd(cmd, repo_root, sandbox_provider=None):
+            if "--name-only" in cmd:
+                return "app.py\n"
+            return "import os"
+
         with (
             patch(
-                "amelia.pipelines.nodes._get_changed_files",
-                new_callable=AsyncMock,
-                return_value=["app.py"],
-            ),
-            patch(
-                "amelia.pipelines.nodes._get_diff_content",
-                new_callable=AsyncMock,
-                return_value="import os",
+                "amelia.pipelines.nodes._run_git_command",
+                side_effect=mock_git_cmd,
             ),
             patch("amelia.pipelines.nodes.detect_stack", return_value={"python"}),
             patch("amelia.pipelines.nodes.load_skills", return_value="# Guidelines") as mock_load,
@@ -369,12 +363,7 @@ class TestCallReviewNodeMultipleReviewTypes:
 
         with (
             patch(
-                "amelia.pipelines.nodes._get_changed_files",
-                new_callable=AsyncMock,
-                return_value=[],
-            ),
-            patch(
-                "amelia.pipelines.nodes._get_diff_content",
+                "amelia.pipelines.nodes._run_git_command",
                 new_callable=AsyncMock,
                 return_value="",
             ),

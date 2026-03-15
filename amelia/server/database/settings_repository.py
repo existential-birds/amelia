@@ -107,13 +107,6 @@ class SettingsRepository:
         Returns:
             ServerSettings instance.
         """
-        return ServerSettings(
-            log_retention_days=row["log_retention_days"],
-            checkpoint_retention_days=row["checkpoint_retention_days"],
-            websocket_idle_timeout_seconds=row["websocket_idle_timeout_seconds"],
-            workflow_start_timeout_seconds=row["workflow_start_timeout_seconds"],
-            max_concurrent=row["max_concurrent"],
-            pr_polling_enabled=row["pr_polling_enabled"],
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-        )
+        data = dict(row)
+        data.pop("id", None)
+        return ServerSettings(**data)

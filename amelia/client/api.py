@@ -22,13 +22,9 @@ from amelia.core.types import PRAutoFixConfig, PRReviewComment, PRSummary
 class AmeliaClientError(Exception):
     """Base exception for API client errors."""
 
-    pass
-
 
 class ServerUnreachableError(AmeliaClientError):
     """Raised when server cannot be reached."""
-
-    pass
 
 
 class WorkflowConflictError(AmeliaClientError):
@@ -58,13 +54,9 @@ class RateLimitError(AmeliaClientError):
 class WorkflowNotFoundError(AmeliaClientError):
     """Raised when workflow is not found (404)."""
 
-    pass
-
 
 class InvalidRequestError(AmeliaClientError):
     """Raised when request validation fails (400/422)."""
-
-    pass
 
 
 class TriggerPRAutoFixResponse(BaseModel):
@@ -135,6 +127,32 @@ class AmeliaClient:
                 f"Cannot connect to Amelia server at {self.base_url}. "
                 f"Is the server running? Try: amelia server"
             ) from e
+
+    def _handle_action_response(
+        self, response: httpx.Response, workflow_id: str | uuid.UUID
+    ) -> None:
+        """Handle response for workflow action endpoints (approve/reject/cancel/resume).
+
+        Args:
+            response: HTTP response to check.
+            workflow_id: Workflow ID for error messages.
+
+        Raises:
+            WorkflowNotFoundError: If workflow not found (404).
+            InvalidRequestError: If action invalid (400/409).
+            httpx.HTTPStatusError: For other non-2xx status codes.
+        """
+        if response.status_code == 200:
+            return
+        elif response.status_code == 404:
+            raise WorkflowNotFoundError(f"Workflow {workflow_id} not found")
+        elif response.status_code in (400, 409):
+            data = response.json()
+            raise InvalidRequestError(
+                data.get("detail", "Invalid request")
+            )
+        else:
+            response.raise_for_status()
 
     def _handle_workflow_create_errors(self, response: httpx.Response) -> None:
         """Handle error responses for workflow creation endpoints.
@@ -218,7 +236,6 @@ class AmeliaClient:
 
             self._handle_workflow_create_errors(response)
 
-        # This should never be reached, but mypy needs it
         raise RuntimeError("Unexpected code path in create_workflow")
 
     async def create_review_workflow(
@@ -260,7 +277,6 @@ class AmeliaClient:
 
             self._handle_workflow_create_errors(response)
 
-        # This should never be reached, but mypy needs it
         raise RuntimeError("Unexpected code path in create_review_workflow")
 
     async def approve_workflow(self, workflow_id: str | uuid.UUID) -> None:
@@ -278,15 +294,7 @@ class AmeliaClient:
             response = await client.post(
                 f"{self.base_url}/api/workflows/{workflow_id}/approve"
             )
-
-            if response.status_code == 200:
-                return
-            elif response.status_code == 404:
-                raise WorkflowNotFoundError(f"Workflow {workflow_id} not found")
-            elif response.status_code == 400:
-                raise InvalidRequestError(response.json().get("detail", "Invalid request"))
-            else:
-                response.raise_for_status()
+            self._handle_action_response(response, workflow_id)
 
     async def reject_workflow(self, workflow_id: str | uuid.UUID, reason: str) -> None:
         """Reject a workflow plan.
@@ -308,14 +316,7 @@ class AmeliaClient:
                 json=request.model_dump(),
             )
 
-            if response.status_code == 200:
-                return
-            elif response.status_code == 404:
-                raise WorkflowNotFoundError(f"Workflow {workflow_id} not found")
-            elif response.status_code == 400:
-                raise InvalidRequestError(response.json().get("detail", "Invalid request"))
-            else:
-                response.raise_for_status()
+            self._handle_action_response(response, workflow_id)
 
     async def cancel_workflow(self, workflow_id: str | uuid.UUID) -> None:
         """Cancel an active workflow.
@@ -332,12 +333,7 @@ class AmeliaClient:
                 f"{self.base_url}/api/workflows/{workflow_id}/cancel"
             )
 
-            if response.status_code == 200:
-                return
-            elif response.status_code == 404:
-                raise WorkflowNotFoundError(f"Workflow {workflow_id} not found")
-            else:
-                response.raise_for_status()
+            self._handle_action_response(response, workflow_id)
 
     async def resume_workflow(self, workflow_id: str) -> None:
         """Resume a failed workflow from its last checkpoint.
@@ -355,15 +351,7 @@ class AmeliaClient:
                 f"{self.base_url}/api/workflows/{workflow_id}/resume"
             )
 
-            if response.status_code == 200:
-                return
-            elif response.status_code == 404:
-                raise WorkflowNotFoundError(f"Workflow {workflow_id} not found")
-            elif response.status_code == 409:
-                data = response.json()
-                raise InvalidRequestError(data.get("detail", "Cannot resume workflow"))
-            else:
-                response.raise_for_status()
+            self._handle_action_response(response, workflow_id)
 
     async def get_active_workflows(
         self, worktree_path: str | None = None
@@ -421,7 +409,6 @@ class AmeliaClient:
             else:
                 response.raise_for_status()
 
-        # This should never be reached, but mypy needs it
         raise RuntimeError("Unexpected code path in get_workflow")
 
     async def start_workflow(self, workflow_id: str) -> dict[str, str]:
@@ -455,7 +442,6 @@ class AmeliaClient:
             else:
                 response.raise_for_status()
 
-        # This should never be reached, but mypy needs it
         raise RuntimeError("Unexpected code path in start_workflow")
 
     async def start_batch(
@@ -492,7 +478,6 @@ class AmeliaClient:
             else:
                 response.raise_for_status()
 
-        # This should never be reached, but mypy needs it
         raise RuntimeError("Unexpected code path in start_batch")
 
     async def trigger_pr_autofix(
