@@ -12,6 +12,58 @@ from amelia.server.database import ServerSettings
 from amelia.server.dependencies import get_profile_repository, get_settings_repository
 from amelia.server.routes.settings import router
 
+# --- Shared constants ---
+
+_DEFAULT_TIMESTAMP = datetime(2024, 1, 1, 12, 0, 0)
+
+_REQUIRED_AGENTS = (
+    "architect", "developer", "reviewer",
+    "task_reviewer", "evaluator", "brainstormer", "plan_validator",
+)
+
+
+def _full_agents_json(
+    driver: str = "claude", model: str = "opus", **overrides: dict,
+) -> dict[str, dict[str, str]]:
+    """Build a complete agents JSON dict for API requests."""
+    base = {name: {"driver": driver, "model": model} for name in _REQUIRED_AGENTS}
+    base.update(overrides)
+    return base
+
+
+def _make_server_settings(**overrides) -> ServerSettings:
+    """Build ServerSettings with defaults."""
+    defaults = dict(
+        log_retention_days=30,
+        checkpoint_retention_days=0,
+        websocket_idle_timeout_seconds=300.0,
+        workflow_start_timeout_seconds=60.0,
+        max_concurrent=5,
+        created_at=_DEFAULT_TIMESTAMP,
+        updated_at=_DEFAULT_TIMESTAMP,
+    )
+    defaults.update(overrides)
+    return ServerSettings(**defaults)
+
+
+def make_test_profile(
+    name: str = "test-profile",
+    tracker: TrackerType = TrackerType.NOOP,
+    repo_root: str = "/path/to/repo",
+    driver: DriverType = DriverType.CLAUDE,
+    model: str = "opus",
+    **extra_profile_kwargs,
+) -> Profile:
+    """Create a Profile for testing with agents dict."""
+    agent_config = AgentConfig(driver=driver, model=model)
+    agents = {a: agent_config for a in _REQUIRED_AGENTS}
+    return Profile(
+        name=name, tracker=tracker, repo_root=repo_root, agents=agents,
+        **extra_profile_kwargs,
+    )
+
+
+# --- Fixtures ---
 
 @pytest.fixture
 def mock_repo() -> MagicMock:
@@ -84,6 +136,7 @@ class TestSettingsRoutes:
         assert data["max_concurrent"] == 10
 
 
+
 @pytest.fixture
 def mock_profile_repo() -> MagicMock:
     """Create mock profile repository."""
@@ -114,49 +167,41 @@ def profile_client(profile_app: FastAPI) -> TestClient:
     return TestClient(profile_app)
 
 
-def make_test_profile(
-    name: str = "test-profile",
-    tracker: TrackerType = TrackerType.NOOP,
-    repo_root: str = "/path/to/repo",
-    driver: DriverType = DriverType.CLAUDE,
-    model: str = "opus",
-) -> Profile:
-    """Create a Profile for testing with agents dict.
+# --- Settings tests ---
 
-    Args:
-        name: Profile name.
-        tracker: Tracker type.
-        repo_root: Repository root directory.
-        driver: Default driver for all agents.
-        model: Default model for all agents.
+class TestSettingsRoutes:
+    """Tests for /api/settings endpoints."""
 
-    Returns:
-        Profile with default agents configuration.
-    """
-    agent_config = AgentConfig(driver=driver, model=model)
-    agents = {
-        "architect": agent_config,
-        "developer": agent_config,
-        "reviewer": agent_config,
-        "task_reviewer": agent_config,
-        "evaluator": agent_config,
-        "brainstormer": agent_config,
-        "plan_validator": agent_config,
-    }
-    return Profile(
-        name=name,
-        tracker=tracker,
-        repo_root=repo_root,
-        agents=agents,
-    )
+    def test_get_server_settings(self, client: TestClient, mock_repo: MagicMock) -> None:
+        """GET /api/settings returns current settings."""
+        mock_repo.get_server_settings.return_value = _make_server_settings()
 
+        response = client.get("/api/settings")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["log_retention_days"] == 30
+        assert data["max_concurrent"] == 5
+
+    def test_update_server_settings(self, client: TestClient, mock_repo: MagicMock) -> None:
+        """PUT /api/settings updates settings."""
+        mock_repo.update_server_settings.return_value = _make_server_settings(
+            log_retention_days=60, max_concurrent=10,
+        )
+
+        response = client.put(
+            "/api/settings",
+            json={"log_retention_days": 60, "max_concurrent": 10},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["log_retention_days"] == 60
+        assert data["max_concurrent"] == 10
+
+
+# --- Profile tests ---
 
 class TestProfileRoutes:
-    """Tests for /api/profiles endpoints.
-
-    Note: With per-agent configuration, the API now returns agents dict
-    instead of flat driver/model fields.
-    """
+    """Tests for /api/profiles endpoints."""
 
     def test_list_profiles(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """GET /api/profiles returns all profiles with correct is_active."""
@@ -170,11 +215,10 @@ class TestProfileRoutes:
         data = response.json()
         assert len(data) == 2
         assert data[0]["id"] == "dev"
-        assert data[0]["is_active"] is True  # dev is active
+        assert data[0]["is_active"] is True
         assert "agents" in data[0]
         assert data[1]["id"] == "prod"
-        assert data[1]["is_active"] is False  # prod is not active
-        # With agents dict, check agent configuration
+        assert data[1]["is_active"] is False
         assert data[1]["agents"]["developer"]["driver"] == "api"
 
     def test_list_profiles_empty(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
@@ -187,24 +231,14 @@ class TestProfileRoutes:
 
     def test_create_profile(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """POST /api/profiles creates new profile."""
-        mock_profile_repo.create_profile.return_value = make_test_profile(
-            name="new-profile"
-        )
+        mock_profile_repo.create_profile.return_value = make_test_profile(name="new-profile")
 
         response = profile_client.post(
             "/api/profiles",
             json={
                 "id": "new-profile",
                 "repo_root": "/path/to/repo",
-                "agents": {
-                    "architect": {"driver": "claude", "model": "opus"},
-                    "developer": {"driver": "claude", "model": "opus"},
-                    "reviewer": {"driver": "claude", "model": "haiku"},
-                    "task_reviewer": {"driver": "claude", "model": "opus"},
-                    "evaluator": {"driver": "claude", "model": "opus"},
-                    "brainstormer": {"driver": "claude", "model": "opus"},
-                    "plan_validator": {"driver": "claude", "model": "opus"},
-                },
+                "agents": _full_agents_json(reviewer={"driver": "claude", "model": "haiku"}),
             },
         )
         assert response.status_code == 201
@@ -214,17 +248,13 @@ class TestProfileRoutes:
 
     def test_create_profile_with_all_fields(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """POST /api/profiles creates profile with all optional fields."""
-        tracker: TrackerType = TrackerType.JIRA
-        driver: DriverType = DriverType.API
         mock_profile_repo.create_profile.return_value = Profile(
             name="full-profile",
-            tracker=tracker,
+            tracker=TrackerType.JIRA,
             repo_root="/custom/path",
             plan_output_dir="custom/plans",
             plan_path_pattern="custom/{date}.md",
-            agents={
-                "developer": AgentConfig(driver=driver, model="gpt-4"),
-            },
+            agents={"developer": AgentConfig(driver=DriverType.API, model="gpt-4")},
         )
 
         response = profile_client.post(
@@ -235,15 +265,7 @@ class TestProfileRoutes:
                 "repo_root": "/custom/path",
                 "plan_output_dir": "custom/plans",
                 "plan_path_pattern": "custom/{date}.md",
-                "agents": {
-                    "architect": {"driver": "api", "model": "gpt-4"},
-                    "developer": {"driver": "api", "model": "gpt-4"},
-                    "reviewer": {"driver": "api", "model": "gpt-4"},
-                    "task_reviewer": {"driver": "api", "model": "gpt-4"},
-                    "evaluator": {"driver": "api", "model": "gpt-4"},
-                    "brainstormer": {"driver": "api", "model": "gpt-4"},
-                    "plan_validator": {"driver": "api", "model": "gpt-4"},
-                },
+                "agents": _full_agents_json(driver="api", model="gpt-4"),
             },
         )
         assert response.status_code == 201
@@ -272,76 +294,52 @@ class TestProfileRoutes:
     def test_update_profile(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """PUT /api/profiles/{id} updates profile."""
         mock_profile_repo.update_profile.return_value = make_test_profile(
-            name="dev", tracker=TrackerType.GITHUB
+            name="dev", tracker=TrackerType.GITHUB,
         )
 
-        response = profile_client.put(
-            "/api/profiles/dev",
-            json={"tracker": "github"},
-        )
+        response = profile_client.put("/api/profiles/dev", json={"tracker": "github"})
         assert response.status_code == 200
-        data = response.json()
-        assert data["tracker"] == "github"
+        assert response.json()["tracker"] == "github"
 
     def test_update_profile_with_agents(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """PUT /api/profiles/{id} updates agents configuration."""
-        tracker: TrackerType = TrackerType.NOOP
-        driver: DriverType = DriverType.API
         mock_profile_repo.update_profile.return_value = Profile(
-            name="dev",
-            tracker=tracker,
-            repo_root="/new/path",
-            agents={
-                "developer": AgentConfig(driver=driver, model="gpt-4"),
-            },
+            name="dev", tracker=TrackerType.NOOP, repo_root="/new/path",
+            agents={"developer": AgentConfig(driver=DriverType.API, model="gpt-4")},
         )
 
         response = profile_client.put(
             "/api/profiles/dev",
-            json={
-                "tracker": "jira",
-                "agents": {
-                    "architect": {"driver": "api", "model": "gpt-4"},
-                    "developer": {"driver": "api", "model": "gpt-4"},
-                    "reviewer": {"driver": "api", "model": "gpt-4"},
-                    "task_reviewer": {"driver": "api", "model": "gpt-4"},
-                    "evaluator": {"driver": "api", "model": "gpt-4"},
-                    "brainstormer": {"driver": "api", "model": "gpt-4"},
-                    "plan_validator": {"driver": "api", "model": "gpt-4"},
-                },
-            },
+            json={"tracker": "jira", "agents": _full_agents_json(driver="api", model="gpt-4")},
         )
         assert response.status_code == 200
-        data = response.json()
-        assert data["agents"]["developer"]["driver"] == "api"
+        assert response.json()["agents"]["developer"]["driver"] == "api"
 
     def test_update_profile_not_found(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """PUT /api/profiles/{id} returns 404 for missing profile."""
-        mock_profile_repo.update_profile.side_effect = ValueError(
-            "Profile nonexistent not found"
-        )
+        mock_profile_repo.update_profile.side_effect = ValueError("Profile nonexistent not found")
 
-        response = profile_client.put(
-            "/api/profiles/nonexistent",
-            json={"tracker": "github"},
-        )
+        response = profile_client.put("/api/profiles/nonexistent", json={"tracker": "github"})
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
 
-    def test_delete_profile(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
-        """DELETE /api/profiles/{id} deletes profile."""
-        mock_profile_repo.delete_profile.return_value = True
+    @pytest.mark.parametrize(
+        ("delete_rv", "expected_status"),
+        [(True, 204), (False, 404)],
+        ids=["success", "not-found"],
+    )
+    def test_delete_profile(
+        self, profile_client: TestClient, mock_profile_repo: MagicMock,
+        delete_rv: bool, expected_status: int,
+    ) -> None:
+        """DELETE /api/profiles/{id} returns correct status."""
+        mock_profile_repo.delete_profile.return_value = delete_rv
+        name = "dev" if delete_rv else "nonexistent"
 
-        response = profile_client.delete("/api/profiles/dev")
-        assert response.status_code == 204
-
-    def test_delete_profile_not_found(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
-        """DELETE /api/profiles/{id} returns 404 for missing profile."""
-        mock_profile_repo.delete_profile.return_value = False
-
-        response = profile_client.delete("/api/profiles/nonexistent")
-        assert response.status_code == 404
-        assert response.json()["detail"] == "Profile not found"
+        response = profile_client.delete(f"/api/profiles/{name}")
+        assert response.status_code == expected_status
+        if expected_status == 404:
+            assert response.json()["detail"] == "Profile not found"
 
     def test_activate_profile(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """POST /api/profiles/{id}/activate sets profile as active."""
@@ -351,115 +349,65 @@ class TestProfileRoutes:
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == "dev"
-        assert data["is_active"] is True  # Verify is_active is True after activation
+        assert data["is_active"] is True
         mock_profile_repo.set_active.assert_called_once_with("dev")
 
     def test_activate_profile_not_found(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """POST /api/profiles/{id}/activate returns 404 for missing profile."""
-        mock_profile_repo.set_active.side_effect = ValueError(
-            "Profile nonexistent not found"
-        )
+        mock_profile_repo.set_active.side_effect = ValueError("Profile nonexistent not found")
 
         response = profile_client.post("/api/profiles/nonexistent/activate")
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
 
-    def test_create_profile_missing_agents_returns_422(
-        self, profile_client: TestClient, mock_profile_repo: MagicMock
+    @pytest.mark.parametrize(
+        ("method", "url", "json_body", "error_substr"),
+        [
+            ("post", "/api/profiles", {
+                "id": "bad", "repo_root": "/path/to/repo",
+                "agents": {"architect": {"driver": "claude", "model": "opus"},
+                           "developer": {"driver": "claude", "model": "opus"},
+                           "reviewer": {"driver": "claude", "model": "opus"}},
+            }, "Missing required agents"),
+            ("put", "/api/profiles/dev", {
+                "agents": {"developer": {"driver": "api", "model": "gpt-4"}},
+            }, "Missing required agents"),
+            ("post", "/api/profiles", {
+                "id": "bad", "repo_root": "relative/path",
+                "agents": _full_agents_json(),
+            }, "repo_root must be an absolute path"),
+            ("put", "/api/profiles/dev", {
+                "repo_root": "./relative",
+            }, "repo_root must be an absolute path"),
+        ],
+        ids=[
+            "create-missing-agents",
+            "update-missing-agents",
+            "create-relative-repo-root",
+            "update-relative-repo-root",
+        ],
+    )
+    def test_validation_returns_422(
+        self, profile_client: TestClient, mock_profile_repo: MagicMock,
+        method: str, url: str, json_body: dict, error_substr: str,
     ) -> None:
-        """POST /api/profiles with missing agents returns 422."""
-        response = profile_client.post(
-            "/api/profiles",
-            json={
-                "id": "bad-profile",
-                "repo_root": "/path/to/repo",
-                "agents": {
-                    "architect": {"driver": "claude", "model": "opus"},
-                    "developer": {"driver": "claude", "model": "opus"},
-                    "reviewer": {"driver": "claude", "model": "opus"},
-                },
-            },
-        )
+        """Validation errors return 422 with correct message."""
+        response = getattr(profile_client, method)(url, json=json_body)
         assert response.status_code == 422
         detail = response.json()["detail"]
-        assert any("Missing required agents" in str(e) for e in detail)
-
-    def test_update_profile_missing_agents_returns_422(
-        self, profile_client: TestClient, mock_profile_repo: MagicMock
-    ) -> None:
-        """PUT /api/profiles/{id} with partial agents returns 422."""
-        response = profile_client.put(
-            "/api/profiles/dev",
-            json={
-                "agents": {
-                    "developer": {"driver": "api", "model": "gpt-4"},
-                },
-            },
-        )
-        assert response.status_code == 422
-        detail = response.json()["detail"]
-        assert any("Missing required agents" in str(e) for e in detail)
-
-    def test_create_profile_relative_repo_root_returns_422(
-        self, profile_client: TestClient, mock_profile_repo: MagicMock
-    ) -> None:
-        """POST /api/profiles with relative repo_root returns 422."""
-        response = profile_client.post(
-            "/api/profiles",
-            json={
-                "id": "bad-profile",
-                "repo_root": "relative/path",
-                "agents": {
-                    "architect": {"driver": "claude", "model": "opus"},
-                    "developer": {"driver": "claude", "model": "opus"},
-                    "reviewer": {"driver": "claude", "model": "opus"},
-                    "task_reviewer": {"driver": "claude", "model": "opus"},
-                    "evaluator": {"driver": "claude", "model": "opus"},
-                    "brainstormer": {"driver": "claude", "model": "opus"},
-                    "plan_validator": {"driver": "claude", "model": "opus"},
-                },
-            },
-        )
-        assert response.status_code == 422
-        detail = response.json()["detail"]
-        assert any("repo_root must be an absolute path" in str(e) for e in detail)
-
-    def test_update_profile_relative_repo_root_returns_422(
-        self, profile_client: TestClient, mock_profile_repo: MagicMock
-    ) -> None:
-        """PUT /api/profiles/{id} with relative repo_root returns 422."""
-        response = profile_client.put(
-            "/api/profiles/dev",
-            json={"repo_root": "./relative"},
-        )
-        assert response.status_code == 422
-        detail = response.json()["detail"]
-        assert any("repo_root must be an absolute path" in str(e) for e in detail)
+        assert any(error_substr in str(e) for e in detail)
 
     def test_create_profile_extra_agents_accepted(
-        self, profile_client: TestClient, mock_profile_repo: MagicMock
+        self, profile_client: TestClient, mock_profile_repo: MagicMock,
     ) -> None:
         """POST /api/profiles with extra agents is accepted."""
-        mock_profile_repo.create_profile.return_value = make_test_profile(
-            name="extra-profile"
-        )
+        mock_profile_repo.create_profile.return_value = make_test_profile(name="extra-profile")
 
+        agents = _full_agents_json()
+        agents["custom_agent"] = {"driver": "claude", "model": "opus"}
         response = profile_client.post(
             "/api/profiles",
-            json={
-                "id": "extra-profile",
-                "repo_root": "/path/to/repo",
-                "agents": {
-                    "architect": {"driver": "claude", "model": "opus"},
-                    "developer": {"driver": "claude", "model": "opus"},
-                    "reviewer": {"driver": "claude", "model": "opus"},
-                    "task_reviewer": {"driver": "claude", "model": "opus"},
-                    "evaluator": {"driver": "claude", "model": "opus"},
-                    "brainstormer": {"driver": "claude", "model": "opus"},
-                    "plan_validator": {"driver": "claude", "model": "opus"},
-                    "custom_agent": {"driver": "claude", "model": "opus"},
-                },
-            },
+            json={"id": "extra-profile", "repo_root": "/path/to/repo", "agents": agents},
         )
         assert response.status_code == 201
 
