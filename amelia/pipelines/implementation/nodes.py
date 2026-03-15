@@ -27,7 +27,7 @@ from amelia.pipelines.implementation.utils import (
     validate_plan_structure,
 )
 from amelia.pipelines.nodes import _save_token_usage
-from amelia.pipelines.utils import extract_config_params
+from amelia.pipelines.utils import extract_node_config
 
 
 async def plan_validator_node(
@@ -51,7 +51,7 @@ async def plan_validator_node(
     Raises:
         ValueError: If plan file not found or empty.
     """
-    event_bus, workflow_id, profile = extract_config_params(config or {})
+    nc = extract_node_config(config)
 
     if not state.issue:
         raise ValueError("Issue is required in state for plan validation")
@@ -60,14 +60,14 @@ async def plan_validator_node(
     if state.external_plan and state.plan_path is not None:
         plan_path = state.plan_path
     else:
-        plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
-        working_dir = Path(profile.repo_root)
+        plan_rel_path = resolve_plan_path(nc.profile.plan_path_pattern, state.issue.id)
+        working_dir = Path(nc.profile.repo_root)
         plan_path = working_dir / plan_rel_path
 
     logger.info(
         "Orchestrator: Validating plan structure",
         plan_path=str(plan_path),
-        workflow_id=workflow_id,
+        workflow_id=nc.workflow_id,
     )
 
     # Read plan file - fail fast if not found
@@ -94,7 +94,7 @@ async def plan_validator_node(
             issues=validation_result.issues,
             severity=validation_result.severity.value,
             revision_count=revision_count,
-            workflow_id=workflow_id,
+            workflow_id=nc.workflow_id,
         )
 
     logger.info(
@@ -102,7 +102,7 @@ async def plan_validator_node(
         goal=goal,
         key_files_count=len(key_files),
         total_tasks=total_tasks,
-        workflow_id=workflow_id,
+        workflow_id=nc.workflow_id,
     )
 
     return {
@@ -144,21 +144,15 @@ async def call_architect_node(
     if state.issue is None:
         raise ValueError("Cannot call Architect: no issue provided in state.")
 
-    # Extract event_bus, workflow_id, and profile from config
-    event_bus, workflow_id, profile = extract_config_params(config or {})
+    # Extract all config params in one call
+    nc = extract_node_config(config)
 
-    resolved_config = config or {}
-    configurable = resolved_config.get("configurable", {})
-    repository = configurable.get("repository")
-    prompts = configurable.get("prompts", {})
-    sandbox_provider = configurable.get("sandbox_provider")
-
-    agent_config = profile.get_agent_config("architect")
-    architect = Architect(agent_config, prompts=prompts, sandbox_provider=sandbox_provider)
+    agent_config = nc.profile.get_agent_config("architect")
+    architect = Architect(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
 
     # Ensure the plan directory exists before the architect runs
-    plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
-    working_dir = Path(profile.repo_root)
+    plan_rel_path = resolve_plan_path(nc.profile.plan_path_pattern, state.issue.id)
+    working_dir = Path(nc.profile.repo_root)
     plan_path = working_dir / plan_rel_path
     await asyncio.to_thread(plan_path.parent.mkdir, parents=True, exist_ok=True)
     logger.debug("Ensured plan directory exists", plan_dir=str(plan_path.parent))
@@ -166,14 +160,14 @@ async def call_architect_node(
     final_state = state
     async for new_state, event in architect.plan(
         state=state,
-        profile=profile,
-        workflow_id=workflow_id,
+        profile=nc.profile,
+        workflow_id=nc.workflow_id,
     ):
         final_state = new_state
-        if event_bus:
-            event_bus.emit(event)
+        if nc.event_bus:
+            nc.event_bus.emit(event)
 
-    await _save_token_usage(architect.driver, workflow_id, "architect", repository)
+    await _save_token_usage(architect.driver, nc.workflow_id, "architect", nc.repository)
 
     # Fallback: If plan file doesn't exist, write it from Write tool call content
     # This handles cases where Claude Code's Write tool didn't persist the file
