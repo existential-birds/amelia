@@ -46,8 +46,7 @@ class TestStartCommandQueue:
             assert result.exit_code == 0, f"Command failed: {result.stdout}"
             call_kwargs = mock_client.create_workflow.call_args.kwargs
             assert call_kwargs.get("start", True) is expect_start
-            if not expect_start:
-                assert call_kwargs.get("plan_now", False) is expect_plan
+            assert call_kwargs.get("plan_now", False) is expect_plan
 
     def test_plan_without_queue_is_error(self, runner: CliRunner) -> None:
         """--plan without --queue should error."""
