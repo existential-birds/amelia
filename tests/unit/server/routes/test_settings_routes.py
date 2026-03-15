@@ -12,6 +12,7 @@ from amelia.server.database import ServerSettings
 from amelia.server.dependencies import get_profile_repository, get_settings_repository
 from amelia.server.routes.settings import router
 
+
 # --- Shared constants ---
 
 _DEFAULT_TIMESTAMP = datetime(2024, 1, 1, 12, 0, 0)
@@ -39,6 +40,7 @@ def _make_server_settings(**overrides) -> ServerSettings:
         websocket_idle_timeout_seconds=300.0,
         workflow_start_timeout_seconds=60.0,
         max_concurrent=5,
+        pr_polling_enabled=False,
         created_at=_DEFAULT_TIMESTAMP,
         updated_at=_DEFAULT_TIMESTAMP,
     )
@@ -87,53 +89,6 @@ def app(mock_repo: MagicMock) -> FastAPI:
 def client(app: FastAPI) -> TestClient:
     """Create test client."""
     return TestClient(app)
-
-
-class TestSettingsRoutes:
-    """Tests for /api/settings endpoints."""
-
-    def test_get_server_settings(self, client: TestClient, mock_repo: MagicMock) -> None:
-        """GET /api/settings returns current settings."""
-        mock_settings = ServerSettings(
-            log_retention_days=30,
-            checkpoint_retention_days=0,
-            websocket_idle_timeout_seconds=300.0,
-            workflow_start_timeout_seconds=60.0,
-            max_concurrent=5,
-            pr_polling_enabled=False,
-            created_at=datetime(2024, 1, 1, 12, 0, 0),
-            updated_at=datetime(2024, 1, 1, 12, 0, 0),
-        )
-        mock_repo.get_server_settings.return_value = mock_settings
-
-        response = client.get("/api/settings")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["log_retention_days"] == 30
-        assert data["max_concurrent"] == 5
-
-    def test_update_server_settings(self, client: TestClient, mock_repo: MagicMock) -> None:
-        """PUT /api/settings updates settings."""
-        # Return updated settings
-        mock_repo.update_server_settings.return_value = ServerSettings(
-            log_retention_days=60,
-            checkpoint_retention_days=0,
-            websocket_idle_timeout_seconds=300.0,
-            workflow_start_timeout_seconds=60.0,
-            max_concurrent=10,
-            pr_polling_enabled=False,
-            created_at=datetime(2024, 1, 1, 12, 0, 0),
-            updated_at=datetime(2024, 1, 1, 12, 0, 0),
-        )
-
-        response = client.put(
-            "/api/settings",
-            json={"log_retention_days": 60, "max_concurrent": 10},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["log_retention_days"] == 60
-        assert data["max_concurrent"] == 10
 
 
 

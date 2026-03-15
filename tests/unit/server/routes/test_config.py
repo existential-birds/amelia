@@ -20,6 +20,7 @@ def _make_server_settings(**overrides: object) -> ServerSettings:
         websocket_idle_timeout_seconds=300.0,
         workflow_start_timeout_seconds=30.0,
         max_concurrent=5,
+        pr_polling_enabled=False,
         created_at=datetime.now(),
         updated_at=datetime.now(),
     )
