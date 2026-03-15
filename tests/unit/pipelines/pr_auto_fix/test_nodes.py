@@ -345,13 +345,21 @@ def _make_reply_resolve_state(
 class TestReplyResolveNode:
     """Tests for reply_resolve_node."""
 
-    async def test_fixed_comment_gets_reply_and_resolve(self) -> None:
-        state, config = _make_reply_resolve_state()
-
+    @staticmethod
+    async def _run_node(
+        state: Any, config: dict[str, Any], *, setup_mock: Any = None,
+    ) -> tuple[dict[str, Any], AsyncMock]:
         with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
             mock_gh = AsyncMock()
             mock_gh_cls.return_value = mock_gh
+            if setup_mock:
+                setup_mock(mock_gh)
             result = await reply_resolve_node(state, config)
+        return result, mock_gh
+
+    async def test_fixed_comment_gets_reply_and_resolve(self) -> None:
+        state, config = _make_reply_resolve_state()
+        result, mock_gh = await self._run_node(state, config)
 
         mock_gh.reply_to_comment.assert_called_once()
         body = mock_gh.reply_to_comment.call_args[0][2]
@@ -364,22 +372,14 @@ class TestReplyResolveNode:
 
     async def test_fixed_reply_includes_commit_sha(self) -> None:
         state, config = _make_reply_resolve_state(commit_sha="deadbeef1234567")
-
-        with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
-            mock_gh = AsyncMock()
-            mock_gh_cls.return_value = mock_gh
-            await reply_resolve_node(state, config)
+        _, mock_gh = await self._run_node(state, config)
 
         body = mock_gh.reply_to_comment.call_args[0][2]
         assert "deadbee" in body
 
     async def test_reply_mentions_author(self) -> None:
         state, config = _make_reply_resolve_state(authors=["octocat"])
-
-        with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
-            mock_gh = AsyncMock()
-            mock_gh_cls.return_value = mock_gh
-            await reply_resolve_node(state, config)
+        _, mock_gh = await self._run_node(state, config)
 
         body = mock_gh.reply_to_comment.call_args[0][2]
         assert body.startswith("@octocat")
@@ -388,11 +388,7 @@ class TestReplyResolveNode:
         state, config = _make_reply_resolve_state(
             status=GroupFixStatus.FAILED, error="Syntax error in generated code",
         )
-
-        with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
-            mock_gh = AsyncMock()
-            mock_gh_cls.return_value = mock_gh
-            result = await reply_resolve_node(state, config)
+        result, mock_gh = await self._run_node(state, config)
 
         body = mock_gh.reply_to_comment.call_args[0][2]
         assert "Syntax error in generated code" in body
@@ -412,11 +408,7 @@ class TestReplyResolveNode:
             status=GroupFixStatus.NO_CHANGES,
             autofix_config=PRAutoFixConfig(resolve_no_changes=resolve_no_changes),
         )
-
-        with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
-            mock_gh = AsyncMock()
-            mock_gh_cls.return_value = mock_gh
-            result = await reply_resolve_node(state, config)
+        result, mock_gh = await self._run_node(state, config)
 
         if expect_resolved:
             mock_gh.resolve_thread.assert_called_once_with("T_abc123")
@@ -426,11 +418,7 @@ class TestReplyResolveNode:
 
     async def test_missing_thread_id_skips_resolve(self) -> None:
         state, config = _make_reply_resolve_state(thread_ids=[None])
-
-        with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
-            mock_gh = AsyncMock()
-            mock_gh_cls.return_value = mock_gh
-            result = await reply_resolve_node(state, config)
+        result, mock_gh = await self._run_node(state, config)
 
         mock_gh.reply_to_comment.assert_called_once()
         mock_gh.resolve_thread.assert_not_called()
@@ -443,12 +431,10 @@ class TestReplyResolveNode:
             authors=["reviewer1", "reviewer2"],
             thread_ids=["T_abc123", "T_def456"],
         )
-
-        with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
-            mock_gh = AsyncMock()
-            mock_gh_cls.return_value = mock_gh
-            mock_gh.resolve_thread.side_effect = [Exception("GraphQL error"), None]
-            result = await reply_resolve_node(state, config)
+        result, mock_gh = await self._run_node(
+            state, config,
+            setup_mock=lambda m: setattr(m.resolve_thread, "side_effect", [Exception("GraphQL error"), None]),
+        )
 
         assert mock_gh.reply_to_comment.call_count == 2
         assert mock_gh.resolve_thread.call_count == 2

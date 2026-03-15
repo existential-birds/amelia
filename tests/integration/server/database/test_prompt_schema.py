@@ -20,19 +20,24 @@ async def _table_exists(db: Database, table: str) -> bool:
     return row[0] if row else False
 
 
-async def test_prompts_table_exists(test_db: Database) -> None:
-    """Prompts table should exist after schema creation."""
-    assert await _table_exists(test_db, "prompts") is True
+@pytest.mark.parametrize("table", ["prompts", "prompt_versions", "workflow_prompt_versions"])
+async def test_table_exists(test_db: Database, table: str) -> None:
+    assert await _table_exists(test_db, table) is True
 
 
-async def test_prompt_versions_table_exists(test_db: Database) -> None:
-    """Prompt versions table should exist after schema creation."""
-    assert await _table_exists(test_db, "prompt_versions") is True
-
-
-async def test_workflow_prompt_versions_table_exists(test_db: Database) -> None:
-    """Workflow prompt versions table should exist after schema creation."""
-    assert await _table_exists(test_db, "workflow_prompt_versions") is True
+async def _insert_test_prompt(
+    db: Database, prompt_id: str = "test.prompt", agent: str = "test", name: str = "Test",
+) -> uuid.UUID:
+    await db.execute(
+        "INSERT INTO prompts (id, agent, name) VALUES ($1, $2, $3)",
+        prompt_id, agent, name,
+    )
+    version_id = uuid.uuid4()
+    await db.execute(
+        "INSERT INTO prompt_versions (id, prompt_id, version_number, content) VALUES ($1, $2, $3, $4)",
+        version_id, prompt_id, 1, "Content",
+    )
+    return version_id
 
 
 async def test_can_insert_prompt(test_db: Database) -> None:
@@ -67,14 +72,7 @@ async def test_can_insert_prompt_version(test_db: Database) -> None:
 
 async def test_version_unique_constraint(test_db: Database) -> None:
     """Same prompt+version_number should fail unique constraint."""
-    await test_db.execute(
-        "INSERT INTO prompts (id, agent, name) VALUES ($1, $2, $3)",
-        "test.prompt", "test", "Test",
-    )
-    await test_db.execute(
-        "INSERT INTO prompt_versions (id, prompt_id, version_number, content) VALUES ($1, $2, $3, $4)",
-        uuid.uuid4(), "test.prompt", 1, "Content",
-    )
+    await _insert_test_prompt(test_db)
     with pytest.raises(asyncpg.exceptions.UniqueViolationError):
         await test_db.execute(
             "INSERT INTO prompt_versions (id, prompt_id, version_number, content) VALUES ($1, $2, $3, $4)",
@@ -90,15 +88,7 @@ async def test_workflow_prompt_version_foreign_keys(test_db: Database) -> None:
     )
     wf = await test_db.fetch_one("SELECT id FROM workflows WHERE issue_id = 'ISSUE-1'")
     wf_id = wf["id"]
-    await test_db.execute(
-        "INSERT INTO prompts (id, agent, name) VALUES ($1, $2, $3)",
-        "test.prompt", "test", "Test",
-    )
-    version_id = uuid.uuid4()
-    await test_db.execute(
-        "INSERT INTO prompt_versions (id, prompt_id, version_number, content) VALUES ($1, $2, $3, $4)",
-        version_id, "test.prompt", 1, "Content",
-    )
+    version_id = await _insert_test_prompt(test_db)
     await test_db.execute(
         """INSERT INTO workflow_prompt_versions (workflow_id, prompt_id, version_id)
            VALUES ($1, $2, $3)""",

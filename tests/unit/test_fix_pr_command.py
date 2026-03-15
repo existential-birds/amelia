@@ -15,6 +15,15 @@ from amelia.main import app
 runner = CliRunner()
 
 
+def _invoke_fix_pr(args: list[str], mock_client: AsyncMock, mock_summary: WorkflowSummary):
+    with (
+        patch("amelia.main.AmeliaClient", return_value=mock_client),
+        patch("amelia.main.stream_workflow_events", new_callable=AsyncMock, return_value=mock_summary) as mock_stream,
+    ):
+        result = runner.invoke(app, ["fix-pr", *args])
+    return result, mock_stream
+
+
 class TestFixPRCommand:
     """Tests for the fix-pr CLI command."""
 
@@ -43,11 +52,7 @@ class TestFixPRCommand:
 
     def test_happy_path(self, mock_client: AsyncMock, mock_summary: WorkflowSummary) -> None:
         """fix-pr triggers fix, streams events, prints summary."""
-        with (
-            patch("amelia.main.AmeliaClient", return_value=mock_client),
-            patch("amelia.main.stream_workflow_events", new_callable=AsyncMock, return_value=mock_summary),
-        ):
-            result = runner.invoke(app, ["fix-pr", "42", "--profile", "myprofile"])
+        result, _ = _invoke_fix_pr(["42", "--profile", "myprofile"], mock_client, mock_summary)
 
         assert result.exit_code == 0
         assert "2 comments fixed" in result.output
@@ -59,26 +64,18 @@ class TestFixPRCommand:
 
     def test_quiet_mode(self, mock_client: AsyncMock, mock_summary: WorkflowSummary) -> None:
         """--quiet calls stream_workflow_events with display=False, still prints summary."""
-        with (
-            patch("amelia.main.AmeliaClient", return_value=mock_client),
-            patch("amelia.main.stream_workflow_events", new_callable=AsyncMock, return_value=mock_summary) as mock_stream,
-        ):
-            result = runner.invoke(app, ["fix-pr", "42", "--profile", "prof", "--quiet"])
+        result, mock_stream = _invoke_fix_pr(["42", "--profile", "prof", "--quiet"], mock_client, mock_summary)
 
         assert result.exit_code == 0
         assert "2 comments fixed" in result.output
         # Verify display=False was passed
         mock_stream.assert_called_once()
         call_kwargs = mock_stream.call_args
-        assert call_kwargs.kwargs.get("display") is False or (len(call_kwargs.args) > 1 and call_kwargs.args[1] is False) or call_kwargs.kwargs.get("display") is False
+        assert call_kwargs.kwargs.get("display") is False or (len(call_kwargs.args) > 1 and call_kwargs.args[1] is False)
 
     def test_aggressiveness_passed(self, mock_client: AsyncMock, mock_summary: WorkflowSummary) -> None:
         """--aggressiveness is forwarded to trigger_pr_autofix."""
-        with (
-            patch("amelia.main.AmeliaClient", return_value=mock_client),
-            patch("amelia.main.stream_workflow_events", new_callable=AsyncMock, return_value=mock_summary),
-        ):
-            result = runner.invoke(app, ["fix-pr", "42", "--profile", "prof", "--aggressiveness", "thorough"])
+        result, _ = _invoke_fix_pr(["42", "--profile", "prof", "--aggressiveness", "thorough"], mock_client, mock_summary)
 
         assert result.exit_code == 0
         mock_client.trigger_pr_autofix.assert_called_once_with(42, "prof", "thorough")
@@ -114,12 +111,7 @@ class TestFixPRCommand:
     def test_no_commit_sha_in_summary(self, mock_client: AsyncMock) -> None:
         """When commit_sha is None, summary line omits commit info."""
         summary = WorkflowSummary(fixed=1, skipped=0, failed=0, commit_sha=None)
-
-        with (
-            patch("amelia.main.AmeliaClient", return_value=mock_client),
-            patch("amelia.main.stream_workflow_events", new_callable=AsyncMock, return_value=summary),
-        ):
-            result = runner.invoke(app, ["fix-pr", "42", "--profile", "prof"])
+        result, _ = _invoke_fix_pr(["42", "--profile", "prof"], mock_client, summary)
 
         assert result.exit_code == 0
         assert "1 comments fixed" in result.output

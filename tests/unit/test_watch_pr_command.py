@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -9,10 +10,24 @@ from typer.testing import CliRunner
 
 from amelia.client.api import PRCommentsResponse, ServerUnreachableError
 from amelia.client.streaming import WorkflowSummary
+from amelia.core.types import PRReviewComment
 from amelia.main import app
 
 
 runner = CliRunner()
+
+
+def _invoke_watch_pr(args: list[str], mock_client: AsyncMock, mock_summary: WorkflowSummary):
+    with (
+        patch("amelia.main.AmeliaClient", return_value=mock_client),
+        patch(
+            "amelia.main.stream_workflow_events",
+            new_callable=AsyncMock,
+            return_value=mock_summary,
+        ),
+    ):
+        result = runner.invoke(app, ["watch-pr", *args])
+    return result
 
 
 class TestWatchPRCommand:
@@ -38,17 +53,7 @@ class TestWatchPRCommand:
         # After cycle: zero comments -> stop
         mock_client.get_pr_comments.return_value = PRCommentsResponse(comments=[])
 
-        with (
-            patch("amelia.main.AmeliaClient", return_value=mock_client),
-            patch(
-                "amelia.main.stream_workflow_events",
-                new_callable=AsyncMock,
-                return_value=mock_summary,
-            ),
-        ):
-            result = runner.invoke(
-                app, ["watch-pr", "42", "--profile", "myprofile"]
-            )
+        result = _invoke_watch_pr(["42", "--profile", "myprofile"], mock_client, mock_summary)
 
         assert result.exit_code == 0
         assert "All comments resolved" in result.output
@@ -59,10 +64,6 @@ class TestWatchPRCommand:
         self, mock_client: AsyncMock, mock_summary: WorkflowSummary
     ) -> None:
         """watch-pr runs two cycles: first has comments, second has zero."""
-        from datetime import datetime
-
-        from amelia.core.types import PRReviewComment
-
         comment = PRReviewComment(
             id=1,
             body="Fix this",
@@ -150,18 +151,11 @@ class TestWatchPRCommand:
         """--aggressiveness is forwarded on each trigger cycle."""
         mock_client.get_pr_comments.return_value = PRCommentsResponse(comments=[])
 
-        with (
-            patch("amelia.main.AmeliaClient", return_value=mock_client),
-            patch(
-                "amelia.main.stream_workflow_events",
-                new_callable=AsyncMock,
-                return_value=mock_summary,
-            ),
-        ):
-            result = runner.invoke(
-                app,
-                ["watch-pr", "42", "--profile", "prof", "--aggressiveness", "thorough"],
-            )
+        result = _invoke_watch_pr(
+            ["42", "--profile", "prof", "--aggressiveness", "thorough"],
+            mock_client,
+            mock_summary,
+        )
 
         assert result.exit_code == 0
         mock_client.trigger_pr_autofix.assert_called_once_with(
