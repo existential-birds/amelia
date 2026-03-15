@@ -144,25 +144,19 @@ class TestPRAutoFixConfig:
         with pytest.raises(ValidationError):
             config.aggressiveness = AggressivenessLevel.THOROUGH  # type: ignore[misc]
 
-    def test_poll_interval_too_low(self) -> None:
+    @pytest.mark.parametrize("value", [5, 7200])
+    def test_poll_interval_out_of_range(self, value: int) -> None:
         with pytest.raises(ValidationError, match="poll_interval"):
-            PRAutoFixConfig(poll_interval=5)
-
-    def test_poll_interval_too_high(self) -> None:
-        with pytest.raises(ValidationError, match="poll_interval"):
-            PRAutoFixConfig(poll_interval=7200)
+            PRAutoFixConfig(poll_interval=value)
 
     def test_poll_interval_bounds_valid(self) -> None:
         assert PRAutoFixConfig(poll_interval=10).poll_interval == 10
         assert PRAutoFixConfig(poll_interval=3600).poll_interval == 3600
 
-    def test_max_iterations_too_low(self) -> None:
+    @pytest.mark.parametrize("value", [0, 11])
+    def test_max_iterations_out_of_range(self, value: int) -> None:
         with pytest.raises(ValidationError, match="max_iterations"):
-            PRAutoFixConfig(max_iterations=0)
-
-    def test_max_iterations_too_high(self) -> None:
-        with pytest.raises(ValidationError, match="max_iterations"):
-            PRAutoFixConfig(max_iterations=11)
+            PRAutoFixConfig(max_iterations=value)
 
     def test_max_iterations_bounds_valid(self) -> None:
         assert PRAutoFixConfig(max_iterations=1).max_iterations == 1
@@ -191,12 +185,9 @@ class TestProfilePRAutoFix:
     def base_profile_kwargs(self) -> dict:
         return {"name": "test", "repo_root": "/tmp/repo", "tracker": TrackerType.GITHUB}
 
-    def test_pr_autofix_default_none(self, base_profile_kwargs: dict) -> None:
-        profile = Profile(**base_profile_kwargs)
-        assert profile.pr_autofix is None
-
-    def test_pr_autofix_none_means_disabled(self, base_profile_kwargs: dict) -> None:
-        profile = Profile(**base_profile_kwargs, pr_autofix=None)
+    @pytest.mark.parametrize("kwargs", [{}, {"pr_autofix": None}])
+    def test_pr_autofix_is_none(self, base_profile_kwargs: dict, kwargs: dict) -> None:
+        profile = Profile(**base_profile_kwargs, **kwargs)
         assert profile.pr_autofix is None
 
     def test_pr_autofix_enabled_with_defaults(self, base_profile_kwargs: dict) -> None:

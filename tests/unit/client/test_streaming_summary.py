@@ -35,6 +35,21 @@ class _AsyncIter:
             raise StopAsyncIteration from None
 
 
+async def _run_streaming_events(
+    messages: list[str], wf_id: str, **kwargs
+) -> tuple[WorkflowSummary, _AsyncIter]:
+    mock_ws = _AsyncIter(messages)
+    mock_ws.send = AsyncMock()  # type: ignore[attr-defined]
+
+    with patch("websockets.connect") as mock_connect:
+        mock_connect.return_value.__aenter__ = AsyncMock(return_value=mock_ws)
+        mock_connect.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        summary = await stream_workflow_events(wf_id, **kwargs)
+
+    return summary, mock_ws
+
+
 class TestStreamWorkflowSummary:
     """Tests for WorkflowSummary collection from streaming events."""
 
@@ -68,16 +83,7 @@ class TestStreamWorkflowSummary:
                 "data": {"commit_sha": "abc123def"},
             },
         ]
-        messages = _make_ws_messages(events)
-
-        mock_ws = _AsyncIter(messages)
-        mock_ws.send = AsyncMock()  # type: ignore[attr-defined]
-
-        with patch("websockets.connect") as mock_connect:
-            mock_connect.return_value.__aenter__ = AsyncMock(return_value=mock_ws)
-            mock_connect.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            summary = await stream_workflow_events("wf-123")
+        summary, _ = await _run_streaming_events(_make_ws_messages(events), "wf-123")
 
         assert isinstance(summary, WorkflowSummary)
         assert summary.fixed == 2
@@ -100,16 +106,7 @@ class TestStreamWorkflowSummary:
                 "data": {},
             },
         ]
-        messages = _make_ws_messages(events)
-
-        mock_ws = _AsyncIter(messages)
-        mock_ws.send = AsyncMock()  # type: ignore[attr-defined]
-
-        with patch("websockets.connect") as mock_connect:
-            mock_connect.return_value.__aenter__ = AsyncMock(return_value=mock_ws)
-            mock_connect.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            summary = await stream_workflow_events("wf-456")
+        summary, _ = await _run_streaming_events(_make_ws_messages(events), "wf-456")
 
         assert summary.fixed == 0
         assert summary.skipped == 0
@@ -131,16 +128,9 @@ class TestStreamWorkflowSummary:
                 "data": {"commit_sha": "xyz789"},
             },
         ]
-        messages = _make_ws_messages(events)
-
-        mock_ws = _AsyncIter(messages)
-        mock_ws.send = AsyncMock()  # type: ignore[attr-defined]
-
-        with patch("websockets.connect") as mock_connect:
-            mock_connect.return_value.__aenter__ = AsyncMock(return_value=mock_ws)
-            mock_connect.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            summary = await stream_workflow_events("wf-789", display=False)
+        summary, _ = await _run_streaming_events(
+            _make_ws_messages(events), "wf-789", display=False
+        )
 
         assert summary.fixed == 1
         assert summary.commit_sha == "xyz789"
@@ -161,15 +151,7 @@ class TestStreamWorkflowSummary:
                 },
             }),
         ]
-
-        mock_ws = _AsyncIter(raw_messages)
-        mock_ws.send = AsyncMock()  # type: ignore[attr-defined]
-
-        with patch("websockets.connect") as mock_connect:
-            mock_connect.return_value.__aenter__ = AsyncMock(return_value=mock_ws)
-            mock_connect.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            summary = await stream_workflow_events("wf-ping")
+        summary, mock_ws = await _run_streaming_events(raw_messages, "wf-ping")
 
         assert isinstance(summary, WorkflowSummary)
         # Verify pong was sent

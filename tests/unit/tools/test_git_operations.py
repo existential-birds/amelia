@@ -80,17 +80,6 @@ async def test_stage_and_commit_nothing_to_commit(git_ops, mock_subprocess):
         await git_ops.stage_and_commit("test msg")
 
 
-async def test_safe_push_protected_branch_refused(git_ops, mock_subprocess):
-    """safe_push refuses to push to protected branch 'main'."""
-    _, mock_exec, _ = mock_subprocess
-
-    with pytest.raises(ValueError, match="protected branch"):
-        await git_ops.safe_push("main")
-
-    # No subprocess should have been called
-    mock_exec.assert_not_called()
-
-
 @pytest.mark.parametrize("branch", ["main", "master", "develop", "release"])
 async def test_safe_push_protected_branches_all(git_ops, mock_subprocess, branch):
     """safe_push refuses all protected branches."""
