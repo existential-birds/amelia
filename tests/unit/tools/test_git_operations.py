@@ -99,15 +99,15 @@ async def test_safe_push_success_local_ahead(git_ops, mock_subprocess):
         ("aaa111", "", 0),  # git rev-parse HEAD (local)
         ("bbb222", "", 0),  # git rev-parse origin/feat-branch (remote)
         ("bbb222", "", 0),  # git merge-base aaa111 bbb222 = bbb222 (local ahead)
-        ("", "", 0),  # git push origin HEAD
+        ("", "", 0),  # git push origin HEAD:refs/heads/feat-branch
     )
 
     sha = await git_ops.safe_push("feat-branch")
 
     assert sha == "aaa111"
-    # Verify push was called
+    # Verify push was called with explicit refspec
     push_call = mock_exec.call_args_list[-1]
-    assert push_call.args[:4] == ("git", "push", "origin", "HEAD")
+    assert push_call.args[:4] == ("git", "push", "origin", "HEAD:refs/heads/feat-branch")
 
 
 async def test_safe_push_diverged_aborts(git_ops, mock_subprocess):
@@ -134,14 +134,14 @@ async def test_safe_push_new_branch(git_ops, mock_subprocess):
         ("", "", 0),  # git fetch origin feat-new (ok even if not found)
         ("aaa111", "", 0),  # git rev-parse HEAD (local)
         ("", "unknown revision", 1),  # git rev-parse origin/feat-new fails
-        ("", "", 0),  # git push origin HEAD
+        ("", "", 0),  # git push origin HEAD:refs/heads/feat-new
     )
 
     sha = await git_ops.safe_push("feat-new")
 
     assert sha == "aaa111"
     push_call = mock_exec.call_args_list[-1]
-    assert push_call.args[:4] == ("git", "push", "origin", "HEAD")
+    assert push_call.args[:4] == ("git", "push", "origin", "HEAD:refs/heads/feat-new")
 
 
 async def test_safe_push_never_force_pushes(git_ops, mock_subprocess):

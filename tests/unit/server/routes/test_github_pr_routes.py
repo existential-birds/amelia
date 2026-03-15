@@ -250,7 +250,7 @@ class TestTriggerPRAutoFix:
             MockService.return_value = mock_svc
 
             mock_orch = MagicMock()
-            mock_orch._get_workflow_id.return_value = UUID("12345678-1234-5678-1234-567812345678")
+            mock_orch.get_workflow_id.return_value = UUID("12345678-1234-5678-1234-567812345678")
             mock_orch.trigger_fix_cycle = AsyncMock()
             MockOrch.return_value = mock_orch
 

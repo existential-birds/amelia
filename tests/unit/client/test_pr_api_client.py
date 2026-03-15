@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -17,11 +17,9 @@ from amelia.client.api import (
 )
 
 
-def _make_response(status: int, body: dict) -> AsyncMock:
-    resp = AsyncMock()
-    resp.status_code = status
-    resp.json = lambda: body
-    return resp
+def _make_response(status: int, body: dict, *, method: str = "GET", url: str = "http://test") -> httpx.Response:
+    request = httpx.Request(method, url)
+    return httpx.Response(status_code=status, json=body, request=request)
 
 
 @pytest.fixture
@@ -154,13 +152,10 @@ class TestGetPRComments:
     async def test_get_comments_server_error(self, client: AmeliaClient) -> None:
         """Non-200 response raises InvalidRequestError."""
         mock_resp = _make_response(500, {"detail": "Internal error"})
-        mock_resp.raise_for_status = lambda: (_ for _ in ()).throw(
-            httpx.HTTPStatusError("Server error", request=httpx.Request("GET", "http://test"), response=mock_resp)
-        )
 
         with (
             patch("httpx.AsyncClient.get", return_value=mock_resp),
-            pytest.raises((InvalidRequestError, httpx.HTTPStatusError)),
+            pytest.raises(InvalidRequestError),
         ):
             await client.get_pr_comments(42, "prof")
 

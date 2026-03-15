@@ -305,7 +305,8 @@ class TestCooldown:
         pipeline_continue.set()
 
         await asyncio.wait_for(cooldown_entered.wait(), timeout=2.0)
-        await asyncio.sleep(0.05)
+        # Yield to event loop so _run_cooldown reaches its await point
+        await asyncio.sleep(0)
         await orch.trigger_fix_cycle(pr_number=42, repo="owner/repo", profile=profile)
 
         reset_events = [e for e in captured_events if e.event_type == EventType.PR_FIX_COOLDOWN_RESET]

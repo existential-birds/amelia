@@ -90,6 +90,31 @@ class TestPRAutoFixConfigPollLabel:
         config = PRAutoFixConfig(poll_label="custom-label")
         assert config.poll_label == "custom-label"
 
+    def test_none_poll_label(self) -> None:
+        config = PRAutoFixConfig(poll_label=None)
+        assert config.poll_label is None
+
+
+class TestPollProfileNullLabel:
+    """Tests that poll_label=None causes _poll_profile to skip polling."""
+
+    async def test_null_label_skips_polling(
+        self,
+        poller: PRCommentPoller,
+        mock_orchestrator: AsyncMock,
+    ) -> None:
+        profile = Profile(
+            name="null-label",
+            repo_root="/tmp/test-repo",
+            pr_autofix=PRAutoFixConfig(poll_label=None),
+        )
+
+        with _mock_pr_service(poller, []) as svc:
+            await poller._poll_profile(profile)
+
+        svc.list_labeled_prs.assert_not_called()
+        mock_orchestrator.trigger_fix_cycle.assert_not_called()
+
 
 class TestEventTypePollRateLimited:
     """Tests for PR_POLL_RATE_LIMITED event type."""
@@ -349,9 +374,9 @@ class TestPollProfile:
         with _mock_pr_service(poller, [pr], [comment]):
             await poller._poll_profile(sample_profile)
 
-        # Task should be tracked in _active_tasks
-        assert len(poller._active_tasks) >= 0  # Tasks may complete fast
+        # Let fire-and-forget task run
         await asyncio.sleep(0)
+        mock_orchestrator.trigger_fix_cycle.assert_called_once()
 
     async def test_silent_when_no_labeled_prs(
         self,

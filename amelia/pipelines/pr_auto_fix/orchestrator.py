@@ -86,7 +86,7 @@ class PRAutoFixOrchestrator:
             self._repo_locks[repo_path] = asyncio.Lock()
         return self._repo_locks[repo_path]
 
-    def _get_workflow_id(self, pr_number: int) -> UUID:
+    def get_workflow_id(self, pr_number: int) -> UUID:
         """Get or create a synthetic workflow ID for orchestration events."""
         if pr_number not in self._pr_workflow_ids:
             self._pr_workflow_ids[pr_number] = uuid4()
@@ -322,7 +322,7 @@ class PRAutoFixOrchestrator:
             pipeline = PRAutoFixPipeline()
             graph = pipeline.create_graph()
             initial_state = pipeline.get_initial_state(
-                workflow_id=self._get_workflow_id(pr_number),
+                workflow_id=self.get_workflow_id(pr_number),
                 profile_id=profile.name,
                 pr_number=pr_number,
                 head_branch=head_branch,
@@ -611,7 +611,7 @@ class PRAutoFixOrchestrator:
 
         event = WorkflowEvent(
             id=uuid4(),
-            workflow_id=self._get_workflow_id(pr_number),
+            workflow_id=self.get_workflow_id(pr_number),
             sequence=0,  # Orchestration events don't need sequence ordering
             timestamp=datetime.now(UTC),
             agent="pr_auto_fix",

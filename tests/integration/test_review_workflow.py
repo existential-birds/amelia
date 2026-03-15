@@ -495,10 +495,12 @@ class TestRunReviewWorkflow:
             # Immediately check pending status
             state = await test_repository.get(workflow_id)
             assert state is not None
-            # Status is PENDING at creation, transitions to IN_PROGRESS in the task
+            # Status is PENDING at creation, transitions to IN_PROGRESS then COMPLETED in the task.
+            # With an empty astream mock the background task can finish before this check.
             assert state.workflow_status in (
                 WorkflowStatus.PENDING,
                 WorkflowStatus.IN_PROGRESS,
+                WorkflowStatus.COMPLETED,
             )
 
             # Wait for completion

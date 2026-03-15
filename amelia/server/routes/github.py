@@ -355,8 +355,16 @@ async def trigger_pr_autofix(
     # Determine config override
     effective_config: PRAutoFixConfig | None = None
     if body and body.aggressiveness:
+        try:
+            level = AggressivenessLevel[body.aggressiveness.upper()]
+        except KeyError:
+            valid = ", ".join(e.name.lower() for e in AggressivenessLevel)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid aggressiveness '{body.aggressiveness}'. Valid values: {valid}",
+            ) from None
         effective_config = resolved.pr_autofix.model_copy(
-            update={"aggressiveness": AggressivenessLevel[body.aggressiveness.upper()]},
+            update={"aggressiveness": level},
         )
 
     orchestrator = PRAutoFixOrchestrator(
@@ -364,7 +372,7 @@ async def trigger_pr_autofix(
         github_pr_service=service,
         workflow_repo=workflow_repo,
     )
-    workflow_id = orchestrator._get_workflow_id(number)
+    workflow_id = orchestrator.get_workflow_id(number)
 
     def _log_task_error(task: asyncio.Task[None]) -> None:
         if not task.cancelled():

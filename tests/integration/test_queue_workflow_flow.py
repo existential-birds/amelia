@@ -108,6 +108,8 @@ async def create_pending_workflow(
         issue_id=issue_id,
         worktree_path=worktree_path,
         workflow_status="pending",
+        profile_id="test",
+        issue_cache={"title": "Test issue", "body": "Test body"},
         # Note: started_at is None for pending workflows (set when started)
     )
     await repository.create(workflow)

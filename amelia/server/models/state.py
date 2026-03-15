@@ -176,6 +176,10 @@ class ServerExecutionState(BaseModel):
         default=None,
         description="Error message when failed",
     )
+    base_commit: str | None = Field(
+        default=None,
+        description="Git commit SHA at workflow start, used as diff base for reviews",
+    )
 
     model_config = {
         "json_schema_extra": {

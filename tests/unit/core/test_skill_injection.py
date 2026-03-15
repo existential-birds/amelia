@@ -71,6 +71,7 @@ class TestSkillInjection:
             ),
             patch(
                 "amelia.pipelines.nodes._run_git_command",
+                new_callable=AsyncMock,
                 side_effect=lambda cmd, *a, **kw: (
                     "src/app.py\nsrc/routes.py\n" if "--name-only" in cmd
                     else "from fastapi import FastAPI\n"

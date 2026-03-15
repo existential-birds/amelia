@@ -515,8 +515,14 @@ def create_planning_graph_mock(
 
 
 async def await_planning_task(orchestrator: OrchestratorService, workflow_id: str) -> None:
-    if workflow_id in orchestrator._planning_tasks:
-        await orchestrator._planning_tasks[workflow_id]
+    import asyncio
+
+    # Poll for task registration — the background task may not have added it yet
+    for _ in range(100):  # 100 * 0.01 = 1 second max
+        if workflow_id in orchestrator._planning_tasks:
+            await orchestrator._planning_tasks[workflow_id]
+            return
+        await asyncio.sleep(0.01)
 
 
 @asynccontextmanager

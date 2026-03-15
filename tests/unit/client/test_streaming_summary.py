@@ -6,8 +6,6 @@ import json
 from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from amelia.client.streaming import WorkflowSummary, stream_workflow_events
 
 
@@ -113,8 +111,8 @@ class TestStreamWorkflowSummary:
         assert summary.failed == 0
         assert summary.commit_sha is None
 
-    async def test_display_false_suppresses_output(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """display=False suppresses console output but still collects summary."""
+    async def test_display_false_collects_summary(self) -> None:
+        """display=False still collects summary correctly."""
         events = [
             {"event_type": "workflow_started", "message": "Started"},
             {
@@ -134,9 +132,6 @@ class TestStreamWorkflowSummary:
 
         assert summary.fixed == 1
         assert summary.commit_sha == "xyz789"
-        # With display=False, Rich console should not produce visible output
-        # (Rich writes to its own file handle, so capsys may not capture it,
-        # but the important thing is no crash and summary is collected)
 
     async def test_handles_ping_pong(self) -> None:
         """Ping messages are handled and don't affect summary."""

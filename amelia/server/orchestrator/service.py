@@ -638,6 +638,7 @@ class OrchestratorService:
                 issue_cache=execution_state.issue.model_dump(mode="json"),
                 workflow_status=WorkflowStatus.PENDING,
                 started_at=datetime.now(UTC),
+                base_commit=execution_state.base_commit,
             )
             try:
                 await self._repository.create(state)
@@ -749,6 +750,7 @@ class OrchestratorService:
             issue_cache=execution_state.issue.model_dump(mode="json"),
             plan_cache=plan_cache,
             workflow_status=WorkflowStatus.PENDING,
+            base_commit=execution_state.base_commit,
             # No started_at - workflow hasn't started
         )
 
@@ -849,6 +851,7 @@ class OrchestratorService:
                 issue_cache=execution_state.issue.model_dump(mode="json"),
                 workflow_status=WorkflowStatus.PENDING,
                 started_at=datetime.now(UTC),
+                base_commit=execution_state.base_commit,
             )
 
             await self._repository.create(state)
@@ -2442,6 +2445,7 @@ class OrchestratorService:
             profile_id=profile.name,
             issue_cache=execution_state.issue.model_dump(mode="json"),
             workflow_status=WorkflowStatus.PENDING,
+            base_commit=execution_state.base_commit,
             # Note: started_at is None - workflow hasn't started yet
         )
 
@@ -2894,10 +2898,18 @@ class OrchestratorService:
             base_commit=base_commit,
         )
 
-        # Resolve base commit and diff content
+        # Resolve base commit and diff content.
+        # Use the source workflow's stored base_commit (the HEAD at workflow start)
+        # so the diff captures all changes the workflow made. Falling back to HEAD
+        # would produce an empty diff (HEAD vs HEAD).
         worktree_path = workflow.worktree_path
         if base_commit is None:
-            base_commit = await get_git_head(worktree_path)
+            base_commit = workflow.base_commit
+        if base_commit is None:
+            logger.warning(
+                "No base_commit stored for workflow, review diff may be empty",
+                workflow_id=workflow_id,
+            )
 
         # Get diff content
         diff_content = ""
@@ -2968,6 +2980,7 @@ class OrchestratorService:
                 issue_cache=workflow.issue_cache,
                 workflow_status=WorkflowStatus.PENDING,
                 started_at=datetime.now(UTC),
+                base_commit=base_commit,
             )
 
             await self._repository.create(state)

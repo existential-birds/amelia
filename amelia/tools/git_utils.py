@@ -28,7 +28,15 @@ async def get_current_commit(cwd: str | None = None) -> str | None:
             return None
         result = stdout.decode().strip()
         return result if result else None
-    except (RuntimeError, TimeoutError, OSError):
+    except TimeoutError:
+        try:
+            proc.kill()
+            await proc.wait()
+        except ProcessLookupError:
+            pass
+        logger.warning("Failed to get current commit", cwd=cwd)
+        return None
+    except (RuntimeError, OSError):
         logger.warning("Failed to get current commit", cwd=cwd)
         return None
 
@@ -161,7 +169,7 @@ class GitOperations:
                     f"Aborting push (never rebase)."
                 )
 
-        await self._run_git("push", "origin", "HEAD")
+        await self._run_git("push", "origin", f"HEAD:refs/heads/{branch}")
         logger.info("Pushed to remote", branch=branch, sha=local_sha[:8])
         return local_sha
 
