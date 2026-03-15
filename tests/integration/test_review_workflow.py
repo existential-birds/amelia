@@ -48,7 +48,6 @@ from amelia.server.models.state import (
 )
 from amelia.server.orchestrator.service import OrchestratorService
 from tests.integration.server.conftest import noop_lifespan
-from tests.integration.test_workflow_endpoints import create_test_workflow
 
 
 # =============================================================================
@@ -212,7 +211,7 @@ class TestRequestReview:
             git_mocks["create_subprocess_exec"],
         ):
             mock_create.return_value = mocks.graph
-            review_id = await test_orchestrator.request_review(
+            await test_orchestrator.request_review(
                 source.id, mode="review_only",
             )
 
@@ -337,7 +336,7 @@ class TestRequestReview:
             async def blocking_astream(*args: Any, **kwargs: Any) -> Any:
                 await long_event.wait()
                 return
-                yield  # make it a generator  # noqa: unreachable
+                yield  # make it an async generator
 
             mocks.graph.astream = blocking_astream
             mock_create.return_value = mocks.graph
@@ -392,7 +391,7 @@ class TestRequestReview:
         async def blocking_astream(*args: Any, **kwargs: Any) -> Any:
             await long_event.wait()
             return
-            yield  # noqa: unreachable
+            yield  # make it an async generator
 
         mocks.graph.astream = blocking_astream
 
@@ -577,7 +576,7 @@ class TestRunReviewWorkflow:
 
         async def failing_astream(*args: Any, **kwargs: Any) -> Any:
             raise RuntimeError("Graph execution failed")
-            yield  # noqa: unreachable
+            yield  # make it an async generator
 
         mock_graph.astream = failing_astream
 
@@ -771,7 +770,7 @@ class TestReviewEndpointIntegration:
         async def blocking_astream(*args: Any, **kwargs: Any) -> Any:
             await long_event.wait()
             return
-            yield  # noqa: unreachable
+            yield  # make it an async generator
 
         mocks.graph.astream = blocking_astream
 
