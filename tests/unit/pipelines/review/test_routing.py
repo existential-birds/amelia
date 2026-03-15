@@ -16,6 +16,7 @@ from amelia.pipelines.implementation.state import (
 )
 from amelia.pipelines.review.routing import route_after_evaluation, route_after_fixes
 
+
 # Required for EvaluationResult field resolution
 rebuild_implementation_state()
 
