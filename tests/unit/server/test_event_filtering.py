@@ -118,7 +118,11 @@ class TestWorkflowTypePRAutoFix:
 class TestWorkflowSummaryFields:
     """Tests for pipeline_type, pr_number, pr_title, pr_comment_count on WorkflowSummary."""
 
-    def test_pipeline_type_defaults_to_none(self) -> None:
+    @pytest.mark.parametrize(
+        "field",
+        ["pipeline_type", "pr_number", "pr_title", "pr_comment_count"],
+    )
+    def test_field_defaults_to_none(self, field: str) -> None:
         summary = WorkflowSummary(
             id=uuid.uuid4(),
             issue_id="ISSUE-1",
@@ -126,7 +130,7 @@ class TestWorkflowSummaryFields:
             status=WorkflowStatus.COMPLETED,
             created_at=datetime.now(UTC),
         )
-        assert summary.pipeline_type is None
+        assert getattr(summary, field) is None
 
     def test_pipeline_type_accepts_value(self) -> None:
         summary = WorkflowSummary(
@@ -138,36 +142,6 @@ class TestWorkflowSummaryFields:
             pipeline_type="pr_auto_fix",
         )
         assert summary.pipeline_type == "pr_auto_fix"
-
-    def test_pr_number_defaults_to_none(self) -> None:
-        summary = WorkflowSummary(
-            id=uuid.uuid4(),
-            issue_id="ISSUE-1",
-            worktree_path="/tmp/repo",
-            status=WorkflowStatus.COMPLETED,
-            created_at=datetime.now(UTC),
-        )
-        assert summary.pr_number is None
-
-    def test_pr_title_defaults_to_none(self) -> None:
-        summary = WorkflowSummary(
-            id=uuid.uuid4(),
-            issue_id="ISSUE-1",
-            worktree_path="/tmp/repo",
-            status=WorkflowStatus.COMPLETED,
-            created_at=datetime.now(UTC),
-        )
-        assert summary.pr_title is None
-
-    def test_pr_comment_count_defaults_to_none(self) -> None:
-        summary = WorkflowSummary(
-            id=uuid.uuid4(),
-            issue_id="ISSUE-1",
-            worktree_path="/tmp/repo",
-            status=WorkflowStatus.COMPLETED,
-            created_at=datetime.now(UTC),
-        )
-        assert summary.pr_comment_count is None
 
     def test_pr_fields_accept_values(self) -> None:
         summary = WorkflowSummary(
@@ -206,34 +180,22 @@ class TestWorkflowDetailResponseFields:
         defaults.update(kwargs)
         return WorkflowDetailResponse(**defaults)  # type: ignore[arg-type]
 
-    def test_pipeline_type_defaults_to_none(self) -> None:
+    @pytest.mark.parametrize(
+        "field",
+        ["pipeline_type", "pr_comments", "pr_number", "pr_title", "pr_comment_count"],
+    )
+    def test_field_defaults_to_none(self, field: str) -> None:
         detail = self._make_detail()
-        assert detail.pipeline_type is None
+        assert getattr(detail, field) is None
 
     def test_pipeline_type_accepts_value(self) -> None:
         detail = self._make_detail(pipeline_type="pr_auto_fix")
         assert detail.pipeline_type == "pr_auto_fix"
 
-    def test_pr_comments_defaults_to_none(self) -> None:
-        detail = self._make_detail()
-        assert detail.pr_comments is None
-
     def test_pr_comments_accepts_list(self) -> None:
         comments = [{"comment_id": 1, "status": "fixed"}]
         detail = self._make_detail(pr_comments=comments)
         assert detail.pr_comments == comments
-
-    def test_pr_number_defaults_to_none(self) -> None:
-        detail = self._make_detail()
-        assert detail.pr_number is None
-
-    def test_pr_title_defaults_to_none(self) -> None:
-        detail = self._make_detail()
-        assert detail.pr_title is None
-
-    def test_pr_comment_count_defaults_to_none(self) -> None:
-        detail = self._make_detail()
-        assert detail.pr_comment_count is None
 
     def test_pr_fields_accept_values(self) -> None:
         detail = self._make_detail(

@@ -305,102 +305,47 @@ class TestClassifyComments:
         assert result[1].actionable is False
         assert result[1].confidence == 0.5
 
-    async def test_below_threshold_logged(self, caplog: pytest.LogCaptureFixture) -> None:
-        """Verify log message when below threshold."""
-        comments = [_comment(1, body="Maybe a bug")]
+    @pytest.mark.parametrize(
+        ("aggressiveness", "categories", "expected_actionable"),
+        [
+            pytest.param(
+                AggressivenessLevel.CRITICAL,
+                [CommentCategory.BUG, CommentCategory.STYLE, CommentCategory.SUGGESTION],
+                [True, False, False],
+                id="critical-filters-non-critical",
+            ),
+            pytest.param(
+                AggressivenessLevel.STANDARD,
+                [CommentCategory.BUG, CommentCategory.STYLE, CommentCategory.SUGGESTION],
+                [True, True, False],
+                id="standard-includes-style",
+            ),
+            pytest.param(
+                AggressivenessLevel.THOROUGH,
+                [CommentCategory.SUGGESTION, CommentCategory.QUESTION, CommentCategory.PRAISE],
+                [True, True, False],
+                id="thorough-includes-suggestions",
+            ),
+        ],
+    )
+    async def test_aggressiveness_filtering(
+        self,
+        aggressiveness: AggressivenessLevel,
+        categories: list[CommentCategory],
+        expected_actionable: list[bool],
+    ) -> None:
+        comments = [_comment(i + 1, body=cat.value) for i, cat in enumerate(categories)]
         classifications = [
-            _make_classification(1, CommentCategory.BUG, 0.5, True, "Uncertain"),
+            _make_classification(i + 1, cat, 0.9, True, cat.value)
+            for i, cat in enumerate(categories)
         ]
         driver = _make_mock_driver(classifications)
-        config = PRAutoFixConfig(
-            aggressiveness=AggressivenessLevel.STANDARD,
-            confidence_threshold=0.7,
-        )
-
-        with caplog.at_level("DEBUG"):
-            await classify_comments(comments, driver, config)
-
-        # Loguru uses a sink; just verify the function runs without error
-        # The confidence check is verified in test_confidence_threshold_config
-
-    async def test_aggressiveness_critical_filters_non_critical(self) -> None:
-        """CRITICAL level marks style/suggestion/question as non-actionable."""
-        comments = [
-            _comment(1, body="Bug here"),
-            _comment(2, body="Style issue"),
-            _comment(3, body="Try this approach"),
-        ]
-        classifications = [
-            _make_classification(1, CommentCategory.BUG, 0.95, True, "Bug"),
-            _make_classification(2, CommentCategory.STYLE, 0.9, True, "Style"),
-            _make_classification(3, CommentCategory.SUGGESTION, 0.9, True, "Suggestion"),
-        ]
-        driver = _make_mock_driver(classifications)
-        config = PRAutoFixConfig(aggressiveness=AggressivenessLevel.CRITICAL)
+        config = PRAutoFixConfig(aggressiveness=aggressiveness)
 
         result = await classify_comments(comments, driver, config)
 
-        assert result[1].actionable is True   # bug stays actionable
-        assert result[2].actionable is False   # style filtered at CRITICAL
-        assert result[3].actionable is False   # suggestion filtered at CRITICAL
-
-    async def test_aggressiveness_standard_includes_style(self) -> None:
-        """STANDARD level keeps bug+security+style actionable."""
-        comments = [
-            _comment(1, body="Bug"),
-            _comment(2, body="Style"),
-            _comment(3, body="Suggestion"),
-        ]
-        classifications = [
-            _make_classification(1, CommentCategory.BUG, 0.95, True, "Bug"),
-            _make_classification(2, CommentCategory.STYLE, 0.9, True, "Style"),
-            _make_classification(3, CommentCategory.SUGGESTION, 0.9, True, "Suggestion"),
-        ]
-        driver = _make_mock_driver(classifications)
-        config = PRAutoFixConfig(aggressiveness=AggressivenessLevel.STANDARD)
-
-        result = await classify_comments(comments, driver, config)
-
-        assert result[1].actionable is True   # bug
-        assert result[2].actionable is True   # style included at STANDARD
-        assert result[3].actionable is False   # suggestion filtered at STANDARD
-
-    async def test_aggressiveness_thorough_includes_suggestions(self) -> None:
-        """THOROUGH level keeps all except praise actionable."""
-        comments = [
-            _comment(1, body="Suggestion"),
-            _comment(2, body="Question"),
-            _comment(3, body="Praise"),
-        ]
-        classifications = [
-            _make_classification(1, CommentCategory.SUGGESTION, 0.9, True, "Suggestion"),
-            _make_classification(2, CommentCategory.QUESTION, 0.9, True, "Question"),
-            _make_classification(3, CommentCategory.PRAISE, 0.9, True, "Praise"),
-        ]
-        driver = _make_mock_driver(classifications)
-        config = PRAutoFixConfig(aggressiveness=AggressivenessLevel.THOROUGH)
-
-        result = await classify_comments(comments, driver, config)
-
-        assert result[1].actionable is True   # suggestion at THOROUGH
-        assert result[2].actionable is True   # question at THOROUGH
-        assert result[3].actionable is False   # praise always non-actionable
-
-    async def test_batch_size_warning(self, caplog: pytest.LogCaptureFixture) -> None:
-        """51+ comments triggers warning log."""
-        comments = [_comment(i, body=f"Comment {i}") for i in range(51)]
-        classifications = [
-            _make_classification(i, CommentCategory.BUG, 0.9, True, "Bug")
-            for i in range(51)
-        ]
-        driver = _make_mock_driver(classifications)
-        config = PRAutoFixConfig(aggressiveness=AggressivenessLevel.STANDARD)
-
-        with caplog.at_level("WARNING"):
-            await classify_comments(comments, driver, config)
-
-        # Loguru sink check -- function runs without error
-        # The batch size warning is implementation detail
+        for i, expected in enumerate(expected_actionable):
+            assert result[i + 1].actionable is expected
 
 
 class TestGroupCommentsByFile:

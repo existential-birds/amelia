@@ -34,6 +34,18 @@ from tests.conftest import create_mock_execute_agentic
 runner = CliRunner()
 
 
+def _make_workflow_list(issue_id: str, status: str, worktree_path: str | None = None, **overrides) -> WorkflowListResponse:
+    fields = {
+        "id": str(uuid4()),
+        "issue_id": issue_id,
+        "status": status,
+        "worktree_path": worktree_path or "/tmp/test-worktree",
+        "started_at": datetime.now(UTC),
+        **overrides,
+    }
+    return WorkflowListResponse(workflows=[WorkflowSummary(**fields)], total=1)
+
+
 @pytest.fixture(autouse=True)
 def mock_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """Set API key env var to allow driver construction."""
@@ -268,18 +280,7 @@ class TestApproveCommand:
         self, tmp_path: Path, mock_worktree_context: MagicMock
     ) -> None:
         """amelia approve should approve the pending workflow."""
-        mock_workflows = WorkflowListResponse(
-            workflows=[
-                WorkflowSummary(
-                    id=str(uuid4()),
-                    issue_id="TEST-789",
-                    status="awaiting_approval",
-                    worktree_path="/tmp/test-worktree",
-                    started_at=datetime.now(UTC),
-                )
-            ],
-            total=1,
-        )
+        mock_workflows = _make_workflow_list("TEST-789", "awaiting_approval")
 
         with patch("amelia.client.cli.get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:
@@ -326,18 +327,7 @@ class TestRejectCommand:
         self, tmp_path: Path, mock_worktree_context: MagicMock
     ) -> None:
         """amelia reject should reject with feedback."""
-        mock_workflows = WorkflowListResponse(
-            workflows=[
-                WorkflowSummary(
-                    id=str(uuid4()),
-                    issue_id="TEST-REJECT",
-                    status="awaiting_approval",
-                    worktree_path="/tmp/test-worktree",
-                    started_at=datetime.now(UTC),
-                )
-            ],
-            total=1,
-        )
+        mock_workflows = _make_workflow_list("TEST-REJECT", "awaiting_approval")
 
         with patch("amelia.client.cli.get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:
@@ -365,18 +355,7 @@ class TestStatusCommand:
         self, tmp_path: Path, mock_worktree_context: MagicMock
     ) -> None:
         """amelia status should show workflow for current worktree."""
-        mock_workflows = WorkflowListResponse(
-            workflows=[
-                WorkflowSummary(
-                    id=str(uuid4()),
-                    issue_id="TEST-STATUS",
-                    status="running",
-                    worktree_path="/tmp/test-worktree",
-                    started_at=datetime.now(UTC),
-                )
-            ],
-            total=1,
-        )
+        mock_workflows = _make_workflow_list("TEST-STATUS", "running")
 
         with patch("amelia.client.cli.get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:
@@ -457,18 +436,7 @@ class TestCancelCommand:
         self, tmp_path: Path, mock_worktree_context: MagicMock
     ) -> None:
         """amelia cancel --force should cancel without confirmation."""
-        mock_workflows = WorkflowListResponse(
-            workflows=[
-                WorkflowSummary(
-                    id=str(uuid4()),
-                    issue_id="TEST-CANCEL",
-                    status="running",
-                    worktree_path="/tmp/test-worktree",
-                    started_at=datetime.now(UTC),
-                )
-            ],
-            total=1,
-        )
+        mock_workflows = _make_workflow_list("TEST-CANCEL", "running")
 
         with patch("amelia.client.cli.get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:
@@ -507,18 +475,8 @@ class TestCancelCommand:
         self, tmp_path: Path, mock_worktree_context: MagicMock
     ) -> None:
         """amelia cancel without --force should prompt and cancel only after user confirms."""
-        mock_workflows = WorkflowListResponse(
-            workflows=[
-                WorkflowSummary(
-                    id=str(workflow_uuid := uuid4()),
-                    issue_id="TEST-CONFIRM",
-                    status="running",
-                    worktree_path="/tmp/test-worktree",
-                    started_at=datetime.now(UTC),
-                )
-            ],
-            total=1,
-        )
+        workflow_uuid = uuid4()
+        mock_workflows = _make_workflow_list("TEST-CONFIRM", "running", id=str(workflow_uuid))
 
         with patch("amelia.client.cli.get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:
@@ -541,18 +499,7 @@ class TestCancelCommand:
         self, tmp_path: Path, mock_worktree_context: MagicMock
     ) -> None:
         """amelia cancel should NOT cancel when user declines confirmation."""
-        mock_workflows = WorkflowListResponse(
-            workflows=[
-                WorkflowSummary(
-                    id=str(uuid4()),
-                    issue_id="TEST-DECLINE",
-                    status="running",
-                    worktree_path="/tmp/test-worktree",
-                    started_at=datetime.now(UTC),
-                )
-            ],
-            total=1,
-        )
+        mock_workflows = _make_workflow_list("TEST-DECLINE", "running")
 
         with patch("amelia.client.cli.get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:
