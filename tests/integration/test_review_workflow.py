@@ -54,6 +54,14 @@ from tests.integration.server.conftest import noop_lifespan
 # Helpers
 # =============================================================================
 
+def _make_blocking_astream(event: asyncio.Event) -> Any:
+    async def blocking_astream(*args: Any, **kwargs: Any) -> Any:
+        await event.wait()
+        return
+        yield  # make it an async generator
+    return blocking_astream
+
+
 def _make_git_mocks() -> dict[str, Any]:
     """Create mock context managers for git subprocess calls.
 
@@ -181,15 +189,41 @@ class TestRequestReview:
         assert review_state.issue_id == source.issue_id
         assert review_state.worktree_path == valid_worktree
 
-    async def test_review_only_mode_propagated(
+    @pytest.mark.parametrize(
+        ("review_kwargs", "config_key", "expected_value"),
+        [
+            pytest.param(
+                {"mode": "review_only"},
+                "review_mode",
+                "review_only",
+                id="review_only_mode",
+            ),
+            pytest.param(
+                {"mode": "review_fix"},
+                "review_mode",
+                "review_fix",
+                id="review_fix_mode",
+            ),
+            pytest.param(
+                {"review_types": ["security", "performance"]},
+                "review_types",
+                ["security", "performance"],
+                id="custom_review_types",
+            ),
+        ],
+    )
+    async def test_review_config_propagated(
         self,
         test_orchestrator: OrchestratorService,
         test_repository: WorkflowRepository,
         active_test_profile: Any,
         valid_worktree: str,
         langgraph_mock_factory: Any,
+        review_kwargs: dict[str, Any],
+        config_key: str,
+        expected_value: Any,
     ) -> None:
-        """review_mode='review_only' is propagated through graph config."""
+        """Review kwargs (mode, review_types) are propagated through graph config."""
         source = await _create_completed_workflow(
             test_repository, worktree_path=valid_worktree,
         )
@@ -212,90 +246,13 @@ class TestRequestReview:
         ):
             mock_create.return_value = mocks.graph
             await test_orchestrator.request_review(
-                source.id, mode="review_only",
+                source.id, **review_kwargs,
             )
 
             # Wait for background task to execute (must be inside patch context)
             await asyncio.sleep(0.2)
 
-        assert captured_config["configurable"]["review_mode"] == "review_only"
-
-    async def test_review_fix_mode_propagated(
-        self,
-        test_orchestrator: OrchestratorService,
-        test_repository: WorkflowRepository,
-        active_test_profile: Any,
-        valid_worktree: str,
-        langgraph_mock_factory: Any,
-    ) -> None:
-        """review_mode='review_fix' is propagated through graph config."""
-        source = await _create_completed_workflow(
-            test_repository, worktree_path=valid_worktree,
-        )
-
-        mocks = langgraph_mock_factory(astream_items=[])
-        git_mocks = _make_git_mocks()
-        captured_config: dict[str, Any] = {}
-
-        def capture_astream(initial_state: Any, *, config: Any, **kwargs: Any) -> Any:
-            captured_config.update(config)
-            from tests.conftest import AsyncIteratorMock
-            return AsyncIteratorMock([])
-
-        mocks.graph.astream = capture_astream
-
-        with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
-            git_mocks["get_git_head"],
-            git_mocks["create_subprocess_exec"],
-        ):
-            mock_create.return_value = mocks.graph
-            await test_orchestrator.request_review(
-                source.id, mode="review_fix",
-            )
-
-            await asyncio.sleep(0.2)
-
-        assert captured_config["configurable"]["review_mode"] == "review_fix"
-
-    async def test_custom_review_types_propagated(
-        self,
-        test_orchestrator: OrchestratorService,
-        test_repository: WorkflowRepository,
-        active_test_profile: Any,
-        valid_worktree: str,
-        langgraph_mock_factory: Any,
-    ) -> None:
-        """Custom review_types are passed through to graph config."""
-        source = await _create_completed_workflow(
-            test_repository, worktree_path=valid_worktree,
-        )
-
-        mocks = langgraph_mock_factory(astream_items=[])
-        git_mocks = _make_git_mocks()
-        captured_config: dict[str, Any] = {}
-
-        def capture_astream(initial_state: Any, *, config: Any, **kwargs: Any) -> Any:
-            captured_config.update(config)
-            from tests.conftest import AsyncIteratorMock
-            return AsyncIteratorMock([])
-
-        mocks.graph.astream = capture_astream
-
-        with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
-            git_mocks["get_git_head"],
-            git_mocks["create_subprocess_exec"],
-        ):
-            mock_create.return_value = mocks.graph
-            await test_orchestrator.request_review(
-                source.id,
-                review_types=["security", "performance"],
-            )
-
-            await asyncio.sleep(0.2)
-
-        assert captured_config["configurable"]["review_types"] == ["security", "performance"]
+        assert captured_config["configurable"][config_key] == expected_value
 
     async def test_workflow_not_found_error(
         self,
@@ -325,20 +282,13 @@ class TestRequestReview:
         git_mocks = _make_git_mocks()
 
         # Occupy the worktree with a long-running task
+        long_event = asyncio.Event()
         with (
             patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
             git_mocks["get_git_head"],
             git_mocks["create_subprocess_exec"],
         ):
-            # Make graph.astream block so task stays active
-            long_event = asyncio.Event()
-
-            async def blocking_astream(*args: Any, **kwargs: Any) -> Any:
-                await long_event.wait()
-                return
-                yield  # make it an async generator
-
-            mocks.graph.astream = blocking_astream
+            mocks.graph.astream = _make_blocking_astream(long_event)
             mock_create.return_value = mocks.graph
 
             # First request occupies the worktree
@@ -387,13 +337,7 @@ class TestRequestReview:
         git_mocks = _make_git_mocks()
 
         long_event = asyncio.Event()
-
-        async def blocking_astream(*args: Any, **kwargs: Any) -> Any:
-            await long_event.wait()
-            return
-            yield  # make it an async generator
-
-        mocks.graph.astream = blocking_astream
+        mocks.graph.astream = _make_blocking_astream(long_event)
 
         with (
             patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
@@ -766,13 +710,7 @@ class TestReviewEndpointIntegration:
         git_mocks = _make_git_mocks()
 
         long_event = asyncio.Event()
-
-        async def blocking_astream(*args: Any, **kwargs: Any) -> Any:
-            await long_event.wait()
-            return
-            yield  # make it an async generator
-
-        mocks.graph.astream = blocking_astream
+        mocks.graph.astream = _make_blocking_astream(long_event)
 
         with (
             patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,

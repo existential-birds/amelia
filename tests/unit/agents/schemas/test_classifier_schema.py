@@ -35,9 +35,6 @@ class TestCommentCategory:
     def test_is_str_subclass(self) -> None:
         assert isinstance(CommentCategory.BUG, str)
 
-    def test_string_comparison(self) -> None:
-        assert CommentCategory.BUG == "bug"
-        assert CommentCategory.SECURITY == "security"
 
 
 # ---------------------------------------------------------------------------
@@ -73,45 +70,27 @@ class TestCommentClassification:
         with pytest.raises(ValidationError):
             c.comment_id = 2  # type: ignore[misc]
 
-    def test_confidence_lower_bound(self) -> None:
+    @pytest.mark.parametrize("value", [-0.1, 1.1])
+    def test_confidence_out_of_range(self, value: float) -> None:
         with pytest.raises(ValidationError):
             CommentClassification(
                 comment_id=1,
                 category=CommentCategory.BUG,
-                confidence=-0.1,
+                confidence=value,
                 actionable=True,
                 reason="bad",
             )
 
-    def test_confidence_upper_bound(self) -> None:
-        with pytest.raises(ValidationError):
-            CommentClassification(
-                comment_id=1,
-                category=CommentCategory.BUG,
-                confidence=1.1,
-                actionable=True,
-                reason="bad",
-            )
-
-    def test_confidence_edge_zero(self) -> None:
+    @pytest.mark.parametrize("value", [0.0, 1.0])
+    def test_confidence_edge_values(self, value: float) -> None:
         c = CommentClassification(
             comment_id=1,
             category=CommentCategory.BUG,
-            confidence=0.0,
-            actionable=False,
-            reason="uncertain",
-        )
-        assert c.confidence == 0.0
-
-    def test_confidence_edge_one(self) -> None:
-        c = CommentClassification(
-            comment_id=1,
-            category=CommentCategory.BUG,
-            confidence=1.0,
+            confidence=value,
             actionable=True,
-            reason="certain",
+            reason="edge",
         )
-        assert c.confidence == 1.0
+        assert c.confidence == value
 
 
 # ---------------------------------------------------------------------------
@@ -184,13 +163,10 @@ class TestIsActionable:
         for level in AggressivenessLevel:
             assert is_actionable(CommentCategory.PRAISE, level) is False
 
-    def test_bug_actionable_at_all_levels(self) -> None:
+    @pytest.mark.parametrize("category", [CommentCategory.BUG, CommentCategory.SECURITY])
+    def test_actionable_at_all_levels(self, category: CommentCategory) -> None:
         for level in AggressivenessLevel:
-            assert is_actionable(CommentCategory.BUG, level) is True
-
-    def test_security_actionable_at_all_levels(self) -> None:
-        for level in AggressivenessLevel:
-            assert is_actionable(CommentCategory.SECURITY, level) is True
+            assert is_actionable(category, level) is True
 
     def test_style_not_actionable_at_critical(self) -> None:
         assert is_actionable(CommentCategory.STYLE, AggressivenessLevel.CRITICAL) is False
@@ -201,15 +177,11 @@ class TestIsActionable:
     def test_style_actionable_at_thorough(self) -> None:
         assert is_actionable(CommentCategory.STYLE, AggressivenessLevel.THOROUGH) is True
 
-    def test_suggestion_only_at_thorough(self) -> None:
-        assert is_actionable(CommentCategory.SUGGESTION, AggressivenessLevel.CRITICAL) is False
-        assert is_actionable(CommentCategory.SUGGESTION, AggressivenessLevel.STANDARD) is False
-        assert is_actionable(CommentCategory.SUGGESTION, AggressivenessLevel.THOROUGH) is True
-
-    def test_question_only_at_thorough(self) -> None:
-        assert is_actionable(CommentCategory.QUESTION, AggressivenessLevel.CRITICAL) is False
-        assert is_actionable(CommentCategory.QUESTION, AggressivenessLevel.STANDARD) is False
-        assert is_actionable(CommentCategory.QUESTION, AggressivenessLevel.THOROUGH) is True
+    @pytest.mark.parametrize("category", [CommentCategory.SUGGESTION, CommentCategory.QUESTION])
+    def test_only_actionable_at_thorough(self, category: CommentCategory) -> None:
+        assert is_actionable(category, AggressivenessLevel.CRITICAL) is False
+        assert is_actionable(category, AggressivenessLevel.STANDARD) is False
+        assert is_actionable(category, AggressivenessLevel.THOROUGH) is True
 
     def test_critical_level_only_bug_and_security(self) -> None:
         """CRITICAL aggressiveness should only pass bug and security."""
