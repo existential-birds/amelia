@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from amelia.core.types import PRAutoFixConfig, PRSummary, Profile
+from amelia.core.types import PRAutoFixConfig, Profile, PRSummary
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.server.database import WorkflowRepository
 from amelia.server.events.bus import EventBus

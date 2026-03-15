@@ -6,12 +6,9 @@ from datetime import UTC, datetime
 import pytest
 
 from amelia.server.models.events import (
+    PERSISTED_TYPES,
     EventLevel,
     EventType,
-    PERSISTED_TYPES,
-    _ERROR_TYPES,
-    _INFO_TYPES,
-    _WARNING_TYPES,
     get_event_level,
 )
 from amelia.server.models.responses import WorkflowDetailResponse, WorkflowSummary

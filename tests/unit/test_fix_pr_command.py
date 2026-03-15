@@ -11,6 +11,7 @@ from amelia.client.api import ServerUnreachableError
 from amelia.client.streaming import WorkflowSummary
 from amelia.main import app
 
+
 runner = CliRunner()
 
 

@@ -57,6 +57,5 @@ class TestGetPRSummary:
         with patch.object(
             service, "_run_gh", new_callable=AsyncMock,
             side_effect=ValueError("gh command failed: no pull requests found"),
-        ):
-            with pytest.raises(ValueError, match="no pull requests found"):
-                await service.get_pr_summary(999)
+        ), pytest.raises(ValueError, match="no pull requests found"):
+            await service.get_pr_summary(999)

@@ -1,13 +1,8 @@
 """Tests for metrics collection in orchestrator and classify_node."""
 
-import asyncio
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
 
-import pytest
-
-from amelia.core.types import PRAutoFixConfig, PRSummary, Profile
+from amelia.core.types import PRAutoFixConfig, Profile, PRSummary
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.pipelines.pr_auto_fix.state import GroupFixResult, GroupFixStatus, ResolutionResult
 from amelia.server.database import MetricsRepository, WorkflowRepository

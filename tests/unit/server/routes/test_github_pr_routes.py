@@ -12,9 +12,9 @@ from fastapi.testclient import TestClient
 from amelia.core.types import (
     AggressivenessLevel,
     PRAutoFixConfig,
+    Profile,
     PRReviewComment,
     PRSummary,
-    Profile,
     TrackerType,
 )
 from amelia.server.database import ProfileRepository, WorkflowRepository

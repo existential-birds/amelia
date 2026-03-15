@@ -11,6 +11,7 @@ from amelia.client.api import PRCommentsResponse, ServerUnreachableError
 from amelia.client.streaming import WorkflowSummary
 from amelia.main import app
 
+
 runner = CliRunner()
 
 
@@ -58,8 +59,9 @@ class TestWatchPRCommand:
         self, mock_client: AsyncMock, mock_summary: WorkflowSummary
     ) -> None:
         """watch-pr runs two cycles: first has comments, second has zero."""
-        from amelia.core.types import PRReviewComment
         from datetime import datetime
+
+        from amelia.core.types import PRReviewComment
 
         comment = PRReviewComment(
             id=1,

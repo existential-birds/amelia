@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from amelia.tools.git_utils import PROTECTED_BRANCHES, GitOperations
+from amelia.tools.git_utils import GitOperations
 
 
 @pytest.fixture

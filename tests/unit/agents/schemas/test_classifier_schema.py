@@ -37,7 +37,7 @@ class TestCommentCategory:
 
     def test_string_comparison(self) -> None:
         assert CommentCategory.BUG == "bug"
-        assert "security" == CommentCategory.SECURITY
+        assert CommentCategory.SECURITY == "security"
 
 
 # ---------------------------------------------------------------------------
