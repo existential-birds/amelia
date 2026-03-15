@@ -66,7 +66,12 @@ from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.sandbox.proxy import ProviderConfig, create_proxy_router
 from amelia.sandbox.teardown import teardown_all_sandbox_containers
 from amelia.server.config import ServerConfig
-from amelia.server.database import ProfileRepository, SettingsRepository, WorkflowRepository
+from amelia.server.database import (
+    MetricsRepository,
+    ProfileRepository,
+    SettingsRepository,
+    WorkflowRepository,
+)
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.connection import Database
 from amelia.server.database.migrator import Migrator
@@ -270,10 +275,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # create_issue_comment on divergence failure. The poller creates per-profile
     # services for actual PR listing and comment fetching.
     # Use a placeholder -- profiles provide real repo_roots at poll time.
+    metrics_repo = MetricsRepository(database)
     pr_fix_orchestrator = PRAutoFixOrchestrator(
         event_bus=event_bus,
         github_pr_service=GitHubPRService("."),
         workflow_repo=repository,
+        metrics_repo=metrics_repo,
     )
     pr_poller = PRCommentPoller(
         profile_repo=profile_repo,
