@@ -17,21 +17,27 @@ from amelia.client.api import (
 )
 
 
+def _make_response(status: int, body: dict) -> AsyncMock:
+    resp = AsyncMock()
+    resp.status_code = status
+    resp.json = lambda: body
+    return resp
+
+
+@pytest.fixture
+def client() -> AmeliaClient:
+    return AmeliaClient(base_url="http://localhost:8420")
+
+
 class TestTriggerPRAutofix:
     """Tests for AmeliaClient.trigger_pr_autofix."""
 
-    @pytest.fixture
-    def client(self) -> AmeliaClient:
-        return AmeliaClient(base_url="http://localhost:8420")
-
     async def test_trigger_success(self, client: AmeliaClient) -> None:
         """POST to /api/github/prs/{n}/auto-fix returns TriggerPRAutoFixResponse."""
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 202
-        mock_resp.json = lambda: {
+        mock_resp = _make_response(202, {
             "workflow_id": "wf-123",
             "message": "Auto-fix cycle triggered for PR #42",
-        }
+        })
 
         with patch("httpx.AsyncClient.post", return_value=mock_resp) as mock_post:
             result = await client.trigger_pr_autofix(42, "myprofile")
@@ -46,9 +52,7 @@ class TestTriggerPRAutofix:
 
     async def test_trigger_with_aggressiveness(self, client: AmeliaClient) -> None:
         """Aggressiveness override is sent as JSON body."""
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 202
-        mock_resp.json = lambda: {"workflow_id": "wf-456", "message": "ok"}
+        mock_resp = _make_response(202, {"workflow_id": "wf-456", "message": "ok"})
 
         with patch("httpx.AsyncClient.post", return_value=mock_resp) as mock_post:
             await client.trigger_pr_autofix(10, "prof", aggressiveness="thorough")
@@ -58,9 +62,7 @@ class TestTriggerPRAutofix:
 
     async def test_trigger_no_aggressiveness_no_body(self, client: AmeliaClient) -> None:
         """Without aggressiveness, no JSON body is sent."""
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 202
-        mock_resp.json = lambda: {"workflow_id": "wf-789", "message": "ok"}
+        mock_resp = _make_response(202, {"workflow_id": "wf-789", "message": "ok"})
 
         with patch("httpx.AsyncClient.post", return_value=mock_resp) as mock_post:
             await client.trigger_pr_autofix(10, "prof")
@@ -79,9 +81,7 @@ class TestTriggerPRAutofix:
 
     async def test_trigger_invalid_request(self, client: AmeliaClient) -> None:
         """400 response raises InvalidRequestError."""
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 400
-        mock_resp.json = lambda: {"detail": "bad request"}
+        mock_resp = _make_response(400, {"detail": "bad request"})
 
         with (
             patch("httpx.AsyncClient.post", return_value=mock_resp),
@@ -93,15 +93,9 @@ class TestTriggerPRAutofix:
 class TestListPRs:
     """Tests for AmeliaClient.list_prs."""
 
-    @pytest.fixture
-    def client(self) -> AmeliaClient:
-        return AmeliaClient(base_url="http://localhost:8420")
-
     async def test_list_prs_success(self, client: AmeliaClient) -> None:
         """GET /api/github/prs returns PRListResponse."""
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 200
-        mock_resp.json = lambda: {
+        mock_resp = _make_response(200, {
             "prs": [
                 {
                     "number": 42,
@@ -111,7 +105,7 @@ class TestListPRs:
                     "updated_at": "2026-01-01T00:00:00Z",
                 }
             ]
-        }
+        })
 
         with patch("httpx.AsyncClient.get", return_value=mock_resp):
             result = await client.list_prs("myprofile")
@@ -121,9 +115,7 @@ class TestListPRs:
 
     async def test_list_prs_profile_not_found(self, client: AmeliaClient) -> None:
         """404 response raises WorkflowNotFoundError."""
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 404
-        mock_resp.json = lambda: {"detail": "Profile not found"}
+        mock_resp = _make_response(404, {"detail": "Profile not found"})
 
         with (
             patch("httpx.AsyncClient.get", return_value=mock_resp),
@@ -135,15 +127,9 @@ class TestListPRs:
 class TestGetPRComments:
     """Tests for AmeliaClient.get_pr_comments."""
 
-    @pytest.fixture
-    def client(self) -> AmeliaClient:
-        return AmeliaClient(base_url="http://localhost:8420")
-
     async def test_get_comments_success(self, client: AmeliaClient) -> None:
         """GET /api/github/prs/{n}/comments returns PRCommentsResponse."""
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 200
-        mock_resp.json = lambda: {
+        mock_resp = _make_response(200, {
             "comments": [
                 {
                     "id": 1,
@@ -157,7 +143,7 @@ class TestGetPRComments:
                     "pr_number": 42,
                 }
             ]
-        }
+        })
 
         with patch("httpx.AsyncClient.get", return_value=mock_resp):
             result = await client.get_pr_comments(42, "myprofile")
@@ -167,9 +153,7 @@ class TestGetPRComments:
 
     async def test_get_comments_server_error(self, client: AmeliaClient) -> None:
         """Non-200 response raises InvalidRequestError."""
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 500
-        mock_resp.json = lambda: {"detail": "Internal error"}
+        mock_resp = _make_response(500, {"detail": "Internal error"})
         mock_resp.raise_for_status = lambda: (_ for _ in ()).throw(
             httpx.HTTPStatusError("Server error", request=httpx.Request("GET", "http://test"), response=mock_resp)
         )
@@ -184,22 +168,16 @@ class TestGetPRComments:
 class TestGetPRAutoFixStatus:
     """Tests for AmeliaClient.get_pr_autofix_status."""
 
-    @pytest.fixture
-    def client(self) -> AmeliaClient:
-        return AmeliaClient(base_url="http://localhost:8420")
-
     async def test_status_enabled(self, client: AmeliaClient) -> None:
         """Returns PRAutoFixStatusResponse with enabled=True."""
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 200
-        mock_resp.json = lambda: {
+        mock_resp = _make_response(200, {
             "enabled": True,
             "config": {
                 "aggressiveness": 2,
                 "auto_resolve": True,
                 "resolve_no_changes": True,
             },
-        }
+        })
 
         with patch("httpx.AsyncClient.get", return_value=mock_resp):
             result = await client.get_pr_autofix_status("myprofile")
@@ -210,9 +188,7 @@ class TestGetPRAutoFixStatus:
 
     async def test_status_disabled(self, client: AmeliaClient) -> None:
         """Returns PRAutoFixStatusResponse with enabled=False."""
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 200
-        mock_resp.json = lambda: {"enabled": False, "config": None}
+        mock_resp = _make_response(200, {"enabled": False, "config": None})
 
         with patch("httpx.AsyncClient.get", return_value=mock_resp):
             result = await client.get_pr_autofix_status("myprofile")
@@ -222,9 +198,7 @@ class TestGetPRAutoFixStatus:
 
     async def test_status_profile_not_found(self, client: AmeliaClient) -> None:
         """404 response raises WorkflowNotFoundError."""
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 404
-        mock_resp.json = lambda: {"detail": "Profile not found"}
+        mock_resp = _make_response(404, {"detail": "Profile not found"})
 
         with (
             patch("httpx.AsyncClient.get", return_value=mock_resp),

@@ -84,6 +84,17 @@ def mock_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
+def plan_path(
+    tmp_path: Path, multi_task_plan_content: str
+) -> Path:
+    """Write multi-task plan to a temp file and return the path."""
+    p = tmp_path / "plans" / "test-plan.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(multi_task_plan_content)
+    return p
+
+
+@pytest.fixture
 def multi_task_plan_content() -> str:
     """A plan with 3 tasks for testing multi-task execution."""
     return """# Test Plan
@@ -179,19 +190,16 @@ class TestDeveloperNodeTaskInjection:
 
     async def test_developer_node_clears_session_for_task_execution(
         self,
-        tmp_path: Path,
         integration_profile: Profile,
         integration_issue: Issue,
         multi_task_plan_content: str,
+        plan_path: Path,
     ) -> None:
         """Developer node should clear driver_session_id for fresh task sessions.
 
         Real components: call_developer_node session handling
         Mock boundary: ApiDriver.execute_agentic
         """
-        plan_path = tmp_path / "plans" / "test-plan.md"
-        plan_path.parent.mkdir(parents=True, exist_ok=True)
-        plan_path.write_text(multi_task_plan_content)
 
         # State with existing session that should be cleared
         state = make_execution_state(
@@ -227,19 +235,16 @@ class TestDeveloperNodeTaskInjection:
 
     async def test_developer_node_injects_task_prompt(
         self,
-        tmp_path: Path,
         integration_profile: Profile,
         integration_issue: Issue,
         multi_task_plan_content: str,
+        plan_path: Path,
     ) -> None:
         """Developer node should inject task-specific prompt for multi-task execution.
 
         Real components: call_developer_node task prompt injection
         Mock boundary: ApiDriver.execute_agentic
         """
-        plan_path = tmp_path / "plans" / "test-plan.md"
-        plan_path.parent.mkdir(parents=True, exist_ok=True)
-        plan_path.write_text(multi_task_plan_content)
 
         state = make_execution_state(
             profile=integration_profile,
@@ -360,6 +365,19 @@ class TestReviewerNodeTaskIteration:
         assert result["task_review_iteration"] == 2
 
 
+@pytest.fixture
+def git_repo_profile(git_repo: Path) -> Profile:
+    """Create profile with git_repo as working directory."""
+    return make_profile(
+        name="test-task-execution",
+        driver="api",
+        model="openrouter:anthropic/claude-sonnet-4-20250514",
+        repo_root=str(git_repo),
+        plan_output_dir=str(git_repo / "plans"),
+        max_task_review_iterations=2,
+    )
+
+
 @pytest.mark.integration
 class TestNextTaskNodeTransition:
     """Test next_task_node transitions between tasks."""
@@ -367,6 +385,7 @@ class TestNextTaskNodeTransition:
     async def test_next_task_node_increments_index_and_resets_iteration(
         self,
         git_repo: Path,
+        git_repo_profile: Profile,
         integration_issue: Issue,
     ) -> None:
         """next_task_node should increment task index and reset iteration.
@@ -374,21 +393,11 @@ class TestNextTaskNodeTransition:
         Real components: next_task_node state transitions
         Mock boundary: git commands for commit (via subprocess)
         """
-        # Create profile with git_repo as working directory
-        profile = make_profile(
-            name="test-task-execution",
-            driver="api",
-            model="openrouter:anthropic/claude-sonnet-4-20250514",
-            repo_root=str(git_repo),
-            plan_output_dir=str(git_repo / "plans"),
-            max_task_review_iterations=2,
-        )
-
         # Create a change to commit
         (git_repo / "task_0.py").write_text("# Task 0 code")
 
         state = make_execution_state(
-            profile=profile,
+            profile=git_repo_profile,
             issue=integration_issue,
             total_tasks=3,
             current_task_index=0,
@@ -398,7 +407,7 @@ class TestNextTaskNodeTransition:
 
         config = make_config(
             thread_id=str(uuid4()),
-            profile=profile,
+            profile=git_repo_profile,
         )
 
         result = await next_task_node(state, cast(RunnableConfig, config))
@@ -411,29 +420,18 @@ class TestNextTaskNodeTransition:
     async def test_next_task_node_commits_changes(
         self,
         git_repo: Path,
+        git_repo_profile: Profile,
         integration_issue: Issue,
     ) -> None:
         """next_task_node should commit changes for the completed task.
 
         Real components: next_task_node, commit_task_changes
         """
-        import subprocess
-
-        # Create profile with git_repo as working directory
-        profile = make_profile(
-            name="test-task-execution",
-            driver="api",
-            model="openrouter:anthropic/claude-sonnet-4-20250514",
-            repo_root=str(git_repo),
-            plan_output_dir=str(git_repo / "plans"),
-            max_task_review_iterations=2,
-        )
-
         # Create a change that will be committed
         (git_repo / "new_file.py").write_text("# New code")
 
         state = make_execution_state(
-            profile=profile,
+            profile=git_repo_profile,
             issue=integration_issue,
             total_tasks=3,
             current_task_index=0,
@@ -441,7 +439,7 @@ class TestNextTaskNodeTransition:
 
         config = make_config(
             thread_id=str(uuid4()),
-            profile=profile,
+            profile=git_repo_profile,
         )
 
         await next_task_node(state, cast(RunnableConfig, config))
@@ -464,19 +462,16 @@ class TestPlanMarkdownPreservation:
 
     async def test_plan_markdown_unchanged_after_developer_node(
         self,
-        tmp_path: Path,
         integration_profile: Profile,
         integration_issue: Issue,
         multi_task_plan_content: str,
+        plan_path: Path,
     ) -> None:
         """Developer node should NOT mutate plan_markdown in returned state.
 
         Real components: call_developer_node state handling
         Mock boundary: ApiDriver.execute_agentic
         """
-        plan_path = tmp_path / "plans" / "test-plan.md"
-        plan_path.parent.mkdir(parents=True, exist_ok=True)
-        plan_path.write_text(multi_task_plan_content)
 
         original_plan = multi_task_plan_content
 
@@ -506,19 +501,16 @@ class TestPlanMarkdownPreservation:
 
     async def test_developer_prompt_contains_task_section_not_full_plan(
         self,
-        tmp_path: Path,
         integration_profile: Profile,
         integration_issue: Issue,
         multi_task_plan_content: str,
+        plan_path: Path,
     ) -> None:
         """Developer should receive extracted task section, not full plan.
 
         Real components: Developer._build_prompt, extract_task_section
         Mock boundary: ApiDriver.execute_agentic
         """
-        plan_path = tmp_path / "plans" / "test-plan.md"
-        plan_path.parent.mkdir(parents=True, exist_ok=True)
-        plan_path.write_text(multi_task_plan_content)
 
         state = make_execution_state(
             profile=integration_profile,

@@ -19,9 +19,9 @@ Real components:
 - Request/Response model validation
 """
 
-import tempfile
 import uuid
 from collections.abc import AsyncGenerator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -67,6 +67,21 @@ async def test_client(
         base_url="http://testserver",
     ) as client:
         yield client
+
+
+@contextmanager
+def patched_graph(langgraph_mock_factory: Any):
+    """Patch create_implementation_graph to return a mock graph.
+
+    Consolidates the repeated pattern of creating langgraph mocks and
+    patching create_implementation_graph.
+    """
+    mocks = langgraph_mock_factory(astream_items=[])
+    with patch(
+        "amelia.server.orchestrator.service.create_implementation_graph"
+    ) as mock_create_graph:
+        mock_create_graph.return_value = mocks.graph
+        yield mocks
 
 
 async def create_pending_workflow(
@@ -147,12 +162,7 @@ class TestQueueWorkflowCreation:
     ) -> None:
         """Creating workflow without start param defaults to start=True."""
         # Mock LangGraph to prevent actual graph execution
-        mocks = langgraph_mock_factory(astream_items=[])
-        with patch(
-            "amelia.server.orchestrator.service.create_implementation_graph"
-        ) as mock_create_graph:
-            mock_create_graph.return_value = mocks.graph
-
+        with patched_graph(langgraph_mock_factory):
             response = await test_client.post(
                 "/api/workflows",
                 json={
@@ -175,31 +185,26 @@ class TestStartPendingWorkflow:
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         langgraph_mock_factory: Any,
+        tmp_path: Path,
     ) -> None:
         """Starting a pending workflow returns 202 Accepted."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            resolved_path = str(Path(tmp_dir).resolve())
+        resolved_path = str(tmp_path.resolve())
 
-            # Create pending workflow directly in DB
-            workflow = await create_pending_workflow(
-                test_repository,
-                issue_id="TEST-START",
-                worktree_path=resolved_path,
-            )
+        # Create pending workflow directly in DB
+        workflow = await create_pending_workflow(
+            test_repository,
+            issue_id="TEST-START",
+            worktree_path=resolved_path,
+        )
 
-            # Mock LangGraph to prevent actual graph execution
-            mocks = langgraph_mock_factory(astream_items=[])
-            with patch(
-                "amelia.server.orchestrator.service.create_implementation_graph"
-            ) as mock_create_graph:
-                mock_create_graph.return_value = mocks.graph
+        # Mock LangGraph to prevent actual graph execution
+        with patched_graph(langgraph_mock_factory):
+            response = await test_client.post(f"/api/workflows/{workflow.id}/start")
 
-                response = await test_client.post(f"/api/workflows/{workflow.id}/start")
-
-            assert response.status_code == status.HTTP_202_ACCEPTED
-            data = response.json()
-            assert data["workflow_id"] == str(workflow.id)
-            assert data["status"] == "started"
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        data = response.json()
+        assert data["workflow_id"] == str(workflow.id)
+        assert data["status"] == "started"
 
     async def test_start_nonexistent_workflow_returns_404(
         self,
@@ -242,98 +247,90 @@ class TestBatchStartWorkflows:
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         langgraph_mock_factory: Any,
+        tmp_path: Path,
     ) -> None:
         """Batch start with no filters starts all pending workflows."""
-        # Create pending workflows in different temp directories to avoid conflicts
-        with tempfile.TemporaryDirectory() as tmp_dir1, \
-             tempfile.TemporaryDirectory() as tmp_dir2:
-            path1 = str(Path(tmp_dir1).resolve())
-            path2 = str(Path(tmp_dir2).resolve())
+        # Create pending workflows in different directories to avoid conflicts
+        path1 = str((tmp_path / "wt1").resolve())
+        path2 = str((tmp_path / "wt2").resolve())
+        (tmp_path / "wt1").mkdir()
+        (tmp_path / "wt2").mkdir()
 
-            wf1 = await create_pending_workflow(
-                test_repository,
-                issue_id="TEST-BATCH-1",
-                worktree_path=path1,
+        wf1 = await create_pending_workflow(
+            test_repository,
+            issue_id="TEST-BATCH-1",
+            worktree_path=path1,
+        )
+        wf2 = await create_pending_workflow(
+            test_repository,
+            issue_id="TEST-BATCH-2",
+            worktree_path=path2,
+        )
+
+        # Mock LangGraph
+        with patched_graph(langgraph_mock_factory):
+            response = await test_client.post(
+                "/api/workflows/start-batch",
+                json={},
             )
-            wf2 = await create_pending_workflow(
-                test_repository,
-                issue_id="TEST-BATCH-2",
-                worktree_path=path2,
-            )
 
-            # Mock LangGraph
-            mocks = langgraph_mock_factory(astream_items=[])
-            with patch(
-                "amelia.server.orchestrator.service.create_implementation_graph"
-            ) as mock_create_graph:
-                mock_create_graph.return_value = mocks.graph
-
-                response = await test_client.post(
-                    "/api/workflows/start-batch",
-                    json={},
-                )
-
-            assert response.status_code == status.HTTP_200_OK
-            data = response.json()
-            assert "started" in data
-            assert "errors" in data
-            # Both workflows should be started
-            assert len(data["started"]) == 2
-            assert str(wf1.id) in data["started"]
-            assert str(wf2.id) in data["started"]
-            assert data["errors"] == {}
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "started" in data
+        assert "errors" in data
+        # Both workflows should be started
+        assert len(data["started"]) == 2
+        assert str(wf1.id) in data["started"]
+        assert str(wf2.id) in data["started"]
+        assert data["errors"] == {}
 
     async def test_batch_start_specific_workflow_ids(
         self,
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         langgraph_mock_factory: Any,
+        tmp_path: Path,
     ) -> None:
         """Batch start with workflow_ids only starts specified workflows."""
-        with tempfile.TemporaryDirectory() as tmp_dir1, \
-             tempfile.TemporaryDirectory() as tmp_dir2, \
-             tempfile.TemporaryDirectory() as tmp_dir3:
-            path1 = str(Path(tmp_dir1).resolve())
-            path2 = str(Path(tmp_dir2).resolve())
-            path3 = str(Path(tmp_dir3).resolve())
+        path1 = str((tmp_path / "wt1").resolve())
+        path2 = str((tmp_path / "wt2").resolve())
+        path3 = str((tmp_path / "wt3").resolve())
+        (tmp_path / "wt1").mkdir()
+        (tmp_path / "wt2").mkdir()
+        (tmp_path / "wt3").mkdir()
 
-            wf1 = await create_pending_workflow(
-                test_repository,
-                issue_id="TEST-SEL-1",
-                worktree_path=path1,
+        wf1 = await create_pending_workflow(
+            test_repository,
+            issue_id="TEST-SEL-1",
+            worktree_path=path1,
+        )
+        wf2 = await create_pending_workflow(
+            test_repository,
+            issue_id="TEST-SEL-2",
+            worktree_path=path2,
+        )
+        wf3 = await create_pending_workflow(
+            test_repository,
+            issue_id="TEST-NOT-SEL",
+            worktree_path=path3,
+        )
+
+        # Mock LangGraph
+        with patched_graph(langgraph_mock_factory):
+            response = await test_client.post(
+                "/api/workflows/start-batch",
+                json={"workflow_ids": [str(wf1.id), str(wf2.id)]},
             )
-            wf2 = await create_pending_workflow(
-                test_repository,
-                issue_id="TEST-SEL-2",
-                worktree_path=path2,
-            )
-            wf3 = await create_pending_workflow(
-                test_repository,
-                issue_id="TEST-NOT-SEL",
-                worktree_path=path3,
-            )
 
-            # Mock LangGraph
-            mocks = langgraph_mock_factory(astream_items=[])
-            with patch(
-                "amelia.server.orchestrator.service.create_implementation_graph"
-            ) as mock_create_graph:
-                mock_create_graph.return_value = mocks.graph
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        # Only selected workflows should be started
+        assert set(data["started"]) == {str(wf1.id), str(wf2.id)}
 
-                response = await test_client.post(
-                    "/api/workflows/start-batch",
-                    json={"workflow_ids": [str(wf1.id), str(wf2.id)]},
-                )
-
-            assert response.status_code == status.HTTP_200_OK
-            data = response.json()
-            # Only selected workflows should be started
-            assert set(data["started"]) == {str(wf1.id), str(wf2.id)}
-
-            # Verify wf3 is still pending
-            not_selected = await test_repository.get(wf3.id)
-            assert not_selected is not None
-            assert not_selected.workflow_status == "pending"
+        # Verify wf3 is still pending
+        not_selected = await test_repository.get(wf3.id)
+        assert not_selected is not None
+        assert not_selected.workflow_status == "pending"
 
     async def test_batch_start_empty_result_when_no_pending(
         self,
@@ -383,12 +380,7 @@ class TestQueueThenStartFlow:
         assert get_response.json()["status"] == "pending"
 
         # Step 3: Start the workflow
-        mocks = langgraph_mock_factory(astream_items=[])
-        with patch(
-            "amelia.server.orchestrator.service.create_implementation_graph"
-        ) as mock_create_graph:
-            mock_create_graph.return_value = mocks.graph
-
+        with patched_graph(langgraph_mock_factory):
             start_response = await test_client.post(f"/api/workflows/{workflow_id}/start")
 
         assert start_response.status_code == status.HTTP_202_ACCEPTED
@@ -543,12 +535,7 @@ class TestQueueMultiplePendingWorkflows:
         workflow2_id = response2.json()["id"]
 
         # Start first workflow
-        mocks = langgraph_mock_factory(astream_items=[])
-        with patch(
-            "amelia.server.orchestrator.service.create_implementation_graph"
-        ) as mock_create_graph:
-            mock_create_graph.return_value = mocks.graph
-
+        with patched_graph(langgraph_mock_factory):
             start1_response = await test_client.post(f"/api/workflows/{workflow1_id}/start")
             assert start1_response.status_code == status.HTTP_202_ACCEPTED
 
@@ -624,12 +611,7 @@ class TestQueuedWorkflowExecution:
         workflow_id = response.json()["id"]
 
         # Start the workflow
-        mocks = langgraph_mock_factory(astream_items=[])
-        with patch(
-            "amelia.server.orchestrator.service.create_implementation_graph"
-        ) as mock_create_graph:
-            mock_create_graph.return_value = mocks.graph
-
+        with patched_graph(langgraph_mock_factory):
             start_response = await test_client.post(f"/api/workflows/{workflow_id}/start")
 
         # Should succeed
@@ -686,12 +668,7 @@ class TestQueuedWorkflowStateTransition:
         assert workflow.workflow_status == "pending"
 
         # Start the workflow (mocks apply to HTTP request context only)
-        mocks = langgraph_mock_factory(astream_items=[])
-        with patch(
-            "amelia.server.orchestrator.service.create_implementation_graph"
-        ) as mock_create_graph:
-            mock_create_graph.return_value = mocks.graph
-
+        with patched_graph(langgraph_mock_factory):
             start_response = await test_client.post(f"/api/workflows/{workflow_id}/start")
 
         # Key assertion: HTTP request was accepted
