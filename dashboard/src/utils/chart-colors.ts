@@ -26,3 +26,13 @@ export function getModelColor(rankIndex: number): string {
   const index = rankIndex % MODEL_COLORS.length;
   return MODEL_COLORS[index] ?? MODEL_COLORS[0];
 }
+
+/**
+ * OKLCH color constants for PR fix outcome categories.
+ * Used in chart configs and Bar component fills.
+ */
+export const PR_FIX_COLORS = {
+  fixed: 'oklch(0.723 0.191 149.579)',
+  failed: 'oklch(0.637 0.237 25.331)',
+  skipped: 'oklch(0.795 0.184 86.047)',
+} as const;

@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/empty';
 import { formatTokens, formatCost, formatDuration } from '@/utils/workflow';
 import { getModelColor } from '@/utils/chart-colors';
+import { downloadCSV } from '@/utils/export';
 import { cn } from '@/lib/utils';
 import type { analyticsLoader } from '@/loaders/analytics';
 import type { UsageByModel } from '@/types';
@@ -68,23 +69,10 @@ function getPresetDescription(preset: string): string {
 }
 
 /**
- * Escape a CSV field value to handle special characters.
- */
-function escapeCsvField(value: string | number): string {
-  let text = String(value);
-  if (/^[=+\-@]/.test(text)) {
-    text = `'${text}`;
-  }
-  const needsQuote = /[",\n\r]/.test(text);
-  text = text.replace(/"/g, '""');
-  return needsQuote ? `"${text}"` : text;
-}
-
-/**
  * Export usage data to CSV.
  */
-function exportCSV(byModel: UsageByModel[], dateRange: string) {
-  const rows = [
+function exportUsageCSV(byModel: UsageByModel[], dateRange: string) {
+  const rows: (string | number)[] [] = [
     ['Model', 'Workflows', 'Success Rate', 'Tokens', 'Cost (USD)'],
     ...byModel.map((m) => [
       m.model,
@@ -94,14 +82,7 @@ function exportCSV(byModel: UsageByModel[], dateRange: string) {
       m.cost_usd.toFixed(2),
     ]),
   ];
-  const csv = rows.map((r) => r.map(escapeCsvField).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `costs-${dateRange}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCSV(rows, `costs-${dateRange}`);
 }
 
 /**
@@ -425,7 +406,7 @@ function CostsTabContent({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => exportCSV(usage.by_model, getExportFilename(currentPreset))}
+            onClick={() => exportUsageCSV(usage.by_model, getExportFilename(currentPreset))}
           >
             <Download className="size-4 mr-1" />
             Export CSV

@@ -13,16 +13,20 @@ import {
 import { cn } from '@/lib/utils';
 import type { PRCommentData } from '@/types';
 
+/** Status style mapping: status -> [IconComponent, iconColor, borderColor]. */
+const STATUS_STYLES: Record<
+  PRCommentData['status'],
+  { icon: typeof CheckCircle2; color: string; border: string }
+> = {
+  fixed: { icon: CheckCircle2, color: 'text-green-500', border: 'border-l-green-500/30' },
+  failed: { icon: XCircle, color: 'text-red-500', border: 'border-l-red-500/30' },
+  skipped: { icon: MinusCircle, color: 'text-muted-foreground', border: 'border-l-muted-foreground/30' },
+};
+
 /** Status icon component based on resolution status. */
 function StatusIcon({ status }: { status: PRCommentData['status'] }) {
-  switch (status) {
-    case 'fixed':
-      return <CheckCircle2 className="size-4 text-green-500 shrink-0" />;
-    case 'failed':
-      return <XCircle className="size-4 text-red-500 shrink-0" />;
-    case 'skipped':
-      return <MinusCircle className="size-4 text-muted-foreground shrink-0" />;
-  }
+  const { icon: Icon, color } = STATUS_STYLES[status];
+  return <Icon className={`size-4 ${color} shrink-0`} />;
 }
 
 /** Format file_path:line or "General" for null paths. */
@@ -42,9 +46,8 @@ interface PRCommentSectionProps {
  * comment rows with file location, body snippet, and external link.
  */
 export function PRCommentSection({ comments }: PRCommentSectionProps) {
-  const fixed = comments.filter((c) => c.status === 'fixed').length;
-  const failed = comments.filter((c) => c.status === 'failed').length;
-  const skipped = comments.filter((c) => c.status === 'skipped').length;
+  const counts = { fixed: 0, failed: 0, skipped: 0 };
+  for (const c of comments) counts[c.status]++;
 
   return (
     <div className="p-4 border border-border rounded-lg bg-card/50">
@@ -54,11 +57,11 @@ export function PRCommentSection({ comments }: PRCommentSectionProps) {
 
       {/* Summary bar */}
       <div className="flex items-center gap-3 mb-3 text-sm font-mono">
-        <span className="text-green-500">{fixed} fixed</span>
+        <span className="text-green-500">{counts.fixed} fixed</span>
         <span className="text-muted-foreground/40">&bull;</span>
-        <span className="text-red-500">{failed} failed</span>
+        <span className="text-red-500">{counts.failed} failed</span>
         <span className="text-muted-foreground/40">&bull;</span>
-        <span className="text-muted-foreground">{skipped} skipped</span>
+        <span className="text-muted-foreground">{counts.skipped} skipped</span>
       </div>
 
       {/* Comment rows */}
@@ -90,9 +93,7 @@ export function PRCommentSection({ comments }: PRCommentSectionProps) {
             <CollapsibleContent>
               <div className={cn(
                 'ml-6 pl-2 py-2 border-l-2 text-xs space-y-1',
-                comment.status === 'fixed' && 'border-l-green-500/30',
-                comment.status === 'failed' && 'border-l-red-500/30',
-                comment.status === 'skipped' && 'border-l-muted-foreground/30',
+                STATUS_STYLES[comment.status].border,
               )}>
                 <p className="text-foreground/80 whitespace-pre-wrap">{comment.body}</p>
                 <p className="text-muted-foreground">

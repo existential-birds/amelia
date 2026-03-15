@@ -19,6 +19,7 @@ import {
 import { Bar, BarChart, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { Activity } from 'lucide-react';
 import { ClassificationAuditLog } from '@/components/ClassificationAuditLog';
+import { PR_FIX_COLORS } from '@/utils/chart-colors';
 import type { PRAutoFixMetricsResponse } from '@/types';
 
 interface PRFixMetricsTabProps {
@@ -52,18 +53,9 @@ const latencyChartConfig: ChartConfig = {
 
 /** Chart config for the success breakdown bar chart. */
 const breakdownChartConfig: ChartConfig = {
-  fixed: {
-    label: 'Fixed',
-    color: 'oklch(0.723 0.191 149.579)',
-  },
-  failed: {
-    label: 'Failed',
-    color: 'oklch(0.637 0.237 25.331)',
-  },
-  skipped: {
-    label: 'Skipped',
-    color: 'oklch(0.795 0.184 86.047)',
-  },
+  fixed: { label: 'Fixed', color: PR_FIX_COLORS.fixed },
+  failed: { label: 'Failed', color: PR_FIX_COLORS.failed },
+  skipped: { label: 'Skipped', color: PR_FIX_COLORS.skipped },
 };
 
 /**
@@ -187,19 +179,19 @@ export function PRFixMetricsTab({ metrics, preset }: PRFixMetricsTabProps) {
               <Bar
                 dataKey="fixed"
                 stackId="breakdown"
-                fill="oklch(0.723 0.191 149.579)"
+                fill={PR_FIX_COLORS.fixed}
                 radius={[0, 0, 0, 0]}
               />
               <Bar
                 dataKey="failed"
                 stackId="breakdown"
-                fill="oklch(0.637 0.237 25.331)"
+                fill={PR_FIX_COLORS.failed}
                 radius={[0, 0, 0, 0]}
               />
               <Bar
                 dataKey="skipped"
                 stackId="breakdown"
-                fill="oklch(0.795 0.184 86.047)"
+                fill={PR_FIX_COLORS.skipped}
                 radius={[4, 4, 0, 0]}
               />
             </BarChart>
