@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -42,7 +42,7 @@ def _make_mock_process(
 # Sample data
 # ---------------------------------------------------------------------------
 
-_NOW = datetime(2026, 3, 13, 12, 0, 0, tzinfo=timezone.utc)
+_NOW = datetime(2026, 3, 13, 12, 0, 0, tzinfo=UTC)
 
 _REST_COMMENTS = [
     {
@@ -335,9 +335,11 @@ async def test_gh_command_failure_raises_valueerror(
         returncode=1,
     )
 
-    with patch("asyncio.create_subprocess_exec", return_value=proc):
-        with pytest.raises(ValueError, match="HTTP 404"):
-            await service.list_open_prs()
+    with (
+        patch("asyncio.create_subprocess_exec", return_value=proc),
+        pytest.raises(ValueError, match="HTTP 404"),
+    ):
+        await service.list_open_prs()
 
 
 # ---------------------------------------------------------------------------

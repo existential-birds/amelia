@@ -32,7 +32,7 @@ const DEFAULT_PR_AUTOFIX_CONFIG: PRAutoFixConfig = {
   commit_prefix: 'fix(review):',
   post_push_cooldown_seconds: 30,
   max_cooldown_seconds: 120,
-  poll_label: null,
+  poll_label: 'amelia',
 };
 
 interface PRAutoFixSectionProps {

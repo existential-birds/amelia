@@ -240,7 +240,7 @@ class PRAutoFixConfig(BaseModel):
 
     aggressiveness: AggressivenessLevel = AggressivenessLevel.STANDARD
     poll_interval: int = Field(default=60, ge=10, le=3600, description="Polling interval in seconds")
-    poll_label: str = Field(default="amelia", description="GitHub label to filter PRs for polling")
+    poll_label: str | None = Field(default="amelia", description="GitHub label to filter PRs for polling (null = all PRs)")
     auto_resolve: bool = Field(default=True, description="Auto-resolve threads after fix")
     max_iterations: int = Field(default=3, ge=1, le=10, description="Max fix attempts per thread")
     commit_prefix: str = Field(default="fix(review):", description="Commit message prefix")

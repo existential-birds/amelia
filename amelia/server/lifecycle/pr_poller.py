@@ -168,6 +168,9 @@ class PRCommentPoller:
         config = profile.pr_autofix
 
         service = GitHubPRService(profile.repo_root)
+        if config.poll_label is None:
+            logger.warning("poll_label is null, skipping poll cycle", profile=profile.name)
+            return
         prs = await service.list_labeled_prs(config.poll_label)
 
         if not prs:
