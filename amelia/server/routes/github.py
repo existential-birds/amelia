@@ -374,7 +374,18 @@ async def trigger_pr_autofix(
     )
     workflow_id = orchestrator._get_workflow_id(number)
 
-    asyncio.create_task(
+    def _log_task_error(task: asyncio.Task[None]) -> None:
+        if not task.cancelled():
+            exc = task.exception()
+            if exc is not None:
+                logger.error(
+                    "PR auto-fix task failed",
+                    pr_number=number,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
+
+    task = asyncio.create_task(
         orchestrator.trigger_fix_cycle(
             pr_number=number,
             repo=repo,
@@ -383,6 +394,7 @@ async def trigger_pr_autofix(
             config=effective_config,
         )
     )
+    task.add_done_callback(_log_task_error)
 
     return JSONResponse(
         status_code=202,

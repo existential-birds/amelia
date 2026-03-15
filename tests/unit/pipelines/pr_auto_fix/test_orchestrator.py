@@ -127,6 +127,9 @@ def mock_git_operations() -> MagicMock:
     """Create a mock GitOperations that does nothing."""
     mock_git = MagicMock()
     mock_git._run_git = AsyncMock(return_value="")
+    mock_git.fetch_origin = AsyncMock()
+    mock_git.checkout_and_reset = AsyncMock()
+    mock_git.has_changes = AsyncMock(return_value=False)
     return mock_git
 
 
@@ -165,6 +168,13 @@ def profile() -> Profile:
             max_cooldown_seconds=0,
         ),
     )
+
+
+@pytest.fixture()
+def pr_autofix_config(profile: Profile) -> PRAutoFixConfig:
+    """Extract PR auto-fix config from profile (guaranteed non-None in tests)."""
+    assert profile.pr_autofix is not None
+    return profile.pr_autofix
 
 
 # ---------------------------------------------------------------------------
@@ -506,21 +516,14 @@ class TestDivergenceRecovery:
         profile: Profile,
     ) -> None:
         """Orchestrator fetches and resets to remote HEAD before each cycle."""
-        git_commands: list[tuple[str, ...]] = []
-
-        async def track_git(*args: str, **kwargs: object) -> str:
-            git_commands.append(args)
-            return ""
-
-        mock_git_operations._run_git = AsyncMock(side_effect=track_git)
         orchestrator._execute_pipeline = AsyncMock()  # type: ignore[method-assign]
 
         await orchestrator.trigger_fix_cycle(
             pr_number=42, repo="owner/repo", profile=profile,
         )
 
-        # Should have done fetch, checkout, reset --hard
-        assert ("fetch", "origin") in [cmd[:2] for cmd in git_commands]
+        # Should have called fetch_origin
+        mock_git_operations.fetch_origin.assert_awaited_once()
 
     async def test_divergence_retries_up_to_two_times(
         self,
@@ -608,13 +611,6 @@ class TestDivergenceRecovery:
         profile: Profile,
     ) -> None:
         """head_branch parameter is passed through to _reset_to_remote."""
-        git_commands: list[tuple[str, ...]] = []
-
-        async def track_git(*args: str, **kwargs: object) -> str:
-            git_commands.append(args)
-            return ""
-
-        mock_git_operations._run_git = AsyncMock(side_effect=track_git)
         orchestrator._execute_pipeline = AsyncMock()  # type: ignore[method-assign]
 
         await orchestrator.trigger_fix_cycle(
@@ -624,10 +620,9 @@ class TestDivergenceRecovery:
             head_branch="feat/my-branch",
         )
 
-        # Should have done fetch, checkout feat/my-branch, reset --hard origin/feat/my-branch
-        assert ("fetch", "origin") in git_commands
-        assert ("checkout", "feat/my-branch") in git_commands
-        assert ("reset", "--hard", "origin/feat/my-branch") in git_commands
+        # Should have called fetch_origin and checkout_and_reset with branch
+        mock_git_operations.fetch_origin.assert_awaited_once()
+        mock_git_operations.checkout_and_reset.assert_awaited_once_with("feat/my-branch")
 
     async def test_non_divergence_error_not_retried(
         self,
@@ -751,6 +746,7 @@ class TestExecutePipelineWiring:
         self,
         orchestrator: PRAutoFixOrchestrator,
         profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
     ) -> None:
         """_execute_pipeline creates PRAutoFixPipeline, builds graph, and invokes it."""
         mock_graph = AsyncMock()
@@ -768,7 +764,7 @@ class TestExecutePipelineWiring:
                 pr_number=42,
                 repo="owner/repo",
                 profile=profile,
-                config=profile.pr_autofix,
+                config=pr_autofix_config,
                 head_branch="feat/test",
             )
 
@@ -799,6 +795,7 @@ class TestWorkflowRecordCreation:
         orchestrator: PRAutoFixOrchestrator,
         workflow_repo: MagicMock,
         profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
     ) -> None:
         """_execute_pipeline creates a ServerExecutionState with workflow_type=PR_AUTO_FIX."""
         mock_graph = AsyncMock()
@@ -815,7 +812,7 @@ class TestWorkflowRecordCreation:
                 pr_number=42,
                 repo="owner/repo",
                 profile=profile,
-                config=profile.pr_autofix,
+                config=pr_autofix_config,
                 head_branch="feat/test",
             )
 
@@ -828,6 +825,7 @@ class TestWorkflowRecordCreation:
         orchestrator: PRAutoFixOrchestrator,
         workflow_repo: MagicMock,
         profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
     ) -> None:
         """Workflow record has issue_id=PR-{number}, worktree_path, profile_id."""
         mock_graph = AsyncMock()
@@ -844,7 +842,7 @@ class TestWorkflowRecordCreation:
                 pr_number=42,
                 repo="owner/repo",
                 profile=profile,
-                config=profile.pr_autofix,
+                config=pr_autofix_config,
                 head_branch="feat/test",
             )
 
@@ -858,6 +856,7 @@ class TestWorkflowRecordCreation:
         orchestrator: PRAutoFixOrchestrator,
         workflow_repo: MagicMock,
         profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
     ) -> None:
         """issue_cache contains pr_number, pr_title, and comment_count keys."""
         mock_graph = AsyncMock()
@@ -874,7 +873,7 @@ class TestWorkflowRecordCreation:
                 pr_number=42,
                 repo="owner/repo",
                 profile=profile,
-                config=profile.pr_autofix,
+                config=pr_autofix_config,
                 head_branch="feat/test",
             )
 
@@ -890,6 +889,7 @@ class TestWorkflowRecordCreation:
         github_pr_service: MagicMock,
         workflow_repo: MagicMock,
         profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
     ) -> None:
         """PR title is fetched via GitHubPRService.get_pr_summary."""
         mock_graph = AsyncMock()
@@ -906,7 +906,7 @@ class TestWorkflowRecordCreation:
                 pr_number=42,
                 repo="owner/repo",
                 profile=profile,
-                config=profile.pr_autofix,
+                config=pr_autofix_config,
                 head_branch="feat/test",
             )
 
@@ -918,6 +918,7 @@ class TestWorkflowRecordCreation:
         github_pr_service: MagicMock,
         workflow_repo: MagicMock,
         profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
     ) -> None:
         """If get_pr_summary fails, fallback title is used."""
         github_pr_service.get_pr_summary = AsyncMock(
@@ -937,7 +938,7 @@ class TestWorkflowRecordCreation:
                 pr_number=42,
                 repo="owner/repo",
                 profile=profile,
-                config=profile.pr_autofix,
+                config=pr_autofix_config,
                 head_branch="feat/test",
             )
 
@@ -953,6 +954,7 @@ class TestWorkflowEventEmission:
         orchestrator: PRAutoFixOrchestrator,
         captured_events: list[WorkflowEvent],
         profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
     ) -> None:
         """PR_AUTO_FIX_STARTED event emitted before pipeline."""
         mock_graph = AsyncMock()
@@ -969,7 +971,7 @@ class TestWorkflowEventEmission:
                 pr_number=42,
                 repo="owner/repo",
                 profile=profile,
-                config=profile.pr_autofix,
+                config=pr_autofix_config,
                 head_branch="feat/test",
             )
 
@@ -981,6 +983,7 @@ class TestWorkflowEventEmission:
         orchestrator: PRAutoFixOrchestrator,
         captured_events: list[WorkflowEvent],
         profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
     ) -> None:
         """PR_AUTO_FIX_COMPLETED event emitted after successful pipeline."""
         mock_graph = AsyncMock()
@@ -997,7 +1000,7 @@ class TestWorkflowEventEmission:
                 pr_number=42,
                 repo="owner/repo",
                 profile=profile,
-                config=profile.pr_autofix,
+                config=pr_autofix_config,
                 head_branch="feat/test",
             )
 
@@ -1013,6 +1016,7 @@ class TestWorkflowFailureHandling:
         orchestrator: PRAutoFixOrchestrator,
         workflow_repo: MagicMock,
         profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
     ) -> None:
         """On pipeline failure, workflow status set to FAILED with failure_reason."""
         mock_graph = AsyncMock()
@@ -1032,7 +1036,7 @@ class TestWorkflowFailureHandling:
                 pr_number=42,
                 repo="owner/repo",
                 profile=profile,
-                config=profile.pr_autofix,
+                config=pr_autofix_config,
                 head_branch="feat/test",
             )
 
@@ -1051,6 +1055,7 @@ class TestWorkflowCompletion:
         orchestrator: PRAutoFixOrchestrator,
         workflow_repo: MagicMock,
         profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
     ) -> None:
         """After pipeline completion, issue_cache is updated with pr_comments data."""
         mock_graph = AsyncMock()
@@ -1085,7 +1090,7 @@ class TestWorkflowCompletion:
                 pr_number=42,
                 repo="owner/repo",
                 profile=profile,
-                config=profile.pr_autofix,
+                config=pr_autofix_config,
                 head_branch="feat/test",
             )
 

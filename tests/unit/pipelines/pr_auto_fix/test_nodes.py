@@ -433,7 +433,7 @@ class TestCommitPushNode:
         ) as mock_git_cls:
             mock_git = AsyncMock()
             mock_git_cls.return_value = mock_git
-            mock_git._run_git.return_value = " M src/app.py"  # porcelain output
+            mock_git.has_changes.return_value = True  # changes exist
             mock_git.stage_and_commit.return_value = "abc123def456"
             mock_git.safe_push.return_value = "abc123def456"
 
@@ -460,7 +460,7 @@ class TestCommitPushNode:
         ) as mock_git_cls:
             mock_git = AsyncMock()
             mock_git_cls.return_value = mock_git
-            mock_git._run_git.return_value = ""  # empty porcelain = no changes
+            mock_git.has_changes.return_value = False  # no changes
 
             result = await commit_push_node(state, config)
 
@@ -480,7 +480,7 @@ class TestCommitPushNode:
         ) as mock_git_cls:
             mock_git = AsyncMock()
             mock_git_cls.return_value = mock_git
-            mock_git._run_git.return_value = " M src/app.py"
+            mock_git.has_changes.return_value = True  # changes exist
             mock_git.stage_and_commit.side_effect = ValueError("nothing to commit")
 
             result = await commit_push_node(state, config)

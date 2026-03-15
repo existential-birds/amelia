@@ -446,8 +446,9 @@ async def wait_for_server_ready(host: str, port: int, timeout: float = 10.0) -> 
     Returns:
         True if server is ready, False if timeout reached.
     """
-    start_time = asyncio.get_event_loop().time()
-    while asyncio.get_event_loop().time() - start_time < timeout:
+    loop = asyncio.get_running_loop()
+    start_time = loop.time()
+    while loop.time() - start_time < timeout:
         try:
             # Try to connect to the server
             _, writer = await asyncio.open_connection(host, port)

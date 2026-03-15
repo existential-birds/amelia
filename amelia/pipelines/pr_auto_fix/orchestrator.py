@@ -526,7 +526,7 @@ class PRAutoFixOrchestrator:
 
         event = asyncio.Event()
         self._cooldown_events[pr_number] = event
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         absolute_deadline = loop.time() + max_cooldown
 
         remaining = cooldown_seconds
@@ -561,10 +561,9 @@ class PRAutoFixOrchestrator:
             git_ops: GitOperations instance for the repo.
             branch: Branch name to reset to.
         """
-        await git_ops._run_git("fetch", "origin")
+        await git_ops.fetch_origin()
         if branch:
-            await git_ops._run_git("checkout", branch)
-            await git_ops._run_git("reset", "--hard", f"origin/{branch}")
+            await git_ops.checkout_and_reset(branch)
 
     async def _post_final_failure_comment(
         self,

@@ -39,7 +39,7 @@ from amelia.tools.git_utils import GitOperations
 
 async def classify_node(
     state: PRAutoFixState,
-    config: RunnableConfig | None = None,
+    config: RunnableConfig,
 ) -> dict[str, Any]:
     """Classify PR review comments into actionable categories.
 
@@ -53,7 +53,7 @@ async def classify_node(
     if not state.comments:
         return {"classified_comments": [], "file_groups": {}}
 
-    _event_bus, _workflow_id, profile = extract_config_params(config or {})
+    _event_bus, _workflow_id, profile = extract_config_params(config)
 
     # Create driver for classification
     agent_config = AgentConfig(
@@ -78,7 +78,7 @@ async def classify_node(
     )
 
     # Persist classification audit log if metrics_repo available
-    configurable = (config or {}).get("configurable", {})
+    configurable = config.get("configurable", {})
     metrics_repo = configurable.get("metrics_repo")
     run_id = configurable.get("metrics_run_id")
     if metrics_repo is not None and run_id is not None:
@@ -103,6 +103,7 @@ async def classify_node(
             logger.warning(
                 "Failed to persist classification audit log (non-fatal)",
                 error=str(exc),
+                error_type=type(exc).__name__,
             )
 
     # Group by file path
@@ -172,7 +173,7 @@ def _build_developer_goal(
 
 async def develop_node(
     state: PRAutoFixState,
-    config: RunnableConfig | None = None,
+    config: RunnableConfig,
 ) -> dict[str, Any]:
     """Fix code for each file group based on classified comments.
 
@@ -188,7 +189,7 @@ async def develop_node(
             "agentic_status": AgenticStatus.COMPLETED,
         }
 
-    _event_bus, workflow_id, profile = extract_config_params(config or {})
+    _event_bus, workflow_id, profile = extract_config_params(config)
 
     # Build classification lookup from state
     classifications: dict[int, CommentClassification] = {
@@ -315,7 +316,7 @@ def _build_commit_message(
 
 async def commit_push_node(
     state: PRAutoFixState,
-    config: RunnableConfig | None = None,
+    config: RunnableConfig,
 ) -> dict[str, Any]:
     """Commit and push fixes to the PR branch.
 
@@ -324,14 +325,13 @@ async def commit_push_node(
 
     Returns dict with commit_sha and status for state update.
     """
-    _event_bus, _workflow_id, profile = extract_config_params(config or {})
+    _event_bus, _workflow_id, profile = extract_config_params(config)
 
     try:
         git_ops = GitOperations(profile.repo_root)
 
         # Check if there are changes to commit
-        porcelain = await git_ops._run_git("status", "--porcelain")
-        if not porcelain.strip():
+        if not await git_ops.has_changes():
             logger.info("No changes to commit, skipping")
             return {"status": "completed", "commit_sha": None}
 
@@ -389,7 +389,7 @@ def _build_reply_body(
 
 async def reply_resolve_node(
     state: PRAutoFixState,
-    config: RunnableConfig | None = None,
+    config: RunnableConfig,
 ) -> dict[str, Any]:
     """Reply to reviewers and resolve threads after fixes are pushed.
 
@@ -400,7 +400,7 @@ async def reply_resolve_node(
 
     Returns dict with status and resolution_results for state update.
     """
-    _event_bus, _workflow_id, profile = extract_config_params(config or {})
+    _event_bus, _workflow_id, profile = extract_config_params(config)
 
     github_service = GitHubPRService(profile.repo_root)
 

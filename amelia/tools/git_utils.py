@@ -144,6 +144,15 @@ class GitOperations:
 
         return stdout.decode().strip()
 
+    async def has_changes(self) -> bool:
+        """Check if there are uncommitted changes in the repository.
+
+        Returns:
+            True if there are staged or unstaged changes, False otherwise.
+        """
+        porcelain = await self._run_git("status", "--porcelain")
+        return bool(porcelain.strip())
+
     async def stage_and_commit(self, message: str) -> str:
         """Stage all changes and commit with the given message.
 
@@ -204,3 +213,23 @@ class GitOperations:
         await self._run_git("push", "origin", "HEAD")
         logger.info("Pushed to remote", branch=branch, sha=local_sha[:8])
         return local_sha
+
+    async def fetch_origin(self) -> None:
+        """Fetch from origin remote.
+
+        Raises:
+            ValueError: If fetch command fails.
+        """
+        await self._run_git("fetch", "origin")
+
+    async def checkout_and_reset(self, branch: str) -> None:
+        """Checkout branch and hard reset to remote HEAD.
+
+        Args:
+            branch: Branch name to checkout and reset.
+
+        Raises:
+            ValueError: If checkout or reset commands fail.
+        """
+        await self._run_git("checkout", branch)
+        await self._run_git("reset", "--hard", f"origin/{branch}")

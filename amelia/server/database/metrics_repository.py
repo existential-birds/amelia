@@ -137,7 +137,9 @@ class MetricsRepository:
         Returns:
             PRAutoFixMetricsResponse with summary, daily, and by_aggressiveness.
         """
-        # Build dynamic WHERE clause
+        # Build dynamic WHERE clause with parameterized placeholders.
+        # SAFETY: f-strings here only interpolate the parameter index ($N),
+        # not user input. Actual values are passed via params to the driver.
         conditions = ["created_at::date >= $1 AND created_at::date <= $2"]
         params: list[Any] = [start, end]
         param_idx = 3
