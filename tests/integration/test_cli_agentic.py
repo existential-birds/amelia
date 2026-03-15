@@ -11,7 +11,7 @@ For CLI tests, the proper mock boundaries are:
 
 Internal components like Architect should NOT be mocked.
 """
-from collections.abc import AsyncIterator, Generator
+from collections.abc import Generator
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -28,6 +28,7 @@ from amelia.client.models import (
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.main import app
+from tests.conftest import create_mock_execute_agentic
 
 
 runner = CliRunner()
@@ -101,26 +102,27 @@ class TestPlanCommand:
         full_plan_path.write_text("# Implementation Plan\n\n1. Step one\n2. Step two")
 
         # Mock driver's execute_agentic to yield messages simulating LLM execution
-        async def mock_execute_agentic(**kwargs: object) -> AsyncIterator[AgenticMessage]:
-            yield AgenticMessage(
+        mock_messages = [
+            AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
                 tool_name="write_file",
                 tool_input={"file_path": plan_path, "content": "# Plan"},
                 tool_call_id="call-0",
-            )
-            yield AgenticMessage(
+            ),
+            AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
                 tool_name="write_file",
                 tool_output="File written",
                 tool_call_id="call-0",
-            )
-            yield AgenticMessage(
+            ),
+            AgenticMessage(
                 type=AgenticMessageType.RESULT,
                 content="Plan generated successfully.",
-            )
+            ),
+        ]
 
         mock_driver = MagicMock()
-        mock_driver.execute_agentic = mock_execute_agentic
+        mock_driver.execute_agentic = create_mock_execute_agentic(mock_messages)
 
         with patch("amelia.client.cli._get_profile_from_server", new_callable=AsyncMock) as mock_get_profile, \
              patch("amelia.client.cli.create_tracker") as mock_create_tracker, \
@@ -173,26 +175,27 @@ class TestPlanCommand:
         full_plan_path.write_text("# Work Plan\n\n1. Do work")
 
         # Mock driver's execute_agentic to yield messages simulating LLM execution
-        async def mock_execute_agentic(**kwargs: object) -> AsyncIterator[AgenticMessage]:
-            yield AgenticMessage(
+        mock_messages = [
+            AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
                 tool_name="write_file",
                 tool_input={"file_path": plan_path, "content": "# Work Plan"},
                 tool_call_id="call-0",
-            )
-            yield AgenticMessage(
+            ),
+            AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
                 tool_name="write_file",
                 tool_output="File written",
                 tool_call_id="call-0",
-            )
-            yield AgenticMessage(
+            ),
+            AgenticMessage(
                 type=AgenticMessageType.RESULT,
                 content="Plan generated successfully.",
-            )
+            ),
+        ]
 
         mock_driver = MagicMock()
-        mock_driver.execute_agentic = mock_execute_agentic
+        mock_driver.execute_agentic = create_mock_execute_agentic(mock_messages)
 
         with patch("amelia.client.cli._get_profile_from_server", new_callable=AsyncMock) as mock_get_profile, \
              patch("amelia.client.cli.create_tracker") as mock_create_tracker, \

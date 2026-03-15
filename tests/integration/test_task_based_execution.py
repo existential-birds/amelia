@@ -23,6 +23,7 @@ from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.nodes import next_task_node
 from amelia.pipelines.nodes import call_developer_node, call_reviewer_node
+from tests.conftest import create_mock_execute_agentic
 from tests.integration.conftest import (
     make_config,
     make_execution_state,
@@ -352,11 +353,7 @@ class TestReviewerNodeTaskIteration:
             severity="major",
         )
 
-        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
-            for msg in mock_messages:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         # task_review_iteration should be incremented to 2
@@ -498,11 +495,7 @@ class TestPlanMarkdownPreservation:
             profile=integration_profile,
         )
 
-        async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
-            for msg in _create_developer_mock_messages(1):
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(_create_developer_mock_messages(1))):
             result = await call_developer_node(state, cast(RunnableConfig, config))
 
         # The returned state dict should NOT contain plan_markdown

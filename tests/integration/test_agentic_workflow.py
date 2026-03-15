@@ -20,6 +20,7 @@ from amelia.pipelines.implementation.nodes import (
     plan_validator_node,
 )
 from amelia.pipelines.nodes import call_developer_node, call_reviewer_node
+from tests.conftest import create_mock_execute_agentic
 from tests.integration.conftest import (
     make_agentic_messages,
     make_config,
@@ -71,12 +72,7 @@ class TestArchitectNodeIntegration:
             ),
         ]
 
-        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
-            """Mock async generator that yields AgenticMessage objects."""
-            for msg in mock_messages:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result = await call_architect_node(state, cast(RunnableConfig, config))
 
         # Architect node returns raw output - goal/plan extraction is done by plan_validator_node
@@ -122,12 +118,7 @@ class TestDeveloperNodeIntegration:
             final_text="I created hello.txt with the content 'Hello World'",
         )
 
-        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
-            """Mock async generator that yields AgenticMessage objects."""
-            for msg in mock_messages:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result = await call_developer_node(state, cast(RunnableConfig, config))
 
         assert len(result["tool_calls"]) >= 1
@@ -165,11 +156,7 @@ class TestReviewerNodeIntegration:
 
         mock_messages = make_reviewer_agentic_messages(approved=True)
 
-        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
-            for msg in mock_messages:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         assert result["last_reviews"] is not None
@@ -195,11 +182,7 @@ class TestReviewerNodeIntegration:
             severity="critical",
         )
 
-        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
-            for msg in mock_messages:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         assert result["last_reviews"][0].approved is False
@@ -229,11 +212,7 @@ class TestReviewerNodeIntegration:
             severity="major",
         )
 
-        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
-            for msg in mock_messages:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         # Key assertion: review_iteration should be incremented
@@ -242,7 +221,7 @@ class TestReviewerNodeIntegration:
 
         # Run again with incremented state to verify it keeps incrementing
         state_round2 = state.model_copy(update={"review_iteration": 1})
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result2 = await call_reviewer_node(state_round2, cast(RunnableConfig, config))
 
         assert result2["review_iteration"] == 2, "review_iteration should increment from 1 to 2"
@@ -272,11 +251,7 @@ class TestReviewerNodeIntegration:
             severity="major",
         )
 
-        async def mock_execute_round1(*_args: Any, **_kwargs: Any) -> Any:
-            for msg in mock_messages_round1:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_round1):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages_round1)):
             result1 = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         assert result1["last_reviews"][0].approved is False
@@ -294,11 +269,7 @@ class TestReviewerNodeIntegration:
             severity="minor",
         )
 
-        async def mock_execute_round2(*_args: Any, **_kwargs: Any) -> Any:
-            for msg in mock_messages_round2:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_round2):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages_round2)):
             result2 = await call_reviewer_node(state_round2, cast(RunnableConfig, config))
 
         # Verify last_reviews is UPDATED, not stale
@@ -313,11 +284,7 @@ class TestReviewerNodeIntegration:
         })
         mock_messages_round3 = make_reviewer_agentic_messages(approved=True)
 
-        async def mock_execute_round3(*_args: Any, **_kwargs: Any) -> Any:
-            for msg in mock_messages_round3:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_round3):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages_round3)):
             result3 = await call_reviewer_node(state_round3, cast(RunnableConfig, config))
 
         assert result3["last_reviews"][0].approved is True, "should be approved in round 3"

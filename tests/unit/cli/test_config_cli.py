@@ -9,13 +9,24 @@ from amelia.core.types import AgentConfig, Profile
 from amelia.main import app
 
 
+@pytest.fixture
+def runner() -> CliRunner:
+    """Typer CLI test runner."""
+    return CliRunner()
+
+
+@pytest.fixture
+def mock_db() -> MagicMock:
+    """Create a mock Database."""
+    mock = MagicMock()
+    mock.connect = AsyncMock()
+    mock.close = AsyncMock()
+    mock.ensure_schema = AsyncMock()
+    return mock
+
+
 class TestConfigCLI:
     """Tests for 'amelia config' command."""
-
-    @pytest.fixture
-    def runner(self) -> CliRunner:
-        """Typer CLI test runner."""
-        return CliRunner()
 
     def test_config_command_exists(self, runner: CliRunner) -> None:
         """'amelia config' command is registered."""
@@ -38,20 +49,6 @@ class TestConfigCLI:
 
 class TestProfileList:
     """Tests for 'amelia config profile list' command."""
-
-    @pytest.fixture
-    def runner(self) -> CliRunner:
-        """Typer CLI test runner."""
-        return CliRunner()
-
-    @pytest.fixture
-    def mock_db(self) -> MagicMock:
-        """Create a mock Database."""
-        mock = MagicMock()
-        mock.connect = AsyncMock()
-        mock.close = AsyncMock()
-        mock.ensure_schema = AsyncMock()
-        return mock
 
     def test_profile_list_empty(self, runner: CliRunner, mock_db: MagicMock) -> None:
         """'amelia config profile list' shows message when no profiles."""
@@ -110,20 +107,6 @@ class TestProfileList:
 class TestProfileShow:
     """Tests for 'amelia config profile show' command."""
 
-    @pytest.fixture
-    def runner(self) -> CliRunner:
-        """Typer CLI test runner."""
-        return CliRunner()
-
-    @pytest.fixture
-    def mock_db(self) -> MagicMock:
-        """Create a mock Database."""
-        mock = MagicMock()
-        mock.connect = AsyncMock()
-        mock.close = AsyncMock()
-        mock.ensure_schema = AsyncMock()
-        return mock
-
     def test_profile_show_not_found(
         self, runner: CliRunner, mock_db: MagicMock
     ) -> None:
@@ -169,20 +152,6 @@ class TestProfileShow:
 
 class TestProfileCreate:
     """Tests for 'amelia config profile create' command."""
-
-    @pytest.fixture
-    def runner(self) -> CliRunner:
-        """Typer CLI test runner."""
-        return CliRunner()
-
-    @pytest.fixture
-    def mock_db(self) -> MagicMock:
-        """Create a mock Database."""
-        mock = MagicMock()
-        mock.connect = AsyncMock()
-        mock.close = AsyncMock()
-        mock.ensure_schema = AsyncMock()
-        return mock
 
     def test_profile_create_with_options(
         self, runner: CliRunner, mock_db: MagicMock
@@ -309,20 +278,6 @@ class TestProfileCreate:
 class TestProfileCreateDriverAwareDefaults:
     """Tests for driver-aware model defaults in profile creation."""
 
-    @pytest.fixture
-    def runner(self) -> CliRunner:
-        """Typer CLI test runner."""
-        return CliRunner()
-
-    @pytest.fixture
-    def mock_db(self) -> MagicMock:
-        """Create a mock Database."""
-        mock = MagicMock()
-        mock.connect = AsyncMock()
-        mock.close = AsyncMock()
-        mock.ensure_schema = AsyncMock()
-        return mock
-
     def test_profile_create_interactive_claude_default_model(
         self, runner: CliRunner, mock_db: MagicMock
     ) -> None:
@@ -392,20 +347,6 @@ class TestProfileCreateDriverAwareDefaults:
 class TestProfileDelete:
     """Tests for 'amelia config profile delete' command."""
 
-    @pytest.fixture
-    def runner(self) -> CliRunner:
-        """Typer CLI test runner."""
-        return CliRunner()
-
-    @pytest.fixture
-    def mock_db(self) -> MagicMock:
-        """Create a mock Database."""
-        mock = MagicMock()
-        mock.connect = AsyncMock()
-        mock.close = AsyncMock()
-        mock.ensure_schema = AsyncMock()
-        return mock
-
     def test_profile_delete_with_force(
         self, runner: CliRunner, mock_db: MagicMock
     ) -> None:
@@ -442,20 +383,6 @@ class TestProfileDelete:
 
 class TestProfileActivate:
     """Tests for 'amelia config profile activate' command."""
-
-    @pytest.fixture
-    def runner(self) -> CliRunner:
-        """Typer CLI test runner."""
-        return CliRunner()
-
-    @pytest.fixture
-    def mock_db(self) -> MagicMock:
-        """Create a mock Database."""
-        mock = MagicMock()
-        mock.connect = AsyncMock()
-        mock.close = AsyncMock()
-        mock.ensure_schema = AsyncMock()
-        return mock
 
     def test_profile_activate_success(
         self, runner: CliRunner, mock_db: MagicMock
@@ -496,20 +423,6 @@ class TestProfileActivate:
 class TestServerShow:
     """Tests for 'amelia config server show' command."""
 
-    @pytest.fixture
-    def runner(self) -> CliRunner:
-        """Typer CLI test runner."""
-        return CliRunner()
-
-    @pytest.fixture
-    def mock_db(self) -> MagicMock:
-        """Create a mock Database."""
-        mock = MagicMock()
-        mock.connect = AsyncMock()
-        mock.close = AsyncMock()
-        mock.ensure_schema = AsyncMock()
-        return mock
-
     def test_server_show(self, runner: CliRunner, mock_db: MagicMock) -> None:
         """'amelia config server show' displays server settings."""
         from datetime import datetime
@@ -542,20 +455,6 @@ class TestServerShow:
 
 class TestServerSet:
     """Tests for 'amelia config server set' command."""
-
-    @pytest.fixture
-    def runner(self) -> CliRunner:
-        """Typer CLI test runner."""
-        return CliRunner()
-
-    @pytest.fixture
-    def mock_db(self) -> MagicMock:
-        """Create a mock Database."""
-        mock = MagicMock()
-        mock.connect = AsyncMock()
-        mock.close = AsyncMock()
-        mock.ensure_schema = AsyncMock()
-        return mock
 
     def test_server_set_int_value(
         self, runner: CliRunner, mock_db: MagicMock
@@ -594,11 +493,6 @@ class TestServerSet:
 
 class TestDbConnectionError:
     """Tests for database connection error handling in CLI."""
-
-    @pytest.fixture
-    def runner(self) -> CliRunner:
-        """Typer CLI test runner."""
-        return CliRunner()
 
     def test_profile_list_shows_panel_on_connection_error(
         self, runner: CliRunner
