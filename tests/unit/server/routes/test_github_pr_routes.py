@@ -224,40 +224,50 @@ class TestPRAutoFixConfig:
 
 
 class TestTriggerPRAutoFix:
-    def test_returns_202_with_workflow_id(
-        self,
-        client: TestClient,
-        mock_profile_repo: AsyncMock,
-        github_profile: Profile,
-    ) -> None:
-        mock_profile_repo.get_profile.return_value = github_profile
-        mock_pr_summary = PRSummary(
+    @staticmethod
+    def _make_pr_summary(**overrides) -> PRSummary:
+        defaults = dict(
             number=42,
             title="Fix bug",
             head_branch="fix/bug",
             author="alice",
             updated_at="2026-03-01T10:00:00Z",
         )
+        return PRSummary(**(defaults | overrides))
+
+    @staticmethod
+    def _trigger_autofix_with_mocks(client, profile_repo, profile, *, pr_summary=None, body=None):
+        profile_repo.get_profile.return_value = profile
+        if pr_summary is None:
+            pr_summary = TestTriggerPRAutoFix._make_pr_summary()
         with (
             patch("amelia.server.routes.github.GitHubPRService") as MockService,
             patch("amelia.server.routes.github.PRAutoFixOrchestrator") as MockOrch,
             patch("amelia.server.routes.github._get_repo_name", new_callable=AsyncMock, return_value="owner/repo"),
         ):
             mock_svc = AsyncMock()
-            mock_svc.get_pr_summary.return_value = mock_pr_summary
+            mock_svc.get_pr_summary.return_value = pr_summary
             MockService.return_value = mock_svc
 
             mock_orch = MagicMock()
-            test_uuid = UUID("12345678-1234-5678-1234-567812345678")
-            mock_orch._get_workflow_id.return_value = test_uuid
+            mock_orch._get_workflow_id.return_value = UUID("12345678-1234-5678-1234-567812345678")
             mock_orch.trigger_fix_cycle = AsyncMock()
             MockOrch.return_value = mock_orch
 
-            response = client.post("/api/github/prs/42/auto-fix?profile=test")
+            response = client.post("/api/github/prs/42/auto-fix?profile=test", json=body)
+        return response, mock_orch
+
+    def test_returns_202_with_workflow_id(
+        self,
+        client: TestClient,
+        mock_profile_repo: AsyncMock,
+        github_profile: Profile,
+    ) -> None:
+        response, _ = self._trigger_autofix_with_mocks(client, mock_profile_repo, github_profile)
 
         assert response.status_code == 202
         data = response.json()
-        assert data["workflow_id"] == str(test_uuid)
+        assert data["workflow_id"] == str(UUID("12345678-1234-5678-1234-567812345678"))
         assert "message" in data
 
     def test_returns_400_when_pr_autofix_none(
@@ -287,32 +297,9 @@ class TestTriggerPRAutoFix:
         mock_profile_repo: AsyncMock,
         github_profile: Profile,
     ) -> None:
-        mock_profile_repo.get_profile.return_value = github_profile
-        mock_pr_summary = PRSummary(
-            number=42,
-            title="Fix bug",
-            head_branch="fix/bug",
-            author="alice",
-            updated_at="2026-03-01T10:00:00Z",
+        response, mock_orch = self._trigger_autofix_with_mocks(
+            client, mock_profile_repo, github_profile, body={"aggressiveness": "thorough"},
         )
-        with (
-            patch("amelia.server.routes.github.GitHubPRService") as MockService,
-            patch("amelia.server.routes.github.PRAutoFixOrchestrator") as MockOrch,
-            patch("amelia.server.routes.github._get_repo_name", new_callable=AsyncMock, return_value="owner/repo"),
-        ):
-            mock_svc = AsyncMock()
-            mock_svc.get_pr_summary.return_value = mock_pr_summary
-            MockService.return_value = mock_svc
-
-            mock_orch = MagicMock()
-            mock_orch._get_workflow_id.return_value = UUID("12345678-1234-5678-1234-567812345678")
-            mock_orch.trigger_fix_cycle = AsyncMock()
-            MockOrch.return_value = mock_orch
-
-            response = client.post(
-                "/api/github/prs/42/auto-fix?profile=test",
-                json={"aggressiveness": "thorough"},
-            )
 
         assert response.status_code == 202
         # Verify the config override was passed to trigger_fix_cycle
@@ -325,29 +312,10 @@ class TestTriggerPRAutoFix:
         mock_profile_repo: AsyncMock,
         github_profile: Profile,
     ) -> None:
-        mock_profile_repo.get_profile.return_value = github_profile
-        mock_pr_summary = PRSummary(
-            number=42,
-            title="Fix bug",
-            head_branch="feat/my-branch",
-            author="alice",
-            updated_at="2026-03-01T10:00:00Z",
+        pr_summary = self._make_pr_summary(head_branch="feat/my-branch")
+        _, mock_orch = self._trigger_autofix_with_mocks(
+            client, mock_profile_repo, github_profile, pr_summary=pr_summary,
         )
-        with (
-            patch("amelia.server.routes.github.GitHubPRService") as MockService,
-            patch("amelia.server.routes.github.PRAutoFixOrchestrator") as MockOrch,
-            patch("amelia.server.routes.github._get_repo_name", new_callable=AsyncMock, return_value="owner/repo"),
-        ):
-            mock_svc = AsyncMock()
-            mock_svc.get_pr_summary.return_value = mock_pr_summary
-            MockService.return_value = mock_svc
-
-            mock_orch = MagicMock()
-            mock_orch._get_workflow_id.return_value = UUID("12345678-1234-5678-1234-567812345678")
-            mock_orch.trigger_fix_cycle = AsyncMock()
-            MockOrch.return_value = mock_orch
-
-            client.post("/api/github/prs/42/auto-fix?profile=test")
 
         # Verify head_branch was fetched from PR summary and passed to orchestrator
         call_kwargs = mock_orch.trigger_fix_cycle.call_args.kwargs

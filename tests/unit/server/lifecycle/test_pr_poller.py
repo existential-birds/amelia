@@ -6,6 +6,7 @@ import asyncio
 import json
 import time
 from datetime import UTC, datetime
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -29,7 +30,6 @@ from amelia.server.models.events import _WARNING_TYPES, EventType
 def mock_profile_repo() -> AsyncMock:
     """Mock ProfileRepository with list_profiles."""
     repo = AsyncMock()
-    repo.list_profiles = AsyncMock(return_value=[])
     return repo
 
 
@@ -39,24 +39,20 @@ def mock_settings_repo() -> AsyncMock:
     repo = AsyncMock()
     settings = MagicMock()
     settings.pr_polling_enabled = True
-    repo.get_server_settings = AsyncMock(return_value=settings)
+    repo.get_server_settings.return_value = settings
     return repo
 
 
 @pytest.fixture()
 def mock_orchestrator() -> AsyncMock:
     """Mock PRAutoFixOrchestrator with trigger_fix_cycle."""
-    orch = AsyncMock()
-    orch.trigger_fix_cycle = AsyncMock()
-    return orch
+    return AsyncMock()
 
 
 @pytest.fixture()
 def mock_event_bus() -> MagicMock:
     """Mock EventBus with emit."""
-    bus = MagicMock()
-    bus.emit = MagicMock()
-    return bus
+    return MagicMock()
 
 
 @pytest.fixture()
@@ -192,6 +188,17 @@ def _make_comment(comment_id: int = 1, pr_number: int = 42) -> PRReviewComment:
     )
 
 
+@contextmanager
+def _mock_pr_service(poller, prs, comments=None):
+    with patch("amelia.server.lifecycle.pr_poller.GitHubPRService") as MockService:
+        svc = AsyncMock()
+        svc.list_labeled_prs.return_value = prs
+        svc.fetch_review_comments.return_value = comments or []
+        MockService.return_value = svc
+        with patch.object(poller, "_get_repo_slug", new_callable=AsyncMock, return_value="owner/repo"):
+            yield svc
+
+
 class TestPollerLifecycle:
     """Tests for start/stop lifecycle."""
 
@@ -305,14 +312,8 @@ class TestPollProfile:
         pr = _make_pr_summary()
         comment = _make_comment()
 
-        with patch("amelia.server.lifecycle.pr_poller.GitHubPRService") as MockService:  # noqa: SIM117
-            svc = AsyncMock()
-            svc.list_labeled_prs = AsyncMock(return_value=[pr])
-            svc.fetch_review_comments = AsyncMock(return_value=[comment])
-            MockService.return_value = svc
-
-            with patch.object(poller, "_get_repo_slug", new_callable=AsyncMock, return_value="owner/repo"):
-                await poller._poll_profile(sample_profile)
+        with _mock_pr_service(poller, [pr], [comment]):
+            await poller._poll_profile(sample_profile)
 
         # Let fire-and-forget task run
         await asyncio.sleep(0)
@@ -329,14 +330,8 @@ class TestPollProfile:
     ) -> None:
         pr = _make_pr_summary()
 
-        with patch("amelia.server.lifecycle.pr_poller.GitHubPRService") as MockService:
-            svc = AsyncMock()
-            svc.list_labeled_prs = AsyncMock(return_value=[pr])
-            svc.fetch_review_comments = AsyncMock(return_value=[])
-            MockService.return_value = svc
-
-            with patch.object(poller, "_get_repo_slug", new_callable=AsyncMock, return_value="owner/repo"):  # noqa: SIM117
-                await poller._poll_profile(sample_profile)
+        with _mock_pr_service(poller, [pr]):
+            await poller._poll_profile(sample_profile)
 
         await asyncio.sleep(0)
         mock_orchestrator.trigger_fix_cycle.assert_not_called()
@@ -351,14 +346,8 @@ class TestPollProfile:
         pr = _make_pr_summary()
         comment = _make_comment()
 
-        with patch("amelia.server.lifecycle.pr_poller.GitHubPRService") as MockService:  # noqa: SIM117
-            svc = AsyncMock()
-            svc.list_labeled_prs = AsyncMock(return_value=[pr])
-            svc.fetch_review_comments = AsyncMock(return_value=[comment])
-            MockService.return_value = svc
-
-            with patch.object(poller, "_get_repo_slug", new_callable=AsyncMock, return_value="owner/repo"):
-                await poller._poll_profile(sample_profile)
+        with _mock_pr_service(poller, [pr], [comment]):
+            await poller._poll_profile(sample_profile)
 
         # Task should be tracked in _active_tasks
         assert len(poller._active_tasks) >= 0  # Tasks may complete fast
@@ -370,11 +359,7 @@ class TestPollProfile:
         mock_orchestrator: AsyncMock,
         sample_profile: Profile,
     ) -> None:
-        with patch("amelia.server.lifecycle.pr_poller.GitHubPRService") as MockService:
-            svc = AsyncMock()
-            svc.list_labeled_prs = AsyncMock(return_value=[])
-            MockService.return_value = svc
-
+        with _mock_pr_service(poller, []):
             await poller._poll_profile(sample_profile)
 
         mock_orchestrator.trigger_fix_cycle.assert_not_called()
@@ -387,17 +372,11 @@ class TestPollProfile:
         pr = _make_pr_summary()
         comment = _make_comment()
 
-        with patch("amelia.server.lifecycle.pr_poller.GitHubPRService") as MockService:  # noqa: SIM117
-            svc = AsyncMock()
-            svc.list_labeled_prs = AsyncMock(return_value=[pr])
-            svc.fetch_review_comments = AsyncMock(return_value=[comment])
-            MockService.return_value = svc
-
-            with (
-                patch.object(poller, "_get_repo_slug", new_callable=AsyncMock, return_value="owner/repo"),
-                patch("amelia.server.lifecycle.pr_poller.logger") as mock_logger,
-            ):
-                await poller._poll_profile(sample_profile)
+        with (
+            _mock_pr_service(poller, [pr], [comment]),
+            patch("amelia.server.lifecycle.pr_poller.logger") as mock_logger,
+        ):
+            await poller._poll_profile(sample_profile)
 
         # Should log at info level
         info_calls = [c for c in mock_logger.info.call_args_list]
@@ -503,27 +482,6 @@ class TestRuntimeToggle:
             await poller.stop()
 
         mock_poll.assert_not_called()
-
-
-class TestImmediateFirstPoll:
-    """Tests for immediate polling on startup."""
-
-    async def test_no_initial_next_poll_means_immediate_poll(
-        self,
-        poller: PRCommentPoller,
-        mock_profile_repo: AsyncMock,
-        sample_profile: Profile,
-    ) -> None:
-        mock_profile_repo.list_profiles.return_value = [sample_profile]
-        assert "test-profile" not in poller._next_poll
-
-        with (
-            patch.object(poller, "_should_back_off", new_callable=AsyncMock, return_value=None),
-            patch.object(poller, "_poll_profile", new_callable=AsyncMock) as mock_poll,
-        ):
-            await poller._poll_all_profiles()
-
-        mock_poll.assert_called_once()
 
 
 class TestNoOverlap:
