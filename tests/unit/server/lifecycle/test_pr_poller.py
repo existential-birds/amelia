@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from datetime import UTC, datetime
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
