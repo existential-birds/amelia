@@ -2,26 +2,15 @@
 
 from __future__ import annotations
 
-import uuid
-from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
-from amelia.agents.schemas.classifier import (
-    CommentCategory,
-    CommentClassification,
-)
+from amelia.agents.schemas.classifier import CommentCategory
 from amelia.core.agentic_state import AgenticStatus
-from amelia.core.types import (
-    AgentConfig,
-    DriverType,
-    PRAutoFixConfig,
-    Profile,
-    PRReviewComment,
-)
+from amelia.core.types import PRAutoFixConfig
 from amelia.pipelines.pr_auto_fix.nodes import (
     classify_node,
     commit_push_node,
@@ -31,108 +20,14 @@ from amelia.pipelines.pr_auto_fix.nodes import (
 from amelia.pipelines.pr_auto_fix.state import (
     GroupFixResult,
     GroupFixStatus,
-    PRAutoFixState,
 )
 
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-def _make_comment(
-    *,
-    id: int = 1,
-    body: str = "Fix this bug",
-    author: str = "reviewer1",
-    path: str | None = "src/app.py",
-    line: int | None = 42,
-    diff_hunk: str | None = "@@ -1,3 +1,4 @@\n+new line",
-    thread_id: str | None = None,
-    in_reply_to_id: int | None = None,
-) -> PRReviewComment:
-    return PRReviewComment(
-        id=id,
-        body=body,
-        author=author,
-        created_at=datetime(2026, 1, 1, tzinfo=UTC),
-        path=path,
-        line=line,
-        diff_hunk=diff_hunk,
-        thread_id=thread_id,
-        in_reply_to_id=in_reply_to_id,
-    )
-
-
-def _make_state(
-    *,
-    comments: list[PRReviewComment] | None = None,
-    file_groups: dict[str | None, list[int]] | None = None,
-    classified_comments: list[CommentClassification] | None = None,
-    pr_number: int = 123,
-    head_branch: str = "feat/my-feature",
-    repo: str = "owner/repo",
-    commit_sha: str | None = None,
-    group_results: list[GroupFixResult] | None = None,
-    autofix_config: PRAutoFixConfig | None = None,
-) -> PRAutoFixState:
-    kwargs: dict[str, Any] = {
-        "workflow_id": uuid.uuid4(),
-        "profile_id": "test",
-        "created_at": datetime(2026, 1, 1, tzinfo=UTC),
-        "pr_number": pr_number,
-        "head_branch": head_branch,
-        "repo": repo,
-        "comments": comments or [],
-        "file_groups": file_groups or {},
-        "classified_comments": classified_comments or [],
-    }
-    if commit_sha is not None:
-        kwargs["commit_sha"] = commit_sha
-    if group_results is not None:
-        kwargs["group_results"] = group_results
-    if autofix_config is not None:
-        kwargs["autofix_config"] = autofix_config
-    return PRAutoFixState(**kwargs)
-
-
-def _make_profile() -> Profile:
-    return Profile(
-        name="test",
-        repo_root="/tmp/test-repo",
-        agents={
-            "developer": AgentConfig(driver=DriverType.CLAUDE, model="test-model"),
-            "classifier": AgentConfig(driver=DriverType.API, model="test-model"),
-        },
-    )
-
-
-def _make_config(profile: Profile | None = None) -> dict[str, Any]:
-    """Build a LangGraph-style RunnableConfig."""
-    if profile is None:
-        profile = _make_profile()
-    return {
-        "configurable": {
-            "thread_id": uuid.uuid4(),
-            "profile": profile,
-            "event_bus": None,
-        }
-    }
-
-
-def _make_classification(
-    comment_id: int,
-    *,
-    category: CommentCategory = CommentCategory.BUG,
-    actionable: bool = True,
-) -> CommentClassification:
-    return CommentClassification(
-        comment_id=comment_id,
-        category=category,
-        confidence=0.95,
-        actionable=actionable,
-        reason="test classification",
-    )
+from .conftest import (
+    make_classification,
+    make_comment,
+    make_runnable_config,
+    make_state,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -143,72 +38,62 @@ def _make_classification(
 class TestClassifyNode:
     """Tests for classify_node."""
 
-    @pytest.mark.asyncio
     async def test_classify_orchestrates_filter_classify_group_flow(self) -> None:
-        """classify_node calls filter -> classify -> group and writes results."""
-        c1 = _make_comment(id=1, path="src/app.py", body="Fix bug here")
-        c2 = _make_comment(id=2, path="src/utils.py", body="Style issue")
-        state = _make_state(comments=[c1, c2])
-        config = _make_config()
+        c1 = make_comment(id=1, path="src/app.py", body="Fix bug here")
+        c2 = make_comment(id=2, path="src/utils.py", body="Style issue")
+        state = make_state(comments=[c1, c2])
+        config = make_runnable_config()
 
-        cls1 = _make_classification(1, category=CommentCategory.BUG)
-        cls2 = _make_classification(2, category=CommentCategory.STYLE)
-
-        mock_driver = MagicMock()
+        cls1 = make_classification(1, category=CommentCategory.BUG)
+        cls2 = make_classification(2, category=CommentCategory.STYLE)
 
         with (
-            patch(
-                "amelia.pipelines.pr_auto_fix.nodes.filter_comments",
-                return_value=[c1, c2],
-            ) as mock_filter,
-            patch(
-                "amelia.pipelines.pr_auto_fix.nodes.classify_comments",
-                new_callable=AsyncMock,
-                return_value={1: cls1, 2: cls2},
-            ) as mock_classify,
-            patch(
-                "amelia.pipelines.pr_auto_fix.nodes.group_comments_by_file",
-                return_value={"src/app.py": [c1], "src/utils.py": [c2]},
-            ) as mock_group,
-            patch(
-                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
-                return_value=mock_driver,
-            ),
+            patch("amelia.pipelines.pr_auto_fix.nodes.filter_comments", return_value=[c1, c2]) as mock_filter,
+            patch("amelia.pipelines.pr_auto_fix.nodes.classify_comments", new_callable=AsyncMock, return_value={1: cls1, 2: cls2}) as mock_classify,
+            patch("amelia.pipelines.pr_auto_fix.nodes.group_comments_by_file", return_value={"src/app.py": [c1], "src/utils.py": [c2]}) as mock_group,
+            patch("amelia.pipelines.pr_auto_fix.nodes.get_driver", return_value=MagicMock()),
         ):
             result = await classify_node(state, config)
 
-        # Verify call chain
         mock_filter.assert_called_once()
         mock_classify.assert_called_once()
         mock_group.assert_called_once()
 
-        # Verify returned state updates
-        assert "classified_comments" in result
         assert len(result["classified_comments"]) == 2
-        assert "file_groups" in result
-        assert "src/app.py" in result["file_groups"]
-        assert "src/utils.py" in result["file_groups"]
-        # file_groups should map to comment IDs (ints), not PRReviewComment objects
         assert result["file_groups"]["src/app.py"] == [1]
         assert result["file_groups"]["src/utils.py"] == [2]
 
-    @pytest.mark.asyncio
     async def test_classify_empty_comments_returns_empty(self) -> None:
-        """classify_node with no comments returns empty results without LLM call."""
-        state = _make_state(comments=[])
-        config = _make_config()
+        state = make_state(comments=[])
+        config = make_runnable_config()
 
-        with (
-            patch(
-                "amelia.pipelines.pr_auto_fix.nodes.classify_comments",
-                new_callable=AsyncMock,
-            ) as mock_classify,
-        ):
+        with patch("amelia.pipelines.pr_auto_fix.nodes.classify_comments", new_callable=AsyncMock) as mock_classify:
             result = await classify_node(state, config)
 
         mock_classify.assert_not_called()
         assert result["classified_comments"] == []
         assert result["file_groups"] == {}
+
+
+# ---------------------------------------------------------------------------
+# develop_node helpers
+# ---------------------------------------------------------------------------
+
+
+def _fake_dev_run_success(impl_state: Any, profile: Any, workflow_id: Any) -> Any:
+    """Async generator that yields a completed state."""
+    async def gen() -> Any:
+        final = impl_state.model_copy(update={"agentic_status": AgenticStatus.COMPLETED})
+        yield final, MagicMock()
+    return gen()
+
+
+def _fake_dev_run_failure(impl_state: Any, profile: Any, workflow_id: Any) -> Any:
+    """Async generator that raises RuntimeError."""
+    async def gen() -> Any:
+        raise RuntimeError("Developer failed")
+        yield  # noqa: RET503
+    return gen()
 
 
 # ---------------------------------------------------------------------------
@@ -219,182 +104,116 @@ class TestClassifyNode:
 class TestDevelopNode:
     """Tests for develop_node."""
 
-    @pytest.mark.asyncio
     async def test_develop_builds_goal_with_full_context(self) -> None:
-        """develop_node goal string includes body, path, line, diff_hunk, pr_number, category, constraints."""
-        c1 = _make_comment(
-            id=1,
-            body="Fix this null check",
-            path="src/app.py",
-            line=42,
-            diff_hunk="@@ -10,3 +10,4 @@\n+bad code",
+        c1 = make_comment(
+            id=1, body="Fix this null check", path="src/app.py",
+            line=42, diff_hunk="@@ -10,3 +10,4 @@\n+bad code",
         )
-        cls1 = _make_classification(1, category=CommentCategory.BUG)
-        state = _make_state(
+        cls1 = make_classification(1, category=CommentCategory.BUG)
+        state = make_state(
             comments=[c1],
             file_groups={"src/app.py": [1]},
             classified_comments=[cls1],
         )
-        config = _make_config()
+        config = make_runnable_config()
 
         captured_goal: str | None = None
-
-        # Mock Developer to capture goal
         mock_dev_instance = MagicMock()
 
-        async def fake_run(impl_state, profile, workflow_id):  # noqa: ANN001, ARG001
+        async def fake_run(impl_state: Any, profile: Any, workflow_id: Any) -> Any:
             nonlocal captured_goal
             captured_goal = impl_state.goal
-            # Yield a completed state
-            final_state = impl_state.model_copy(
-                update={"agentic_status": AgenticStatus.COMPLETED}
-            )
-            yield final_state, MagicMock()
+            final = impl_state.model_copy(update={"agentic_status": AgenticStatus.COMPLETED})
+            yield final, MagicMock()
 
         mock_dev_instance.run = fake_run
 
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.Developer",
-            return_value=mock_dev_instance,
-        ):
+        with patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance):
             result = await develop_node(state, config)
 
-        # Verify goal content
         assert captured_goal is not None
-        assert "Fix this null check" in captured_goal
-        assert "src/app.py" in captured_goal
-        assert "42" in captured_goal
-        assert "@@ -10,3 +10,4 @@" in captured_goal
-        assert "123" in captured_goal  # pr_number
-        assert "bug" in captured_goal.lower()  # category
-        # Constraints
+        for expected in ["Fix this null check", "src/app.py", "42", "@@ -10,3 +10,4 @@", "123"]:
+            assert expected in captured_goal
+        assert "bug" in captured_goal.lower()
         assert "root cause" in captured_goal.lower() or "only modify" in captured_goal.lower()
 
-        # Verify result
         assert len(result["group_results"]) == 1
         assert result["group_results"][0].status == GroupFixStatus.FIXED
 
-    @pytest.mark.asyncio
     async def test_develop_mixed_success_and_failure(self) -> None:
-        """develop_node records both successes and failures, continues on failure."""
-        c1 = _make_comment(id=1, path="src/good.py", body="Fix A")
-        c2 = _make_comment(id=2, path="src/bad.py", body="Fix B")
-        cls1 = _make_classification(1)
-        cls2 = _make_classification(2)
-        state = _make_state(
+        c1 = make_comment(id=1, path="src/good.py", body="Fix A")
+        c2 = make_comment(id=2, path="src/bad.py", body="Fix B")
+        state = make_state(
             comments=[c1, c2],
             file_groups={"src/good.py": [1], "src/bad.py": [2]},
-            classified_comments=[cls1, cls2],
+            classified_comments=[make_classification(1), make_classification(2)],
         )
-        config = _make_config()
+        config = make_runnable_config()
 
         call_count = 0
-
         mock_dev_instance = MagicMock()
 
-        async def fake_run(impl_state, profile, workflow_id):  # noqa: ANN001, ARG001
+        async def fake_run(impl_state: Any, profile: Any, workflow_id: Any) -> Any:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                # First group succeeds
-                final = impl_state.model_copy(
-                    update={"agentic_status": AgenticStatus.COMPLETED}
-                )
+                final = impl_state.model_copy(update={"agentic_status": AgenticStatus.COMPLETED})
                 yield final, MagicMock()
             else:
-                # Second group fails
                 raise RuntimeError("Developer failed on bad.py")
 
         mock_dev_instance.run = fake_run
 
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.Developer",
-            return_value=mock_dev_instance,
-        ):
+        with patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance):
             result = await develop_node(state, config)
 
         assert len(result["group_results"]) == 2
         statuses = {r.file_path: r.status for r in result["group_results"]}
         assert GroupFixStatus.FIXED in statuses.values()
         assert GroupFixStatus.FAILED in statuses.values()
-        # Failed one has error message
         failed = [r for r in result["group_results"] if r.status == GroupFixStatus.FAILED]
-        assert len(failed) == 1
         assert "Developer failed" in (failed[0].error or "")
 
-    @pytest.mark.asyncio
     async def test_develop_empty_file_groups_returns_completed(self) -> None:
-        """develop_node with empty file_groups returns empty results and COMPLETED."""
-        state = _make_state(file_groups={})
-        config = _make_config()
-
-        result = await develop_node(state, config)
-
+        result = await develop_node(make_state(file_groups={}), make_runnable_config())
         assert result["group_results"] == []
         assert result["agentic_status"] == AgenticStatus.COMPLETED
 
-    @pytest.mark.asyncio
     async def test_develop_uses_pr_fix_system_prompt(self) -> None:
-        """develop_node passes developer.pr_fix.system prompt to Developer constructor."""
-        c1 = _make_comment(id=1, path="src/app.py", body="Fix this")
-        cls1 = _make_classification(1)
-        state = _make_state(
+        c1 = make_comment(id=1, path="src/app.py", body="Fix this")
+        state = make_state(
             comments=[c1],
             file_groups={"src/app.py": [1]},
-            classified_comments=[cls1],
+            classified_comments=[make_classification(1)],
         )
-        config = _make_config()
 
         mock_dev_cls = MagicMock()
         mock_dev_instance = MagicMock()
-
-        async def fake_run(impl_state, profile, workflow_id):  # noqa: ANN001, ARG001
-            final = impl_state.model_copy(
-                update={"agentic_status": AgenticStatus.COMPLETED}
-            )
-            yield final, MagicMock()
-
-        mock_dev_instance.run = fake_run
+        mock_dev_instance.run = _fake_dev_run_success
         mock_dev_cls.return_value = mock_dev_instance
 
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.Developer",
-            mock_dev_cls,
-        ):
-            await develop_node(state, config)
+        with patch("amelia.pipelines.pr_auto_fix.nodes.Developer", mock_dev_cls):
+            await develop_node(state, make_runnable_config())
 
-        # Verify Developer constructor received the pr_fix prompt
         call_kwargs = mock_dev_cls.call_args
         prompts = call_kwargs.kwargs.get("prompts") or call_kwargs[1].get("prompts")
         expected_prompt = PROMPT_DEFAULTS["developer.pr_fix.system"].content
         assert prompts is not None
         assert prompts.get("developer.system") == expected_prompt
 
-    @pytest.mark.asyncio
     async def test_develop_all_groups_fail_returns_failed_status(self) -> None:
-        """If every group fails, develop_node returns FAILED status."""
-        c1 = _make_comment(id=1, path="src/a.py", body="Fix")
-        cls1 = _make_classification(1)
-        state = _make_state(
+        c1 = make_comment(id=1, path="src/a.py", body="Fix")
+        state = make_state(
             comments=[c1],
             file_groups={"src/a.py": [1]},
-            classified_comments=[cls1],
+            classified_comments=[make_classification(1)],
         )
-        config = _make_config()
 
         mock_dev_instance = MagicMock()
+        mock_dev_instance.run = _fake_dev_run_failure
 
-        async def fake_run(impl_state, profile, workflow_id):  # noqa: ANN001, ARG001
-            raise RuntimeError("Total failure")
-            yield  # Make it an async generator  # noqa: RET503
-
-        mock_dev_instance.run = fake_run
-
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.Developer",
-            return_value=mock_dev_instance,
-        ):
-            result = await develop_node(state, config)
+        with patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance):
+            result = await develop_node(state, make_runnable_config())
 
         assert result["agentic_status"] == AgenticStatus.FAILED
         assert all(r.status == GroupFixStatus.FAILED for r in result["group_results"])
@@ -408,127 +227,77 @@ class TestDevelopNode:
 class TestCommitPushNode:
     """Tests for commit_push_node."""
 
-    @pytest.mark.asyncio
+    @staticmethod
+    def _mock_git(*, has_changes: bool = True, commit_sha: str = "abc123def456") -> tuple[MagicMock, AsyncMock]:
+        """Return (mock_git_cls, mock_git) for patching GitOperations."""
+        mock_git = AsyncMock()
+        mock_git.has_changes.return_value = has_changes
+        mock_git.stage_and_commit.return_value = commit_sha
+        mock_git.safe_push.return_value = commit_sha
+        mock_git_cls = MagicMock(return_value=mock_git)
+        return mock_git_cls, mock_git
+
     async def test_commit_push_with_changes(self) -> None:
-        """commit_push_node stages, commits, and pushes when changes exist."""
-        c1 = _make_comment(id=1, path="src/app.py", line=42, body="Fix this bug")
-        state = _make_state(
-            comments=[c1],
-            file_groups={"src/app.py": [1]},
-        )
-        # Add group_results to state
+        c1 = make_comment(id=1, path="src/app.py", line=42, body="Fix this bug")
+        state = make_state(comments=[c1], file_groups={"src/app.py": [1]})
         state = state.model_copy(update={
             "group_results": [
-                GroupFixResult(
-                    file_path="src/app.py",
-                    status=GroupFixStatus.FIXED,
-                    comment_ids=[1],
-                ),
+                GroupFixResult(file_path="src/app.py", status=GroupFixStatus.FIXED, comment_ids=[1]),
             ],
         })
-        config = _make_config()
 
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.GitOperations"
-        ) as mock_git_cls:
-            mock_git = AsyncMock()
-            mock_git_cls.return_value = mock_git
-            mock_git.has_changes.return_value = True  # changes exist
-            mock_git.stage_and_commit.return_value = "abc123def456"
-            mock_git.safe_push.return_value = "abc123def456"
-
-            result = await commit_push_node(state, config)
+        mock_git_cls, mock_git = self._mock_git()
+        with patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", mock_git_cls):
+            result = await commit_push_node(state, make_runnable_config())
 
         assert result["status"] == "completed"
         assert result["commit_sha"] == "abc123def456"
         mock_git.stage_and_commit.assert_called_once()
         mock_git.safe_push.assert_called_once_with("feat/my-feature")
 
-        # Verify commit message includes prefix and comment info
         commit_msg = mock_git.stage_and_commit.call_args[0][0]
         assert "fix(review):" in commit_msg
         assert "src/app.py:42" in commit_msg
 
-    @pytest.mark.asyncio
     async def test_commit_push_no_changes_skips(self) -> None:
-        """commit_push_node skips commit/push when no files changed."""
-        state = _make_state()
-        config = _make_config()
-
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.GitOperations"
-        ) as mock_git_cls:
-            mock_git = AsyncMock()
-            mock_git_cls.return_value = mock_git
-            mock_git.has_changes.return_value = False  # no changes
-
-            result = await commit_push_node(state, config)
+        mock_git_cls, mock_git = self._mock_git(has_changes=False)
+        with patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", mock_git_cls):
+            result = await commit_push_node(make_state(), make_runnable_config())
 
         assert result["status"] == "completed"
         assert result["commit_sha"] is None
         mock_git.stage_and_commit.assert_not_called()
         mock_git.safe_push.assert_not_called()
 
-    @pytest.mark.asyncio
     async def test_commit_push_git_error_returns_failed(self) -> None:
-        """commit_push_node returns failed status on git error."""
-        state = _make_state()
-        config = _make_config()
-
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.GitOperations"
-        ) as mock_git_cls:
-            mock_git = AsyncMock()
-            mock_git_cls.return_value = mock_git
-            mock_git.has_changes.return_value = True  # changes exist
-            mock_git.stage_and_commit.side_effect = ValueError("nothing to commit")
-
-            result = await commit_push_node(state, config)
+        mock_git_cls, mock_git = self._mock_git()
+        mock_git.stage_and_commit.side_effect = ValueError("nothing to commit")
+        with patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", mock_git_cls):
+            result = await commit_push_node(make_state(), make_runnable_config())
 
         assert result["status"] == "failed"
         assert "nothing to commit" in result["error"]
 
-    @pytest.mark.asyncio
     async def test_commit_message_format(self) -> None:
-        """Commit message uses configurable prefix and lists addressed comments."""
-        c1 = _make_comment(id=1, path="src/app.py", line=10, body="Fix null check")
-        c2 = _make_comment(id=2, path="src/utils.py", line=20, body="Add validation")
-        state = _make_state(comments=[c1, c2])
+        c1 = make_comment(id=1, path="src/app.py", line=10, body="Fix null check")
+        c2 = make_comment(id=2, path="src/utils.py", line=20, body="Add validation")
+        state = make_state(comments=[c1, c2])
         state = state.model_copy(update={
             "group_results": [
-                GroupFixResult(
-                    file_path="src/app.py",
-                    status=GroupFixStatus.FIXED,
-                    comment_ids=[1],
-                ),
-                GroupFixResult(
-                    file_path="src/utils.py",
-                    status=GroupFixStatus.FIXED,
-                    comment_ids=[2],
-                ),
+                GroupFixResult(file_path="src/app.py", status=GroupFixStatus.FIXED, comment_ids=[1]),
+                GroupFixResult(file_path="src/utils.py", status=GroupFixStatus.FIXED, comment_ids=[2]),
             ],
             "autofix_config": PRAutoFixConfig(commit_prefix="chore(review):"),
         })
-        config = _make_config()
 
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.GitOperations"
-        ) as mock_git_cls:
-            mock_git = AsyncMock()
-            mock_git_cls.return_value = mock_git
-            mock_git._run_git.return_value = " M src/app.py\n M src/utils.py"
-            mock_git.stage_and_commit.return_value = "abc123"
-            mock_git.safe_push.return_value = "abc123"
-
-            await commit_push_node(state, config)
+        mock_git_cls, mock_git = self._mock_git(commit_sha="abc123")
+        mock_git._run_git.return_value = " M src/app.py\n M src/utils.py"
+        with patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", mock_git_cls):
+            await commit_push_node(state, make_runnable_config())
 
         commit_msg = mock_git.stage_and_commit.call_args[0][0]
-        assert "chore(review):" in commit_msg
-        assert "address PR review comments" in commit_msg
-        assert "src/app.py:10" in commit_msg
-        assert "Fix null check" in commit_msg
-        assert "src/utils.py:20" in commit_msg
-        assert "Add validation" in commit_msg
+        for expected in ["chore(review):", "address PR review comments", "src/app.py:10", "Fix null check", "src/utils.py:20", "Add validation"]:
+            assert expected in commit_msg
 
 
 # ---------------------------------------------------------------------------
@@ -536,283 +305,160 @@ class TestCommitPushNode:
 # ---------------------------------------------------------------------------
 
 
+def _make_reply_resolve_state(
+    *,
+    comment_ids: list[int] | None = None,
+    status: GroupFixStatus = GroupFixStatus.FIXED,
+    error: str | None = None,
+    commit_sha: str = "abc1234567890",
+    authors: list[str] | None = None,
+    thread_ids: list[str | None] | None = None,
+    autofix_config: PRAutoFixConfig | None = None,
+) -> tuple[Any, dict[str, Any]]:
+    """Build state + config for reply_resolve_node tests."""
+    cids = comment_ids or [1]
+    auths = authors or ["reviewer1"] * len(cids)
+    tids = thread_ids or ["T_abc123"] * len(cids)
+
+    comments = [
+        make_comment(id=cid, author=auth, thread_id=tid)
+        for cid, auth, tid in zip(cids, auths, tids, strict=True)
+    ]
+    groups = [
+        GroupFixResult(
+            file_path=f"src/file{i}.py",
+            status=status,
+            error=error,
+            comment_ids=[cid],
+        )
+        for i, cid in enumerate(cids)
+    ]
+    state = make_state(
+        comments=comments,
+        commit_sha=commit_sha,
+        group_results=groups,
+        autofix_config=autofix_config,
+    )
+    return state, make_runnable_config()
+
+
 class TestReplyResolveNode:
     """Tests for reply_resolve_node."""
 
-    @pytest.mark.asyncio
     async def test_fixed_comment_gets_reply_and_resolve(self) -> None:
-        """Fixed GroupFixResult -> reply_to_comment called with commit SHA, resolve_thread called."""
-        c1 = _make_comment(id=1, author="reviewer1", thread_id="T_abc123")
-        state = _make_state(
-            comments=[c1],
-            commit_sha="abc1234567890",
-            group_results=[
-                GroupFixResult(
-                    file_path="src/app.py",
-                    status=GroupFixStatus.FIXED,
-                    comment_ids=[1],
-                ),
-            ],
-        )
-        config = _make_config()
+        state, config = _make_reply_resolve_state()
 
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
-        ) as mock_gh_cls:
+        with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
             mock_gh = AsyncMock()
             mock_gh_cls.return_value = mock_gh
-
             result = await reply_resolve_node(state, config)
 
         mock_gh.reply_to_comment.assert_called_once()
-        call_kwargs = mock_gh.reply_to_comment.call_args
-        body = call_kwargs.kwargs.get("body") or call_kwargs[1].get("body") or call_kwargs[0][2]
-        assert "abc1234" in body  # short SHA (7 chars)
+        body = mock_gh.reply_to_comment.call_args[0][2]
+        assert "abc1234" in body
 
         mock_gh.resolve_thread.assert_called_once_with("T_abc123")
-
         assert result["status"] == "completed"
-        assert len(result["resolution_results"]) == 1
         assert result["resolution_results"][0].replied is True
         assert result["resolution_results"][0].resolved is True
 
-    @pytest.mark.asyncio
     async def test_fixed_reply_includes_commit_sha(self) -> None:
-        """Reply body for fixed comment contains short SHA (first 7 chars)."""
-        c1 = _make_comment(id=1, author="reviewer1", thread_id="T_abc123")
-        state = _make_state(
-            comments=[c1],
-            commit_sha="deadbeef1234567",
-            group_results=[
-                GroupFixResult(
-                    file_path="src/app.py",
-                    status=GroupFixStatus.FIXED,
-                    comment_ids=[1],
-                ),
-            ],
-        )
-        config = _make_config()
+        state, config = _make_reply_resolve_state(commit_sha="deadbeef1234567")
 
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
-        ) as mock_gh_cls:
+        with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
             mock_gh = AsyncMock()
             mock_gh_cls.return_value = mock_gh
-
             await reply_resolve_node(state, config)
 
         body = mock_gh.reply_to_comment.call_args[0][2]
-        assert "deadbee" in body  # first 7 chars of SHA
+        assert "deadbee" in body
 
-    @pytest.mark.asyncio
     async def test_reply_mentions_author(self) -> None:
-        """Reply body starts with @{author}."""
-        c1 = _make_comment(id=1, author="octocat", thread_id="T_abc123")
-        state = _make_state(
-            comments=[c1],
-            commit_sha="abc1234567890",
-            group_results=[
-                GroupFixResult(
-                    file_path="src/app.py",
-                    status=GroupFixStatus.FIXED,
-                    comment_ids=[1],
-                ),
-            ],
-        )
-        config = _make_config()
+        state, config = _make_reply_resolve_state(authors=["octocat"])
 
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
-        ) as mock_gh_cls:
+        with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
             mock_gh = AsyncMock()
             mock_gh_cls.return_value = mock_gh
-
             await reply_resolve_node(state, config)
 
         body = mock_gh.reply_to_comment.call_args[0][2]
         assert body.startswith("@octocat")
 
-    @pytest.mark.asyncio
     async def test_failed_comment_reply_no_resolve(self) -> None:
-        """Failed GroupFixResult -> reply posted with error, resolve NOT called."""
-        c1 = _make_comment(id=1, author="reviewer1", thread_id="T_abc123")
-        state = _make_state(
-            comments=[c1],
-            commit_sha="abc1234567890",
-            group_results=[
-                GroupFixResult(
-                    file_path="src/app.py",
-                    status=GroupFixStatus.FAILED,
-                    error="Syntax error in generated code",
-                    comment_ids=[1],
-                ),
-            ],
+        state, config = _make_reply_resolve_state(
+            status=GroupFixStatus.FAILED, error="Syntax error in generated code",
         )
-        config = _make_config()
 
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
-        ) as mock_gh_cls:
+        with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
             mock_gh = AsyncMock()
             mock_gh_cls.return_value = mock_gh
-
             result = await reply_resolve_node(state, config)
 
-        mock_gh.reply_to_comment.assert_called_once()
         body = mock_gh.reply_to_comment.call_args[0][2]
         assert "Syntax error in generated code" in body
-
         mock_gh.resolve_thread.assert_not_called()
-
         assert result["resolution_results"][0].replied is True
         assert result["resolution_results"][0].resolved is False
 
-    @pytest.mark.asyncio
-    async def test_no_changes_resolve_config_gated(self) -> None:
-        """No_changes with resolve_no_changes=True -> resolves; with False -> does not."""
-        c1 = _make_comment(id=1, author="reviewer1", thread_id="T_abc123")
-
-        # Test with resolve_no_changes=True (default)
-        state_resolve = _make_state(
-            comments=[c1],
-            commit_sha="abc1234567890",
-            group_results=[
-                GroupFixResult(
-                    file_path="src/app.py",
-                    status=GroupFixStatus.NO_CHANGES,
-                    comment_ids=[1],
-                ),
-            ],
-            autofix_config=PRAutoFixConfig(resolve_no_changes=True),
-        )
-        config = _make_config()
-
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
-        ) as mock_gh_cls:
-            mock_gh = AsyncMock()
-            mock_gh_cls.return_value = mock_gh
-
-            result = await reply_resolve_node(state_resolve, config)
-
-        mock_gh.resolve_thread.assert_called_once_with("T_abc123")
-        assert result["resolution_results"][0].resolved is True
-
-        # Test with resolve_no_changes=False
-        c2 = _make_comment(id=2, author="reviewer1", thread_id="T_def456")
-        state_no_resolve = _make_state(
-            comments=[c2],
-            commit_sha="abc1234567890",
-            group_results=[
-                GroupFixResult(
-                    file_path="src/app.py",
-                    status=GroupFixStatus.NO_CHANGES,
-                    comment_ids=[2],
-                ),
-            ],
-            autofix_config=PRAutoFixConfig(resolve_no_changes=False),
+    @pytest.mark.parametrize(
+        ("resolve_no_changes", "expect_resolved"),
+        [(True, True), (False, False)],
+        ids=["resolve-true", "resolve-false"],
+    )
+    async def test_no_changes_resolve_config_gated(
+        self, resolve_no_changes: bool, expect_resolved: bool,
+    ) -> None:
+        state, config = _make_reply_resolve_state(
+            status=GroupFixStatus.NO_CHANGES,
+            autofix_config=PRAutoFixConfig(resolve_no_changes=resolve_no_changes),
         )
 
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
-        ) as mock_gh_cls:
+        with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
             mock_gh = AsyncMock()
             mock_gh_cls.return_value = mock_gh
+            result = await reply_resolve_node(state, config)
 
-            result = await reply_resolve_node(state_no_resolve, config)
+        if expect_resolved:
+            mock_gh.resolve_thread.assert_called_once_with("T_abc123")
+        else:
+            mock_gh.resolve_thread.assert_not_called()
+        assert result["resolution_results"][0].resolved is expect_resolved
 
-        mock_gh.resolve_thread.assert_not_called()
-        assert result["resolution_results"][0].resolved is False
-
-    @pytest.mark.asyncio
     async def test_missing_thread_id_skips_resolve(self) -> None:
-        """Comment with thread_id=None -> reply posted, resolve skipped, warning logged."""
-        c1 = _make_comment(id=1, author="reviewer1", thread_id=None)
-        state = _make_state(
-            comments=[c1],
-            commit_sha="abc1234567890",
-            group_results=[
-                GroupFixResult(
-                    file_path="src/app.py",
-                    status=GroupFixStatus.FIXED,
-                    comment_ids=[1],
-                ),
-            ],
-        )
-        config = _make_config()
+        state, config = _make_reply_resolve_state(thread_ids=[None])
 
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
-        ) as mock_gh_cls:
+        with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
             mock_gh = AsyncMock()
             mock_gh_cls.return_value = mock_gh
-
             result = await reply_resolve_node(state, config)
 
         mock_gh.reply_to_comment.assert_called_once()
         mock_gh.resolve_thread.assert_not_called()
-
         assert result["resolution_results"][0].replied is True
         assert result["resolution_results"][0].resolved is False
 
-    @pytest.mark.asyncio
     async def test_resolve_failure_nonfatal(self) -> None:
-        """resolve_thread raises Exception -> logged, remaining comments still processed."""
-        c1 = _make_comment(id=1, author="reviewer1", thread_id="T_abc123")
-        c2 = _make_comment(id=2, author="reviewer2", thread_id="T_def456")
-        state = _make_state(
-            comments=[c1, c2],
-            commit_sha="abc1234567890",
-            group_results=[
-                GroupFixResult(
-                    file_path="src/app.py",
-                    status=GroupFixStatus.FIXED,
-                    comment_ids=[1],
-                ),
-                GroupFixResult(
-                    file_path="src/utils.py",
-                    status=GroupFixStatus.FIXED,
-                    comment_ids=[2],
-                ),
-            ],
+        state, config = _make_reply_resolve_state(
+            comment_ids=[1, 2],
+            authors=["reviewer1", "reviewer2"],
+            thread_ids=["T_abc123", "T_def456"],
         )
-        config = _make_config()
 
-        with patch(
-            "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService"
-        ) as mock_gh_cls:
+        with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
             mock_gh = AsyncMock()
             mock_gh_cls.return_value = mock_gh
-            # First resolve fails, second succeeds
-            mock_gh.resolve_thread.side_effect = [
-                Exception("GraphQL error"),
-                None,
-            ]
-
+            mock_gh.resolve_thread.side_effect = [Exception("GraphQL error"), None]
             result = await reply_resolve_node(state, config)
 
-        # Both comments got replies
         assert mock_gh.reply_to_comment.call_count == 2
-        # Both resolves were attempted
         assert mock_gh.resolve_thread.call_count == 2
 
-        # First failed resolve, second succeeded
-        assert len(result["resolution_results"]) == 2
-        res1 = result["resolution_results"][0]
-        res2 = result["resolution_results"][1]
-        assert res1.replied is True
-        assert res1.resolved is False
-        assert res1.error is not None
-        assert res2.replied is True
-        assert res2.resolved is True
+        res1, res2 = result["resolution_results"]
+        assert res1.replied is True and res1.resolved is False and res1.error is not None
+        assert res2.replied is True and res2.resolved is True
 
-    @pytest.mark.asyncio
     async def test_graph_includes_reply_resolve(self) -> None:
-        """Compiled graph has reply_resolve_node wired commit_push -> reply_resolve -> END."""
         from amelia.pipelines.pr_auto_fix.graph import create_pr_auto_fix_graph
 
         graph = create_pr_auto_fix_graph()
-
-        # Get node names from the graph
-        node_names = set(graph.nodes.keys())
-        assert "reply_resolve_node" in node_names
+        assert "reply_resolve_node" in set(graph.nodes.keys())
