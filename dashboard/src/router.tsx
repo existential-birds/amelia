@@ -129,13 +129,6 @@ export const router = createBrowserRouter([
         },
       },
       {
-        path: 'develop',
-        lazy: async () => {
-          const { default: Component } = await import('@/pages/DevelopPage');
-          return { Component };
-        },
-      },
-      {
         path: 'analytics',
         loader: analyticsLoader,
         lazy: async () => {
