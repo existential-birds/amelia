@@ -14,18 +14,13 @@ same event loop as the asyncpg pool (TestClient creates a separate thread
 with its own event loop, causing asyncpg event loop mismatches).
 """
 
-import os
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
 
-from amelia.server.database.brainstorm_repository import BrainstormRepository
-from amelia.server.database.connection import Database
-from amelia.server.database.migrator import Migrator
 from amelia.server.dependencies import get_orchestrator, get_profile_repository
-from amelia.server.events.bus import EventBus
 from amelia.server.main import create_app
 from amelia.server.routes.brainstorm import get_brainstorm_service
 from amelia.server.services.brainstorm import BrainstormService
@@ -33,47 +28,9 @@ from amelia.server.services.brainstorm import BrainstormService
 from .conftest import AsyncClientFactory, noop_lifespan
 
 
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://amelia:amelia@localhost:5434/amelia_test",
-)
-
-
 # =============================================================================
 # Fixtures
 # =============================================================================
-
-
-@pytest.fixture
-async def test_db() -> AsyncGenerator[Database, None]:
-    """Create and initialize PostgreSQL test database."""
-    db = Database(DATABASE_URL)
-    await db.connect()
-    migrator = Migrator(db)
-    await migrator.run()
-    yield db
-    await db.close()
-
-
-@pytest.fixture
-def test_brainstorm_repository(test_db: Database) -> BrainstormRepository:
-    """Create repository backed by test database."""
-    return BrainstormRepository(test_db)
-
-
-@pytest.fixture
-def test_event_bus() -> EventBus:
-    """Create event bus for testing."""
-    return EventBus()
-
-
-@pytest.fixture
-def test_brainstorm_service(
-    test_brainstorm_repository: BrainstormRepository,
-    test_event_bus: EventBus,
-) -> BrainstormService:
-    """Create real BrainstormService with test dependencies."""
-    return BrainstormService(test_brainstorm_repository, test_event_bus)
 
 
 @pytest.fixture

@@ -18,14 +18,11 @@ same event loop as the asyncpg pool (TestClient creates a separate thread
 with its own event loop, causing asyncpg event loop mismatches).
 """
 
-import os
-from collections.abc import AsyncGenerator
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
-from fastapi import FastAPI
 
 from amelia.drivers.base import (
     AgenticMessage,
@@ -33,64 +30,15 @@ from amelia.drivers.base import (
     DriverInterface,
     DriverUsage,
 )
-from amelia.server.database.brainstorm_repository import BrainstormRepository
-from amelia.server.database.connection import Database
-from amelia.server.database.migrator import Migrator
-from amelia.server.dependencies import get_orchestrator, get_profile_repository
-from amelia.server.events.bus import EventBus
-from amelia.server.main import create_app
-from amelia.server.routes.brainstorm import (
-    get_brainstorm_service,
-    get_cwd,
-    get_driver,
-)
 from amelia.server.services.brainstorm import BrainstormService
 from tests.conftest import create_mock_execute_agentic
 
-from .conftest import noop_lifespan
-
-
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://amelia:amelia@localhost:5434/amelia_test",
-)
+from .conftest import _create_app_with_overrides
 
 
 # =============================================================================
 # Fixtures
 # =============================================================================
-
-
-@pytest.fixture
-async def test_db() -> AsyncGenerator[Database, None]:
-    """Create and initialize PostgreSQL test database."""
-    db = Database(DATABASE_URL)
-    await db.connect()
-    migrator = Migrator(db)
-    await migrator.run()
-    yield db
-    await db.close()
-
-
-@pytest.fixture
-def test_brainstorm_repository(test_db: Database) -> BrainstormRepository:
-    """Create repository backed by test database."""
-    return BrainstormRepository(test_db)
-
-
-@pytest.fixture
-def test_event_bus() -> EventBus:
-    """Create event bus for testing."""
-    return EventBus()
-
-
-@pytest.fixture
-def test_brainstorm_service(
-    test_brainstorm_repository: BrainstormRepository,
-    test_event_bus: EventBus,
-) -> BrainstormService:
-    """Create real BrainstormService with test dependencies."""
-    return BrainstormService(test_brainstorm_repository, test_event_bus)
 
 
 def create_mock_driver_with_usage(
@@ -110,33 +58,6 @@ def create_mock_driver_with_usage(
     driver.execute_agentic = create_mock_execute_agentic(messages)
     driver.get_usage = MagicMock(return_value=usage)
     return driver
-
-
-def _create_app_with_overrides(
-    service: BrainstormService,
-    driver: MagicMock,
-    cwd: str,
-) -> FastAPI:
-    """Create FastAPI app with noop lifespan and dependency overrides."""
-    app = create_app()
-
-    app.router.lifespan_context = noop_lifespan
-    app.dependency_overrides[get_brainstorm_service] = lambda: service
-    app.dependency_overrides[get_driver] = lambda: driver
-    app.dependency_overrides[get_cwd] = lambda: cwd
-
-    # Override dependencies that would otherwise require the database lifespan
-    mock_profile_repo = AsyncMock()
-    mock_profile_repo.get_profile = AsyncMock(return_value=None)
-    app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
-
-    mock_orch = MagicMock()
-    mock_orch.queue_workflow = AsyncMock(
-        return_value="00000000-0000-4000-8000-000000000001"
-    )
-    app.dependency_overrides[get_orchestrator] = lambda: mock_orch
-
-    return app
 
 
 # =============================================================================
@@ -173,7 +94,7 @@ class TestMessageUsageFromDriver:
         )
         mock_driver = create_mock_driver_with_usage(messages, usage)
         app = _create_app_with_overrides(
-            test_brainstorm_service, mock_driver, str(tmp_path)
+            test_brainstorm_service, lambda: mock_driver, str(tmp_path)
         )
 
         async with httpx.AsyncClient(
@@ -231,7 +152,7 @@ class TestMessageUsageFromDriver:
         ]
         mock_driver = create_mock_driver_with_usage(messages, usage=None)
         app = _create_app_with_overrides(
-            test_brainstorm_service, mock_driver, str(tmp_path)
+            test_brainstorm_service, lambda: mock_driver, str(tmp_path)
         )
 
         async with httpx.AsyncClient(
@@ -291,7 +212,7 @@ class TestSessionUsageSummary:
         )
         mock_driver1 = create_mock_driver_with_usage(messages1, usage1)
         app1 = _create_app_with_overrides(
-            test_brainstorm_service, mock_driver1, str(tmp_path)
+            test_brainstorm_service, lambda: mock_driver1, str(tmp_path)
         )
 
         async with httpx.AsyncClient(
@@ -328,7 +249,7 @@ class TestSessionUsageSummary:
         )
         mock_driver2 = create_mock_driver_with_usage(messages2, usage2)
         app2 = _create_app_with_overrides(
-            test_brainstorm_service, mock_driver2, str(tmp_path)
+            test_brainstorm_service, lambda: mock_driver2, str(tmp_path)
         )
 
         async with httpx.AsyncClient(
@@ -390,7 +311,7 @@ class TestSessionUsageSummary:
         ]
         mock_driver = create_mock_driver_with_usage(messages, usage=None)
         app = _create_app_with_overrides(
-            test_brainstorm_service, mock_driver, str(tmp_path)
+            test_brainstorm_service, lambda: mock_driver, str(tmp_path)
         )
 
         async with httpx.AsyncClient(
@@ -435,7 +356,7 @@ class TestSessionUsageSummary:
         ]
         mock_driver = create_mock_driver_with_usage(messages, usage=None)
         app = _create_app_with_overrides(
-            test_brainstorm_service, mock_driver, str(tmp_path)
+            test_brainstorm_service, lambda: mock_driver, str(tmp_path)
         )
 
         async with httpx.AsyncClient(
@@ -485,7 +406,7 @@ class TestUsageWithPartialData:
         )
         mock_driver = create_mock_driver_with_usage(messages, usage)
         app = _create_app_with_overrides(
-            test_brainstorm_service, mock_driver, str(tmp_path)
+            test_brainstorm_service, lambda: mock_driver, str(tmp_path)
         )
 
         async with httpx.AsyncClient(
@@ -543,7 +464,7 @@ class TestUsageWithPartialData:
         )
         mock_driver = create_mock_driver_with_usage(messages, usage)
         app = _create_app_with_overrides(
-            test_brainstorm_service, mock_driver, str(tmp_path)
+            test_brainstorm_service, lambda: mock_driver, str(tmp_path)
         )
 
         async with httpx.AsyncClient(

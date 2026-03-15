@@ -514,6 +514,11 @@ def create_planning_graph_mock(
     return mock_graph
 
 
+async def await_planning_task(orchestrator: OrchestratorService, workflow_id: str) -> None:
+    if workflow_id in orchestrator._planning_tasks:
+        await orchestrator._planning_tasks[workflow_id]
+
+
 @asynccontextmanager
 async def mock_langgraph_for_planning(
     goal: str = "Test goal from architect",

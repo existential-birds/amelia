@@ -19,7 +19,7 @@ from amelia.core.types import Profile
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.requests import CreateWorkflowRequest
 from amelia.server.orchestrator.service import OrchestratorService
-from tests.integration.conftest import mock_langgraph_for_planning
+from tests.integration.conftest import await_planning_task, mock_langgraph_for_planning
 
 
 @pytest.mark.integration
@@ -59,8 +59,7 @@ class TestPlanNowApproveFlow:
             workflow_id = await test_orchestrator.queue_and_plan_workflow(request)
 
             # Wait for the background planning task to complete
-            if workflow_id in test_orchestrator._planning_tasks:
-                await test_orchestrator._planning_tasks[workflow_id]
+            await await_planning_task(test_orchestrator, workflow_id)
 
         # Verify workflow is in blocked state (waiting for approval)
         workflow = await test_repository.get(workflow_id)
@@ -102,8 +101,7 @@ class TestPlanNowApproveFlow:
             workflow_id = await test_orchestrator.queue_and_plan_workflow(request)
 
             # Wait for planning to complete
-            if workflow_id in test_orchestrator._planning_tasks:
-                await test_orchestrator._planning_tasks[workflow_id]
+            await await_planning_task(test_orchestrator, workflow_id)
 
         # Verify blocked status
         workflow = await test_repository.get(workflow_id)
@@ -171,8 +169,7 @@ class TestPlanNowApproveFlow:
             workflow_id = await test_orchestrator.queue_and_plan_workflow(request)
 
             # Wait for planning to complete
-            if workflow_id in test_orchestrator._planning_tasks:
-                await test_orchestrator._planning_tasks[workflow_id]
+            await await_planning_task(test_orchestrator, workflow_id)
 
         # Verify plan data was synced to ServerExecutionState
         workflow = await test_repository.get(workflow_id)
