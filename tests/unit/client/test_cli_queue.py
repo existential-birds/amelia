@@ -139,7 +139,7 @@ class TestRunCommand:
 
             assert result.exit_code == 0
             assert "3" in result.stdout
-            assert "wf-4" in result.stdout or "1" in result.stdout
+            assert "wf-4" in result.stdout
 
     def test_run_handles_server_unreachable(self, runner: CliRunner) -> None:
         """run command handles server connection errors gracefully."""

@@ -72,7 +72,7 @@ function getPresetDescription(preset: string): string {
  * Export usage data to CSV.
  */
 function exportUsageCSV(byModel: UsageByModel[], dateRange: string) {
-  const rows: (string | number)[] [] = [
+  const rows: (string | number)[][] = [
     ['Model', 'Workflows', 'Success Rate', 'Tokens', 'Cost (USD)'],
     ...byModel.map((m) => [
       m.model,

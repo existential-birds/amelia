@@ -133,8 +133,7 @@ class TestConcurrencyControl:
         task2 = asyncio.create_task(
             orchestrator.trigger_fix_cycle(pr_number=42, repo="owner/repo", profile=orch_profile)
         )
-        await asyncio.sleep(0.01)
-
+        await asyncio.wait_for(task2, timeout=1.0)
         assert task2.done()
         queued_events = [e for e in captured_events if e.event_type == EventType.PR_FIX_QUEUED]
         assert len(queued_events) == 1
@@ -478,20 +477,22 @@ class TestRepoLevelGitSerialization:
     async def test_repo_lock_serializes_git_across_prs(
         self,
         orchestrator: PRAutoFixOrchestrator,
+        mock_git_operations: MagicMock,
         orch_profile: Profile,
     ) -> None:
-        original_execute = AsyncMock()
         git_in_progress = asyncio.Event()
 
-        async def check_overlap(pr_number: int, *args: object, **kwargs: object) -> None:
+        async def slow_fetch(*args: object, **kwargs: object) -> None:
             if git_in_progress.is_set():
-                pass  # overlap detected (non-fatal here)
+                pytest.fail("Repo-level git section overlapped across PRs")
             git_in_progress.set()
-            await asyncio.sleep(0.05)
-            git_in_progress.clear()
-            await original_execute(pr_number, *args, **kwargs)
+            try:
+                await asyncio.sleep(0.05)
+            finally:
+                git_in_progress.clear()
 
-        orchestrator._execute_pipeline = AsyncMock(side_effect=check_overlap)  # type: ignore[method-assign]
+        mock_git_operations.fetch_origin = AsyncMock(side_effect=slow_fetch)
+        orchestrator._execute_pipeline = AsyncMock()  # type: ignore[method-assign]
 
         task1 = asyncio.create_task(
             orchestrator.trigger_fix_cycle(pr_number=42, repo="owner/repo", profile=orch_profile)
@@ -500,7 +501,7 @@ class TestRepoLevelGitSerialization:
             orchestrator.trigger_fix_cycle(pr_number=99, repo="owner/repo", profile=orch_profile)
         )
         await asyncio.gather(task1, task2)
-        assert original_execute.call_count == 2
+        assert orchestrator._execute_pipeline.call_count == 2
 
 
 # ---------------------------------------------------------------------------

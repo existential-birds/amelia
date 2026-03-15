@@ -4,14 +4,14 @@
 DB_PORT := $(or $(AMELIA_DB_PORT),5434)
 DATABASE_URL := postgresql://amelia:amelia@localhost:$(DB_PORT)/amelia_test
 
-.PHONY: db db-stop test test-unit test-integration test-all lint type-check check dev
+.PHONY: db db-stop test test-db test-integration test-all lint type-check check dev help
 
 ## Database
 db:                    ## Start postgres (detached)
 	docker compose up -d postgres
 
 db-stop:               ## Stop postgres
-	docker compose down
+	docker compose stop postgres
 
 ## Tests
 test:                  ## Run unit tests (no DB required)

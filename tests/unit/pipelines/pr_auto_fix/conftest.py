@@ -191,7 +191,9 @@ async def mock_pipeline_context(
 
     mock_pipeline = MagicMock()
     mock_pipeline.create_graph.return_value = mock_graph
-    mock_pipeline.get_initial_state.return_value = initial_state or {"mock": "state"}
+    mock_pipeline.get_initial_state.return_value = (
+        initial_state if initial_state is not None else {"mock": "state"}
+    )
 
     with patch(
         "amelia.pipelines.pr_auto_fix.orchestrator.PRAutoFixPipeline",

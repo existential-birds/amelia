@@ -84,21 +84,13 @@ def extract_node_config(
     """
     resolved = config or {}
     configurable = resolved.get("configurable", {})
-
-    event_bus = configurable.get("event_bus")
-    workflow_id = configurable.get("thread_id")
-    profile = configurable.get("profile")
-
-    if not workflow_id:
-        raise ValueError("workflow_id (thread_id) is required in config.configurable")
-    if not profile:
-        raise ValueError("profile is required in config.configurable")
+    event_bus, workflow_id, profile = extract_config_params(resolved)
 
     return NodeConfigParams(
         event_bus=event_bus,
         workflow_id=workflow_id,
         profile=profile,
         repository=configurable.get("repository"),
-        prompts=configurable.get("prompts", {}),
+        prompts=configurable.get("prompts") or {},
         sandbox_provider=configurable.get("sandbox_provider"),
     )
