@@ -599,14 +599,14 @@ async def request_review(
     Returns:
         202 Accepted with workflow_id and status.
     """
-    await orchestrator.request_review(
+    review_workflow_id = await orchestrator.request_review(
         workflow_id=workflow_id,
         mode=request.mode,
         review_types=request.review_types,
         base_commit=request.base_commit,
     )
-    logger.info("Review requested", workflow_id=workflow_id, mode=request.mode)
-    return ActionResponse(status="review_requested", workflow_id=workflow_id)
+    logger.info("Review requested", workflow_id=workflow_id, review_workflow_id=review_workflow_id, mode=request.mode)
+    return ActionResponse(status="review_requested", workflow_id=review_workflow_id)
 
 
 def configure_exception_handlers(app: FastAPI) -> None:

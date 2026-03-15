@@ -1348,6 +1348,8 @@ class OrchestratorService:
         workflow_id: uuid.UUID,
         state: ServerExecutionState,
         execution_state: ImplementationState,
+        review_mode: str = "review_fix",
+        review_types: list[str] | None = None,
     ) -> None:
         """Run the review-fix workflow graph.
 
@@ -1358,6 +1360,8 @@ class OrchestratorService:
             workflow_id: The workflow ID.
             state: Server execution state (for worktree path etc).
             execution_state: The ImplementationState for graph input.
+            review_mode: "review_only" or "review_fix".
+            review_types: Optional list of review types to run.
         """
         # Get profile from settings using profile_id
         if state.profile_id is None:
@@ -1411,6 +1415,8 @@ class OrchestratorService:
                     "repository": self._repository,
                     "prompts": prompts,
                     "sandbox_provider": sandbox_provider,
+                    "review_mode": review_mode,
+                    "review_types": review_types,
                 },
             }
 
@@ -3060,7 +3066,7 @@ class OrchestratorService:
         mode: str = "review_only",
         review_types: list[str] | None = None,
         base_commit: str | None = None,
-    ) -> None:
+    ) -> uuid.UUID:
         """Request an on-demand code review for a workflow.
 
         Args:
@@ -3072,8 +3078,13 @@ class OrchestratorService:
             base_commit: Optional base commit for the diff. If None, uses
                 the workflow's stored base commit.
 
+        Returns:
+            The new review workflow ID (UUID).
+
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist.
+            WorkflowConflictError: If worktree already has active workflow.
+            ConcurrencyLimitError: If at max concurrent workflows.
         """
         if review_types is None:
             review_types = ["general"]
@@ -3089,3 +3100,98 @@ class OrchestratorService:
             review_types=review_types,
             base_commit=base_commit,
         )
+
+        # Resolve base commit and diff content
+        worktree_path = workflow.worktree_path
+        if base_commit is None:
+            base_commit = await get_git_head(worktree_path)
+
+        # Get diff content
+        diff_content = ""
+        if base_commit:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "git", "diff", base_commit, "HEAD",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=worktree_path,
+                )
+                stdout, _ = await proc.communicate()
+                if proc.returncode == 0:
+                    diff_content = stdout.decode()
+            except (FileNotFoundError, OSError):
+                logger.warning("Failed to get diff", worktree_path=worktree_path)
+
+        async with self._start_lock:
+            if worktree_path in self._active_tasks:
+                existing_id, _ = self._active_tasks[worktree_path]
+                raise WorkflowConflictError(worktree_path, existing_id)
+
+            if len(self._active_tasks) >= self._max_concurrent:
+                raise ConcurrencyLimitError(self._max_concurrent, len(self._active_tasks))
+
+            new_id = uuid4()
+
+            # Load profile
+            if self._profile_repo is None:
+                raise ValueError("ProfileRepository not configured")
+
+            if workflow.profile_id:
+                record = await self._profile_repo.get_profile(workflow.profile_id)
+                if record is None:
+                    raise ValueError(f"Profile '{workflow.profile_id}' not found")
+            else:
+                record = await self._profile_repo.get_active_profile()
+                if record is None:
+                    raise ValueError("No active profile set")
+
+            loaded_profile = self._update_profile_repo_root(record, worktree_path)
+
+            # Reconstruct issue from cached data
+            issue = None
+            if workflow.issue_cache:
+                issue = Issue(**workflow.issue_cache)
+
+            # Create ImplementationState for the review
+            execution_state = ImplementationState(
+                workflow_id=new_id,
+                profile_id=loaded_profile.name,
+                created_at=datetime.now(UTC),
+                status="pending",
+                issue=issue,
+                code_changes_for_review=diff_content,
+                base_commit=base_commit,
+                review_iteration=0,
+                review_mode=mode,
+            )
+
+            # Create server state
+            state = ServerExecutionState(
+                id=new_id,
+                issue_id=workflow.issue_id,
+                worktree_path=worktree_path,
+                workflow_type=WorkflowType.REVIEW,
+                profile_id=loaded_profile.name,
+                issue_cache=workflow.issue_cache,
+                workflow_status=WorkflowStatus.PENDING,
+                started_at=datetime.now(UTC),
+            )
+
+            await self._repository.create(state)
+
+            task = asyncio.create_task(
+                self._run_review_workflow(
+                    new_id, state, execution_state,
+                    review_mode=mode, review_types=review_types,
+                )
+            )
+            self._active_tasks[worktree_path] = (new_id, task)
+
+        def cleanup_task(_: asyncio.Task[None]) -> None:
+            self._active_tasks.pop(worktree_path, None)
+            self._sequence_counters.pop(new_id, None)
+            self._sequence_locks.pop(new_id, None)
+
+        task.add_done_callback(cleanup_task)
+
+        return new_id

@@ -341,7 +341,8 @@ async def call_reviewer_node(
         )
 
     # Detect stack and load review skills
-    raw_review_types = agent_config.options.get("review_types", ["general"])
+    config_review_types = (config or {}).get("configurable", {}).get("review_types")
+    raw_review_types = config_review_types or agent_config.options.get("review_types", ["general"])
     if not isinstance(raw_review_types, list) or not raw_review_types:
         logger.warning(
             "Invalid review_types in agent options, falling back to ['general']",
