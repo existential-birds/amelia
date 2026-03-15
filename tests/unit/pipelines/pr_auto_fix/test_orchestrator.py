@@ -143,11 +143,15 @@ class TestConcurrencyControl:
         await task1
         assert call_count == 2
 
-    async def test_concurrent_different_prs_run_in_parallel(
+    async def test_concurrent_different_repos_run_in_parallel(
         self,
         orchestrator: PRAutoFixOrchestrator,
         orch_profile: Profile,
     ) -> None:
+        """PRs on *different* repos run in parallel (separate repo locks)."""
+        profile_a = orch_profile.model_copy(update={"repo_root": "/tmp/repo-a"})
+        profile_b = orch_profile.model_copy(update={"repo_root": "/tmp/repo-b"})
+
         pr42_started = asyncio.Event()
         pr99_started = asyncio.Event()
         both_running = asyncio.Event()
@@ -160,10 +164,10 @@ class TestConcurrencyControl:
         orchestrator._execute_pipeline = AsyncMock(side_effect=mock_execute)  # type: ignore[method-assign]
 
         task1 = asyncio.create_task(
-            orchestrator.trigger_fix_cycle(pr_number=42, repo="owner/repo", profile=orch_profile)
+            orchestrator.trigger_fix_cycle(pr_number=42, repo="owner/repo-a", profile=profile_a)
         )
         task2 = asyncio.create_task(
-            orchestrator.trigger_fix_cycle(pr_number=99, repo="owner/repo", profile=orch_profile)
+            orchestrator.trigger_fix_cycle(pr_number=99, repo="owner/repo-b", profile=profile_b)
         )
 
         await asyncio.wait_for(pr42_started.wait(), timeout=2.0)
@@ -172,6 +176,33 @@ class TestConcurrencyControl:
         both_running.set()
         await task1
         await task2
+
+    async def test_concurrent_same_repo_different_prs_serialized(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        orch_profile: Profile,
+    ) -> None:
+        """PRs on the *same* repo are serialized by the repo lock."""
+        execution_order: list[int] = []
+
+        async def mock_execute(pr_number: int, *args: object, **kwargs: object) -> None:
+            execution_order.append(pr_number)
+            await asyncio.sleep(0.01)
+
+        orchestrator._execute_pipeline = AsyncMock(side_effect=mock_execute)  # type: ignore[method-assign]
+
+        task1 = asyncio.create_task(
+            orchestrator.trigger_fix_cycle(pr_number=42, repo="owner/repo", profile=orch_profile)
+        )
+        # Yield so task1 grabs the repo lock first
+        await asyncio.sleep(0)
+        task2 = asyncio.create_task(
+            orchestrator.trigger_fix_cycle(pr_number=99, repo="owner/repo", profile=orch_profile)
+        )
+
+        await asyncio.gather(task1, task2)
+        # PR 42 should finish before PR 99 starts
+        assert execution_order == [42, 99]
 
     async def test_pending_flag_is_boolean_latest_wins(
         self,

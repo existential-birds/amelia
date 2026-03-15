@@ -282,6 +282,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         event_bus=event_bus,
     )
 
+    app.state.pr_autofix_orchestrator = pr_fix_orchestrator
     app.state.lifecycle = lifecycle
 
     # Start lifecycle components

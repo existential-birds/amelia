@@ -17,10 +17,12 @@ from amelia.core.types import (
     PRSummary,
     TrackerType,
 )
+from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.server.database import ProfileRepository, WorkflowRepository
 from amelia.server.dependencies import get_profile_repository, get_repository
 from amelia.server.events.bus import EventBus
 from amelia.server.routes.github import router
+from amelia.services.github_pr import GitHubPRService
 
 
 @pytest.fixture
@@ -43,6 +45,11 @@ def app(mock_profile_repo: AsyncMock, event_bus: EventBus) -> FastAPI:
     mock_workflow_repo.update = AsyncMock()
     application.dependency_overrides[get_repository] = lambda: mock_workflow_repo
     application.state.event_bus = event_bus
+    application.state.pr_autofix_orchestrator = PRAutoFixOrchestrator(
+        event_bus=event_bus,
+        github_pr_service=GitHubPRService("."),
+        workflow_repo=mock_workflow_repo,
+    )
     return application
 
 
@@ -236,23 +243,23 @@ class TestTriggerPRAutoFix:
         return PRSummary(**(defaults | overrides))
 
     @staticmethod
-    def _trigger_autofix_with_mocks(client, profile_repo, profile, *, pr_summary=None, body=None):
+    def _trigger_autofix_with_mocks(client, app, profile_repo, profile, *, pr_summary=None, body=None):
         profile_repo.get_profile.return_value = profile
         if pr_summary is None:
             pr_summary = TestTriggerPRAutoFix._make_pr_summary()
+
+        mock_orch = MagicMock()
+        mock_orch.get_workflow_id.return_value = UUID("12345678-1234-5678-1234-567812345678")
+        mock_orch.trigger_fix_cycle = AsyncMock()
+        app.state.pr_autofix_orchestrator = mock_orch
+
         with (
             patch("amelia.server.routes.github.GitHubPRService") as MockService,
-            patch("amelia.server.routes.github.PRAutoFixOrchestrator") as MockOrch,
             patch("amelia.server.routes.github._get_repo_name", new_callable=AsyncMock, return_value="owner/repo"),
         ):
             mock_svc = AsyncMock()
             mock_svc.get_pr_summary.return_value = pr_summary
             MockService.return_value = mock_svc
-
-            mock_orch = MagicMock()
-            mock_orch.get_workflow_id.return_value = UUID("12345678-1234-5678-1234-567812345678")
-            mock_orch.trigger_fix_cycle = AsyncMock()
-            MockOrch.return_value = mock_orch
 
             response = client.post("/api/github/prs/42/auto-fix?profile=test", json=body)
         return response, mock_orch
@@ -260,10 +267,11 @@ class TestTriggerPRAutoFix:
     def test_returns_202_with_workflow_id(
         self,
         client: TestClient,
+        app: FastAPI,
         mock_profile_repo: AsyncMock,
         github_profile: Profile,
     ) -> None:
-        response, _ = self._trigger_autofix_with_mocks(client, mock_profile_repo, github_profile)
+        response, _ = self._trigger_autofix_with_mocks(client, app, mock_profile_repo, github_profile)
 
         assert response.status_code == 202
         data = response.json()
@@ -294,11 +302,12 @@ class TestTriggerPRAutoFix:
     def test_aggressiveness_override(
         self,
         client: TestClient,
+        app: FastAPI,
         mock_profile_repo: AsyncMock,
         github_profile: Profile,
     ) -> None:
         response, mock_orch = self._trigger_autofix_with_mocks(
-            client, mock_profile_repo, github_profile, body={"aggressiveness": "thorough"},
+            client, app, mock_profile_repo, github_profile, body={"aggressiveness": "thorough"},
         )
 
         assert response.status_code == 202
@@ -309,12 +318,13 @@ class TestTriggerPRAutoFix:
     def test_fetches_head_branch_before_triggering(
         self,
         client: TestClient,
+        app: FastAPI,
         mock_profile_repo: AsyncMock,
         github_profile: Profile,
     ) -> None:
         pr_summary = self._make_pr_summary(head_branch="feat/my-branch")
         _, mock_orch = self._trigger_autofix_with_mocks(
-            client, mock_profile_repo, github_profile, pr_summary=pr_summary,
+            client, app, mock_profile_repo, github_profile, pr_summary=pr_summary,
         )
 
         # Verify head_branch was fetched from PR summary and passed to orchestrator

@@ -22,8 +22,8 @@ from amelia.core.types import (
     TrackerType,
 )
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
-from amelia.server.database import ProfileRepository, WorkflowRepository
-from amelia.server.dependencies import get_profile_repository, get_repository
+from amelia.server.database import ProfileRepository
+from amelia.server.dependencies import get_profile_repository
 from amelia.services.github_pr import GitHubPRService
 
 
@@ -319,15 +319,15 @@ async def trigger_pr_autofix(
     profile: str = Query(..., description="Profile name"),
     body: TriggerPRAutoFixRequest | None = None,
     profile_repo: ProfileRepository = Depends(get_profile_repository),
-    workflow_repo: WorkflowRepository = Depends(get_repository),
 ) -> JSONResponse:
     """Trigger a PR auto-fix cycle.
 
     Fetches PR metadata (head_branch) then spawns an async fix cycle via
-    the PRAutoFixOrchestrator. Returns 202 immediately with a workflow_id.
+    the shared PRAutoFixOrchestrator on app.state. Returns 202 immediately
+    with a workflow_id.
 
     Args:
-        request: Starlette request (for app.state.event_bus access).
+        request: Starlette request (for app.state access).
         number: PR number to fix.
         profile: Profile name to resolve repo context.
         body: Optional request body with aggressiveness override.
@@ -367,12 +367,8 @@ async def trigger_pr_autofix(
             update={"aggressiveness": level},
         )
 
-    orchestrator = PRAutoFixOrchestrator(
-        event_bus=request.app.state.event_bus,
-        github_pr_service=service,
-        workflow_repo=workflow_repo,
-    )
-    workflow_id = orchestrator.get_workflow_id(number)
+    orchestrator: PRAutoFixOrchestrator = request.app.state.pr_autofix_orchestrator
+    workflow_id = orchestrator.get_workflow_id(repo, number)
 
     def _log_task_error(task: asyncio.Task[None]) -> None:
         if not task.cancelled():

@@ -61,24 +61,25 @@ class PRAutoFixOrchestrator:
         self._workflow_repo = workflow_repo
         self._metrics_repo = metrics_repo
 
-        # Per-PR concurrency control
-        self._pr_locks: dict[int, asyncio.Lock] = {}
-        self._pr_pending: dict[int, bool] = {}
+        # Per-PR concurrency control (keyed by (repo, pr_number))
+        self._pr_locks: dict[tuple[str, int], asyncio.Lock] = {}
+        self._pr_pending: dict[tuple[str, int], bool] = {}
 
         # Cooldown interruption
-        self._cooldown_events: dict[int, asyncio.Event] = {}
+        self._cooldown_events: dict[tuple[str, int], asyncio.Event] = {}
 
         # Repo-level git serialization (keyed by repo_path)
         self._repo_locks: dict[str, asyncio.Lock] = {}
 
         # Per-PR synthetic workflow IDs for orchestration events
-        self._pr_workflow_ids: dict[int, UUID] = {}
+        self._pr_workflow_ids: dict[tuple[str, int], UUID] = {}
 
-    def _get_pr_lock(self, pr_number: int) -> asyncio.Lock:
+    def _get_pr_lock(self, repo: str, pr_number: int) -> asyncio.Lock:
         """Get or create the per-PR asyncio lock."""
-        if pr_number not in self._pr_locks:
-            self._pr_locks[pr_number] = asyncio.Lock()
-        return self._pr_locks[pr_number]
+        key = (repo, pr_number)
+        if key not in self._pr_locks:
+            self._pr_locks[key] = asyncio.Lock()
+        return self._pr_locks[key]
 
     def _get_repo_lock(self, repo_path: str) -> asyncio.Lock:
         """Get or create the repo-level asyncio lock for git serialization."""
@@ -86,11 +87,12 @@ class PRAutoFixOrchestrator:
             self._repo_locks[repo_path] = asyncio.Lock()
         return self._repo_locks[repo_path]
 
-    def get_workflow_id(self, pr_number: int) -> UUID:
+    def get_workflow_id(self, repo: str, pr_number: int) -> UUID:
         """Get or create a synthetic workflow ID for orchestration events."""
-        if pr_number not in self._pr_workflow_ids:
-            self._pr_workflow_ids[pr_number] = uuid4()
-        return self._pr_workflow_ids[pr_number]
+        key = (repo, pr_number)
+        if key not in self._pr_workflow_ids:
+            self._pr_workflow_ids[key] = uuid4()
+        return self._pr_workflow_ids[key]
 
     async def trigger_fix_cycle(
         self,
@@ -115,23 +117,26 @@ class PRAutoFixOrchestrator:
             config: Optional config override (defaults to profile.pr_autofix).
         """
         effective_config = config or profile.pr_autofix or PRAutoFixConfig()
-        lock = self._get_pr_lock(pr_number)
+        key = (repo, pr_number)
+        lock = self._get_pr_lock(repo, pr_number)
 
         if lock.locked():
             # Already running -- set pending flag (latest wins, no accumulation)
-            self._pr_pending[pr_number] = True
+            self._pr_pending[key] = True
             # If in cooldown, reset the timer
-            if pr_number in self._cooldown_events:
-                self._cooldown_events[pr_number].set()
+            if key in self._cooldown_events:
+                self._cooldown_events[key].set()
                 self._emit_event(
                     EventType.PR_FIX_COOLDOWN_RESET,
                     pr_number,
                     f"Cooldown timer reset for PR #{pr_number} (new comment arrived)",
+                    repo=repo,
                 )
             self._emit_event(
                 EventType.PR_FIX_QUEUED,
                 pr_number,
                 f"Fix cycle queued for PR #{pr_number}",
+                repo=repo,
             )
             logger.info(
                 "Fix cycle queued (already running)",
@@ -149,8 +154,8 @@ class PRAutoFixOrchestrator:
             )
 
             # Process pending cycle if any (with cooldown between)
-            while self._pr_pending.pop(pr_number, False):
-                await self._run_cooldown(pr_number, effective_config)
+            while self._pr_pending.pop(key, False):
+                await self._run_cooldown(repo, pr_number, effective_config)
                 await self._run_fix_cycle(
                     pr_number=pr_number,
                     repo=repo,
@@ -183,15 +188,16 @@ class PRAutoFixOrchestrator:
 
         for attempt in range(_MAX_DIVERGENCE_RETRIES + 1):
             try:
-                # Git operations serialized per repo
+                # Git operations serialized per repo — hold the lock for the
+                # entire cycle so another PR cannot switch branches mid-run.
                 repo_lock = self._get_repo_lock(profile.repo_root)
                 async with repo_lock:
                     git_ops = GitOperations(profile.repo_root)
                     await self._reset_to_remote(git_ops, head_branch)
 
-                # Run the pipeline (classify -> develop -> commit -> push -> resolve)
-                await self._execute_pipeline(pr_number, repo, profile, config, head_branch)
-                return  # Success
+                    # Run the pipeline (classify -> develop -> commit -> push -> resolve)
+                    await self._execute_pipeline(pr_number, repo, profile, config, head_branch)
+                    return  # Success
 
             except ValueError as exc:
                 if "diverged" not in str(exc).lower():
@@ -209,6 +215,7 @@ class PRAutoFixOrchestrator:
                         pr_number,
                         f"Branch diverged for PR #{pr_number}, retrying ({attempt + 1}/{_MAX_DIVERGENCE_RETRIES})",
                         data={"attempt": attempt + 1, "max_retries": _MAX_DIVERGENCE_RETRIES},
+                        repo=repo,
                     )
                     logger.warning(
                         "Branch diverged, retrying",
@@ -222,6 +229,7 @@ class PRAutoFixOrchestrator:
                         pr_number,
                         f"All divergence retries exhausted for PR #{pr_number}",
                         data={"total_attempts": _MAX_DIVERGENCE_RETRIES + 1},
+                        repo=repo,
                     )
                     logger.error(
                         "Divergence retries exhausted",
@@ -313,6 +321,7 @@ class PRAutoFixOrchestrator:
             pr_number,
             f"PR auto-fix started for PR #{pr_number}",
             data={"workflow_id": str(workflow_id)},
+            repo=repo,
         )
 
         try:
@@ -322,7 +331,7 @@ class PRAutoFixOrchestrator:
             pipeline = PRAutoFixPipeline()
             graph = pipeline.create_graph()
             initial_state = pipeline.get_initial_state(
-                workflow_id=self.get_workflow_id(pr_number),
+                workflow_id=self.get_workflow_id(repo, pr_number),
                 profile_id=profile.name,
                 pr_number=pr_number,
                 head_branch=head_branch,
@@ -420,6 +429,7 @@ class PRAutoFixOrchestrator:
                 pr_number,
                 f"PR auto-fix completed for PR #{pr_number}",
                 data={"workflow_id": str(workflow_id)},
+                repo=repo,
             )
 
         except Exception as exc:
@@ -488,7 +498,7 @@ class PRAutoFixOrchestrator:
                 "file_path": comment_dict.get("path"),
                 "line": comment_dict.get("line"),
                 "body": truncated_body,
-                "author": comment_dict.get("user", {}).get("login") if isinstance(comment_dict.get("user"), dict) else None,
+                "author": comment_dict.get("author") or (comment_dict.get("user", {}).get("login") if isinstance(comment_dict.get("user"), dict) else None),
                 "status": status,
                 "resolved": resolution.get("resolved", False),
                 "replied": resolution.get("replied", False),
@@ -498,6 +508,7 @@ class PRAutoFixOrchestrator:
 
     async def _run_cooldown(
         self,
+        repo: str,
         pr_number: int,
         config: PRAutoFixConfig,
     ) -> None:
@@ -508,9 +519,11 @@ class PRAutoFixOrchestrator:
         max_cooldown_seconds as an absolute cap.
 
         Args:
+            repo: Repository in 'owner/repo' format.
             pr_number: PR number for cooldown tracking.
             config: Configuration with cooldown durations.
         """
+        key = (repo, pr_number)
         cooldown_seconds = config.post_push_cooldown_seconds
         max_cooldown = config.max_cooldown_seconds
 
@@ -522,10 +535,11 @@ class PRAutoFixOrchestrator:
             pr_number,
             f"Cooldown started for PR #{pr_number} ({cooldown_seconds}s, max {max_cooldown}s)",
             data={"cooldown_seconds": cooldown_seconds, "max_cooldown_seconds": max_cooldown},
+            repo=repo,
         )
 
         event = asyncio.Event()
-        self._cooldown_events[pr_number] = event
+        self._cooldown_events[key] = event
         loop = asyncio.get_running_loop()
         absolute_deadline = loop.time() + max_cooldown
 
@@ -548,7 +562,7 @@ class PRAutoFixOrchestrator:
                 # Timer expired naturally
                 break
 
-        self._cooldown_events.pop(pr_number, None)
+        self._cooldown_events.pop(key, None)
 
     async def _reset_to_remote(
         self,
@@ -596,6 +610,7 @@ class PRAutoFixOrchestrator:
         pr_number: int,
         message: str,
         data: dict[str, object] | None = None,
+        repo: str = "",
     ) -> None:
         """Create and emit a workflow event for orchestration state changes.
 
@@ -604,6 +619,7 @@ class PRAutoFixOrchestrator:
             pr_number: PR number for context.
             message: Human-readable message.
             data: Optional structured payload.
+            repo: Repository in 'owner/repo' format.
         """
         event_data: dict[str, object] = {"pr_number": pr_number}
         if data:
@@ -611,7 +627,7 @@ class PRAutoFixOrchestrator:
 
         event = WorkflowEvent(
             id=uuid4(),
-            workflow_id=self.get_workflow_id(pr_number),
+            workflow_id=self.get_workflow_id(repo, pr_number),
             sequence=0,  # Orchestration events don't need sequence ordering
             timestamp=datetime.now(UTC),
             agent="pr_auto_fix",
