@@ -247,17 +247,28 @@ class PRAutoFixOrchestrator:
                 )
                 return
 
-    async def _fetch_pr_title(self, pr_number: int) -> str:
+    async def _fetch_pr_title(
+        self,
+        pr_number: int,
+        repo_root: str | None = None,
+    ) -> str:
         """Fetch PR title from GitHub, with fallback.
 
         Args:
             pr_number: GitHub PR number.
+            repo_root: Repo root path for gh CLI context. Falls back to
+                the shared service if not provided.
 
         Returns:
             PR title string, or fallback "PR #{pr_number}" on error.
         """
         try:
-            summary = await self._github_pr_service.get_pr_summary(pr_number)
+            service = (
+                GitHubPRService(repo_root)
+                if repo_root
+                else self._github_pr_service
+            )
+            summary = await service.get_pr_summary(pr_number)
             return summary.title
         except Exception as exc:
             logger.warning(
@@ -288,7 +299,7 @@ class PRAutoFixOrchestrator:
             head_branch: PR head branch name.
         """
         # Fetch PR title for the workflow record
-        pr_title = await self._fetch_pr_title(pr_number)
+        pr_title = await self._fetch_pr_title(pr_number, repo_root=profile.repo_root)
 
         # Create workflow record for dashboard visibility
         workflow_id = uuid4()
@@ -337,7 +348,10 @@ class PRAutoFixOrchestrator:
                 head_branch=head_branch,
                 repo=repo,
             )
-            final_state = await graph.ainvoke(initial_state)
+            final_state = await graph.ainvoke(
+                initial_state,
+                config={"configurable": {"thread_id": str(workflow_id)}},
+            )
 
             duration_seconds = time.monotonic() - start_time
 

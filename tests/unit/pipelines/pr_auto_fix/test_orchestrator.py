@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from amelia.core.types import PRAutoFixConfig, Profile
+from amelia.core.types import PRAutoFixConfig, PRSummary, Profile
+from amelia.services.github_pr import GitHubPRService
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.server.database import WorkflowRepository
 from amelia.server.events.bus import EventBus
@@ -597,7 +598,9 @@ class TestExecutePipelineWiring:
         assert init_kwargs["head_branch"] == "feat/test"
         assert init_kwargs["repo"] == "owner/repo"
         assert init_kwargs["profile_id"] == "test"
-        mock_graph.ainvoke.assert_awaited_once_with({"mock": "state"})
+        call_args = mock_graph.ainvoke.await_args
+        assert call_args[0][0] == {"mock": "state"}
+        assert "thread_id" in call_args[1]["config"]["configurable"]
 
 
 # ---------------------------------------------------------------------------
@@ -664,25 +667,35 @@ class TestWorkflowRecordCreation:
     async def test_pr_title_fetched_from_github(
         self,
         orchestrator: PRAutoFixOrchestrator,
-        github_pr_service: MagicMock,
-        orch_profile: Profile,
-        pr_autofix_config: PRAutoFixConfig,
-    ) -> None:
-        await self._run_execute_pipeline(orchestrator, orch_profile, pr_autofix_config)
-        github_pr_service.get_pr_summary.assert_awaited_once_with(42)
-
-    async def test_pr_title_fallback_on_error(
-        self,
-        orchestrator: PRAutoFixOrchestrator,
-        github_pr_service: MagicMock,
         workflow_repo: MagicMock,
         orch_profile: Profile,
         pr_autofix_config: PRAutoFixConfig,
     ) -> None:
-        github_pr_service.get_pr_summary = AsyncMock(
+        """PR title is fetched via a GitHubPRService scoped to the profile repo_root."""
+        await self._run_execute_pipeline(orchestrator, orch_profile, pr_autofix_config)
+        state = workflow_repo.create.call_args[0][0]
+        assert state.issue_cache["pr_title"] == "Fix: broken tests"
+
+    async def test_pr_title_fallback_on_error(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        workflow_repo: MagicMock,
+        orch_profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
+    ) -> None:
+        mock_svc = MagicMock(spec=GitHubPRService)
+        mock_svc.get_pr_summary = AsyncMock(
             side_effect=ValueError("gh CLI failed")
         )
-        await self._run_execute_pipeline(orchestrator, orch_profile, pr_autofix_config)
+        async with mock_pipeline_context(pr_summary=None):
+            with patch(
+                "amelia.pipelines.pr_auto_fix.orchestrator.GitHubPRService",
+                return_value=mock_svc,
+            ):
+                await orchestrator._execute_pipeline(
+                    pr_number=42, repo="owner/repo", profile=orch_profile,
+                    config=pr_autofix_config, head_branch="feat/test",
+                )
         state = workflow_repo.create.call_args[0][0]
         assert state.issue_cache["pr_title"] == "PR #42"
 
