@@ -138,7 +138,10 @@ async def test_fetch_review_comments_returns_unresolved(
     rest_proc = _make_mock_process(stdout=json.dumps(_REST_COMMENTS))
     graphql_proc = _make_mock_process(stdout=json.dumps(_GRAPHQL_THREADS))
 
-    with patch("asyncio.create_subprocess_exec") as mock_exec:
+    with (
+        patch("asyncio.create_subprocess_exec") as mock_exec,
+        patch.object(service, "_resolve_owner_repo", return_value=("test-owner", "test-repo")),
+    ):
         mock_exec.side_effect = [rest_proc, graphql_proc]
         comments = await service.fetch_review_comments(pr_number=42)
 
@@ -169,7 +172,10 @@ async def test_fetch_review_comments_skips_self_and_ignored(
     rest_proc = _make_mock_process(stdout=json.dumps(_REST_COMMENTS))
     graphql_proc = _make_mock_process(stdout=json.dumps(_GRAPHQL_THREADS))
 
-    with patch("asyncio.create_subprocess_exec") as mock_exec:
+    with (
+        patch("asyncio.create_subprocess_exec") as mock_exec,
+        patch.object(service, "_resolve_owner_repo", return_value=("test-owner", "test-repo")),
+    ):
         mock_exec.side_effect = [rest_proc, graphql_proc]
         comments = await service.fetch_review_comments(
             pr_number=42,

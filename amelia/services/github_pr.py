@@ -56,6 +56,31 @@ class GitHubPRService:
 
     def __init__(self, repo_root: str | Path) -> None:
         self._repo_root = str(repo_root)
+        self._owner: str | None = None
+        self._repo_name: str | None = None
+
+    async def _resolve_owner_repo(self) -> tuple[str, str]:
+        """Resolve and cache the owner and repo name from the git remote."""
+        if self._owner is not None and self._repo_name is not None:
+            return self._owner, self._repo_name
+
+        proc = await asyncio.create_subprocess_exec(
+            "gh", "repo", "view",
+            "--json", "nameWithOwner",
+            "-q", ".nameWithOwner",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=self._repo_root,
+        )
+        stdout_bytes, stderr_bytes = await proc.communicate()
+        slug = stdout_bytes.decode().strip()
+        if not slug or "/" not in slug:
+            raise ValueError(
+                f"Failed to resolve repo slug from {self._repo_root}: "
+                f"{stderr_bytes.decode().strip()}"
+            )
+        self._owner, self._repo_name = slug.split("/", 1)
+        return self._owner, self._repo_name
 
     async def _run_gh(
         self,
@@ -147,12 +172,13 @@ class GitHubPRService:
         comments_data: list[dict[str, Any]] = json.loads(rest_raw)
 
         # Step 2: GraphQL -- get thread IDs and resolution status
+        owner, repo_name = await self._resolve_owner_repo()
         graphql_raw = await self._run_gh(
             "api", "graphql",
             "-f", f"query={_GRAPHQL_REVIEW_THREADS}",
             "-F", f"pr={pr_number}",
-            "-f", "owner={owner}",
-            "-f", "repo={repo}",
+            "-f", f"owner={owner}",
+            "-f", f"repo={repo_name}",
         )
         graphql_data = json.loads(graphql_raw)
 
