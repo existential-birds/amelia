@@ -540,3 +540,167 @@ class TestNoOverlap:
 
             poll_continue.set()
             await task
+
+
+# ---------------------------------------------------------------------------
+# Processed comment tracking (skip-when-all-processed)
+# ---------------------------------------------------------------------------
+
+
+class TestProcessedCommentTracking:
+    """Tests for per-PR processed comment ID tracking."""
+
+    async def test_all_processed_skips_graph_dispatch(
+        self,
+        poller: PRCommentPoller,
+        mock_orchestrator: AsyncMock,
+        sample_profile: Profile,
+    ) -> None:
+        """When all comment IDs were already dispatched, trigger_fix_cycle is NOT called."""
+        pr = _make_pr_summary(number=42)
+        comments = [_make_comment(comment_id=1, pr_number=42), _make_comment(comment_id=2, pr_number=42)]
+
+        # First call: dispatches (new comments)
+        with _mock_pr_service(poller, [pr], comments):
+            await poller._poll_profile(sample_profile)
+        await asyncio.sleep(0)
+        assert mock_orchestrator.trigger_fix_cycle.call_count == 1
+
+        mock_orchestrator.reset_mock()
+
+        # Second call: same comments => should skip
+        with _mock_pr_service(poller, [pr], comments):
+            await poller._poll_profile(sample_profile)
+        await asyncio.sleep(0)
+        mock_orchestrator.trigger_fix_cycle.assert_not_called()
+
+    async def test_new_comment_triggers_dispatch(
+        self,
+        poller: PRCommentPoller,
+        mock_orchestrator: AsyncMock,
+        sample_profile: Profile,
+    ) -> None:
+        """When a new comment ID appears alongside previously processed ones, dispatch happens."""
+        pr = _make_pr_summary(number=42)
+        initial_comments = [_make_comment(comment_id=1, pr_number=42), _make_comment(comment_id=2, pr_number=42)]
+
+        # First call: dispatches
+        with _mock_pr_service(poller, [pr], initial_comments):
+            await poller._poll_profile(sample_profile)
+        await asyncio.sleep(0)
+        assert mock_orchestrator.trigger_fix_cycle.call_count == 1
+
+        mock_orchestrator.reset_mock()
+
+        # Second call: one new comment (id=3) => should dispatch
+        new_comments = [
+            _make_comment(comment_id=1, pr_number=42),
+            _make_comment(comment_id=2, pr_number=42),
+            _make_comment(comment_id=3, pr_number=42),
+        ]
+        with _mock_pr_service(poller, [pr], new_comments):
+            await poller._poll_profile(sample_profile)
+        await asyncio.sleep(0)
+        mock_orchestrator.trigger_fix_cycle.assert_called_once()
+
+    async def test_first_call_records_processed_and_dispatches(
+        self,
+        poller: PRCommentPoller,
+        mock_orchestrator: AsyncMock,
+        sample_profile: Profile,
+    ) -> None:
+        """First call with comments dispatches and records IDs as processed."""
+        pr = _make_pr_summary(number=42)
+        comments = [_make_comment(comment_id=1, pr_number=42), _make_comment(comment_id=2, pr_number=42)]
+
+        with _mock_pr_service(poller, [pr], comments):
+            await poller._poll_profile(sample_profile)
+        await asyncio.sleep(0)
+
+        mock_orchestrator.trigger_fix_cycle.assert_called_once()
+        # Verify IDs were recorded
+        key = ("test-profile", 42)
+        assert key in poller._processed_comments
+        assert poller._processed_comments[key] == {1, 2}
+
+    async def test_empty_comments_clears_processed_set(
+        self,
+        poller: PRCommentPoller,
+        mock_orchestrator: AsyncMock,
+        sample_profile: Profile,
+    ) -> None:
+        """When fetch_review_comments returns empty (all resolved), processed set is cleared."""
+        pr = _make_pr_summary(number=42)
+        comments = [_make_comment(comment_id=1, pr_number=42)]
+
+        # First call: dispatches and records
+        with _mock_pr_service(poller, [pr], comments):
+            await poller._poll_profile(sample_profile)
+        await asyncio.sleep(0)
+
+        key = ("test-profile", 42)
+        assert key in poller._processed_comments
+
+        mock_orchestrator.reset_mock()
+
+        # Second call: empty comments (all resolved on GitHub)
+        with _mock_pr_service(poller, [pr], []):
+            await poller._poll_profile(sample_profile)
+        await asyncio.sleep(0)
+
+        # Processed set should be cleared
+        assert key not in poller._processed_comments
+        mock_orchestrator.trigger_fix_cycle.assert_not_called()
+
+    async def test_per_pr_isolation(
+        self,
+        poller: PRCommentPoller,
+        mock_orchestrator: AsyncMock,
+        sample_profile: Profile,
+    ) -> None:
+        """Processed tracking is per-PR-number (PR #42 and PR #43 tracked independently)."""
+        pr42 = _make_pr_summary(number=42)
+        pr43 = _make_pr_summary(number=43, branch="fix/other")
+        comments_42 = [_make_comment(comment_id=1, pr_number=42)]
+        comments_43 = [_make_comment(comment_id=10, pr_number=43)]
+
+        # First call: both PRs dispatch
+        with patch("amelia.server.lifecycle.pr_poller.GitHubPRService") as MockService:
+            svc = AsyncMock()
+            svc.list_labeled_prs.return_value = [pr42, pr43]
+            svc.fetch_review_comments.side_effect = [comments_42, comments_43]
+            MockService.return_value = svc
+            with patch.object(poller, "_get_repo_slug", new_callable=AsyncMock, return_value="owner/repo"):
+                await poller._poll_profile(sample_profile)
+        await asyncio.sleep(0)
+        assert mock_orchestrator.trigger_fix_cycle.call_count == 2
+
+        mock_orchestrator.reset_mock()
+
+        # Second call: same comments for both PRs => both skipped
+        with patch("amelia.server.lifecycle.pr_poller.GitHubPRService") as MockService:
+            svc = AsyncMock()
+            svc.list_labeled_prs.return_value = [pr42, pr43]
+            svc.fetch_review_comments.side_effect = [comments_42, comments_43]
+            MockService.return_value = svc
+            with patch.object(poller, "_get_repo_slug", new_callable=AsyncMock, return_value="owner/repo"):
+                await poller._poll_profile(sample_profile)
+        await asyncio.sleep(0)
+        mock_orchestrator.trigger_fix_cycle.assert_not_called()
+
+        mock_orchestrator.reset_mock()
+
+        # Third call: new comment on PR #43 only => only PR #43 dispatches
+        new_comments_43 = [_make_comment(comment_id=10, pr_number=43), _make_comment(comment_id=11, pr_number=43)]
+        with patch("amelia.server.lifecycle.pr_poller.GitHubPRService") as MockService:
+            svc = AsyncMock()
+            svc.list_labeled_prs.return_value = [pr42, pr43]
+            svc.fetch_review_comments.side_effect = [comments_42, new_comments_43]
+            MockService.return_value = svc
+            with patch.object(poller, "_get_repo_slug", new_callable=AsyncMock, return_value="owner/repo"):
+                await poller._poll_profile(sample_profile)
+        await asyncio.sleep(0)
+        # Only PR #43 should trigger (new comment id=11)
+        assert mock_orchestrator.trigger_fix_cycle.call_count == 1
+        call_kwargs = mock_orchestrator.trigger_fix_cycle.call_args[1]
+        assert call_kwargs["pr_number"] == 43
