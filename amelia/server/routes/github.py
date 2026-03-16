@@ -229,7 +229,13 @@ async def _get_repo_name(repo_root: str) -> str:
         HTTPException: 500 if gh CLI fails.
     """
     proc = await asyncio.create_subprocess_exec(
-        "gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner",
+        "gh",
+        "repo",
+        "view",
+        "--json",
+        "nameWithOwner",
+        "-q",
+        ".nameWithOwner",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=repo_root,
@@ -349,6 +355,10 @@ async def trigger_pr_autofix(
 
     service = GitHubPRService(resolved.repo_root)
     pr_summary = await service.get_pr_summary(number)
+    comments = await service.fetch_review_comments(
+        number,
+        ignore_authors=resolved.pr_autofix.ignore_authors,
+    )
 
     repo = await _get_repo_name(resolved.repo_root)
 
@@ -388,6 +398,7 @@ async def trigger_pr_autofix(
             profile=resolved,
             head_branch=pr_summary.head_branch,
             config=effective_config,
+            comments=comments,
         )
     )
     task.add_done_callback(_log_task_error)
