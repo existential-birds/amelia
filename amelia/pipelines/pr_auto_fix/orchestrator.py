@@ -101,6 +101,7 @@ class PRAutoFixOrchestrator:
         profile: Profile,
         head_branch: str = "",
         config: PRAutoFixConfig | None = None,
+        pr_title: str = "",
     ) -> None:
         """Trigger a fix cycle for a PR with concurrency control.
 
@@ -115,6 +116,7 @@ class PRAutoFixOrchestrator:
             head_branch: PR head branch name. Empty string skips checkout/reset
                 (deferred to Phase 7).
             config: Optional config override (defaults to profile.pr_autofix).
+            pr_title: PR title from the poller (avoids re-fetching).
         """
         effective_config = config or profile.pr_autofix or PRAutoFixConfig()
         key = (repo, pr_number)
@@ -144,6 +146,8 @@ class PRAutoFixOrchestrator:
             )
             return
 
+        effective_title = pr_title or f"PR #{pr_number}"
+
         async with lock:
             await self._run_fix_cycle(
                 pr_number=pr_number,
@@ -151,6 +155,7 @@ class PRAutoFixOrchestrator:
                 profile=profile,
                 config=effective_config,
                 head_branch=head_branch,
+                pr_title=effective_title,
             )
 
             # Process pending cycle if any (with cooldown between)
@@ -162,6 +167,7 @@ class PRAutoFixOrchestrator:
                     profile=profile,
                     config=effective_config,
                     head_branch=head_branch,
+                    pr_title=effective_title,
                 )
 
     async def _run_fix_cycle(
@@ -171,6 +177,7 @@ class PRAutoFixOrchestrator:
         profile: Profile,
         config: PRAutoFixConfig,
         head_branch: str = "",
+        pr_title: str = "",
     ) -> None:
         """Run a single fix cycle with divergence recovery.
 
@@ -196,7 +203,7 @@ class PRAutoFixOrchestrator:
                     await self._reset_to_remote(git_ops, head_branch)
 
                     # Run the pipeline (classify -> develop -> commit -> push -> resolve)
-                    await self._execute_pipeline(pr_number, repo, profile, config, head_branch)
+                    await self._execute_pipeline(pr_number, repo, profile, config, head_branch, pr_title=pr_title)
                     return  # Success
 
             except ValueError as exc:
@@ -247,37 +254,6 @@ class PRAutoFixOrchestrator:
                 )
                 return
 
-    async def _fetch_pr_title(
-        self,
-        pr_number: int,
-        repo_root: str | None = None,
-    ) -> str:
-        """Fetch PR title from GitHub, with fallback.
-
-        Args:
-            pr_number: GitHub PR number.
-            repo_root: Repo root path for gh CLI context. Falls back to
-                the shared service if not provided.
-
-        Returns:
-            PR title string, or fallback "PR #{pr_number}" on error.
-        """
-        try:
-            service = (
-                GitHubPRService(repo_root)
-                if repo_root
-                else self._github_pr_service
-            )
-            summary = await service.get_pr_summary(pr_number)
-            return summary.title
-        except Exception as exc:
-            logger.warning(
-                "Failed to fetch PR title, using fallback",
-                pr_number=pr_number,
-                error=str(exc),
-            )
-            return f"PR #{pr_number}"
-
     async def _execute_pipeline(
         self,
         pr_number: int,
@@ -285,6 +261,7 @@ class PRAutoFixOrchestrator:
         profile: Profile,
         config: PRAutoFixConfig,
         head_branch: str = "",
+        pr_title: str = "",
     ) -> None:
         """Execute the PR auto-fix pipeline with workflow record tracking.
 
@@ -297,9 +274,9 @@ class PRAutoFixOrchestrator:
             profile: Execution profile.
             config: Auto-fix configuration.
             head_branch: PR head branch name.
+            pr_title: PR title (passed from poller to avoid re-fetching).
         """
-        # Fetch PR title for the workflow record
-        pr_title = await self._fetch_pr_title(pr_number, repo_root=profile.repo_root)
+        pr_title = pr_title or f"PR #{pr_number}"
 
         # Create workflow record for dashboard visibility
         workflow_id = uuid4()

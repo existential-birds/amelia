@@ -6,8 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from amelia.core.types import PRAutoFixConfig, PRSummary, Profile
-from amelia.services.github_pr import GitHubPRService
+from amelia.core.types import PRAutoFixConfig, Profile
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.server.database import WorkflowRepository
 from amelia.server.events.bus import EventBus
@@ -661,41 +660,33 @@ class TestWorkflowRecordCreation:
         state = workflow_repo.create.call_args[0][0]
         assert state.issue_cache is not None
         assert state.issue_cache["pr_number"] == 42
-        assert state.issue_cache["pr_title"] == "Fix: broken tests"
+        assert state.issue_cache["pr_title"] == "PR #42"
         assert "comment_count" in state.issue_cache
 
-    async def test_pr_title_fetched_from_github(
+    async def test_pr_title_passed_through(
         self,
         orchestrator: PRAutoFixOrchestrator,
         workflow_repo: MagicMock,
         orch_profile: Profile,
         pr_autofix_config: PRAutoFixConfig,
     ) -> None:
-        """PR title is fetched via a GitHubPRService scoped to the profile repo_root."""
-        await self._run_execute_pipeline(orchestrator, orch_profile, pr_autofix_config)
+        """PR title from caller is stored in issue_cache without re-fetching."""
+        await self._run_execute_pipeline(
+            orchestrator, orch_profile, pr_autofix_config,
+            pr_title="Fix: broken tests",
+        )
         state = workflow_repo.create.call_args[0][0]
         assert state.issue_cache["pr_title"] == "Fix: broken tests"
 
-    async def test_pr_title_fallback_on_error(
+    async def test_pr_title_fallback_when_empty(
         self,
         orchestrator: PRAutoFixOrchestrator,
         workflow_repo: MagicMock,
         orch_profile: Profile,
         pr_autofix_config: PRAutoFixConfig,
     ) -> None:
-        mock_svc = MagicMock(spec=GitHubPRService)
-        mock_svc.get_pr_summary = AsyncMock(
-            side_effect=ValueError("gh CLI failed")
-        )
-        async with mock_pipeline_context(pr_summary=None):
-            with patch(
-                "amelia.pipelines.pr_auto_fix.orchestrator.GitHubPRService",
-                return_value=mock_svc,
-            ):
-                await orchestrator._execute_pipeline(
-                    pr_number=42, repo="owner/repo", profile=orch_profile,
-                    config=pr_autofix_config, head_branch="feat/test",
-                )
+        """When no pr_title is provided, falls back to 'PR #<number>'."""
+        await self._run_execute_pipeline(orchestrator, orch_profile, pr_autofix_config)
         state = workflow_repo.create.call_args[0][0]
         assert state.issue_cache["pr_title"] == "PR #42"
 
@@ -789,5 +780,5 @@ class TestWorkflowCompletion:
         assert update_state.issue_cache is not None
         assert "pr_comments" in update_state.issue_cache
         assert update_state.issue_cache["pr_number"] == 42
-        assert update_state.issue_cache["pr_title"] == "Fix: broken tests"
+        assert update_state.issue_cache["pr_title"] == "PR #42"
         assert "comment_count" in update_state.issue_cache

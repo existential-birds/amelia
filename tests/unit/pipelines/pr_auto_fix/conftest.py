@@ -178,7 +178,6 @@ async def mock_pipeline_context(
     ainvoke_return: dict[str, Any] | None = None,
     ainvoke_side_effect: Exception | None = None,
     initial_state: dict[str, Any] | None = None,
-    pr_summary: PRSummary | None = None,
 ) -> AsyncGenerator[tuple[MagicMock, MagicMock]]:
     """Context manager that patches PRAutoFixPipeline with mock graph.
 
@@ -196,26 +195,9 @@ async def mock_pipeline_context(
         initial_state if initial_state is not None else {"mock": "state"}
     )
 
-    # Mock GitHubPRService so _fetch_pr_title(repo_root=...) works
-    mock_gh_service = MagicMock(spec=GitHubPRService)
-    default_summary = pr_summary or PRSummary(
-        number=42,
-        title="Fix: broken tests",
-        head_branch="feat/test",
-        author="testuser",
-        updated_at="2026-03-14T00:00:00Z",
-    )
-    mock_gh_service.get_pr_summary = AsyncMock(return_value=default_summary)
-
-    with (
-        patch(
-            "amelia.pipelines.pr_auto_fix.orchestrator.PRAutoFixPipeline",
-            return_value=mock_pipeline,
-        ),
-        patch(
-            "amelia.pipelines.pr_auto_fix.orchestrator.GitHubPRService",
-            return_value=mock_gh_service,
-        ),
+    with patch(
+        "amelia.pipelines.pr_auto_fix.orchestrator.PRAutoFixPipeline",
+        return_value=mock_pipeline,
     ):
         yield mock_pipeline, mock_graph
 

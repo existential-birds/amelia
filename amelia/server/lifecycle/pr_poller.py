@@ -195,6 +195,7 @@ class PRCommentPoller:
                     profile=profile,
                     head_branch=pr.head_branch,
                     config=config,
+                    pr_title=pr.title,
                 ),
             )
             self._active_tasks.add(task)
