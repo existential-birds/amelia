@@ -32,8 +32,7 @@ from amelia.tools.git_utils import GitOperations
 _MAX_DIVERGENCE_RETRIES: int = 2
 
 _FINAL_FAILURE_MESSAGE: str = (
-    "Could not apply fixes -- PR branch changed during fix attempt. "
-    "Will retry on next cycle."
+    "Could not apply fixes -- PR branch changed during fix attempt. Will retry on next cycle."
 )
 
 
@@ -203,7 +202,9 @@ class PRAutoFixOrchestrator:
                     await self._reset_to_remote(git_ops, head_branch)
 
                     # Run the pipeline (classify -> develop -> commit -> push -> resolve)
-                    await self._execute_pipeline(pr_number, repo, profile, config, head_branch, pr_title=pr_title)
+                    await self._execute_pipeline(
+                        pr_number, repo, profile, config, head_branch, pr_title=pr_title
+                    )
                     return  # Success
 
             except ValueError as exc:
@@ -327,7 +328,15 @@ class PRAutoFixOrchestrator:
             )
             final_state = await graph.ainvoke(
                 initial_state,
-                config={"configurable": {"thread_id": str(workflow_id)}},
+                config={
+                    "configurable": {
+                        "thread_id": str(workflow_id),
+                        "profile": profile,
+                        "event_bus": self._event_bus,
+                        "metrics_repo": self._metrics_repo,
+                        "metrics_run_id": str(workflow_id),
+                    },
+                },
             )
 
             duration_seconds = time.monotonic() - start_time
@@ -354,11 +363,13 @@ class PRAutoFixOrchestrator:
                 try:
                     group_results = (
                         final_state.get("group_results", [])
-                        if isinstance(final_state, dict) else []
+                        if isinstance(final_state, dict)
+                        else []
                     )
                     resolution_results = (
                         final_state.get("resolution_results", [])
-                        if isinstance(final_state, dict) else []
+                        if isinstance(final_state, dict)
+                        else []
                     )
 
                     # Count per-comment (iterate comment_ids, not groups -- Pitfall 3)
@@ -366,8 +377,10 @@ class PRAutoFixOrchestrator:
                     failed = 0
                     for result in group_results:
                         result_dict = (
-                            result if isinstance(result, dict)
-                            else result.model_dump() if hasattr(result, "model_dump")
+                            result
+                            if isinstance(result, dict)
+                            else result.model_dump()
+                            if hasattr(result, "model_dump")
                             else {}
                         )
                         status = result_dict.get("status", "")
@@ -380,13 +393,22 @@ class PRAutoFixOrchestrator:
                     comments_processed = len(comments_raw)
                     skipped = comments_processed - fixed - failed
 
-                    commits_pushed = 1 if (
-                        isinstance(final_state, dict) and final_state.get("commit_sha")
-                    ) else 0
+                    commits_pushed = (
+                        1
+                        if (isinstance(final_state, dict) and final_state.get("commit_sha"))
+                        else 0
+                    )
 
                     threads_resolved = sum(
-                        1 for r in resolution_results
-                        if (r if isinstance(r, dict) else r.model_dump() if hasattr(r, "model_dump") else {}).get("resolved", False)
+                        1
+                        for r in resolution_results
+                        if (
+                            r
+                            if isinstance(r, dict)
+                            else r.model_dump()
+                            if hasattr(r, "model_dump")
+                            else {}
+                        ).get("resolved", False)
                     )
 
                     run_id = uuid4()
@@ -459,21 +481,39 @@ class PRAutoFixOrchestrator:
         # comment_id -> group fix status
         comment_fix_status: dict[int, str] = {}
         for result in group_results:
-            result_dict = result if isinstance(result, dict) else result.model_dump() if hasattr(result, "model_dump") else {}
+            result_dict = (
+                result
+                if isinstance(result, dict)
+                else result.model_dump()
+                if hasattr(result, "model_dump")
+                else {}
+            )
             for cid in result_dict.get("comment_ids", []):
                 comment_fix_status[cid] = result_dict.get("status", "unknown")
 
         # comment_id -> resolution result
         resolution_map: dict[int, dict[str, Any]] = {}
         for result in resolution_results:
-            result_dict = result if isinstance(result, dict) else result.model_dump() if hasattr(result, "model_dump") else {}
+            result_dict = (
+                result
+                if isinstance(result, dict)
+                else result.model_dump()
+                if hasattr(result, "model_dump")
+                else {}
+            )
             cid = result_dict.get("comment_id")
             if cid is not None:
                 resolution_map[cid] = result_dict
 
         pr_comments: list[dict[str, Any]] = []
         for comment in comments:
-            comment_dict = comment if isinstance(comment, dict) else comment.model_dump() if hasattr(comment, "model_dump") else {}
+            comment_dict = (
+                comment
+                if isinstance(comment, dict)
+                else comment.model_dump()
+                if hasattr(comment, "model_dump")
+                else {}
+            )
             cid = comment_dict.get("id")
             if cid is None:
                 continue
@@ -484,16 +524,23 @@ class PRAutoFixOrchestrator:
             status = comment_fix_status.get(cid, "skipped")
             resolution = resolution_map.get(cid, {})
 
-            pr_comments.append({
-                "comment_id": cid,
-                "file_path": comment_dict.get("path"),
-                "line": comment_dict.get("line"),
-                "body": truncated_body,
-                "author": comment_dict.get("author") or (comment_dict.get("user", {}).get("login") if isinstance(comment_dict.get("user"), dict) else None),
-                "status": status,
-                "resolved": resolution.get("resolved", False),
-                "replied": resolution.get("replied", False),
-            })
+            pr_comments.append(
+                {
+                    "comment_id": cid,
+                    "file_path": comment_dict.get("path"),
+                    "line": comment_dict.get("line"),
+                    "body": truncated_body,
+                    "author": comment_dict.get("author")
+                    or (
+                        comment_dict.get("user", {}).get("login")
+                        if isinstance(comment_dict.get("user"), dict)
+                        else None
+                    ),
+                    "status": status,
+                    "resolved": resolution.get("resolved", False),
+                    "replied": resolution.get("replied", False),
+                }
+            )
 
         return pr_comments
 

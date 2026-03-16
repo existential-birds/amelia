@@ -46,7 +46,8 @@ class TestPRAutoFixConfigCooldown:
     )
     def test_valid_cooldown_configs(self, post_push: int, max_cd: int) -> None:
         config = PRAutoFixConfig(
-            post_push_cooldown_seconds=post_push, max_cooldown_seconds=max_cd,
+            post_push_cooldown_seconds=post_push,
+            max_cooldown_seconds=max_cd,
         )
         assert config.post_push_cooldown_seconds == post_push
         assert config.max_cooldown_seconds == max_cd
@@ -66,7 +67,9 @@ class TestPRFixEventTypes:
         ],
     )
     def test_event_type_exists_with_correct_value(
-        self, member: str, value: str,
+        self,
+        member: str,
+        value: str,
     ) -> None:
         event = getattr(EventType, member)
         assert event == value
@@ -103,7 +106,9 @@ class TestConcurrencyControl:
     ) -> None:
         orchestrator._execute_pipeline = AsyncMock()  # type: ignore[method-assign]
         await orchestrator.trigger_fix_cycle(
-            pr_number=42, repo="owner/repo", profile=orch_profile,
+            pr_number=42,
+            repo="owner/repo",
+            profile=orch_profile,
         )
         orchestrator._execute_pipeline.assert_awaited_once()
 
@@ -228,7 +233,9 @@ class TestConcurrencyControl:
         await pipeline_started.wait()
 
         for _ in range(3):
-            await orchestrator.trigger_fix_cycle(pr_number=42, repo="owner/repo", profile=orch_profile)
+            await orchestrator.trigger_fix_cycle(
+                pr_number=42, repo="owner/repo", profile=orch_profile
+            )
 
         pipeline_continue.set()
         await task1
@@ -271,7 +278,10 @@ class TestCooldown:
         captured_events: list[WorkflowEvent],
     ) -> None:
         orch, profile = _make_cooldown_orchestrator(
-            event_bus, github_pr_service, post_push=1, max_cd=5,
+            event_bus,
+            github_pr_service,
+            post_push=1,
+            max_cd=5,
         )
         pipeline_started = asyncio.Event()
         pipeline_continue = asyncio.Event()
@@ -294,7 +304,9 @@ class TestCooldown:
         pipeline_continue.set()
         await asyncio.wait_for(task, timeout=5.0)
 
-        cooldown_events = [e for e in captured_events if e.event_type == EventType.PR_FIX_COOLDOWN_STARTED]
+        cooldown_events = [
+            e for e in captured_events if e.event_type == EventType.PR_FIX_COOLDOWN_STARTED
+        ]
         assert len(cooldown_events) >= 1
 
     async def test_cooldown_resets_on_new_trigger(
@@ -304,7 +316,10 @@ class TestCooldown:
         captured_events: list[WorkflowEvent],
     ) -> None:
         orch, profile = _make_cooldown_orchestrator(
-            event_bus, github_pr_service, post_push=10, max_cd=30,
+            event_bus,
+            github_pr_service,
+            post_push=10,
+            max_cd=30,
         )
         pipeline_started = asyncio.Event()
         pipeline_continue = asyncio.Event()
@@ -340,7 +355,9 @@ class TestCooldown:
         await asyncio.sleep(0)
         await orch.trigger_fix_cycle(pr_number=42, repo="owner/repo", profile=profile)
 
-        reset_events = [e for e in captured_events if e.event_type == EventType.PR_FIX_COOLDOWN_RESET]
+        reset_events = [
+            e for e in captured_events if e.event_type == EventType.PR_FIX_COOLDOWN_RESET
+        ]
         assert len(reset_events) >= 1
 
         task.cancel()
@@ -365,7 +382,10 @@ class TestCooldown:
     ) -> None:
         """Cooldown completes and pending cycle runs (parametrized: max-cap and zero)."""
         orch, profile = _make_cooldown_orchestrator(
-            event_bus, github_pr_service, post_push=post_push, max_cd=max_cd,
+            event_bus,
+            github_pr_service,
+            post_push=post_push,
+            max_cd=max_cd,
         )
         pipeline_started = asyncio.Event()
         pipeline_continue = asyncio.Event()
@@ -407,7 +427,9 @@ class TestDivergenceRecovery:
     ) -> None:
         orchestrator._execute_pipeline = AsyncMock()  # type: ignore[method-assign]
         await orchestrator.trigger_fix_cycle(
-            pr_number=42, repo="owner/repo", profile=orch_profile,
+            pr_number=42,
+            repo="owner/repo",
+            profile=orch_profile,
         )
         mock_git_operations.fetch_origin.assert_awaited_once()
 
@@ -421,13 +443,17 @@ class TestDivergenceRecovery:
             side_effect=ValueError("Remote branch has diverged from local")
         )
         await orchestrator.trigger_fix_cycle(
-            pr_number=42, repo="owner/repo", profile=orch_profile,
+            pr_number=42,
+            repo="owner/repo",
+            profile=orch_profile,
         )
 
         assert orchestrator._execute_pipeline.await_count == 3
         diverged_events = [e for e in captured_events if e.event_type == EventType.PR_FIX_DIVERGED]
         assert len(diverged_events) == 2
-        exhausted_events = [e for e in captured_events if e.event_type == EventType.PR_FIX_RETRIES_EXHAUSTED]
+        exhausted_events = [
+            e for e in captured_events if e.event_type == EventType.PR_FIX_RETRIES_EXHAUSTED
+        ]
         assert len(exhausted_events) == 1
 
     async def test_divergence_success_on_retry(
@@ -446,12 +472,17 @@ class TestDivergenceRecovery:
 
         orchestrator._execute_pipeline = AsyncMock(side_effect=flaky_pipeline)  # type: ignore[method-assign]
         await orchestrator.trigger_fix_cycle(
-            pr_number=42, repo="owner/repo", profile=orch_profile,
+            pr_number=42,
+            repo="owner/repo",
+            profile=orch_profile,
         )
 
         assert call_count == 2
         assert len([e for e in captured_events if e.event_type == EventType.PR_FIX_DIVERGED]) == 1
-        assert len([e for e in captured_events if e.event_type == EventType.PR_FIX_RETRIES_EXHAUSTED]) == 0
+        assert (
+            len([e for e in captured_events if e.event_type == EventType.PR_FIX_RETRIES_EXHAUSTED])
+            == 0
+        )
 
     async def test_final_divergence_failure_posts_github_comment(
         self,
@@ -463,7 +494,9 @@ class TestDivergenceRecovery:
             side_effect=ValueError("Remote branch has diverged from local")
         )
         await orchestrator.trigger_fix_cycle(
-            pr_number=42, repo="owner/repo", profile=orch_profile,
+            pr_number=42,
+            repo="owner/repo",
+            profile=orch_profile,
         )
 
         github_pr_service.create_issue_comment.assert_awaited_once()
@@ -479,7 +512,9 @@ class TestDivergenceRecovery:
     ) -> None:
         orchestrator._execute_pipeline = AsyncMock()  # type: ignore[method-assign]
         await orchestrator.trigger_fix_cycle(
-            pr_number=42, repo="owner/repo", profile=orch_profile,
+            pr_number=42,
+            repo="owner/repo",
+            profile=orch_profile,
             head_branch="feat/my-branch",
         )
         mock_git_operations.fetch_origin.assert_awaited_once()
@@ -494,7 +529,9 @@ class TestDivergenceRecovery:
             side_effect=RuntimeError("Something else broke")
         )
         await orchestrator.trigger_fix_cycle(
-            pr_number=42, repo="owner/repo", profile=orch_profile,
+            pr_number=42,
+            repo="owner/repo",
+            profile=orch_profile,
         )
         assert orchestrator._execute_pipeline.await_count == 1
 
@@ -505,7 +542,6 @@ class TestDivergenceRecovery:
 
 
 class TestRepoLevelGitSerialization:
-
     async def test_repo_lock_serializes_git_across_prs(
         self,
         orchestrator: PRAutoFixOrchestrator,
@@ -542,7 +578,6 @@ class TestRepoLevelGitSerialization:
 
 
 class TestEventEmission:
-
     async def test_queued_event_has_pr_number(
         self,
         orchestrator: PRAutoFixOrchestrator,
@@ -578,7 +613,6 @@ class TestEventEmission:
 
 
 class TestExecutePipelineWiring:
-
     async def test_execute_pipeline_creates_and_invokes_graph(
         self,
         orchestrator: PRAutoFixOrchestrator,
@@ -587,8 +621,11 @@ class TestExecutePipelineWiring:
     ) -> None:
         async with mock_pipeline_context() as (mock_pipeline, mock_graph):
             await orchestrator._execute_pipeline(
-                pr_number=42, repo="owner/repo", profile=orch_profile,
-                config=pr_autofix_config, head_branch="feat/test",
+                pr_number=42,
+                repo="owner/repo",
+                profile=orch_profile,
+                config=pr_autofix_config,
+                head_branch="feat/test",
             )
 
         mock_pipeline.create_graph.assert_called_once()
@@ -599,7 +636,10 @@ class TestExecutePipelineWiring:
         assert init_kwargs["profile_id"] == "test"
         call_args = mock_graph.ainvoke.await_args
         assert call_args[0][0] == {"mock": "state"}
-        assert "thread_id" in call_args[1]["config"]["configurable"]
+        configurable = call_args[1]["config"]["configurable"]
+        assert "thread_id" in configurable
+        assert configurable["profile"].name == "test"
+        assert configurable["event_bus"] is not None
 
 
 # ---------------------------------------------------------------------------
@@ -608,7 +648,6 @@ class TestExecutePipelineWiring:
 
 
 class TestWorkflowRecordCreation:
-
     async def _run_execute_pipeline(
         self,
         orchestrator: PRAutoFixOrchestrator,
@@ -619,8 +658,11 @@ class TestWorkflowRecordCreation:
         """Helper to run _execute_pipeline with mock pipeline context."""
         async with mock_pipeline_context():
             await orchestrator._execute_pipeline(
-                pr_number=42, repo="owner/repo", profile=orch_profile,
-                config=pr_autofix_config, head_branch="feat/test",
+                pr_number=42,
+                repo="owner/repo",
+                profile=orch_profile,
+                config=pr_autofix_config,
+                head_branch="feat/test",
                 **pipeline_kwargs,
             )
 
@@ -672,7 +714,9 @@ class TestWorkflowRecordCreation:
     ) -> None:
         """PR title from caller is stored in issue_cache without re-fetching."""
         await self._run_execute_pipeline(
-            orchestrator, orch_profile, pr_autofix_config,
+            orchestrator,
+            orch_profile,
+            pr_autofix_config,
             pr_title="Fix: broken tests",
         )
         state = workflow_repo.create.call_args[0][0]
@@ -692,7 +736,6 @@ class TestWorkflowRecordCreation:
 
 
 class TestWorkflowEventEmission:
-
     @pytest.mark.parametrize(
         ("event_type_name",),
         [
@@ -710,8 +753,11 @@ class TestWorkflowEventEmission:
     ) -> None:
         async with mock_pipeline_context():
             await orchestrator._execute_pipeline(
-                pr_number=42, repo="owner/repo", profile=orch_profile,
-                config=pr_autofix_config, head_branch="feat/test",
+                pr_number=42,
+                repo="owner/repo",
+                profile=orch_profile,
+                config=pr_autofix_config,
+                head_branch="feat/test",
             )
 
         event_type = getattr(EventType, event_type_name)
@@ -720,7 +766,6 @@ class TestWorkflowEventEmission:
 
 
 class TestWorkflowFailureHandling:
-
     async def test_failure_sets_failed_status(
         self,
         orchestrator: PRAutoFixOrchestrator,
@@ -733,8 +778,11 @@ class TestWorkflowFailureHandling:
         ):
             with pytest.raises(RuntimeError, match="Pipeline crashed"):
                 await orchestrator._execute_pipeline(
-                    pr_number=42, repo="owner/repo", profile=orch_profile,
-                    config=pr_autofix_config, head_branch="feat/test",
+                    pr_number=42,
+                    repo="owner/repo",
+                    profile=orch_profile,
+                    config=pr_autofix_config,
+                    head_branch="feat/test",
                 )
 
         workflow_repo.update.assert_awaited()
@@ -744,7 +792,6 @@ class TestWorkflowFailureHandling:
 
 
 class TestWorkflowCompletion:
-
     async def test_issue_cache_updated_with_pr_comments(
         self,
         orchestrator: PRAutoFixOrchestrator,
@@ -755,7 +802,9 @@ class TestWorkflowCompletion:
         final_state = {
             "comments": [
                 {
-                    "id": 101, "path": "src/main.py", "line": 10,
+                    "id": 101,
+                    "path": "src/main.py",
+                    "line": 10,
                     "body": "Fix this variable name",
                     "user": {"login": "reviewer1"},
                     "html_url": "https://github.com/owner/repo/pull/42#discussion_r101",
@@ -770,8 +819,11 @@ class TestWorkflowCompletion:
         }
         async with mock_pipeline_context(ainvoke_return=final_state):
             await orchestrator._execute_pipeline(
-                pr_number=42, repo="owner/repo", profile=orch_profile,
-                config=pr_autofix_config, head_branch="feat/test",
+                pr_number=42,
+                repo="owner/repo",
+                profile=orch_profile,
+                config=pr_autofix_config,
+                head_branch="feat/test",
             )
 
         workflow_repo.update.assert_awaited()
