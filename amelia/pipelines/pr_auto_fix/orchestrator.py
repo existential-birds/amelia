@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 from loguru import logger
 
-from amelia.core.types import PRAutoFixConfig, Profile
+from amelia.core.types import PRAutoFixConfig, Profile, PRReviewComment
 from amelia.pipelines.pr_auto_fix.pipeline import PRAutoFixPipeline
 from amelia.pipelines.pr_auto_fix.state import GroupFixStatus
 from amelia.server.database import MetricsRepository, WorkflowRepository
@@ -101,6 +101,7 @@ class PRAutoFixOrchestrator:
         head_branch: str = "",
         config: PRAutoFixConfig | None = None,
         pr_title: str = "",
+        comments: list[PRReviewComment] | None = None,
     ) -> None:
         """Trigger a fix cycle for a PR with concurrency control.
 
@@ -155,6 +156,7 @@ class PRAutoFixOrchestrator:
                 config=effective_config,
                 head_branch=head_branch,
                 pr_title=effective_title,
+                comments=comments,
             )
 
             # Process pending cycle if any (with cooldown between)
@@ -167,6 +169,7 @@ class PRAutoFixOrchestrator:
                     config=effective_config,
                     head_branch=head_branch,
                     pr_title=effective_title,
+                    comments=comments,
                 )
 
     async def _run_fix_cycle(
@@ -177,6 +180,7 @@ class PRAutoFixOrchestrator:
         config: PRAutoFixConfig,
         head_branch: str = "",
         pr_title: str = "",
+        comments: list[PRReviewComment] | None = None,
     ) -> None:
         """Run a single fix cycle with divergence recovery.
 
@@ -203,7 +207,13 @@ class PRAutoFixOrchestrator:
 
                     # Run the pipeline (classify -> develop -> commit -> push -> resolve)
                     await self._execute_pipeline(
-                        pr_number, repo, profile, config, head_branch, pr_title=pr_title
+                        pr_number,
+                        repo,
+                        profile,
+                        config,
+                        head_branch,
+                        pr_title=pr_title,
+                        comments=comments,
                     )
                     return  # Success
 
@@ -263,6 +273,7 @@ class PRAutoFixOrchestrator:
         config: PRAutoFixConfig,
         head_branch: str = "",
         pr_title: str = "",
+        comments: list[PRReviewComment] | None = None,
     ) -> None:
         """Execute the PR auto-fix pipeline with workflow record tracking.
 
@@ -285,7 +296,7 @@ class PRAutoFixOrchestrator:
         issue_cache: dict[str, Any] = {
             "pr_number": pr_number,
             "pr_title": pr_title,
-            "comment_count": 0,  # Updated after pipeline if data available
+            "comment_count": len(comments or []),  # Pre-seeded from poller
             "repo": repo,
             "head_branch": head_branch,
         }
@@ -325,6 +336,8 @@ class PRAutoFixOrchestrator:
                 pr_number=pr_number,
                 head_branch=head_branch,
                 repo=repo,
+                comments=comments or [],
+                autofix_config=config,
             )
             final_state = await graph.ainvoke(
                 initial_state,

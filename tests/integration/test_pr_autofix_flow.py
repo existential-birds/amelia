@@ -143,13 +143,18 @@ class TestCommentsReachPipeline:
             mock_graph = AsyncMock()
             mock_graph.ainvoke = AsyncMock(side_effect=capture_ainvoke)
             mock_pipeline.create_graph.return_value = mock_graph
-            mock_pipeline.get_initial_state = lambda **kw: __import__(
-                "amelia.pipelines.pr_auto_fix.state", fromlist=["PRAutoFixState"]
-            ).PRAutoFixState(**{k: v for k, v in kw.items()})
+            def _get_initial_state(**kw: object) -> object:
+                from datetime import UTC, datetime
+                from amelia.pipelines.pr_auto_fix.state import PRAutoFixState
+                if "created_at" not in kw:
+                    kw["created_at"] = datetime.now(tz=UTC)
+                return PRAutoFixState(**{k: v for k, v in kw.items()})
+
+            mock_pipeline.get_initial_state = _get_initial_state
             mock_pipeline_cls.return_value = mock_pipeline
 
             # Patch git operations to no-op
-            with patch("amelia.pipelines.pr_auto_fix.orchestrator.GitOperations"):
+            with patch("amelia.pipelines.pr_auto_fix.orchestrator.GitOperations", autospec=True):
                 await orchestrator.trigger_fix_cycle(
                     pr_number=42,
                     repo="owner/repo",
@@ -184,12 +189,17 @@ class TestCommentsReachPipeline:
             mock_graph = AsyncMock()
             mock_graph.ainvoke = AsyncMock(side_effect=capture_ainvoke)
             mock_pipeline.create_graph.return_value = mock_graph
-            mock_pipeline.get_initial_state = lambda **kw: __import__(
-                "amelia.pipelines.pr_auto_fix.state", fromlist=["PRAutoFixState"]
-            ).PRAutoFixState(**{k: v for k, v in kw.items()})
+            def _get_initial_state2(**kw: object) -> object:
+                from datetime import UTC, datetime
+                from amelia.pipelines.pr_auto_fix.state import PRAutoFixState
+                if "created_at" not in kw:
+                    kw["created_at"] = datetime.now(tz=UTC)
+                return PRAutoFixState(**{k: v for k, v in kw.items()})
+
+            mock_pipeline.get_initial_state = _get_initial_state2
             mock_pipeline_cls.return_value = mock_pipeline
 
-            with patch("amelia.pipelines.pr_auto_fix.orchestrator.GitOperations"):
+            with patch("amelia.pipelines.pr_auto_fix.orchestrator.GitOperations", autospec=True):
                 await orchestrator.trigger_fix_cycle(
                     pr_number=42,
                     repo="owner/repo",

@@ -196,6 +196,7 @@ class PRCommentPoller:
                     head_branch=pr.head_branch,
                     config=config,
                     pr_title=pr.title,
+                    comments=comments,
                 ),
             )
             self._active_tasks.add(task)
@@ -223,9 +224,13 @@ class PRCommentPoller:
             return self._repo_slugs[repo_root]
 
         proc = await asyncio.create_subprocess_exec(
-            "gh", "repo", "view",
-            "--json", "nameWithOwner",
-            "-q", ".nameWithOwner",
+            "gh",
+            "repo",
+            "view",
+            "--json",
+            "nameWithOwner",
+            "-q",
+            ".nameWithOwner",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=repo_root,
@@ -248,7 +253,9 @@ class PRCommentPoller:
             Tuple of (remaining, limit, reset_timestamp).
         """
         proc = await asyncio.create_subprocess_exec(
-            "gh", "api", "/rate_limit",
+            "gh",
+            "api",
+            "/rate_limit",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=repo_root,
