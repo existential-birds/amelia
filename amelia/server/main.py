@@ -482,7 +482,36 @@ def create_app() -> FastAPI:
 
         return ProviderConfig(base_url=base_url, api_key=api_key)
 
-    proxy = create_proxy_router(resolve_provider=_resolve_provider)
+    # Token registry: maps proxy tokens to container names.
+    # Populated when sandbox providers register tokens via register_proxy_token().
+    # Currently empty at startup — validation is skipped when no tokens are
+    # registered (graceful degradation). Full registration will be wired when
+    # DockerSandboxProvider creation is integrated with app state.
+    proxy_tokens: dict[str, str] = {}
+    application.state.proxy_tokens = proxy_tokens
+
+    def register_proxy_token(token: str, container_name: str) -> None:
+        """Register a proxy token for a sandbox container."""
+        proxy_tokens[token] = container_name
+
+    def unregister_proxy_token(token: str) -> None:
+        """Remove a proxy token when a sandbox container is torn down."""
+        proxy_tokens.pop(token, None)
+
+    application.state.register_proxy_token = register_proxy_token
+    application.state.unregister_proxy_token = unregister_proxy_token
+
+    def _validate_proxy_token(token: str) -> bool:
+        if not proxy_tokens:
+            return True  # No tokens registered yet — allow (registration wired in future PR)
+        if not token:
+            return False  # Token required when registry is populated
+        return token in proxy_tokens
+
+    proxy = create_proxy_router(
+        resolve_provider=_resolve_provider,
+        token_validator=_validate_proxy_token,
+    )
     application.include_router(proxy.router, prefix="/proxy/v1")
     application.state.proxy_cleanup = proxy.cleanup
 

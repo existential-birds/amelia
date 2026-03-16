@@ -93,7 +93,7 @@ class SandboxConfig(BaseModel):
 
     mode: SandboxMode = SandboxMode.NONE
     image: str = "amelia-sandbox:latest"
-    network_allowlist_enabled: bool = False
+    network_allowlist_enabled: bool = True
     network_allowed_hosts: tuple[str, ...] = Field(
         default_factory=lambda: DEFAULT_NETWORK_ALLOWED_HOSTS,
     )

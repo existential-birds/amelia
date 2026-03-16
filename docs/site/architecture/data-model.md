@@ -62,7 +62,7 @@ Sandbox execution configuration for a profile. Frozen (immutable).
 |-------|------|---------|-------------|
 | `mode` | `SandboxMode` | `"none"` | Sandbox mode (`none`, `container`, or `daytona`). |
 | `image` | `str` | `"amelia-sandbox:latest"` | Docker image for container sandbox. |
-| `network_allowlist_enabled` | `bool` | `False` | Whether to restrict outbound network. |
+| `network_allowlist_enabled` | `bool` | `True` | Whether to restrict outbound network. |
 | `network_allowed_hosts` | `tuple[str, ...]` | `DEFAULT_NETWORK_ALLOWED_HOSTS` | Hosts allowed when network allowlist is enabled. |
 | `repo_url` | `str \| None` | `None` | Git remote URL to clone into the sandbox. |
 | `daytona_api_url` | `str` | `"https://app.daytona.io/api"` | Daytona API endpoint URL. |

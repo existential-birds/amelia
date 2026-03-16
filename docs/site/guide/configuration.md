@@ -145,7 +145,7 @@ Only the `api` driver works inside sandboxes. The `claude` and `codex` drivers a
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `image` | string | `amelia-sandbox:latest` | Docker image for the sandbox container |
-| `network_allowlist_enabled` | bool | `false` | Enable iptables-based outbound network filtering |
+| `network_allowlist_enabled` | bool | `true` | Enable iptables-based outbound network filtering |
 | `network_allowed_hosts` | list | See below | Hosts allowed when network filtering is enabled |
 
 Default allowed hosts when `network_allowlist_enabled` is `true`:
@@ -158,6 +158,10 @@ Default allowed hosts when `network_allowlist_enabled` is `true`:
 - `pypi.org`
 - `files.pythonhosted.org`
 - `app.daytona.io`
+
+::: info Proxy Security
+The LLM proxy enforces a 10 MB request body size limit and sanitizes upstream error messages to prevent information leakage. When sandbox containers are provisioned, each receives a unique authentication token (`AMELIA_PROXY_TOKEN`) that must be included in proxy requests via the `X-Amelia-Proxy-Token` header. This is handled automatically by the sandbox worker.
+:::
 
 #### Daytona Mode Fields
 

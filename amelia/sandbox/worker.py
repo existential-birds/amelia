@@ -215,6 +215,9 @@ def _create_worker_chat_model(model: str, base_url: str | None = None) -> Any:
         headers: dict[str, str] = {}
         if profile:
             headers["X-Amelia-Profile"] = profile
+        proxy_token = os.environ.get("AMELIA_PROXY_TOKEN", "")
+        if proxy_token:
+            headers["X-Amelia-Proxy-Token"] = proxy_token
 
         # Inject OpenRouter app attribution headers so requests from
         # Daytona sandbox workers show "Amelia" instead of "unknown".

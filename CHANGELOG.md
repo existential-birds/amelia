@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **proxy:** Add per-container token authentication via `X-Amelia-Proxy-Token` header ([#537](https://github.com/existential-birds/amelia/pull/537))
+- **proxy:** Sanitize upstream error messages to prevent information leakage ([#537](https://github.com/existential-birds/amelia/pull/537))
+- **proxy:** Redact profile name from 404 error responses ([#537](https://github.com/existential-birds/amelia/pull/537))
+- **proxy:** Add 10 MB request body size limit ([#537](https://github.com/existential-birds/amelia/pull/537))
+- **sandbox:** Default `network_allowlist_enabled` to `true` for Docker sandboxes ([#537](https://github.com/existential-birds/amelia/pull/537))
+- **network:** Restrict DNS to Docker's internal resolver (127.0.0.11) ([#537](https://github.com/existential-birds/amelia/pull/537))
+- **docker:** Only grant `NET_ADMIN`/`NET_RAW` capabilities when network allowlist is enabled ([#537](https://github.com/existential-birds/amelia/pull/537))
+
 ## [0.18.0] - 2026-03-07
 
 ### Added

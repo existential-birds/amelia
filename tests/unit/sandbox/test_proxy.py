@@ -8,7 +8,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from amelia.sandbox.proxy import ProviderConfig, create_proxy_router
+from amelia.sandbox.proxy import PROXY_MAX_BODY_BYTES, ProviderConfig, create_proxy_router
 
 
 @pytest.fixture
@@ -70,7 +70,9 @@ class TestProxyProfileResolution:
             headers={"X-Amelia-Profile": "nonexistent"},
         )
         assert response.status_code == 404
-        assert "nonexistent" in response.json()["detail"]
+        # Must NOT leak the profile name
+        assert "nonexistent" not in response.json()["detail"]
+        assert "unconfigured" in response.json()["detail"].lower()
 
 
 class TestProxyGitCredentials:
@@ -179,6 +181,321 @@ class TestProxyForwarding:
         )
 
         assert response.status_code == 429
+
+
+class TestProxyErrorSanitization:
+    """Upstream errors must not leak internal details to the caller."""
+
+    def test_connect_error_is_generic(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            raise httpx.ConnectError("Connection refused: 10.0.0.5:443")
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={"X-Amelia-Profile": "work"},
+        )
+        assert response.status_code == 502
+        detail = response.json()["detail"]
+        assert "10.0.0.5" not in detail
+        assert "Connection refused" not in detail
+
+    def test_timeout_error_is_generic(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            raise httpx.ReadTimeout("Read timed out on host api.openrouter.ai:443")
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={"X-Amelia-Profile": "work"},
+        )
+        assert response.status_code == 504
+        detail = response.json()["detail"]
+        assert "openrouter" not in detail
+
+    def test_http_error_is_generic(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            raise httpx.DecodingError("Invalid chunk encoding from 10.0.0.5")
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={"X-Amelia-Profile": "work"},
+        )
+        assert response.status_code == 502
+        detail = response.json()["detail"]
+        assert "10.0.0.5" not in detail
+        assert "DecodingError" not in detail
+
+
+class TestProxyBodySizeLimit:
+    """Proxy must reject oversized request bodies."""
+
+    def test_content_length_exceeding_limit_returns_413(
+        self, client: TestClient,
+    ) -> None:
+        """Request with Content-Length > limit is rejected before reading body."""
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            content=b"x",
+            headers={
+                "X-Amelia-Profile": "work",
+                "Content-Length": str(PROXY_MAX_BODY_BYTES + 1),
+            },
+        )
+        assert response.status_code == 413
+
+    def test_invalid_content_length_returns_400(
+        self, client: TestClient,
+    ) -> None:
+        """Malformed Content-Length header returns 400."""
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            content=b"x",
+            headers={
+                "X-Amelia-Profile": "work",
+                "Content-Length": "abc",
+            },
+        )
+        assert response.status_code == 400
+        assert "Content-Length" in response.json()["detail"]
+
+    def test_actual_body_exceeding_limit_returns_413(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Actual body size (not just Content-Length) is checked."""
+        import amelia.sandbox.proxy as proxy_module
+
+        monkeypatch.setattr(proxy_module, "PROXY_MAX_BODY_BYTES", 50)
+
+        app = FastAPI()
+
+        async def _resolve(name: str) -> ProviderConfig | None:
+            if name == "work":
+                return ProviderConfig(base_url="https://example.com/v1", api_key="k")
+            return None
+
+        proxy = create_proxy_router(resolve_provider=_resolve)
+        app.include_router(proxy.router, prefix="/proxy/v1")
+
+        with TestClient(app) as c:
+            response = c.post(
+                "/proxy/v1/chat/completions",
+                content=b"x" * 100,
+                headers={"X-Amelia-Profile": "work"},
+            )
+        assert response.status_code == 413
+
+    def test_normal_request_passes_size_check(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Normal-sized request passes through."""
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            return _streaming_response(200, b'{"choices": []}', request)
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": [{"role": "user", "content": "hi"}]},
+            headers={"X-Amelia-Profile": "work"},
+        )
+        assert response.status_code == 200
+
+
+class TestProxyTokenAuth:
+    """Per-container proxy token authentication."""
+
+    @pytest.fixture
+    async def authed_app(self) -> AsyncIterator[FastAPI]:
+        """App with token validation enabled."""
+        app = FastAPI()
+
+        async def _resolve_provider(profile_name: str) -> ProviderConfig | None:
+            if profile_name == "work":
+                return ProviderConfig(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key="sk-or-test-key",
+                )
+            return None
+
+        async def _validate_token(token: str) -> bool:
+            return token == "valid-secret-token"
+
+        proxy = create_proxy_router(
+            resolve_provider=_resolve_provider,
+            token_validator=_validate_token,
+        )
+        app.include_router(proxy.router, prefix="/proxy/v1")
+        yield app
+        await proxy.cleanup()
+
+    @pytest.fixture
+    def authed_client(self, authed_app: FastAPI) -> TestClient:
+        return TestClient(authed_app)
+
+    def test_missing_token_returns_401(self, authed_client: TestClient) -> None:
+        response = authed_client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={"X-Amelia-Profile": "work"},
+        )
+        assert response.status_code == 401
+
+    def test_wrong_token_returns_401(self, authed_client: TestClient) -> None:
+        response = authed_client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={
+                "X-Amelia-Profile": "work",
+                "X-Amelia-Proxy-Token": "wrong-token",
+            },
+        )
+        assert response.status_code == 401
+
+    def test_valid_token_passes_through(
+        self, authed_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            return _streaming_response(200, b'{"choices": []}', request)
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = authed_client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={
+                "X-Amelia-Profile": "work",
+                "X-Amelia-Proxy-Token": "valid-secret-token",
+            },
+        )
+        assert response.status_code == 200
+
+    def test_token_not_forwarded_upstream(
+        self, authed_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Proxy token must be stripped before forwarding."""
+        captured_headers: dict[str, str] = {}
+
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            captured_headers.update(dict(request.headers))
+            return _streaming_response(200, b'{"choices": []}', request)
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        authed_client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={
+                "X-Amelia-Profile": "work",
+                "X-Amelia-Proxy-Token": "valid-secret-token",
+            },
+        )
+        assert "x-amelia-proxy-token" not in captured_headers
+
+    def test_no_validator_skips_token_check(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When no token_validator is set, requests pass without a token."""
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            return _streaming_response(200, b'{"choices": []}', request)
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={"X-Amelia-Profile": "work"},
+        )
+        assert response.status_code == 200
+
+
+class TestProxySyncTokenValidator:
+    """Sync token validators work without async overhead."""
+
+    @pytest.fixture
+    async def sync_authed_app(self) -> AsyncIterator[FastAPI]:
+        """App with sync token validation enabled."""
+        app = FastAPI()
+
+        async def _resolve_provider(profile_name: str) -> ProviderConfig | None:
+            if profile_name == "work":
+                return ProviderConfig(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key="sk-or-test-key",
+                )
+            return None
+
+        def _validate_token(token: str) -> bool:
+            """Sync validator - no async overhead for dict lookups."""
+            return token == "sync-valid-token"
+
+        proxy = create_proxy_router(
+            resolve_provider=_resolve_provider,
+            token_validator=_validate_token,
+        )
+        app.include_router(proxy.router, prefix="/proxy/v1")
+        yield app
+        await proxy.cleanup()
+
+    @pytest.fixture
+    def sync_authed_client(self, sync_authed_app: FastAPI) -> TestClient:
+        return TestClient(sync_authed_app)
+
+    def test_sync_validator_rejects_invalid_token(self, sync_authed_client: TestClient) -> None:
+        response = sync_authed_client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={
+                "X-Amelia-Profile": "work",
+                "X-Amelia-Proxy-Token": "wrong-token",
+            },
+        )
+        assert response.status_code == 401
+
+    def test_sync_validator_accepts_valid_token(
+        self, sync_authed_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
+            return _streaming_response(200, b'{"choices": []}', request)
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+
+        response = sync_authed_client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={
+                "X-Amelia-Profile": "work",
+                "X-Amelia-Proxy-Token": "sync-valid-token",
+            },
+        )
+        assert response.status_code == 200
+
+
+class TestProxyBodyLimitConfigurable:
+    """Body size limit is configurable via AMELIA_PROXY_MAX_BODY_MB."""
+
+    def test_body_limit_configurable_via_env(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AMELIA_PROXY_MAX_BODY_MB env var controls the body size limit."""
+        monkeypatch.setenv("AMELIA_PROXY_MAX_BODY_MB", "5")
+
+        import importlib
+
+        import amelia.sandbox.proxy as proxy_module
+
+        importlib.reload(proxy_module)
+
+        try:
+            assert proxy_module.PROXY_MAX_BODY_BYTES == 5 * 1024 * 1024
+        finally:
+            monkeypatch.delenv("AMELIA_PROXY_MAX_BODY_MB", raising=False)
+            importlib.reload(proxy_module)
 
 
 class TestProxyCleanup:
