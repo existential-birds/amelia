@@ -73,6 +73,7 @@ class PRCommentPoller:
         self._next_poll: dict[str, float] = {}
         self._active_tasks: set[asyncio.Task[None]] = set()
         self._repo_slugs: dict[str, str] = {}
+        self._processed_comments: dict[tuple[str, int], set[int]] = {}
 
     async def start(self) -> None:
         """Start the poll loop."""
@@ -182,8 +183,24 @@ class PRCommentPoller:
                 pr.number,
                 ignore_authors=config.ignore_authors,
             )
+            key = (profile.name, pr.number)
+
             if not comments:
-                continue  # Skip silently
+                # All resolved on GitHub — clear tracking so future comments trigger normally
+                self._processed_comments.pop(key, None)
+                continue
+
+            current_ids = {c.id for c in comments}
+            processed_ids = self._processed_comments.get(key, set())
+
+            if current_ids <= processed_ids:
+                logger.debug(
+                    "All comments already processed, skipping",
+                    profile=profile.name,
+                    pr_number=pr.number,
+                    comment_count=len(current_ids),
+                )
+                continue
 
             repo_slug = await self._get_repo_slug(profile.repo_root)
 
@@ -201,6 +218,7 @@ class PRCommentPoller:
             )
             self._active_tasks.add(task)
             task.add_done_callback(self._active_tasks.discard)
+            self._processed_comments[key] = current_ids
             triggered += 1
 
         if triggered > 0 or len(prs) > 0:
