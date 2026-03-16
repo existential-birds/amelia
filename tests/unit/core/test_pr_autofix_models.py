@@ -93,6 +93,11 @@ class TestPRReviewComment:
             created_at=datetime(2026, 1, 15, 13, 0, 0, tzinfo=UTC),
             path="src/auth.py",
             line=42,
+            original_line=42,
+            start_line=40,
+            original_start_line=40,
+            side="RIGHT",
+            subject_type="line",
             diff_hunk="@@ -40,3 +40,5 @@\n some code",
             in_reply_to_id=100,
             thread_id="PRRT_abc123",
@@ -103,6 +108,11 @@ class TestPRReviewComment:
     def test_general_comment_defaults(self, general_comment: PRReviewComment) -> None:
         assert general_comment.path is None
         assert general_comment.line is None
+        assert general_comment.original_line is None
+        assert general_comment.start_line is None
+        assert general_comment.original_start_line is None
+        assert general_comment.side is None
+        assert general_comment.subject_type is None
         assert general_comment.diff_hunk is None
         assert general_comment.in_reply_to_id is None
         assert general_comment.thread_id is None
@@ -112,6 +122,11 @@ class TestPRReviewComment:
     def test_inline_comment_fields(self, inline_comment: PRReviewComment) -> None:
         assert inline_comment.path == "src/auth.py"
         assert inline_comment.line == 42
+        assert inline_comment.original_line == 42
+        assert inline_comment.start_line == 40
+        assert inline_comment.original_start_line == 40
+        assert inline_comment.side == "RIGHT"
+        assert inline_comment.subject_type == "line"
         assert inline_comment.diff_hunk is not None
         assert inline_comment.in_reply_to_id == 100
         assert inline_comment.thread_id == "PRRT_abc123"

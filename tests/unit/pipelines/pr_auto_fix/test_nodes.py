@@ -12,6 +12,7 @@ from amelia.agents.schemas.classifier import CommentCategory
 from amelia.core.agentic_state import AgenticStatus
 from amelia.core.types import PRAutoFixConfig
 from amelia.pipelines.pr_auto_fix.nodes import (
+    _build_developer_goal,
     classify_node,
     commit_push_node,
     develop_node,
@@ -94,6 +95,60 @@ def _fake_dev_run_failure(impl_state: Any, profile: Any, workflow_id: Any) -> An
         raise RuntimeError("Developer failed")
         yield  # noqa: RET503
     return gen()
+
+
+# ---------------------------------------------------------------------------
+# _build_developer_goal tests
+# ---------------------------------------------------------------------------
+
+
+class TestBuildDeveloperGoal:
+    """Tests for _build_developer_goal context preservation."""
+
+    def test_includes_original_line_when_line_is_none(self) -> None:
+        """When line is null (outdated), original_line is used as fallback."""
+        c = make_comment(id=1, path="src/app.py", line=None, original_line=15)
+        goal = _build_developer_goal("src/app.py", [c], {}, pr_number=1, head_branch="main")
+        assert "**Line:** 15" in goal
+
+    def test_includes_multi_line_range(self) -> None:
+        """Multi-line comments show start-end range."""
+        c = make_comment(id=1, path="src/app.py", line=30, start_line=20)
+        goal = _build_developer_goal("src/app.py", [c], {}, pr_number=1, head_branch="main")
+        assert "**Lines:** 20-30" in goal
+
+    def test_includes_original_multi_line_range(self) -> None:
+        """Multi-line comments with original lines show range when current lines are null."""
+        c = make_comment(
+            id=1, path="src/app.py", line=None, original_line=28,
+            start_line=None, original_start_line=18,
+        )
+        goal = _build_developer_goal("src/app.py", [c], {}, pr_number=1, head_branch="main")
+        assert "**Lines:** 18-28" in goal
+
+    def test_includes_side_label(self) -> None:
+        """Side field is rendered as human-readable label."""
+        c_right = make_comment(id=1, path="src/app.py", side="RIGHT")
+        goal = _build_developer_goal("src/app.py", [c_right], {}, pr_number=1, head_branch="main")
+        assert "new code" in goal
+        assert "RIGHT" in goal
+
+        c_left = make_comment(id=2, path="src/app.py", side="LEFT")
+        goal = _build_developer_goal("src/app.py", [c_left], {}, pr_number=1, head_branch="main")
+        assert "old code" in goal
+        assert "LEFT" in goal
+
+    def test_includes_file_level_scope(self) -> None:
+        """File-level comments are labeled as such."""
+        c = make_comment(id=1, path="src/app.py", subject_type="file")
+        goal = _build_developer_goal("src/app.py", [c], {}, pr_number=1, head_branch="main")
+        assert "file-level comment" in goal
+
+    def test_line_level_has_no_scope_label(self) -> None:
+        """Line-level comments don't get extra scope label."""
+        c = make_comment(id=1, path="src/app.py", subject_type="line")
+        goal = _build_developer_goal("src/app.py", [c], {}, pr_number=1, head_branch="main")
+        assert "file-level comment" not in goal
 
 
 # ---------------------------------------------------------------------------

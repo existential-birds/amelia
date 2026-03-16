@@ -52,6 +52,11 @@ _REST_COMMENTS = [
         "created_at": "2026-03-13T12:00:00Z",
         "path": "src/main.py",
         "line": 42,
+        "original_line": 42,
+        "start_line": None,
+        "original_start_line": None,
+        "side": "RIGHT",
+        "subject_type": "line",
         "diff_hunk": "@@ -40,3 +40,5 @@",
         "in_reply_to_id": None,
         "node_id": "PRRC_node100",
@@ -63,6 +68,11 @@ _REST_COMMENTS = [
         "created_at": "2026-03-13T12:05:00Z",
         "path": "src/main.py",
         "line": 42,
+        "original_line": 42,
+        "start_line": None,
+        "original_start_line": None,
+        "side": "RIGHT",
+        "subject_type": "line",
         "diff_hunk": "@@ -40,3 +40,5 @@",
         "in_reply_to_id": 100,
         "node_id": "PRRC_node101",
@@ -74,6 +84,11 @@ _REST_COMMENTS = [
         "created_at": "2026-03-13T12:10:00Z",
         "path": "src/config.py",
         "line": 10,
+        "original_line": 10,
+        "start_line": None,
+        "original_start_line": None,
+        "side": "RIGHT",
+        "subject_type": "line",
         "diff_hunk": "@@ -8,3 +8,5 @@",
         "in_reply_to_id": None,
         "node_id": "PRRC_node102",
@@ -85,6 +100,11 @@ _REST_COMMENTS = [
         "created_at": "2026-03-13T12:15:00Z",
         "path": "src/handler.py",
         "line": 55,
+        "original_line": 55,
+        "start_line": None,
+        "original_start_line": None,
+        "side": "RIGHT",
+        "subject_type": "line",
         "diff_hunk": "@@ -53,3 +53,5 @@",
         "in_reply_to_id": None,
         "node_id": "PRRC_node103",
@@ -158,6 +178,130 @@ async def test_fetch_review_comments_returns_unresolved(
     for c in comments:
         assert c.pr_number == 42
         assert c.thread_id is not None
+
+
+# ---------------------------------------------------------------------------
+# GHAPI-01b: New context fields (original_line, start_line, side, subject_type)
+# ---------------------------------------------------------------------------
+
+
+async def test_fetch_review_comments_captures_context_fields(
+    service: GitHubPRService,
+) -> None:
+    """Review comments include original_line, start_line, side, and subject_type."""
+    # Single comment with multi-line range on the LEFT side
+    rest_data = [
+        {
+            "id": 200,
+            "body": "This whole block should be refactored",
+            "user": {"login": "reviewer1"},
+            "created_at": "2026-03-13T12:00:00Z",
+            "path": "src/utils.py",
+            "line": 30,
+            "original_line": 28,
+            "start_line": 20,
+            "original_start_line": 18,
+            "side": "LEFT",
+            "subject_type": "line",
+            "diff_hunk": "@@ -18,15 +18,20 @@",
+            "in_reply_to_id": None,
+            "node_id": "PRRC_node200",
+        },
+    ]
+    graphql_data = {
+        "data": {
+            "repository": {
+                "pullRequest": {
+                    "reviewThreads": {
+                        "pageInfo": {"hasNextPage": False},
+                        "nodes": [
+                            {
+                                "id": "PRRT_thread200",
+                                "isResolved": False,
+                                "comments": {"nodes": [{"databaseId": 200}]},
+                            },
+                        ],
+                    },
+                },
+            },
+        },
+    }
+
+    rest_proc = _make_mock_process(stdout=json.dumps(rest_data))
+    graphql_proc = _make_mock_process(stdout=json.dumps(graphql_data))
+
+    with (
+        patch("asyncio.create_subprocess_exec") as mock_exec,
+        patch.object(service, "_resolve_owner_repo", return_value=("test-owner", "test-repo")),
+    ):
+        mock_exec.side_effect = [rest_proc, graphql_proc]
+        comments = await service.fetch_review_comments(pr_number=42)
+
+    assert len(comments) == 1
+    c = comments[0]
+    assert c.line == 30
+    assert c.original_line == 28
+    assert c.start_line == 20
+    assert c.original_start_line == 18
+    assert c.side == "LEFT"
+    assert c.subject_type == "line"
+
+
+async def test_fetch_review_comments_outdated_line_preserved(
+    service: GitHubPRService,
+) -> None:
+    """When line is null (outdated after force-push), original_line is still captured."""
+    rest_data = [
+        {
+            "id": 300,
+            "body": "Fix this typo",
+            "user": {"login": "reviewer1"},
+            "created_at": "2026-03-13T12:00:00Z",
+            "path": "src/app.py",
+            "line": None,  # outdated after force-push
+            "original_line": 15,
+            "start_line": None,
+            "original_start_line": None,
+            "side": "RIGHT",
+            "subject_type": "line",
+            "diff_hunk": "@@ -13,3 +13,5 @@",
+            "in_reply_to_id": None,
+            "node_id": "PRRC_node300",
+        },
+    ]
+    graphql_data = {
+        "data": {
+            "repository": {
+                "pullRequest": {
+                    "reviewThreads": {
+                        "pageInfo": {"hasNextPage": False},
+                        "nodes": [
+                            {
+                                "id": "PRRT_thread300",
+                                "isResolved": False,
+                                "comments": {"nodes": [{"databaseId": 300}]},
+                            },
+                        ],
+                    },
+                },
+            },
+        },
+    }
+
+    rest_proc = _make_mock_process(stdout=json.dumps(rest_data))
+    graphql_proc = _make_mock_process(stdout=json.dumps(graphql_data))
+
+    with (
+        patch("asyncio.create_subprocess_exec") as mock_exec,
+        patch.object(service, "_resolve_owner_repo", return_value=("test-owner", "test-repo")),
+    ):
+        mock_exec.side_effect = [rest_proc, graphql_proc]
+        comments = await service.fetch_review_comments(pr_number=42)
+
+    assert len(comments) == 1
+    c = comments[0]
+    assert c.line is None
+    assert c.original_line == 15  # preserved despite line being null
 
 
 # ---------------------------------------------------------------------------

@@ -133,7 +133,7 @@ class GitOperations:
         await self._run_git("add", "-A", "--", ".", ":!.claude/")
         await self._run_git("commit", "-m", message)
         sha = await self._run_git("rev-parse", "HEAD")
-        logger.info("Committed changes", sha=sha[:8], message=message)
+        logger.opt(colors=False).info("Committed changes", sha=sha[:8], message=message)
         return sha
 
     async def safe_push(self, branch: str) -> str:

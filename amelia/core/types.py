@@ -198,7 +198,12 @@ class PRReviewComment(BaseModel):
         author: Comment author login.
         created_at: Comment creation timestamp.
         path: File path for inline comments (None for general).
-        line: Line number for inline comments (None for general).
+        line: End line number for inline comments (None for general or outdated).
+        original_line: Line number on the original commit (survives force-pushes).
+        start_line: Start line for multi-line comments (None for single-line).
+        original_start_line: Start line on original commit for multi-line comments.
+        side: Which diff side the comment is on ("LEFT" for base, "RIGHT" for head).
+        subject_type: Whether the comment targets a "line" or "file".
         diff_hunk: Diff context for inline comments (None for general).
         in_reply_to_id: Parent comment ID for threaded replies.
         thread_id: Review thread ID from GraphQL.
@@ -213,7 +218,12 @@ class PRReviewComment(BaseModel):
     author: str = Field(description="Comment author login")
     created_at: datetime = Field(description="Comment creation timestamp")
     path: str | None = Field(default=None, description="File path for inline comments")
-    line: int | None = Field(default=None, description="Line number for inline comments")
+    line: int | None = Field(default=None, description="End line number for inline comments")
+    original_line: int | None = Field(default=None, description="Line number on the original commit")
+    start_line: int | None = Field(default=None, description="Start line for multi-line comments")
+    original_start_line: int | None = Field(default=None, description="Start line on original commit")
+    side: str | None = Field(default=None, description="Diff side: LEFT (base) or RIGHT (head)")
+    subject_type: str | None = Field(default=None, description="Comment target: line or file")
     diff_hunk: str | None = Field(default=None, description="Diff context for inline comments")
     in_reply_to_id: int | None = Field(default=None, description="Parent comment ID for threaded replies")
     thread_id: str | None = Field(default=None, description="Review thread ID from GraphQL")

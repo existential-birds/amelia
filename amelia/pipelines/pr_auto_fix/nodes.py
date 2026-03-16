@@ -151,8 +151,21 @@ def _build_developer_goal(
         parts.append(f"**Body:** {comment.body}")
         if comment.path:
             parts.append(f"**File:** {comment.path}")
-        if comment.line is not None:
-            parts.append(f"**Line:** {comment.line}")
+        # Prefer line (current), fall back to original_line (survives force-pushes)
+        effective_line = comment.line or comment.original_line
+        if comment.start_line is not None or comment.original_start_line is not None:
+            effective_start = comment.start_line or comment.original_start_line
+            if effective_line is not None:
+                parts.append(f"**Lines:** {effective_start}-{effective_line}")
+            elif effective_start is not None:
+                parts.append(f"**Line:** {effective_start}")
+        elif effective_line is not None:
+            parts.append(f"**Line:** {effective_line}")
+        if comment.side:
+            side_label = "new code" if comment.side == "RIGHT" else "old code"
+            parts.append(f"**Side:** {side_label} ({comment.side})")
+        if comment.subject_type == "file":
+            parts.append("**Scope:** file-level comment")
         if comment.diff_hunk:
             parts.append(f"**Diff hunk:**\n```\n{comment.diff_hunk}\n```")
         if cls:

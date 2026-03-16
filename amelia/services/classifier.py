@@ -166,8 +166,20 @@ def _build_user_prompt(comments: list[PRReviewComment]) -> str:
         lines.append(f"Body: {c.body}")
         if c.path is not None:
             lines.append(f"Path: {c.path}")
-        if c.line is not None:
-            lines.append(f"Line: {c.line}")
+        # Prefer current line, fall back to original_line (survives force-pushes)
+        effective_line = c.line or c.original_line
+        if c.start_line is not None or c.original_start_line is not None:
+            effective_start = c.start_line or c.original_start_line
+            if effective_line is not None:
+                lines.append(f"Lines: {effective_start}-{effective_line}")
+            elif effective_start is not None:
+                lines.append(f"Line: {effective_start}")
+        elif effective_line is not None:
+            lines.append(f"Line: {effective_line}")
+        if c.side is not None:
+            lines.append(f"Side: {c.side}")
+        if c.subject_type == "file":
+            lines.append("Scope: file-level comment")
         if c.diff_hunk is not None:
             lines.append(f"Diff hunk:\n{c.diff_hunk}")
         lines.append("")
