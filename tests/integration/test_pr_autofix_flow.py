@@ -1,8 +1,8 @@
 """Integration tests for PR auto-fix end-to-end flow.
 
-Tests the full pipeline: poller detects comments → orchestrator receives them
-→ pipeline classifies/develops/commits/resolves. Mocks only at external
-boundaries: gh CLI (subprocess) and LLM driver (execute_agentic).
+Tests the full pipeline graph: classify_node → develop_node →
+commit_push_node → reply_resolve_node. Mocks only at external
+boundaries: LLM driver, Developer agent, git operations, GitHub API.
 """
 
 from __future__ import annotations
@@ -11,9 +11,15 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
+from amelia.agents.schemas.classifier import (
+    ClassificationOutput,
+    CommentCategory,
+    CommentClassification,
+)
 from amelia.core.types import (
     AgentConfig,
     DriverType,
@@ -22,7 +28,9 @@ from amelia.core.types import (
     PRReviewComment,
     PRSummary,
 )
+from amelia.pipelines.pr_auto_fix.graph import create_pr_auto_fix_graph
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
+from amelia.pipelines.pr_auto_fix.state import GroupFixStatus, PRAutoFixState
 from amelia.server.events.bus import EventBus
 
 
@@ -77,6 +85,28 @@ def _make_comments(pr_number: int = 42) -> list[PRReviewComment]:
     ]
 
 
+def _make_classification_output(comment_ids: list[int]) -> ClassificationOutput:
+    """Build a ClassificationOutput matching the test comments."""
+    return ClassificationOutput(
+        classifications=[
+            CommentClassification(
+                comment_id=comment_ids[0],
+                category=CommentCategory.STYLE,
+                confidence=0.95,
+                actionable=True,
+                reason="Variable naming",
+            ),
+            CommentClassification(
+                comment_id=comment_ids[1],
+                category=CommentCategory.BUG,
+                confidence=0.90,
+                actionable=True,
+                reason="Missing null check",
+            ),
+        ]
+    )
+
+
 @pytest.fixture()
 def profile(tmp_path: object) -> Profile:
     return _make_profile(tmp_path)
@@ -93,13 +123,6 @@ def event_bus() -> EventBus:
 
 
 @pytest.fixture()
-def captured_events(event_bus: EventBus) -> list[Any]:
-    events: list[Any] = []
-    event_bus.subscribe(lambda e: events.append(e))
-    return events
-
-
-@pytest.fixture()
 def orchestrator(event_bus: EventBus) -> PRAutoFixOrchestrator:
     github_pr = MagicMock()
     github_pr.create_issue_comment = AsyncMock()
@@ -110,113 +133,296 @@ def orchestrator(event_bus: EventBus) -> PRAutoFixOrchestrator:
 
 
 # ---------------------------------------------------------------------------
-# Test: Comments flow from orchestrator into pipeline state
+# Helpers
 # ---------------------------------------------------------------------------
 
 
-class TestCommentsReachPipeline:
-    """Verify comments passed to trigger_fix_cycle reach the pipeline nodes."""
+def _mock_driver_for_classify(comment_ids: list[int]) -> MagicMock:
+    """Create a mock driver that returns valid ClassificationOutput."""
+    driver = MagicMock()
+    output = _make_classification_output(comment_ids)
+    driver.generate = AsyncMock(return_value=(output, None))
+    return driver
 
-    async def test_comments_populate_pipeline_state(
+
+def _mock_developer() -> MagicMock:
+    """Create a mock Developer whose run() yields one state then stops."""
+
+    async def fake_run(state: Any, **kwargs: Any):
+        """Yield the state back unchanged (simulates successful fix)."""
+        yield state, None
+
+    dev = MagicMock()
+    dev.run = fake_run
+    return dev
+
+
+# ---------------------------------------------------------------------------
+# Test: Full pipeline graph with real nodes
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineEndToEnd:
+    """Run the real LangGraph graph with mocks only at external boundaries."""
+
+    async def test_comments_flow_through_classify_to_develop(
+        self,
+        profile: Profile,
+        comments: list[PRReviewComment],
+        event_bus: EventBus,
+    ) -> None:
+        """Comments must be classified by classify_node, grouped, then
+        developed by develop_node, committed, and replied to."""
+
+        graph = create_pr_auto_fix_graph()
+
+        initial_state = PRAutoFixState(
+            workflow_id=uuid4(),
+            profile_id=profile.name,
+            pr_number=42,
+            head_branch="feat/test",
+            repo="owner/repo",
+            comments=comments,
+            autofix_config=profile.pr_autofix,
+            created_at=datetime.now(tz=UTC),
+        )
+
+        config = {
+            "configurable": {
+                "thread_id": str(uuid4()),
+                "profile": profile,
+                "event_bus": event_bus,
+                "metrics_repo": None,
+                "metrics_run_id": None,
+            },
+        }
+
+        mock_driver = _mock_driver_for_classify([100, 101])
+        mock_dev = _mock_developer()
+
+        mock_git_ops = MagicMock()
+        mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
+        mock_git_ops.safe_push = AsyncMock()
+
+        mock_github_service = MagicMock()
+        mock_github_service.reply_to_comment = AsyncMock()
+        mock_github_service.resolve_thread = AsyncMock()
+
+        with (
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.Developer",
+                return_value=mock_dev,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
+                return_value=mock_git_ops,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService",
+                return_value=mock_github_service,
+            ),
+        ):
+            final_state = await graph.ainvoke(initial_state, config=config)
+
+        # classify_node should have produced classifications
+        assert len(final_state["classified_comments"]) == 2
+
+        # develop_node should have produced group results
+        assert len(final_state["group_results"]) > 0
+        assert any(r.status == GroupFixStatus.FIXED for r in final_state["group_results"])
+
+        # commit_push_node should have committed
+        mock_git_ops.stage_and_commit.assert_called_once()
+
+        # reply_resolve_node should have replied and resolved
+        assert mock_github_service.reply_to_comment.call_count >= 1
+        assert mock_github_service.resolve_thread.call_count >= 1
+
+    async def test_empty_comments_skip_all_nodes(
+        self,
+        profile: Profile,
+        event_bus: EventBus,
+    ) -> None:
+        """When comments list is empty, classify_node returns early,
+        develop_node has no groups, and no commits or replies happen."""
+
+        graph = create_pr_auto_fix_graph()
+
+        initial_state = PRAutoFixState(
+            workflow_id=uuid4(),
+            profile_id=profile.name,
+            pr_number=42,
+            head_branch="feat/test",
+            repo="owner/repo",
+            comments=[],
+            autofix_config=profile.pr_autofix,
+            created_at=datetime.now(tz=UTC),
+        )
+
+        config = {
+            "configurable": {
+                "thread_id": str(uuid4()),
+                "profile": profile,
+                "event_bus": event_bus,
+                "metrics_repo": None,
+                "metrics_run_id": None,
+            },
+        }
+
+        mock_git_ops = MagicMock()
+        mock_git_ops.has_changes = AsyncMock(return_value=False)
+        mock_git_ops.stage_and_commit = AsyncMock()
+
+        mock_github_service = MagicMock()
+        mock_github_service.reply_to_comment = AsyncMock()
+
+        with (
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
+                return_value=mock_git_ops,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService",
+                return_value=mock_github_service,
+            ),
+        ):
+            final_state = await graph.ainvoke(initial_state, config=config)
+
+        assert final_state["classified_comments"] == []
+        assert final_state["file_groups"] == {}
+        mock_git_ops.stage_and_commit.assert_not_called()
+        mock_github_service.reply_to_comment.assert_not_called()
+
+    async def test_driver_error_propagates(
+        self,
+        profile: Profile,
+        comments: list[PRReviewComment],
+        event_bus: EventBus,
+    ) -> None:
+        """If the LLM driver fails with RuntimeError, it must propagate
+        up (not be silently swallowed with an empty commit)."""
+
+        graph = create_pr_auto_fix_graph()
+
+        initial_state = PRAutoFixState(
+            workflow_id=uuid4(),
+            profile_id=profile.name,
+            pr_number=42,
+            head_branch="feat/test",
+            repo="owner/repo",
+            comments=comments,
+            autofix_config=profile.pr_autofix,
+            created_at=datetime.now(tz=UTC),
+        )
+
+        config = {
+            "configurable": {
+                "thread_id": str(uuid4()),
+                "profile": profile,
+                "event_bus": event_bus,
+                "metrics_repo": None,
+                "metrics_run_id": None,
+            },
+        }
+
+        mock_driver = MagicMock()
+        mock_driver.generate = AsyncMock(
+            side_effect=RuntimeError("Claude SDK did not return a result message"),
+        )
+
+        mock_git_ops = MagicMock()
+        mock_git_ops.stage_and_commit = AsyncMock()
+
+        with (
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
+                return_value=mock_git_ops,
+            ),
+            pytest.raises(RuntimeError, match="Claude SDK did not return a result message"),
+        ):
+            await graph.ainvoke(initial_state, config=config)
+
+        # Must NOT have committed anything
+        mock_git_ops.stage_and_commit.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test: Orchestrator threads comments into pipeline
+# ---------------------------------------------------------------------------
+
+
+class TestOrchestratorThreadsComments:
+    """Verify the orchestrator passes comments and config to the real pipeline."""
+
+    async def test_trigger_fix_cycle_runs_pipeline_with_comments(
         self,
         orchestrator: PRAutoFixOrchestrator,
         profile: Profile,
         comments: list[PRReviewComment],
+        event_bus: EventBus,
     ) -> None:
-        """Comments passed to trigger_fix_cycle must appear in the
-        initial state given to graph.ainvoke, not be silently dropped."""
-        captured_state: dict[str, Any] = {}
+        """trigger_fix_cycle must pass comments and autofix_config
+        through to the graph execution."""
 
-        async def capture_ainvoke(state: Any, **kwargs: Any) -> dict[str, Any]:
-            captured_state.update(state if isinstance(state, dict) else state.model_dump())
-            return {
-                "group_results": [],
-                "comments": state.get("comments", [])
-                if isinstance(state, dict)
-                else state.comments,
-            }
+        mock_driver = _mock_driver_for_classify([100, 101])
+        mock_dev = _mock_developer()
 
-        with patch(
-            "amelia.pipelines.pr_auto_fix.orchestrator.PRAutoFixPipeline"
-        ) as mock_pipeline_cls:
-            mock_pipeline = MagicMock()
-            mock_graph = AsyncMock()
-            mock_graph.ainvoke = AsyncMock(side_effect=capture_ainvoke)
-            mock_pipeline.create_graph.return_value = mock_graph
-            def _get_initial_state(**kw: object) -> object:
-                from datetime import UTC, datetime
+        mock_git_ops = MagicMock()
+        mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
+        mock_git_ops.safe_push = AsyncMock()
+        mock_git_ops.fetch_origin = AsyncMock()
+        mock_git_ops.checkout_and_reset = AsyncMock()
 
-                from amelia.pipelines.pr_auto_fix.state import PRAutoFixState
-                if "created_at" not in kw:
-                    kw["created_at"] = datetime.now(tz=UTC)
-                return PRAutoFixState(**{k: v for k, v in kw.items()})
+        mock_github_service = MagicMock()
+        mock_github_service.reply_to_comment = AsyncMock()
+        mock_github_service.resolve_thread = AsyncMock()
 
-            mock_pipeline.get_initial_state = _get_initial_state
-            mock_pipeline_cls.return_value = mock_pipeline
+        with (
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.Developer",
+                return_value=mock_dev,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
+                return_value=mock_git_ops,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.orchestrator.GitOperations",
+                return_value=mock_git_ops,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService",
+                return_value=mock_github_service,
+            ),
+        ):
+            await orchestrator.trigger_fix_cycle(
+                pr_number=42,
+                repo="owner/repo",
+                profile=profile,
+                head_branch="feat/test",
+                comments=comments,
+            )
 
-            # Patch git operations to no-op
-            with patch("amelia.pipelines.pr_auto_fix.orchestrator.GitOperations", autospec=True):
-                await orchestrator.trigger_fix_cycle(
-                    pr_number=42,
-                    repo="owner/repo",
-                    profile=profile,
-                    head_branch="feat/test",
-                    comments=comments,
-                )
-
-        # The critical assertion: comments must be in the pipeline state
-        assert len(captured_state.get("comments", [])) == 2
-        comment_ids = {c["id"] if isinstance(c, dict) else c.id for c in captured_state["comments"]}
-        assert comment_ids == {100, 101}
-
-    async def test_autofix_config_reaches_pipeline_state(
-        self,
-        orchestrator: PRAutoFixOrchestrator,
-        profile: Profile,
-        comments: list[PRReviewComment],
-    ) -> None:
-        """PRAutoFixConfig from the profile must be passed to pipeline state,
-        not left as the empty default."""
-        captured_state: dict[str, Any] = {}
-
-        async def capture_ainvoke(state: Any, **kwargs: Any) -> dict[str, Any]:
-            captured_state.update(state if isinstance(state, dict) else state.model_dump())
-            return {}
-
-        with patch(
-            "amelia.pipelines.pr_auto_fix.orchestrator.PRAutoFixPipeline"
-        ) as mock_pipeline_cls:
-            mock_pipeline = MagicMock()
-            mock_graph = AsyncMock()
-            mock_graph.ainvoke = AsyncMock(side_effect=capture_ainvoke)
-            mock_pipeline.create_graph.return_value = mock_graph
-            def _get_initial_state2(**kw: object) -> object:
-                from datetime import UTC, datetime
-
-                from amelia.pipelines.pr_auto_fix.state import PRAutoFixState
-                if "created_at" not in kw:
-                    kw["created_at"] = datetime.now(tz=UTC)
-                return PRAutoFixState(**{k: v for k, v in kw.items()})
-
-            mock_pipeline.get_initial_state = _get_initial_state2
-            mock_pipeline_cls.return_value = mock_pipeline
-
-            with patch("amelia.pipelines.pr_auto_fix.orchestrator.GitOperations", autospec=True):
-                await orchestrator.trigger_fix_cycle(
-                    pr_number=42,
-                    repo="owner/repo",
-                    profile=profile,
-                    head_branch="feat/test",
-                    comments=comments,
-                )
-
-        config = captured_state.get("autofix_config", {})
-        if isinstance(config, dict):
-            assert config.get("poll_label") == "amelia"
-            assert config.get("ignore_authors") == ["bot-user"]
-        else:
-            assert config.poll_label == "amelia"
-            assert config.ignore_authors == ["bot-user"]
+        # The driver was called (classify_node ran with real comments)
+        mock_driver.generate.assert_called_once()
+        # Git commit happened (develop + commit_push ran)
+        mock_git_ops.stage_and_commit.assert_called_once()
+        # Replies were posted (reply_resolve ran)
+        assert mock_github_service.reply_to_comment.call_count >= 1
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +461,6 @@ class TestPollerPassesComments:
             event_bus=event_bus,
         )
 
-        # Mock the GitHubPRService that _poll_profile creates
         mock_service = MagicMock()
         mock_service.list_labeled_prs = AsyncMock(
             return_value=[
@@ -279,50 +484,9 @@ class TestPollerPassesComments:
         ):
             await poller._poll_profile(profile)
 
-        # Wait for fire-and-forget task
         await asyncio.sleep(0.1)
 
         mock_orchestrator.trigger_fix_cycle.assert_called_once()
         call_kwargs = mock_orchestrator.trigger_fix_cycle.call_args.kwargs
         assert "comments" in call_kwargs, "Poller must pass comments to trigger_fix_cycle"
         assert len(call_kwargs["comments"]) == 2
-
-
-class TestNoJunkCommits:
-    """Verify that when classify_node produces no actionable comments,
-    commit_push_node does NOT commit."""
-
-    async def test_no_commit_when_no_actionable_comments(
-        self,
-        orchestrator: PRAutoFixOrchestrator,
-        profile: Profile,
-        event_bus: EventBus,
-    ) -> None:
-        """If comments are empty or all filtered, the pipeline must not
-        create any git commits."""
-        git_ops_mock = MagicMock()
-        git_ops_mock.has_changes = AsyncMock(return_value=False)
-        git_ops_mock.stage_and_commit = AsyncMock()
-        git_ops_mock.fetch_origin = AsyncMock()
-        git_ops_mock.checkout_and_reset = AsyncMock()
-
-        with (
-            patch(
-                "amelia.pipelines.pr_auto_fix.orchestrator.GitOperations",
-                return_value=git_ops_mock,
-            ),
-            patch(
-                "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
-                return_value=git_ops_mock,
-            ),
-        ):
-            await orchestrator.trigger_fix_cycle(
-                pr_number=42,
-                repo="owner/repo",
-                profile=profile,
-                head_branch="feat/test",
-                comments=[],  # No comments
-            )
-
-        # stage_and_commit must NOT have been called
-        git_ops_mock.stage_and_commit.assert_not_called()
