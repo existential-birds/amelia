@@ -18,7 +18,9 @@ async def get_current_commit(cwd: str | None = None) -> str | None:
     try:
         repo_path = Path(cwd) if cwd else Path.cwd()
         proc = await asyncio.create_subprocess_exec(
-            "git", "rev-parse", "HEAD",
+            "git",
+            "rev-parse",
+            "HEAD",
             cwd=repo_path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -92,9 +94,7 @@ class GitOperations:
             except ProcessLookupError:
                 pass
             cmd_str = f"git {' '.join(args)}"
-            raise ValueError(
-                f"Git command timed out after {timeout}s: {cmd_str}"
-            ) from e
+            raise ValueError(f"Git command timed out after {timeout}s: {cmd_str}") from e
 
         if check and process.returncode != 0:
             stderr_text = stderr.decode().strip()
@@ -109,7 +109,13 @@ class GitOperations:
         Returns:
             True if there are staged or unstaged changes, False otherwise.
         """
-        porcelain = await self._run_git("status", "--porcelain")
+        porcelain = await self._run_git(
+            "status",
+            "--porcelain",
+            "--",
+            ".",
+            ":!.claude/",
+        )
         return bool(porcelain.strip())
 
     async def stage_and_commit(self, message: str) -> str:
@@ -124,7 +130,7 @@ class GitOperations:
         Raises:
             ValueError: If the commit fails (e.g., nothing to commit).
         """
-        await self._run_git("add", "-A")
+        await self._run_git("add", "-A", "--", ".", ":!.claude/")
         await self._run_git("commit", "-m", message)
         sha = await self._run_git("rev-parse", "HEAD")
         logger.info("Committed changes", sha=sha[:8], message=message)
