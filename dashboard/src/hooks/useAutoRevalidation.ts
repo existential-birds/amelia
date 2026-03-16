@@ -15,6 +15,8 @@ const STATUS_EVENTS = [
   'approval_rejected',
   'stage_started',
   'stage_completed',
+  'pr_auto_fix_started',
+  'pr_auto_fix_completed',
 ] as const;
 
 /**

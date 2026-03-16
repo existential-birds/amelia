@@ -322,6 +322,7 @@ class PRAutoFixOrchestrator:
             f"PR auto-fix started for PR #{pr_number}",
             data={"workflow_id": str(workflow_id)},
             repo=repo,
+            workflow_id=workflow_id,
         )
 
         try:
@@ -331,7 +332,7 @@ class PRAutoFixOrchestrator:
             pipeline = PRAutoFixPipeline()
             graph = pipeline.create_graph()
             initial_state = pipeline.get_initial_state(
-                workflow_id=self.get_workflow_id(repo, pr_number),
+                workflow_id=workflow_id,
                 profile_id=profile.name,
                 pr_number=pr_number,
                 head_branch=head_branch,
@@ -456,6 +457,7 @@ class PRAutoFixOrchestrator:
                 f"PR auto-fix completed for PR #{pr_number}",
                 data={"workflow_id": str(workflow_id)},
                 repo=repo,
+                workflow_id=workflow_id,
             )
 
         except Exception as exc:
@@ -469,6 +471,20 @@ class PRAutoFixOrchestrator:
             )
             if self._workflow_repo is not None:
                 await self._workflow_repo.update(state)
+
+            # Emit failure event so dashboard gets notified
+            self._emit_event(
+                EventType.PR_AUTO_FIX_COMPLETED,
+                pr_number,
+                f"PR auto-fix failed for PR #{pr_number}: {exc}",
+                data={
+                    "workflow_id": str(workflow_id),
+                    "status": "failed",
+                    "failure_reason": str(exc),
+                },
+                repo=repo,
+                workflow_id=workflow_id,
+            )
             raise
 
     def _build_pr_comments(self, final_state: Any) -> list[dict[str, Any]]:
@@ -662,6 +678,7 @@ class PRAutoFixOrchestrator:
         message: str,
         data: dict[str, object] | None = None,
         repo: str = "",
+        workflow_id: UUID | None = None,
     ) -> None:
         """Create and emit a workflow event for orchestration state changes.
 
@@ -671,6 +688,7 @@ class PRAutoFixOrchestrator:
             message: Human-readable message.
             data: Optional structured payload.
             repo: Repository in 'owner/repo' format.
+            workflow_id: Explicit workflow ID to use. Falls back to synthetic ID.
         """
         event_data: dict[str, object] = {"pr_number": pr_number}
         if data:
@@ -678,7 +696,7 @@ class PRAutoFixOrchestrator:
 
         event = WorkflowEvent(
             id=uuid4(),
-            workflow_id=self.get_workflow_id(repo, pr_number),
+            workflow_id=workflow_id or self.get_workflow_id(repo, pr_number),
             sequence=0,  # Orchestration events don't need sequence ordering
             timestamp=datetime.now(UTC),
             agent="pr_auto_fix",
