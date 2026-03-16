@@ -145,6 +145,7 @@ class TestCommentsReachPipeline:
             mock_pipeline.create_graph.return_value = mock_graph
             def _get_initial_state(**kw: object) -> object:
                 from datetime import UTC, datetime
+
                 from amelia.pipelines.pr_auto_fix.state import PRAutoFixState
                 if "created_at" not in kw:
                     kw["created_at"] = datetime.now(tz=UTC)
@@ -191,6 +192,7 @@ class TestCommentsReachPipeline:
             mock_pipeline.create_graph.return_value = mock_graph
             def _get_initial_state2(**kw: object) -> object:
                 from datetime import UTC, datetime
+
                 from amelia.pipelines.pr_auto_fix.state import PRAutoFixState
                 if "created_at" not in kw:
                     kw["created_at"] = datetime.now(tz=UTC)
