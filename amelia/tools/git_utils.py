@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import shutil
 from pathlib import Path
 from types import TracebackType
@@ -102,7 +103,7 @@ class LocalWorktree:
                 "Removing stale worktree path",
                 path=str(self._worktree_path),
             )
-            try:
+            with contextlib.suppress(ValueError):
                 await _run_git_cmd(
                     self._repo_root,
                     "worktree",
@@ -111,8 +112,6 @@ class LocalWorktree:
                     "--force",
                     check=False,
                 )
-            except ValueError:
-                pass
             # Fallback: rm -rf if git worktree remove didn't clean it
             if self._worktree_path.exists():
                 shutil.rmtree(self._worktree_path, ignore_errors=True)
@@ -161,15 +160,13 @@ class LocalWorktree:
             )
             shutil.rmtree(self._worktree_path, ignore_errors=True)
             # Also prune stale worktree entries
-            try:
+            with contextlib.suppress(Exception):
                 await _run_git_cmd(
                     self._repo_root,
                     "worktree",
                     "prune",
                     check=False,
                 )
-            except Exception:
-                pass
 
 
 async def get_current_commit(cwd: str | None = None) -> str | None:

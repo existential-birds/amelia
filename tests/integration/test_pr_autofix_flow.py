@@ -387,6 +387,12 @@ class TestOrchestratorThreadsComments:
         mock_github_service.reply_to_comment = AsyncMock()
         mock_github_service.resolve_thread = AsyncMock()
 
+        # Mock LocalWorktree as async context manager returning a fake path
+        mock_worktree_instance = AsyncMock()
+        mock_worktree_instance.__aenter__ = AsyncMock(return_value="/tmp/fake-worktree")
+        mock_worktree_instance.__aexit__ = AsyncMock(return_value=None)
+        mock_worktree_cls = MagicMock(return_value=mock_worktree_instance)
+
         with (
             patch(
                 "amelia.pipelines.pr_auto_fix.nodes.get_driver",
@@ -403,6 +409,10 @@ class TestOrchestratorThreadsComments:
             patch(
                 "amelia.pipelines.pr_auto_fix.orchestrator.GitOperations",
                 return_value=mock_git_ops,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.orchestrator.LocalWorktree",
+                mock_worktree_cls,
             ),
             patch(
                 "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService",
