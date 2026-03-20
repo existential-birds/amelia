@@ -253,16 +253,30 @@ async def develop_node(
             ):
                 final_state = updated_state
 
-            group_results.append(GroupFixResult(
-                file_path=file_path,
-                status=GroupFixStatus.FIXED,
-                comment_ids=comment_ids,
-            ))
-            logger.info(
-                "Group fix completed",
-                file_path=file_path,
-                comment_count=len(comment_ids),
-            )
+            # Check if the Developer actually produced file changes
+            git_ops = GitOperations(profile.repo_root)
+            if await git_ops.has_changes():
+                group_results.append(GroupFixResult(
+                    file_path=file_path,
+                    status=GroupFixStatus.FIXED,
+                    comment_ids=comment_ids,
+                ))
+                logger.info(
+                    "Group fix completed",
+                    file_path=file_path,
+                    comment_count=len(comment_ids),
+                )
+            else:
+                group_results.append(GroupFixResult(
+                    file_path=file_path,
+                    status=GroupFixStatus.NO_CHANGES,
+                    comment_ids=comment_ids,
+                ))
+                logger.warning(
+                    "Developer completed but produced no file changes",
+                    file_path=file_path,
+                    comment_count=len(comment_ids),
+                )
 
         except Exception as e:
             logger.error(
@@ -431,6 +445,25 @@ async def reply_resolve_node(
                 logger.warning(
                     "Comment not found in state, skipping",
                     comment_id=comment_id,
+                )
+                continue
+
+            # Guard: skip reply/resolve for FIXED groups when no commit was made.
+            # The developer may have "completed" without producing real file changes,
+            # so commit_push_node returned commit_sha=None.
+            if group_result.status == GroupFixStatus.FIXED and not state.commit_sha:
+                logger.warning(
+                    "Group marked FIXED but no commit was made, skipping reply/resolve",
+                    comment_id=comment_id,
+                    file_path=group_result.file_path,
+                )
+                resolution_results.append(
+                    ResolutionResult(
+                        comment_id=comment.id,
+                        replied=False,
+                        resolved=False,
+                        error="No commit was made despite FIXED status",
+                    )
                 )
                 continue
 

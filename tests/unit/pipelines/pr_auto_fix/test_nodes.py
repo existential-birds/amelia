@@ -182,8 +182,13 @@ class TestDevelopNode:
             yield final, MagicMock()
 
         mock_dev_instance.run = fake_run
+        mock_git = AsyncMock()
+        mock_git.has_changes.return_value = True
 
-        with patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance):
+        with (
+            patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
+            patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", return_value=mock_git),
+        ):
             result = await develop_node(state, config)
 
         assert captured_goal is not None
@@ -218,8 +223,13 @@ class TestDevelopNode:
                 raise RuntimeError("Developer failed on bad.py")
 
         mock_dev_instance.run = fake_run
+        mock_git = AsyncMock()
+        mock_git.has_changes.return_value = True
 
-        with patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance):
+        with (
+            patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
+            patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", return_value=mock_git),
+        ):
             result = await develop_node(state, config)
 
         assert len(result["group_results"]) == 2
@@ -246,8 +256,13 @@ class TestDevelopNode:
         mock_dev_instance = MagicMock()
         mock_dev_instance.run = _fake_dev_run_success
         mock_dev_cls.return_value = mock_dev_instance
+        mock_git = AsyncMock()
+        mock_git.has_changes.return_value = True
 
-        with patch("amelia.pipelines.pr_auto_fix.nodes.Developer", mock_dev_cls):
+        with (
+            patch("amelia.pipelines.pr_auto_fix.nodes.Developer", mock_dev_cls),
+            patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", return_value=mock_git),
+        ):
             await develop_node(state, make_runnable_config())
 
         call_kwargs = mock_dev_cls.call_args
@@ -272,6 +287,30 @@ class TestDevelopNode:
 
         assert result["agentic_status"] == AgenticStatus.FAILED
         assert all(r.status == GroupFixStatus.FAILED for r in result["group_results"])
+
+    async def test_develop_no_file_changes_marks_no_changes(self) -> None:
+        """Developer completes without error but produces no file changes."""
+        c1 = make_comment(id=1, path="src/app.py", body="Fix this")
+        state = make_state(
+            comments=[c1],
+            file_groups={"src/app.py": [1]},
+            classified_comments=[make_classification(1)],
+        )
+
+        mock_dev_instance = MagicMock()
+        mock_dev_instance.run = _fake_dev_run_success
+        mock_git = AsyncMock()
+        mock_git.has_changes.return_value = False
+
+        with (
+            patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
+            patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", return_value=mock_git),
+        ):
+            result = await develop_node(state, make_runnable_config())
+
+        assert len(result["group_results"]) == 1
+        assert result["group_results"][0].status == GroupFixStatus.NO_CHANGES
+        assert result["agentic_status"] == AgenticStatus.COMPLETED
 
 
 # ---------------------------------------------------------------------------
@@ -497,6 +536,40 @@ class TestReplyResolveNode:
         res1, res2 = result["resolution_results"]
         assert res1.replied is True and res1.resolved is False and res1.error is not None
         assert res2.replied is True and res2.resolved is True
+
+    async def test_fixed_but_no_commit_skips_reply_and_resolve(self) -> None:
+        """When commit_sha is None (no commit made), FIXED groups should not be resolved."""
+        state, config = _make_reply_resolve_state(
+            status=GroupFixStatus.FIXED,
+            commit_sha="",  # Empty string = no commit
+        )
+        # Override commit_sha to None (the actual value when no commit)
+        state = state.model_copy(update={"commit_sha": None})
+        result, mock_gh = await self._run_node(state, config)
+
+        mock_gh.reply_to_comment.assert_not_called()
+        mock_gh.resolve_thread.assert_not_called()
+
+        assert len(result["resolution_results"]) == 1
+        res = result["resolution_results"][0]
+        assert res.replied is False
+        assert res.resolved is False
+        assert res.error is not None
+        assert "No commit" in res.error
+
+    async def test_failed_group_still_replies_when_no_commit(self) -> None:
+        """FAILED groups should still get reply even without commit_sha."""
+        state, config = _make_reply_resolve_state(
+            status=GroupFixStatus.FAILED,
+            error="Developer error",
+        )
+        state = state.model_copy(update={"commit_sha": None})
+        result, mock_gh = await self._run_node(state, config)
+
+        mock_gh.reply_to_comment.assert_called_once()
+        body = mock_gh.reply_to_comment.call_args[0][2]
+        assert "Developer error" in body
+        mock_gh.resolve_thread.assert_not_called()
 
     async def test_graph_includes_reply_resolve(self) -> None:
         from amelia.pipelines.pr_auto_fix.graph import create_pr_auto_fix_graph
