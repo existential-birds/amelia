@@ -269,6 +269,17 @@ def mock_git_operations() -> MagicMock:
 
 
 @pytest.fixture()
+def mock_local_worktree() -> MagicMock:
+    """Create a mock LocalWorktree that returns a fake worktree path."""
+    mock_cls = MagicMock()
+    mock_instance = AsyncMock()
+    mock_instance.__aenter__ = AsyncMock(return_value="/tmp/fake-worktree")
+    mock_instance.__aexit__ = AsyncMock(return_value=None)
+    mock_cls.return_value = mock_instance
+    return mock_cls
+
+
+@pytest.fixture()
 def orchestrator(
     event_bus: EventBus,
     github_pr_service: MagicMock,

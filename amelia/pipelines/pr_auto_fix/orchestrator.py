@@ -25,7 +25,7 @@ from amelia.server.models.state import (
 )
 from amelia.services.classifier import get_prompt_hash
 from amelia.services.github_pr import GitHubPRService
-from amelia.tools.git_utils import GitOperations
+from amelia.tools.git_utils import GitOperations, LocalWorktree
 
 
 # Maximum divergence retries per trigger (2 retries = 3 total attempts)
@@ -198,18 +198,28 @@ class PRAutoFixOrchestrator:
 
         for attempt in range(_MAX_DIVERGENCE_RETRIES + 1):
             try:
-                # Git operations serialized per repo — hold the lock for the
-                # entire cycle so another PR cannot switch branches mid-run.
-                repo_lock = self._get_repo_lock(profile.repo_root)
-                async with repo_lock:
-                    git_ops = GitOperations(profile.repo_root)
-                    await self._reset_to_remote(git_ops, head_branch)
-
-                    # Run the pipeline (classify -> develop -> commit -> push -> resolve)
+                if not head_branch:
+                    # No branch specified — skip worktree, run directly
                     await self._execute_pipeline(
                         pr_number,
                         repo,
                         profile,
+                        config,
+                        head_branch,
+                        pr_title=pr_title,
+                        comments=comments,
+                    )
+                    return  # Success
+
+                # Create isolated worktree for this PR fix cycle
+                worktree_id = f"pr-{pr_number}-{int(time.time())}"
+                async with LocalWorktree(profile.repo_root, head_branch, worktree_id) as worktree_path:
+                    # Override profile.repo_root to point at worktree
+                    wt_profile = profile.model_copy(update={"repo_root": str(worktree_path)})
+                    await self._execute_pipeline(
+                        pr_number,
+                        repo,
+                        wt_profile,
                         config,
                         head_branch,
                         pr_title=pr_title,

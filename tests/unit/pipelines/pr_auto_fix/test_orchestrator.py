@@ -77,16 +77,25 @@ class TestPRFixEventTypes:
 
 
 # ---------------------------------------------------------------------------
-# Autouse: patch GitOperations for all tests in this module
+# Autouse: patch LocalWorktree + GitOperations for all tests in this module
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)
-def _patch_git_operations(mock_git_operations: MagicMock) -> object:
-    """Auto-patch GitOperations for all tests in this module."""
-    with patch(
-        "amelia.pipelines.pr_auto_fix.orchestrator.GitOperations",
-        return_value=mock_git_operations,
+def _patch_worktree_and_git(
+    mock_local_worktree: MagicMock,
+    mock_git_operations: MagicMock,
+) -> object:
+    """Auto-patch LocalWorktree and GitOperations for all tests in this module."""
+    with (
+        patch(
+            "amelia.pipelines.pr_auto_fix.orchestrator.LocalWorktree",
+            mock_local_worktree,
+        ),
+        patch(
+            "amelia.pipelines.pr_auto_fix.orchestrator.GitOperations",
+            return_value=mock_git_operations,
+        ),
     ):
         yield
 
@@ -153,7 +162,7 @@ class TestConcurrencyControl:
         orchestrator: PRAutoFixOrchestrator,
         orch_profile: Profile,
     ) -> None:
-        """PRs on *different* repos run in parallel (separate repo locks)."""
+        """PRs on *different* repos run in parallel (separate worktrees)."""
         profile_a = orch_profile.model_copy(update={"repo_root": "/tmp/repo-a"})
         profile_b = orch_profile.model_copy(update={"repo_root": "/tmp/repo-b"})
 
@@ -181,33 +190,6 @@ class TestConcurrencyControl:
         both_running.set()
         await task1
         await task2
-
-    async def test_concurrent_same_repo_different_prs_serialized(
-        self,
-        orchestrator: PRAutoFixOrchestrator,
-        orch_profile: Profile,
-    ) -> None:
-        """PRs on the *same* repo are serialized by the repo lock."""
-        execution_order: list[int] = []
-
-        async def mock_execute(pr_number: int, *args: object, **kwargs: object) -> None:
-            execution_order.append(pr_number)
-            await asyncio.sleep(0.01)
-
-        orchestrator._execute_pipeline = AsyncMock(side_effect=mock_execute)  # type: ignore[method-assign]
-
-        task1 = asyncio.create_task(
-            orchestrator.trigger_fix_cycle(pr_number=42, repo="owner/repo", profile=orch_profile)
-        )
-        # Yield so task1 grabs the repo lock first
-        await asyncio.sleep(0)
-        task2 = asyncio.create_task(
-            orchestrator.trigger_fix_cycle(pr_number=99, repo="owner/repo", profile=orch_profile)
-        )
-
-        await asyncio.gather(task1, task2)
-        # PR 42 should finish before PR 99 starts
-        assert execution_order == [42, 99]
 
     async def test_pending_flag_is_boolean_latest_wins(
         self,
@@ -412,26 +394,107 @@ class TestCooldown:
 
 
 # ---------------------------------------------------------------------------
-# ORCH-03: Branch Safety & Divergence Recovery
+# ORCH-03: Worktree-based Branch Safety & Divergence Recovery
 # ---------------------------------------------------------------------------
 
 
-class TestDivergenceRecovery:
-    """Tests for branch reset and divergence retry logic."""
+class TestWorktreeIntegration:
+    """Tests for worktree creation, profile override, and cleanup."""
 
-    async def test_resets_to_remote_before_each_cycle(
+    async def test_fix_cycle_uses_worktree(
         self,
         orchestrator: PRAutoFixOrchestrator,
-        mock_git_operations: MagicMock,
+        mock_local_worktree: MagicMock,
         orch_profile: Profile,
     ) -> None:
+        """LocalWorktree is created with correct args and profile.repo_root is overridden."""
+        profiles_seen: list[str] = []
+
+        async def capture_profile(
+            pr_number: int,
+            repo: str,
+            profile: Profile,
+            *args: object,
+            **kwargs: object,
+        ) -> None:
+            profiles_seen.append(profile.repo_root)
+
+        orchestrator._execute_pipeline = AsyncMock(side_effect=capture_profile)  # type: ignore[method-assign]
+        await orchestrator.trigger_fix_cycle(
+            pr_number=42,
+            repo="owner/repo",
+            profile=orch_profile,
+            head_branch="feat/test",
+        )
+
+        # LocalWorktree should have been constructed
+        mock_local_worktree.assert_called_once()
+        call_args = mock_local_worktree.call_args
+        assert call_args[0][0] == orch_profile.repo_root  # repo_root
+        assert call_args[0][1] == "feat/test"  # branch
+
+        # Profile passed to _execute_pipeline should have worktree path
+        assert len(profiles_seen) == 1
+        assert profiles_seen[0] == "/tmp/fake-worktree"
+
+    async def test_fix_cycle_cleans_up_worktree_on_failure(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        mock_local_worktree: MagicMock,
+        orch_profile: Profile,
+    ) -> None:
+        """Worktree __aexit__ is called even when pipeline raises."""
+        exit_called = False
+        original_aexit = mock_local_worktree.return_value.__aexit__
+
+        async def tracking_aexit(self: object, *args: object) -> None:
+            nonlocal exit_called
+            exit_called = True
+            await original_aexit(*args)
+
+        mock_local_worktree.return_value.__aexit__ = tracking_aexit.__get__(
+            mock_local_worktree.return_value,
+        )
+
+        orchestrator._execute_pipeline = AsyncMock(  # type: ignore[method-assign]
+            side_effect=RuntimeError("Pipeline exploded"),
+        )
+        # RuntimeError is caught in _run_fix_cycle, not propagated
+        await orchestrator.trigger_fix_cycle(
+            pr_number=42,
+            repo="owner/repo",
+            profile=orch_profile,
+            head_branch="feat/test",
+        )
+        assert exit_called
+
+    async def test_fix_cycle_skips_worktree_when_no_branch(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        mock_local_worktree: MagicMock,
+        orch_profile: Profile,
+    ) -> None:
+        """Empty head_branch skips worktree creation (backward compat)."""
         orchestrator._execute_pipeline = AsyncMock()  # type: ignore[method-assign]
         await orchestrator.trigger_fix_cycle(
             pr_number=42,
             repo="owner/repo",
             profile=orch_profile,
+            head_branch="",
         )
-        mock_git_operations.fetch_origin.assert_awaited_once()
+
+        # LocalWorktree should NOT have been created
+        mock_local_worktree.assert_not_called()
+        # Pipeline should still run with original profile
+        orchestrator._execute_pipeline.assert_awaited_once()
+        call_kwargs = orchestrator._execute_pipeline.call_args
+        # profile arg (3rd positional) should have original repo_root
+        profile_arg = call_kwargs[1].get("profile") or call_kwargs[0][2]
+        assert profile_arg.repo_root == orch_profile.repo_root
+
+
+class TestDivergenceRecovery:
+    """Tests for divergence retry logic."""
 
     async def test_divergence_retries_up_to_two_times(
         self,
@@ -504,22 +567,6 @@ class TestDivergenceRecovery:
         assert call_args.kwargs["pr_number"] == 42
         assert "Could not apply fixes" in call_args.kwargs["body"]
 
-    async def test_head_branch_threaded_to_reset(
-        self,
-        orchestrator: PRAutoFixOrchestrator,
-        mock_git_operations: MagicMock,
-        orch_profile: Profile,
-    ) -> None:
-        orchestrator._execute_pipeline = AsyncMock()  # type: ignore[method-assign]
-        await orchestrator.trigger_fix_cycle(
-            pr_number=42,
-            repo="owner/repo",
-            profile=orch_profile,
-            head_branch="feat/my-branch",
-        )
-        mock_git_operations.fetch_origin.assert_awaited_once()
-        mock_git_operations.checkout_and_reset.assert_awaited_once_with("feat/my-branch")
-
     async def test_non_divergence_error_not_retried(
         self,
         orchestrator: PRAutoFixOrchestrator,
@@ -534,42 +581,6 @@ class TestDivergenceRecovery:
             profile=orch_profile,
         )
         assert orchestrator._execute_pipeline.await_count == 1
-
-
-# ---------------------------------------------------------------------------
-# Repo-level Git Serialization
-# ---------------------------------------------------------------------------
-
-
-class TestRepoLevelGitSerialization:
-    async def test_repo_lock_serializes_git_across_prs(
-        self,
-        orchestrator: PRAutoFixOrchestrator,
-        mock_git_operations: MagicMock,
-        orch_profile: Profile,
-    ) -> None:
-        git_in_progress = asyncio.Event()
-
-        async def slow_fetch(*args: object, **kwargs: object) -> None:
-            if git_in_progress.is_set():
-                pytest.fail("Repo-level git section overlapped across PRs")
-            git_in_progress.set()
-            try:
-                await asyncio.sleep(0.05)
-            finally:
-                git_in_progress.clear()
-
-        mock_git_operations.fetch_origin = AsyncMock(side_effect=slow_fetch)
-        orchestrator._execute_pipeline = AsyncMock()  # type: ignore[method-assign]
-
-        task1 = asyncio.create_task(
-            orchestrator.trigger_fix_cycle(pr_number=42, repo="owner/repo", profile=orch_profile)
-        )
-        task2 = asyncio.create_task(
-            orchestrator.trigger_fix_cycle(pr_number=99, repo="owner/repo", profile=orch_profile)
-        )
-        await asyncio.gather(task1, task2)
-        assert orchestrator._execute_pipeline.call_count == 2
 
 
 # ---------------------------------------------------------------------------
