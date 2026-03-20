@@ -1,9 +1,175 @@
 """Git utilities for repository operations."""
 
+from __future__ import annotations
+
 import asyncio
+import shutil
 from pathlib import Path
+from types import TracebackType
 
 from loguru import logger
+
+
+async def _run_git_cmd(
+    repo_root: Path,
+    *args: str,
+    check: bool = True,
+    timeout: float = 60.0,
+) -> str:
+    """Run a git command against a repo using create_subprocess_exec.
+
+    Args:
+        repo_root: Repository path to use as cwd.
+        *args: Git command arguments.
+        check: If True, raise ValueError on non-zero exit code.
+        timeout: Maximum time in seconds to wait.
+
+    Returns:
+        Command stdout as stripped string.
+
+    Raises:
+        ValueError: If command fails and check=True.
+    """
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        str(repo_root),
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(),
+            timeout=timeout,
+        )
+    except TimeoutError as e:
+        try:
+            process.kill()
+            await process.wait()
+        except ProcessLookupError:
+            pass
+        cmd_str = f"git -C {repo_root} {' '.join(args)}"
+        raise ValueError(f"Git command timed out after {timeout}s: {cmd_str}") from e
+
+    if check and process.returncode != 0:
+        stderr_text = stderr.decode().strip()
+        cmd_str = f"git -C {repo_root} {' '.join(args)}"
+        raise ValueError(f"{cmd_str} failed: {stderr_text}")
+
+    return stdout.decode().strip()
+
+
+class LocalWorktree:
+    """Async context manager for isolated git worktrees.
+
+    Creates a temporary worktree for a branch, yields the path,
+    and cleans up on exit. Used by PR autofix to avoid touching
+    the main checkout.
+    """
+
+    def __init__(self, repo_root: str | Path, branch: str, worktree_id: str) -> None:
+        self._repo_root = Path(repo_root)
+        self._branch = branch
+        self._worktree_id = worktree_id
+        self._worktree_path = self._repo_root.parent / ".amelia-worktrees" / worktree_id
+
+    @property
+    def path(self) -> Path:
+        """The filesystem path where the worktree will be created."""
+        return self._worktree_path
+
+    async def __aenter__(self) -> str:
+        """Create the worktree and return its path as a string.
+
+        1. Ensures parent .amelia-worktrees/ directory exists
+        2. Removes stale worktree if path already exists
+        3. Fetches origin
+        4. Creates detached worktree at origin/<branch>
+
+        Returns:
+            Worktree filesystem path as string.
+
+        Raises:
+            ValueError: If git worktree add fails.
+        """
+        # Ensure parent dir exists
+        self._worktree_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Remove stale worktree if path already exists
+        if self._worktree_path.exists():
+            logger.warning(
+                "Removing stale worktree path",
+                path=str(self._worktree_path),
+            )
+            try:
+                await _run_git_cmd(
+                    self._repo_root,
+                    "worktree",
+                    "remove",
+                    str(self._worktree_path),
+                    "--force",
+                    check=False,
+                )
+            except ValueError:
+                pass
+            # Fallback: rm -rf if git worktree remove didn't clean it
+            if self._worktree_path.exists():
+                shutil.rmtree(self._worktree_path, ignore_errors=True)
+
+        # Fetch origin
+        await _run_git_cmd(self._repo_root, "fetch", "origin")
+
+        # Create detached worktree at origin/<branch>
+        await _run_git_cmd(
+            self._repo_root,
+            "worktree",
+            "add",
+            str(self._worktree_path),
+            f"origin/{self._branch}",
+            "--detach",
+        )
+
+        logger.info(
+            "Created worktree",
+            path=str(self._worktree_path),
+            branch=self._branch,
+        )
+        return str(self._worktree_path)
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        """Remove the worktree. Never re-raises cleanup errors."""
+        try:
+            await _run_git_cmd(
+                self._repo_root,
+                "worktree",
+                "remove",
+                str(self._worktree_path),
+                "--force",
+            )
+            logger.info("Removed worktree", path=str(self._worktree_path))
+        except Exception as cleanup_exc:
+            logger.warning(
+                "Failed to remove worktree via git, falling back to rmtree",
+                path=str(self._worktree_path),
+                error=str(cleanup_exc),
+            )
+            shutil.rmtree(self._worktree_path, ignore_errors=True)
+            # Also prune stale worktree entries
+            try:
+                await _run_git_cmd(
+                    self._repo_root,
+                    "worktree",
+                    "prune",
+                    check=False,
+                )
+            except Exception:
+                pass
 
 
 async def get_current_commit(cwd: str | None = None) -> str | None:
