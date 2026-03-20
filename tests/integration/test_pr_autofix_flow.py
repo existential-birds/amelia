@@ -500,3 +500,430 @@ class TestPollerPassesComments:
         call_kwargs = mock_orchestrator.trigger_fix_cycle.call_args.kwargs
         assert "comments" in call_kwargs, "Poller must pass comments to trigger_fix_cycle"
         assert len(call_kwargs["comments"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# Test: Concurrent trigger queueing + cooldown
+# ---------------------------------------------------------------------------
+
+
+class TestConcurrentTriggerQueueing:
+    """Verify that concurrent trigger_fix_cycle calls queue properly."""
+
+    async def test_second_trigger_queued_while_first_running(
+        self,
+        profile: Profile,
+        comments: list[PRReviewComment],
+        event_bus: EventBus,
+    ) -> None:
+        """When a fix cycle is running for a PR, a second trigger should
+        queue (emit PR_FIX_QUEUED) and the pending cycle should run after
+        the first completes."""
+        from amelia.server.models.events import EventType
+
+        github_pr = MagicMock()
+        github_pr.create_issue_comment = AsyncMock()
+
+        orchestrator = PRAutoFixOrchestrator(
+            event_bus=event_bus,
+            github_pr_service=github_pr,
+        )
+
+        # Collect emitted events
+        emitted_events: list[Any] = []
+        event_bus.subscribe(lambda e: emitted_events.append(e))
+
+        # Track _execute_pipeline calls
+        execute_call_count = 0
+        execute_started = asyncio.Event()
+        execute_proceed = asyncio.Event()
+
+        async def fake_execute_pipeline(*args: Any, **kwargs: Any) -> None:
+            nonlocal execute_call_count
+            execute_call_count += 1
+            if execute_call_count == 1:
+                execute_started.set()
+                await execute_proceed.wait()
+            # Second call completes immediately
+
+        # Mock LocalWorktree as async context manager
+        mock_worktree_instance = AsyncMock()
+        mock_worktree_instance.__aenter__ = AsyncMock(return_value="/tmp/fake-worktree")
+        mock_worktree_instance.__aexit__ = AsyncMock(return_value=None)
+        mock_worktree_cls = MagicMock(return_value=mock_worktree_instance)
+
+        with (
+            patch.object(orchestrator, "_execute_pipeline", side_effect=fake_execute_pipeline),
+            patch(
+                "amelia.pipelines.pr_auto_fix.orchestrator.LocalWorktree",
+                mock_worktree_cls,
+            ),
+        ):
+            # Start first call in a task
+            task1 = asyncio.create_task(
+                orchestrator.trigger_fix_cycle(
+                    pr_number=42,
+                    repo="owner/repo",
+                    profile=profile,
+                    head_branch="feat/test",
+                    comments=comments,
+                )
+            )
+            # Wait for first execute to start
+            await execute_started.wait()
+
+            # Second call while first is running
+            await orchestrator.trigger_fix_cycle(
+                pr_number=42,
+                repo="owner/repo",
+                profile=profile,
+                head_branch="feat/test",
+                comments=comments,
+            )
+
+            # Let first call complete
+            execute_proceed.set()
+            await task1
+
+        # PR_FIX_QUEUED should have been emitted
+        queued_events = [e for e in emitted_events if e.event_type == EventType.PR_FIX_QUEUED]
+        assert len(queued_events) >= 1, "PR_FIX_QUEUED event must be emitted for queued trigger"
+
+        # _execute_pipeline should have been called twice (initial + pending)
+        assert execute_call_count == 2, (
+            f"Expected 2 _execute_pipeline calls (initial + pending), got {execute_call_count}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Test: Event emission sequence
+# ---------------------------------------------------------------------------
+
+
+class TestEventEmissionSequence:
+    """Verify PR_AUTO_FIX_STARTED and PR_AUTO_FIX_COMPLETED events."""
+
+    async def test_started_then_completed_events_emitted(
+        self,
+        profile: Profile,
+        comments: list[PRReviewComment],
+        event_bus: EventBus,
+    ) -> None:
+        """trigger_fix_cycle must emit PR_AUTO_FIX_STARTED followed by
+        PR_AUTO_FIX_COMPLETED, both with workflow_id and matching pr_number."""
+        from amelia.server.models.events import EventType
+
+        mock_workflow_repo = AsyncMock()
+        mock_workflow_repo.create = AsyncMock()
+        mock_workflow_repo.update = AsyncMock()
+
+        github_pr = MagicMock()
+        github_pr.create_issue_comment = AsyncMock()
+
+        orchestrator = PRAutoFixOrchestrator(
+            event_bus=event_bus,
+            github_pr_service=github_pr,
+            workflow_repo=mock_workflow_repo,
+        )
+
+        emitted_events: list[Any] = []
+        event_bus.subscribe(lambda e: emitted_events.append(e))
+
+        mock_driver = _mock_driver_for_classify([100, 101])
+        mock_dev = _mock_developer()
+
+        mock_git_ops = MagicMock()
+        mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
+        mock_git_ops.safe_push = AsyncMock()
+
+        mock_github_service = MagicMock()
+        mock_github_service.reply_to_comment = AsyncMock()
+        mock_github_service.resolve_thread = AsyncMock()
+
+        mock_worktree_instance = AsyncMock()
+        mock_worktree_instance.__aenter__ = AsyncMock(return_value="/tmp/fake-worktree")
+        mock_worktree_instance.__aexit__ = AsyncMock(return_value=None)
+        mock_worktree_cls = MagicMock(return_value=mock_worktree_instance)
+
+        with (
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.Developer",
+                return_value=mock_dev,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
+                return_value=mock_git_ops,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.orchestrator.LocalWorktree",
+                mock_worktree_cls,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService",
+                return_value=mock_github_service,
+            ),
+        ):
+            await orchestrator.trigger_fix_cycle(
+                pr_number=42,
+                repo="owner/repo",
+                profile=profile,
+                head_branch="feat/test",
+                comments=comments,
+            )
+
+        # Filter lifecycle events
+        started_events = [
+            e for e in emitted_events if e.event_type == EventType.PR_AUTO_FIX_STARTED
+        ]
+        completed_events = [
+            e for e in emitted_events if e.event_type == EventType.PR_AUTO_FIX_COMPLETED
+        ]
+
+        assert len(started_events) >= 1, "PR_AUTO_FIX_STARTED must be emitted"
+        assert len(completed_events) >= 1, "PR_AUTO_FIX_COMPLETED must be emitted"
+
+        # Verify order: STARTED before COMPLETED
+        started_idx = emitted_events.index(started_events[0])
+        completed_idx = emitted_events.index(completed_events[0])
+        assert started_idx < completed_idx, "STARTED must precede COMPLETED"
+
+        # Both must contain workflow_id in data
+        assert "workflow_id" in (started_events[0].data or {}), (
+            "PR_AUTO_FIX_STARTED must contain workflow_id in data"
+        )
+        assert "workflow_id" in (completed_events[0].data or {}), (
+            "PR_AUTO_FIX_COMPLETED must contain workflow_id in data"
+        )
+
+        # Both must have pr_number
+        assert started_events[0].data["pr_number"] == 42
+        assert completed_events[0].data["pr_number"] == 42
+
+
+# ---------------------------------------------------------------------------
+# Test: Divergence recovery -> retry -> success
+# ---------------------------------------------------------------------------
+
+
+class TestDivergenceRecovery:
+    """Verify divergence retry logic in the orchestrator."""
+
+    async def test_divergence_triggers_retry_and_succeeds(
+        self,
+        profile: Profile,
+        comments: list[PRReviewComment],
+        event_bus: EventBus,
+    ) -> None:
+        """When _execute_pipeline raises ValueError('diverged'), the orchestrator
+        should emit PR_FIX_DIVERGED and retry. Second attempt succeeds."""
+        from amelia.server.models.events import EventType
+
+        github_pr = MagicMock()
+        github_pr.create_issue_comment = AsyncMock()
+
+        orchestrator = PRAutoFixOrchestrator(
+            event_bus=event_bus,
+            github_pr_service=github_pr,
+        )
+
+        emitted_events: list[Any] = []
+        event_bus.subscribe(lambda e: emitted_events.append(e))
+
+        call_count = 0
+
+        async def fake_execute(
+            *args: Any, **kwargs: Any
+        ) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ValueError("branch diverged from remote")
+
+        mock_worktree_instance = AsyncMock()
+        mock_worktree_instance.__aenter__ = AsyncMock(return_value="/tmp/fake-worktree")
+        mock_worktree_instance.__aexit__ = AsyncMock(return_value=None)
+        mock_worktree_cls = MagicMock(return_value=mock_worktree_instance)
+
+        with (
+            patch.object(orchestrator, "_execute_pipeline", side_effect=fake_execute),
+            patch(
+                "amelia.pipelines.pr_auto_fix.orchestrator.LocalWorktree",
+                mock_worktree_cls,
+            ),
+        ):
+            await orchestrator.trigger_fix_cycle(
+                pr_number=42,
+                repo="owner/repo",
+                profile=profile,
+                head_branch="feat/test",
+                comments=comments,
+            )
+
+        # PR_FIX_DIVERGED should have been emitted
+        diverged_events = [
+            e for e in emitted_events if e.event_type == EventType.PR_FIX_DIVERGED
+        ]
+        assert len(diverged_events) >= 1, "PR_FIX_DIVERGED must be emitted on divergence"
+        assert diverged_events[0].data["attempt"] == 1
+
+        # _execute_pipeline should have been called 2 times (initial + retry)
+        assert call_count == 2, f"Expected 2 calls (initial + retry), got {call_count}"
+
+
+# ---------------------------------------------------------------------------
+# Test: Multi-file-group partial failure
+# ---------------------------------------------------------------------------
+
+
+class TestMultiFileGroupPartialFailure:
+    """Verify per-group error isolation in the pipeline."""
+
+    async def test_one_group_fixed_one_group_failed(
+        self,
+        profile: Profile,
+        event_bus: EventBus,
+    ) -> None:
+        """When two file groups are processed and the Developer fails on one,
+        the pipeline should produce one FIXED and one FAILED GroupFixResult."""
+        from amelia.agents.schemas.classifier import (
+            ClassificationOutput,
+            CommentCategory,
+            CommentClassification,
+        )
+
+        # Create comments across two different files
+        comments = [
+            PRReviewComment(
+                id=200,
+                body="Rename variable for clarity.",
+                author="reviewer1",
+                created_at=_NOW,
+                path="src/app.py",
+                line=10,
+                diff_hunk="@@ -8,3 +8,4 @@\n+x = 0",
+                thread_id="PRRT_thread_a",
+                pr_number=42,
+            ),
+            PRReviewComment(
+                id=201,
+                body="Add error handling here.",
+                author="reviewer2",
+                created_at=_NOW,
+                path="src/utils.py",
+                line=15,
+                diff_hunk="@@ -13,3 +13,4 @@\n+do_thing()",
+                thread_id="PRRT_thread_b",
+                pr_number=42,
+            ),
+        ]
+
+        # Mock driver to classify both as actionable
+        classification_output = ClassificationOutput(
+            classifications=[
+                CommentClassification(
+                    comment_id=200,
+                    category=CommentCategory.STYLE,
+                    confidence=0.95,
+                    actionable=True,
+                    reason="Naming",
+                ),
+                CommentClassification(
+                    comment_id=201,
+                    category=CommentCategory.BUG,
+                    confidence=0.90,
+                    actionable=True,
+                    reason="Missing error handling",
+                ),
+            ]
+        )
+
+        mock_driver = MagicMock()
+        mock_driver.generate = AsyncMock(return_value=(classification_output, None))
+
+        # Developer succeeds for src/app.py group, fails for src/utils.py group
+        dev_call_count = 0
+
+        def make_developer(*args: Any, **kwargs: Any) -> MagicMock:
+            nonlocal dev_call_count
+            dev_call_count += 1
+
+            if dev_call_count == 2:
+                # Second group fails
+                async def failing_run(state: Any, **kw: Any):
+                    raise RuntimeError("LLM refused to generate code")
+                    yield  # noqa: B027 - makes it a generator
+
+                dev = MagicMock()
+                dev.run = failing_run
+                return dev
+
+            # First group succeeds
+            return _mock_developer()
+
+        mock_git_ops = MagicMock()
+        mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops.stage_and_commit = AsyncMock(return_value="def5678")
+        mock_git_ops.safe_push = AsyncMock()
+
+        mock_github_service = MagicMock()
+        mock_github_service.reply_to_comment = AsyncMock()
+        mock_github_service.resolve_thread = AsyncMock()
+
+        graph = create_pr_auto_fix_graph()
+
+        initial_state = PRAutoFixState(
+            workflow_id=uuid4(),
+            profile_id=profile.name,
+            pr_number=42,
+            head_branch="feat/test",
+            repo="owner/repo",
+            comments=comments,
+            autofix_config=profile.pr_autofix,
+            created_at=datetime.now(tz=UTC),
+        )
+
+        config = {
+            "configurable": {
+                "thread_id": str(uuid4()),
+                "profile": profile,
+                "event_bus": event_bus,
+                "metrics_repo": None,
+                "metrics_run_id": None,
+            },
+        }
+
+        with (
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.Developer",
+                side_effect=make_developer,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
+                return_value=mock_git_ops,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService",
+                return_value=mock_github_service,
+            ),
+        ):
+            final_state = await graph.ainvoke(initial_state, config=config)
+
+        # Should have 2 group results
+        group_results = final_state["group_results"]
+        assert len(group_results) == 2, f"Expected 2 group results, got {len(group_results)}"
+
+        statuses = {r.status for r in group_results}
+        assert GroupFixStatus.FIXED in statuses, "One group should be FIXED"
+        assert GroupFixStatus.FAILED in statuses, "One group should be FAILED"
+
+        # Commit should still have happened for the fixed group
+        mock_git_ops.stage_and_commit.assert_called_once()
