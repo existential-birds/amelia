@@ -184,8 +184,9 @@ class TestDevelopNode:
         mock_dev_instance.run = fake_run
         mock_git = AsyncMock()
         mock_git.has_changes.return_value = True
-        # _run_git called twice per group: baseline (empty) then current (changed)
-        mock_git._run_git = AsyncMock(side_effect=["", "M src/app.py"])
+        # _run_git called 4x per group: baseline porcelain, baseline HEAD,
+        # current porcelain, current HEAD
+        mock_git._run_git = AsyncMock(side_effect=["", "abc123", "M src/app.py", "abc123"])
 
         with (
             patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
@@ -227,9 +228,9 @@ class TestDevelopNode:
         mock_dev_instance.run = fake_run
         mock_git = AsyncMock()
         mock_git.has_changes.return_value = True
-        # Two groups: first succeeds (baseline empty, current changed),
-        # second needs baseline before Developer raises
-        mock_git._run_git = AsyncMock(side_effect=["", "M src/good.py", ""])
+        # Two groups: first succeeds (baseline porcelain, baseline HEAD,
+        # current porcelain, current HEAD), second needs baseline before Developer raises
+        mock_git._run_git = AsyncMock(side_effect=["", "abc123", "M src/good.py", "abc123", "", "abc123"])
 
         with (
             patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
@@ -263,7 +264,7 @@ class TestDevelopNode:
         mock_dev_cls.return_value = mock_dev_instance
         mock_git = AsyncMock()
         mock_git.has_changes.return_value = True
-        mock_git._run_git = AsyncMock(side_effect=["", "M src/app.py"])
+        mock_git._run_git = AsyncMock(side_effect=["", "abc123", "M src/app.py", "abc123"])
 
         with (
             patch("amelia.pipelines.pr_auto_fix.nodes.Developer", mock_dev_cls),
@@ -307,8 +308,8 @@ class TestDevelopNode:
         mock_dev_instance.run = _fake_dev_run_success
         mock_git = AsyncMock()
         mock_git.has_changes.return_value = False
-        # Both baseline and current return empty -- no changes detected
-        mock_git._run_git = AsyncMock(side_effect=["", ""])
+        # Both baseline and current return empty porcelain, same HEAD -- no changes
+        mock_git._run_git = AsyncMock(side_effect=["", "abc123", "", "abc123"])
 
         with (
             patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
@@ -319,6 +320,96 @@ class TestDevelopNode:
         assert len(result["group_results"]) == 1
         assert result["group_results"][0].status == GroupFixStatus.NO_CHANGES
         assert result["agentic_status"] == AgenticStatus.COMPLETED
+
+    async def test_develop_detects_committed_changes_via_head_sha(self) -> None:
+        """Developer commits its own changes -- porcelain is clean but HEAD moves."""
+        c1 = make_comment(id=1, path="src/app.py", body="Fix this")
+        state = make_state(
+            comments=[c1],
+            file_groups={"src/app.py": [1]},
+            classified_comments=[make_classification(1)],
+        )
+
+        mock_dev_instance = MagicMock()
+        mock_dev_instance.run = _fake_dev_run_success
+        mock_git = AsyncMock()
+        mock_git.has_changes.return_value = False
+        # Porcelain empty both times, but HEAD SHA changes (Developer committed)
+        mock_git._run_git = AsyncMock(side_effect=[
+            "",          # baseline porcelain
+            "aaa111",    # baseline HEAD
+            "",          # current porcelain (still clean)
+            "bbb222",    # current HEAD (changed!)
+        ])
+
+        with (
+            patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
+            patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", return_value=mock_git),
+        ):
+            result = await develop_node(state, make_runnable_config())
+
+        assert len(result["group_results"]) == 1
+        assert result["group_results"][0].status == GroupFixStatus.FIXED
+
+    async def test_develop_detects_uncommitted_changes_only(self) -> None:
+        """Developer leaves uncommitted changes -- porcelain differs, HEAD same."""
+        c1 = make_comment(id=1, path="src/app.py", body="Fix this")
+        state = make_state(
+            comments=[c1],
+            file_groups={"src/app.py": [1]},
+            classified_comments=[make_classification(1)],
+        )
+
+        mock_dev_instance = MagicMock()
+        mock_dev_instance.run = _fake_dev_run_success
+        mock_git = AsyncMock()
+        mock_git.has_changes.return_value = True
+        # Porcelain changes but HEAD stays the same
+        mock_git._run_git = AsyncMock(side_effect=[
+            "",              # baseline porcelain
+            "aaa111",        # baseline HEAD
+            "M src/app.py",  # current porcelain (changed!)
+            "aaa111",        # current HEAD (same)
+        ])
+
+        with (
+            patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
+            patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", return_value=mock_git),
+        ):
+            result = await develop_node(state, make_runnable_config())
+
+        assert len(result["group_results"]) == 1
+        assert result["group_results"][0].status == GroupFixStatus.FIXED
+
+    async def test_develop_no_changes_when_both_match(self) -> None:
+        """No changes when both porcelain and HEAD SHA are identical."""
+        c1 = make_comment(id=1, path="src/app.py", body="Fix this")
+        state = make_state(
+            comments=[c1],
+            file_groups={"src/app.py": [1]},
+            classified_comments=[make_classification(1)],
+        )
+
+        mock_dev_instance = MagicMock()
+        mock_dev_instance.run = _fake_dev_run_success
+        mock_git = AsyncMock()
+        mock_git.has_changes.return_value = False
+        # Everything identical -- no changes
+        mock_git._run_git = AsyncMock(side_effect=[
+            "",          # baseline porcelain
+            "aaa111",    # baseline HEAD
+            "",          # current porcelain (same)
+            "aaa111",    # current HEAD (same)
+        ])
+
+        with (
+            patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
+            patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", return_value=mock_git),
+        ):
+            result = await develop_node(state, make_runnable_config())
+
+        assert len(result["group_results"]) == 1
+        assert result["group_results"][0].status == GroupFixStatus.NO_CHANGES
 
 
 # ---------------------------------------------------------------------------

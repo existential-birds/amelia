@@ -242,6 +242,7 @@ async def develop_node(
                 "status", "--porcelain", "--", ".", ":!.claude/",
             )
             baseline_files = set(baseline_status.strip().splitlines()) if baseline_status.strip() else set()
+            baseline_head = await git_ops._run_git("rev-parse", "HEAD")
 
             # Create Developer with PR-fix system prompt
             agent_config = profile.get_agent_config("developer")
@@ -276,7 +277,11 @@ async def develop_node(
                 "status", "--porcelain", "--", ".", ":!.claude/",
             )
             current_files = set(current_status.strip().splitlines()) if current_status.strip() else set()
-            group_introduced_changes = current_files != baseline_files
+            current_head = await git_ops._run_git("rev-parse", "HEAD")
+            group_introduced_changes = (
+                (current_files != baseline_files)
+                or (current_head.strip() != baseline_head.strip())
+            )
 
             if group_introduced_changes:
                 group_results.append(GroupFixResult(
