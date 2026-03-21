@@ -116,18 +116,50 @@ class LocalWorktree:
             if self._worktree_path.exists():
                 shutil.rmtree(self._worktree_path, ignore_errors=True)
 
+        # Prune stale worktree bookkeeping (e.g. leftover .git/worktrees entries
+        # after the directory was removed above).
+        await _run_git_cmd(
+            self._repo_root, "worktree", "prune", check=False
+        )
+
         # Fetch origin
         await _run_git_cmd(self._repo_root, "fetch", "origin")
 
         # Create detached worktree at origin/<branch>
-        await _run_git_cmd(
-            self._repo_root,
-            "worktree",
-            "add",
-            str(self._worktree_path),
-            f"origin/{self._branch}",
-            "--detach",
-        )
+        try:
+            await _run_git_cmd(
+                self._repo_root,
+                "worktree",
+                "add",
+                str(self._worktree_path),
+                f"origin/{self._branch}",
+                "--detach",
+            )
+        except ValueError:
+            # Retry once after aggressive cleanup — lock files or stale
+            # bookkeeping can survive the prune above.
+            logger.warning(
+                "Worktree add failed, retrying after forced cleanup",
+                path=str(self._worktree_path),
+            )
+            await _run_git_cmd(
+                self._repo_root,
+                "worktree",
+                "remove",
+                str(self._worktree_path),
+                "--force",
+                check=False,
+            )
+            shutil.rmtree(self._worktree_path, ignore_errors=True)
+            await _run_git_cmd(self._repo_root, "worktree", "prune", check=False)
+            await _run_git_cmd(
+                self._repo_root,
+                "worktree",
+                "add",
+                str(self._worktree_path),
+                f"origin/{self._branch}",
+                "--detach",
+            )
 
         logger.info(
             "Created worktree",

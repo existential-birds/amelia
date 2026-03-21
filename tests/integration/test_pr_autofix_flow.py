@@ -1208,7 +1208,7 @@ class TestAggressivenessFiltering:
             f"Expected empty file_groups at CRITICAL aggressiveness, got {final_state['file_groups']}"
         )
 
-        # Developer should NOT have been called (file_groups is empty, so develop_node skips)
+        # No commits should have been made (file_groups is empty, so develop_node skips)
         mock_git_ops.stage_and_commit.assert_not_called()
 
 

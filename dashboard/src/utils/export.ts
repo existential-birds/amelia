@@ -9,7 +9,7 @@
  */
 export function escapeCsvField(value: string | number): string {
   let text = String(value);
-  if (/^[=+\-@\t\0]/.test(text)) {
+  if (/^\s*[=+\-@\t\0]/.test(text)) {
     text = `'${text}`;
   }
   const needsQuote = /[",\n\r]/.test(text);
