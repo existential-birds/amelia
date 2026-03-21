@@ -184,6 +184,8 @@ class TestDevelopNode:
         mock_dev_instance.run = fake_run
         mock_git = AsyncMock()
         mock_git.has_changes.return_value = True
+        # _run_git called twice per group: baseline (empty) then current (changed)
+        mock_git._run_git = AsyncMock(side_effect=["", "M src/app.py"])
 
         with (
             patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
@@ -225,6 +227,9 @@ class TestDevelopNode:
         mock_dev_instance.run = fake_run
         mock_git = AsyncMock()
         mock_git.has_changes.return_value = True
+        # Two groups: first succeeds (baseline empty, current changed),
+        # second needs baseline before Developer raises
+        mock_git._run_git = AsyncMock(side_effect=["", "M src/good.py", ""])
 
         with (
             patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
@@ -258,6 +263,7 @@ class TestDevelopNode:
         mock_dev_cls.return_value = mock_dev_instance
         mock_git = AsyncMock()
         mock_git.has_changes.return_value = True
+        mock_git._run_git = AsyncMock(side_effect=["", "M src/app.py"])
 
         with (
             patch("amelia.pipelines.pr_auto_fix.nodes.Developer", mock_dev_cls),
@@ -301,6 +307,8 @@ class TestDevelopNode:
         mock_dev_instance.run = _fake_dev_run_success
         mock_git = AsyncMock()
         mock_git.has_changes.return_value = False
+        # Both baseline and current return empty -- no changes detected
+        mock_git._run_git = AsyncMock(side_effect=["", ""])
 
         with (
             patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),

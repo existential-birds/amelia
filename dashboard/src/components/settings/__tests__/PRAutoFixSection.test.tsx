@@ -14,6 +14,8 @@ const DEFAULT_CONFIG: PRAutoFixConfig = {
   post_push_cooldown_seconds: 30,
   max_cooldown_seconds: 120,
   poll_label: null,
+  ignore_authors: [],
+  confidence_threshold: 0.7,
 };
 
 describe('PRAutoFixSection', () => {

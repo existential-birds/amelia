@@ -146,7 +146,7 @@ class AmeliaClient:
             return
         elif response.status_code == 404:
             raise WorkflowNotFoundError(f"Workflow {workflow_id} not found")
-        elif response.status_code in (400, 409):
+        elif response.status_code in (400, 409, 422):
             data = response.json()
             raise InvalidRequestError(
                 data.get("detail", "Invalid request")
@@ -514,6 +514,8 @@ class AmeliaClient:
 
             if response.status_code == 202:
                 return TriggerPRAutoFixResponse.model_validate(response.json())
+            if response.status_code == 404:
+                raise WorkflowNotFoundError(f"Profile '{profile}' not found")
 
             self._handle_workflow_create_errors(response)
 
@@ -545,8 +547,10 @@ class AmeliaClient:
                 raise WorkflowNotFoundError(
                     f"Profile '{profile}' not found"
                 )
-            else:
+            elif response.status_code in (400, 422):
                 raise InvalidRequestError(f"Failed to list PRs: {response.json()}")
+            else:
+                response.raise_for_status()
 
         raise RuntimeError("Unexpected code path in list_prs")
 
@@ -578,12 +582,14 @@ class AmeliaClient:
                 raise WorkflowNotFoundError(
                     f"PR #{pr_number} or profile '{profile}' not found"
                 )
-            else:
+            elif response.status_code in (400, 422):
                 raise InvalidRequestError(
                     f"Failed to get PR comments: {response.json()}"
                 )
-
-        raise RuntimeError("Unexpected code path in get_pr_comments")
+            else:
+                raise InvalidRequestError(
+                    f"Failed to get PR comments: {response.status_code}"
+                )
 
     async def get_pr_autofix_status(self, profile: str) -> PRAutoFixStatusResponse:
         """Get PR auto-fix configuration status for a profile.

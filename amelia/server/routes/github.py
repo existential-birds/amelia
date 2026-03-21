@@ -354,11 +354,16 @@ async def trigger_pr_autofix(
         )
 
     service = GitHubPRService(resolved.repo_root)
-    pr_summary = await service.get_pr_summary(number)
-    comments = await service.fetch_review_comments(
-        number,
-        ignore_authors=resolved.pr_autofix.ignore_authors,
-    )
+    try:
+        pr_summary = await service.get_pr_summary(number)
+        comments = await service.fetch_review_comments(
+            number,
+            ignore_authors=resolved.pr_autofix.ignore_authors,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = 404 if "not found" in detail.lower() else 500
+        raise HTTPException(status_code=status_code, detail=detail) from exc
 
     repo = await _get_repo_name(resolved.repo_root)
 
@@ -378,6 +383,10 @@ async def trigger_pr_autofix(
         )
 
     orchestrator: PRAutoFixOrchestrator = request.app.state.pr_autofix_orchestrator
+    # This is a synthetic per-PR orchestration ID used for pre-pipeline event
+    # routing and concurrency tracking. The actual DB workflow ID is created
+    # inside _execute_pipeline() when the background task runs. Clients can
+    # discover the real workflow_id via PR_AUTO_FIX_STARTED events.
     workflow_id = orchestrator.get_workflow_id(repo, number)
 
     def _log_task_error(task: asyncio.Task[None]) -> None:

@@ -98,23 +98,24 @@ class MetricsRepository:
                 category, confidence, actionable, aggressiveness_level,
                 prompt_hash.
         """
-        for cls in classifications:
-            await self._db.execute(
-                """
-                INSERT INTO pr_autofix_classifications (
-                    run_id, comment_id, body_snippet, category,
-                    confidence, actionable, aggressiveness_level, prompt_hash
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                """,
-                run_id,
-                cls["comment_id"],
-                cls["body_snippet"],
-                cls["category"],
-                cls["confidence"],
-                cls["actionable"],
-                cls["aggressiveness_level"],
-                cls.get("prompt_hash"),
-            )
+        async with self._db.transaction():
+            for cls in classifications:
+                await self._db.execute(
+                    """
+                    INSERT INTO pr_autofix_classifications (
+                        run_id, comment_id, body_snippet, category,
+                        confidence, actionable, aggressiveness_level, prompt_hash
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    """,
+                    run_id,
+                    cls["comment_id"],
+                    cls["body_snippet"],
+                    cls["category"],
+                    cls["confidence"],
+                    cls["actionable"],
+                    cls["aggressiveness_level"],
+                    cls.get("prompt_hash"),
+                )
 
     async def get_metrics_summary(
         self,

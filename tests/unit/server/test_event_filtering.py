@@ -78,21 +78,15 @@ class TestPRAutoFixPersistence:
         [
             EventType.PR_AUTO_FIX_STARTED,
             EventType.PR_AUTO_FIX_COMPLETED,
+            EventType.PR_AUTO_FIX_FAILED,
+            EventType.PR_COMMENTS_DETECTED,
+            EventType.PR_COMMENTS_RESOLVED,
             EventType.PR_POLL_ERROR,
+            EventType.PR_POLL_RATE_LIMITED,
         ],
     )
     def test_persisted_events(self, event_type: EventType) -> None:
         assert event_type in PERSISTED_TYPES
-
-    @pytest.mark.parametrize(
-        "event_type",
-        [
-            EventType.PR_COMMENTS_DETECTED,
-            EventType.PR_COMMENTS_RESOLVED,
-        ],
-    )
-    def test_non_persisted_events(self, event_type: EventType) -> None:
-        assert event_type not in PERSISTED_TYPES
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +189,10 @@ class TestWorkflowDetailResponseFields:
     def test_pr_comments_accepts_list(self) -> None:
         comments = [{"comment_id": 1, "status": "fixed"}]
         detail = self._make_detail(pr_comments=comments)
-        assert detail.pr_comments == comments
+        assert detail.pr_comments is not None
+        assert len(detail.pr_comments) == 1
+        assert detail.pr_comments[0].comment_id == 1
+        assert detail.pr_comments[0].status == "fixed"
 
     def test_pr_fields_accept_values(self) -> None:
         detail = self._make_detail(
@@ -208,4 +205,6 @@ class TestWorkflowDetailResponseFields:
         assert detail.pr_number == 42
         assert detail.pr_title == "Fix: broken tests"
         assert detail.pr_comment_count == 5
-        assert detail.pr_comments == [{"comment_id": 1}]
+        assert detail.pr_comments is not None
+        assert len(detail.pr_comments) == 1
+        assert detail.pr_comments[0].comment_id == 1

@@ -123,6 +123,7 @@ class EventType(StrEnum):
     PR_COMMENTS_DETECTED = "pr_comments_detected"
     PR_AUTO_FIX_STARTED = "pr_auto_fix_started"
     PR_AUTO_FIX_COMPLETED = "pr_auto_fix_completed"
+    PR_AUTO_FIX_FAILED = "pr_auto_fix_failed"
     PR_COMMENTS_RESOLVED = "pr_comments_resolved"
     PR_POLL_ERROR = "pr_poll_error"
 
@@ -183,9 +184,13 @@ PERSISTED_TYPES: frozenset[EventType] = frozenset({
     EventType.PR_FIX_COOLDOWN_RESET,
     EventType.PR_FIX_RETRIES_EXHAUSTED,
     # PR Auto-Fix lifecycle
+    EventType.PR_COMMENTS_DETECTED,
     EventType.PR_AUTO_FIX_STARTED,
     EventType.PR_AUTO_FIX_COMPLETED,
+    EventType.PR_AUTO_FIX_FAILED,
+    EventType.PR_COMMENTS_RESOLVED,
     EventType.PR_POLL_ERROR,
+    EventType.PR_POLL_RATE_LIMITED,
 })
 
 _ERROR_TYPES: frozenset[EventType] = frozenset({
@@ -198,6 +203,7 @@ _ERROR_TYPES: frozenset[EventType] = frozenset({
     EventType.BRAINSTORM_MESSAGE_FAILED,
     EventType.PR_FIX_RETRIES_EXHAUSTED,
     EventType.PR_POLL_ERROR,
+    EventType.PR_AUTO_FIX_FAILED,
 })
 
 _WARNING_TYPES: frozenset[EventType] = frozenset({

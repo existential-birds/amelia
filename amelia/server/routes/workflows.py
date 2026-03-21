@@ -72,6 +72,10 @@ def _to_workflow_summary(
             else None
         ),
         total_duration_ms=token_summary.total_duration_ms if token_summary else None,
+        pipeline_type=workflow.workflow_type,
+        pr_number=workflow.issue_cache.get("pr_number") if workflow.issue_cache else None,
+        pr_title=workflow.issue_cache.get("pr_title") if workflow.issue_cache else None,
+        pr_comment_count=workflow.issue_cache.get("comment_count") if workflow.issue_cache else None,
     )
 
 

@@ -62,7 +62,7 @@ class PRAutoFixOrchestrator:
 
         # Per-PR concurrency control (keyed by (repo, pr_number))
         self._pr_locks: dict[tuple[str, int], asyncio.Lock] = {}
-        self._pr_pending: dict[tuple[str, int], bool] = {}
+        self._pr_pending: dict[tuple[str, int], dict[str, Any]] = {}
 
         # Cooldown interruption
         self._cooldown_events: dict[tuple[str, int], asyncio.Event] = {}
@@ -123,8 +123,14 @@ class PRAutoFixOrchestrator:
         lock = self._get_pr_lock(repo, pr_number)
 
         if lock.locked():
-            # Already running -- set pending flag (latest wins, no accumulation)
-            self._pr_pending[key] = True
+            # Already running -- store latest payload (latest wins, no accumulation)
+            self._pr_pending[key] = {
+                "comments": comments,
+                "head_branch": head_branch,
+                "pr_title": pr_title,
+                "profile": profile,
+                "effective_config": effective_config,
+            }
             # If in cooldown, reset the timer
             if key in self._cooldown_events:
                 self._cooldown_events[key].set()
@@ -160,17 +166,20 @@ class PRAutoFixOrchestrator:
             )
 
             # Process pending cycle if any (with cooldown between)
-            while self._pr_pending.pop(key, False):
-                await self._run_cooldown(repo, pr_number, effective_config)
+            pending_payload = self._pr_pending.pop(key, None)
+            while pending_payload is not None:
+                pending_config = pending_payload["effective_config"]
+                await self._run_cooldown(repo, pr_number, pending_config)
                 await self._run_fix_cycle(
                     pr_number=pr_number,
                     repo=repo,
-                    profile=profile,
-                    config=effective_config,
-                    head_branch=head_branch,
-                    pr_title=effective_title,
-                    comments=comments,
+                    profile=pending_payload["profile"],
+                    config=pending_config,
+                    head_branch=pending_payload["head_branch"],
+                    pr_title=pending_payload["pr_title"] or effective_title,
+                    comments=pending_payload["comments"],
                 )
+                pending_payload = self._pr_pending.pop(key, None)
 
     async def _run_fix_cycle(
         self,
@@ -484,7 +493,7 @@ class PRAutoFixOrchestrator:
 
             # Emit failure event so dashboard gets notified
             self._emit_event(
-                EventType.PR_AUTO_FIX_COMPLETED,
+                EventType.PR_AUTO_FIX_FAILED,
                 pr_number,
                 f"PR auto-fix failed for PR #{pr_number}: {exc}",
                 data={

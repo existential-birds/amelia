@@ -10,6 +10,19 @@ from amelia.server.models.state import WorkflowStatus
 from amelia.server.models.tokens import TokenSummary
 
 
+class PRCommentResponse(BaseModel):
+    """Resolution status of a single PR review comment."""
+
+    comment_id: int = Field(description="GitHub comment ID")
+    file_path: str | None = Field(default=None, description="File path the comment references")
+    line: int | None = Field(default=None, description="Line number the comment references")
+    body: str = Field(default="", description="Truncated comment body (max 200 chars)")
+    author: str | None = Field(default=None, description="Comment author login")
+    status: str = Field(default="skipped", description="Fix status: fixed, failed, or skipped")
+    resolved: bool = Field(default=False, description="Whether the GitHub thread was resolved")
+    replied: bool = Field(default=False, description="Whether the bot replied to the thread")
+
+
 class CreateWorkflowResponse(BaseModel):
     """Response from creating a new workflow."""
 
@@ -86,7 +99,7 @@ class WorkflowDetailResponse(BaseModel):
     pr_comment_count: int | None = Field(
         default=None, description="Comment count for PR Fix workflows"
     )
-    pr_comments: list[dict[str, Any]] | None = Field(
+    pr_comments: list[PRCommentResponse] | None = Field(
         default=None, description="PR comment resolution data from issue_cache"
     )
 

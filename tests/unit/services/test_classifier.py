@@ -156,8 +156,8 @@ class TestShouldSkipThread:
         # 3 Amelia replies, max_iterations=3, no new feedback after last Amelia reply
         assert should_skip_thread(thread, max_iterations=3) is True
 
-    def test_iteration_count_resets_on_new_feedback(self) -> None:
-        """Comment at iteration limit WITH new feedback is not skipped."""
+    def test_iteration_cap_is_hard_limit(self) -> None:
+        """Thread at iteration cap is skipped even with new feedback (hard cap)."""
         thread = [
             _comment(1, body="Fix this", created_at=datetime(2026, 3, 13, 10, 0, 0, tzinfo=UTC)),
             _comment(2, body=f"Done.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 11, 0, 0, tzinfo=UTC)),
@@ -167,7 +167,19 @@ class TestShouldSkipThread:
             _comment(6, body=f"Third fix.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 15, 0, 0, tzinfo=UTC)),
             _comment(7, body="Actually this needs more work", created_at=datetime(2026, 3, 13, 16, 0, 0, tzinfo=UTC)),
         ]
-        # 3 Amelia replies, max_iterations=3, BUT new feedback exists -> not skipped
+        # 3 Amelia replies, max_iterations=3 -> skipped (hard cap)
+        assert should_skip_thread(thread, max_iterations=3) is True
+
+    def test_iteration_resets_on_new_feedback_below_cap(self) -> None:
+        """Thread below iteration cap with new feedback is not skipped."""
+        thread = [
+            _comment(1, body="Fix this", created_at=datetime(2026, 3, 13, 10, 0, 0, tzinfo=UTC)),
+            _comment(2, body=f"Done.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 11, 0, 0, tzinfo=UTC)),
+            _comment(3, body="Try again", created_at=datetime(2026, 3, 13, 12, 0, 0, tzinfo=UTC)),
+            _comment(4, body=f"Done again.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 13, 0, 0, tzinfo=UTC)),
+            _comment(5, body="One more time", created_at=datetime(2026, 3, 13, 14, 0, 0, tzinfo=UTC)),
+        ]
+        # 2 Amelia replies, max_iterations=3, new feedback exists -> not skipped
         assert should_skip_thread(thread, max_iterations=3) is False
 
     def test_no_amelia_replies_not_skipped(self) -> None:

@@ -84,12 +84,12 @@ def should_skip_thread(
     """Determine whether a thread should be skipped.
 
     A thread is skipped when:
-    - Amelia has replied AND no new reviewer feedback exists after the last reply
-    - OR Amelia reply count >= max_iterations AND no new feedback (iteration limit)
+    - Amelia reply count >= max_iterations (hard cap, even with new feedback)
+    - OR Amelia has replied AND no new reviewer feedback exists after the last reply
 
     A thread is NOT skipped when:
     - No Amelia replies exist
-    - New reviewer feedback exists after Amelia's last reply (fresh feedback resets)
+    - Below max_iterations AND new reviewer feedback exists after Amelia's last reply
 
     Args:
         thread_comments: All comments in a review thread.
@@ -102,6 +102,9 @@ def should_skip_thread(
 
     if amelia_count == 0:
         return False
+
+    if amelia_count >= max_iterations:
+        return True  # Hit iteration cap
 
     # Fresh feedback resets iteration tracking; otherwise skip
     return not has_new_feedback_after_amelia(thread_comments)

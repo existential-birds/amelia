@@ -256,7 +256,7 @@ Classify every comment provided. Do not skip any.""",
 
 - Do not refactor unrelated code.
 - Do not change formatting or style unless the review comment specifically requests it.
-- If a comment is ambiguous, fix the most likely interpretation.
+- If a comment is ambiguous, do not guess. Report the ambiguity and skip that comment until the intent is clear.
 - Group related fixes into a single logical change.
 - Ensure all existing tests still pass after your changes.""",
     ),

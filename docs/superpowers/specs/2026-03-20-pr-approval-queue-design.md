@@ -127,7 +127,7 @@ The poller's `_processed_comments` tracking is unchanged for autonomous mode. Fo
 
 ### Storage
 
-In-memory `dict` keyed by `(repo, pr_number)`. Pending approvals are ephemeral — server restart loses them, next poll cycle recreates them. On recreation after restart, supervised timers compute remaining time from `expires_at - now` rather than restarting from zero.
+In-memory `dict` keyed by `(profile_id, repo, pr_number)`. Pending approvals are ephemeral — server restart loses them, next poll cycle recreates them. On recreation after restart, supervised timers compute remaining time from `expires_at - now` rather than restarting from zero.
 
 ### API Endpoints
 
@@ -386,7 +386,7 @@ Default `autonomous` preserves existing behavior. No migration needed — missin
 
 ### ai-elements
 
-The ai-elements component library (`/Users/ka/github/ai-elements`) is not currently a dependency of the dashboard. It must be added to `dashboard/package.json` before implementation. The library provides Queue, QueueItem, Tool, and Confirmation components used throughout the Approvals page. If adding the dependency is blocked, the same UI can be built with shadcn/ui Card + Collapsible + custom composition, but ai-elements is strongly preferred for consistency with the rest of the AI workflow UI.
+The ai-elements component library (`ai-elements`) is not currently a dependency of the dashboard. It must be added to `dashboard/package.json` before implementation. The library provides Queue, QueueItem, Tool, and Confirmation components used throughout the Approvals page. If adding the dependency is blocked, the same UI can be built with shadcn/ui Card + Collapsible + custom composition, but ai-elements is strongly preferred for consistency with the rest of the AI workflow UI.
 
 ## Future Considerations
 

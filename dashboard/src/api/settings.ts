@@ -83,6 +83,8 @@ export interface PRAutoFixConfig {
   resolve_no_changes: boolean;
   max_iterations: number;
   commit_prefix: string;
+  ignore_authors: string[];
+  confidence_threshold: number;
   post_push_cooldown_seconds: number;
   max_cooldown_seconds: number;
   poll_label: string | null;

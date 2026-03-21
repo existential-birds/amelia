@@ -308,15 +308,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.start_time = datetime.now(UTC)
     yield
 
-    # Shutdown - stop components in reverse order
-    # Wait for pending broadcast tasks before closing connections
-    await event_bus.cleanup()
-    # Close WebSocket connections
-    await connection_manager.close_all(code=1001, reason="Server shutting down")
-
+    # Shutdown - stop event producers first, then drain bus, then close connections
     await pr_poller.stop()
     await health_checker.stop()
     await lifecycle.shutdown()
+    await event_bus.cleanup()
+    await connection_manager.close_all(code=1001, reason="Server shutting down")
     if knowledge_service is not None:
         await knowledge_service.cleanup()
         clear_knowledge_service()

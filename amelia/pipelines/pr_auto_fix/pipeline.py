@@ -23,7 +23,7 @@ class PRAutoFixPipeline(Pipeline[PRAutoFixState]):
     """Pipeline for automatically fixing PR review comments.
 
     Implements the Pipeline protocol with a linear graph:
-    classify_node -> develop_node -> commit_push_node -> END
+    classify_node -> develop_node -> commit_push_node -> reply_resolve_node -> END
     """
 
     @property

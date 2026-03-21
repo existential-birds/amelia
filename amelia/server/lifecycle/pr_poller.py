@@ -279,7 +279,17 @@ class PRCommentPoller:
             cwd=repo_root,
         )
         stdout_bytes, _ = await proc.communicate()
-        data = json.loads(stdout_bytes.decode())
+        if proc.returncode != 0:
+            logger.warning(
+                "gh api /rate_limit failed",
+                returncode=proc.returncode,
+            )
+            return (5000, 5000, time.time() + 3600)
+        try:
+            data = json.loads(stdout_bytes.decode())
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse rate limit JSON response")
+            return (5000, 5000, time.time() + 3600)
         core = data.get("resources", {}).get("core", {})
         return (
             core.get("remaining", 5000),

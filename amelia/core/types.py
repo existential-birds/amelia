@@ -294,7 +294,11 @@ class PRAutoFixConfig(BaseModel):
     @classmethod
     def _parse_aggressiveness(cls, v: int | str | AggressivenessLevel) -> AggressivenessLevel:
         if isinstance(v, str):
-            return AggressivenessLevel[v.upper()]
+            try:
+                return AggressivenessLevel[v.upper()]
+            except KeyError as err:
+                valid = ", ".join(e.name for e in AggressivenessLevel)
+                raise ValueError(f"Invalid aggressiveness level: '{v}'. Valid values: {valid}") from err
         return AggressivenessLevel(v)
 
     @field_serializer("aggressiveness")

@@ -17,7 +17,7 @@ from amelia.agents.developer import Developer
 from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 from amelia.agents.schemas.classifier import CommentClassification
 from amelia.core.agentic_state import AgenticStatus
-from amelia.core.types import AgentConfig, PRReviewComment
+from amelia.core.types import PRReviewComment
 from amelia.drivers.factory import get_driver
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.pr_auto_fix.state import (
@@ -55,17 +55,25 @@ async def classify_node(
 
     _event_bus, _workflow_id, profile = extract_config_params(config)
 
-    # Create driver for classification
-    agent_config = AgentConfig(
-        driver=profile.agents["developer"].driver,
-        model=profile.agents["developer"].model,
+    # Create driver for classification using full developer agent config
+    agent_config = profile.get_agent_config("developer")
+    driver = get_driver(
+        agent_config.driver,
+        model=agent_config.model,
+        options=agent_config.options,
+        profile_name=agent_config.profile_name,
     )
-    driver = get_driver(agent_config.driver, model=agent_config.model)
+
+    # Build thread context by grouping comments by thread_id
+    all_thread_comments: dict[str, list[PRReviewComment]] = {}
+    for comment in state.comments:
+        if comment.thread_id is not None:
+            all_thread_comments.setdefault(comment.thread_id, []).append(comment)
 
     # Pre-filter: top-level only, skip already-handled threads
     filtered = filter_comments(
         state.comments,
-        {},  # Empty thread context -- threads pre-filtered by caller
+        all_thread_comments,
         state.autofix_config.max_iterations,
     )
 
@@ -216,6 +224,8 @@ async def develop_node(
 
     group_results: list[GroupFixResult] = []
 
+    git_ops = GitOperations(profile.repo_root)
+
     for file_path, comment_ids in state.file_groups.items():
         comments = [comments_by_id[cid] for cid in comment_ids if cid in comments_by_id]
 
@@ -226,6 +236,13 @@ async def develop_node(
         )
 
         try:
+            # Snapshot changed files before this group runs so we can detect
+            # whether THIS group introduced new changes (vs. prior groups).
+            baseline_status = await git_ops._run_git(
+                "status", "--porcelain", "--", ".", ":!.claude/",
+            )
+            baseline_files = set(baseline_status.strip().splitlines()) if baseline_status.strip() else set()
+
             # Create Developer with PR-fix system prompt
             agent_config = profile.get_agent_config("developer")
             dev = Developer(
@@ -253,9 +270,15 @@ async def develop_node(
             ):
                 final_state = updated_state
 
-            # Check if the Developer actually produced file changes
-            git_ops = GitOperations(profile.repo_root)
-            if await git_ops.has_changes():
+            # Check if THIS group introduced new file changes by comparing
+            # the current porcelain status against the pre-group baseline.
+            current_status = await git_ops._run_git(
+                "status", "--porcelain", "--", ".", ":!.claude/",
+            )
+            current_files = set(current_status.strip().splitlines()) if current_status.strip() else set()
+            group_introduced_changes = current_files != baseline_files
+
+            if group_introduced_changes:
                 group_results.append(GroupFixResult(
                     file_path=file_path,
                     status=GroupFixStatus.FIXED,
@@ -503,8 +526,8 @@ async def reply_resolve_node(
                 )
             )
 
-            # Resolve thread
-            if should_resolve:
+            # Resolve thread (only if reply was successfully posted)
+            if should_resolve and replied:
                 if comment.thread_id:
                     try:
                         await github_service.resolve_thread(comment.thread_id)
@@ -522,6 +545,12 @@ async def reply_resolve_node(
                         "No thread_id for comment, skipping resolve",
                         comment_id=comment.id,
                     )
+            elif should_resolve and not replied:
+                logger.warning(
+                    "Skipping thread resolve because reply was not posted",
+                    comment_id=comment.id,
+                    thread_id=comment.thread_id,
+                )
 
             resolution_results.append(
                 ResolutionResult(

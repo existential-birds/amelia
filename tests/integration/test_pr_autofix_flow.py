@@ -1,8 +1,16 @@
 """Integration tests for PR auto-fix end-to-end flow.
 
 Tests the full pipeline graph: classify_node → develop_node →
-commit_push_node → reply_resolve_node. Mocks only at external
-boundaries: LLM driver, Developer agent, git operations, GitHub API.
+commit_push_node → reply_resolve_node.
+
+Mocks at external boundaries: LLM driver, git operations, GitHub API.
+
+NOTE: Developer is also mocked as a pragmatic choice. Using the real
+Developer would require wiring up a mock driver that yields realistic
+AgenticMessage sequences through execute_agentic, plus an
+ImplementationState round-trip — complexity that doesn't add meaningful
+coverage for the *pipeline graph wiring* under test here. The Developer
+agent itself is covered by its own unit and integration tests.
 """
 
 from __future__ import annotations
@@ -146,7 +154,14 @@ def _mock_driver_for_classify(comment_ids: list[int]) -> MagicMock:
 
 
 def _mock_developer() -> MagicMock:
-    """Create a mock Developer whose run() yields one state then stops."""
+    """Create a mock Developer whose run() yields one state then stops.
+
+    Pragmatic mock: the real Developer internally calls get_driver() and
+    execute_agentic(), which would require a full AgenticMessage stream
+    to exercise. Since these tests focus on pipeline graph wiring (not
+    Developer internals), we replace Developer with a stub that passes
+    state through unchanged.
+    """
 
     async def fake_run(state: Any, **kwargs: Any):
         """Yield the state back unchanged (simulates successful fix)."""
@@ -163,7 +178,7 @@ def _mock_developer() -> MagicMock:
 
 
 class TestPipelineEndToEnd:
-    """Run the real LangGraph graph with mocks only at external boundaries."""
+    """Run the real LangGraph graph with mocks at external boundaries and Developer."""
 
     async def test_comments_flow_through_classify_to_develop(
         self,
@@ -202,6 +217,9 @@ class TestPipelineEndToEnd:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
+        # _run_git is called twice per group: once for baseline, once for current.
+        # Return empty first (baseline), then non-empty (current) to simulate changes.
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/foo.py"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
 
@@ -276,6 +294,7 @@ class TestPipelineEndToEnd:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=False)
+        mock_git_ops._run_git = AsyncMock(side_effect=["", ""])
         mock_git_ops.stage_and_commit = AsyncMock()
 
         mock_github_service = MagicMock()
@@ -378,6 +397,7 @@ class TestOrchestratorThreadsComments:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/changed.py"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
         mock_git_ops.fetch_origin = AsyncMock()
@@ -634,6 +654,7 @@ class TestEventEmissionSequence:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/changed.py"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
 
@@ -867,6 +888,9 @@ class TestMultiFileGroupPartialFailure:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
+        # _run_git: group 1 (success): baseline empty, current changed;
+        # group 2 (failure): baseline empty, then exception before current
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/good.py", ""])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="def5678")
         mock_git_ops.safe_push = AsyncMock()
 
@@ -1019,6 +1043,7 @@ class TestConfidenceThresholdFiltering:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/changed.py"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
 
@@ -1154,6 +1179,7 @@ class TestAggressivenessFiltering:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=False)
+        mock_git_ops._run_git = AsyncMock(side_effect=["", ""])
         mock_git_ops.stage_and_commit = AsyncMock()
 
         mock_github_service = MagicMock()
@@ -1208,8 +1234,7 @@ class TestAggressivenessFiltering:
             f"Expected empty file_groups at CRITICAL aggressiveness, got {final_state['file_groups']}"
         )
 
-        # Developer should NOT have been called
-        mock_dev.run.assert_not_called() if hasattr(mock_dev.run, 'assert_not_called') else None
+        # Developer should NOT have been called (file_groups is empty, so develop_node skips)
         mock_git_ops.stage_and_commit.assert_not_called()
 
 
@@ -1235,6 +1260,7 @@ class TestCommitMessageContent:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/changed.py"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
 
@@ -1339,6 +1365,7 @@ class TestWorkflowStatusLifecycle:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/changed.py"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
 
@@ -1431,6 +1458,7 @@ class TestMetricsPersistence:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/changed.py"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
 
