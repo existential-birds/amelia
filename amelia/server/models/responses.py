@@ -19,6 +19,7 @@ class PRCommentResponse(BaseModel):
     body: str = Field(default="", description="Truncated comment body (max 200 chars)")
     author: str | None = Field(default=None, description="Comment author login")
     status: str = Field(default="skipped", description="Fix status: fixed, failed, or skipped")
+    status_reason: str | None = Field(default=None, description="Reason for the status")
     resolved: bool = Field(default=False, description="Whether the GitHub thread was resolved")
     replied: bool = Field(default=False, description="Whether the bot replied to the thread")
 

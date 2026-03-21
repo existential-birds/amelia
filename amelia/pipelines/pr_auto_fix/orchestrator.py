@@ -531,6 +531,8 @@ class PRAutoFixOrchestrator:
         # Build lookup maps
         # comment_id -> group fix status
         comment_fix_status: dict[int, str] = {}
+        # comment_id -> reason string (why the comment was skipped/failed/etc.)
+        comment_status_reason: dict[int, str | None] = {}
         for result in group_results:
             result_dict = (
                 result
@@ -539,8 +541,16 @@ class PRAutoFixOrchestrator:
                 if hasattr(result, "model_dump")
                 else {}
             )
+            status = result_dict.get("status", "unknown")
             for cid in result_dict.get("comment_ids", []):
-                comment_fix_status[cid] = result_dict.get("status", "unknown")
+                comment_fix_status[cid] = status
+                if status == GroupFixStatus.NO_CHANGES:
+                    comment_status_reason[cid] = "No code changes needed"
+                elif status == GroupFixStatus.FAILED:
+                    comment_status_reason[cid] = result_dict.get("error")
+                else:
+                    # FIXED -> no reason needed
+                    comment_status_reason[cid] = None
 
         # Normalize NO_CHANGES -> skipped for dashboard compatibility
         for cid in comment_fix_status:
@@ -593,6 +603,9 @@ class PRAutoFixOrchestrator:
                         else None
                     ),
                     "status": status,
+                    "status_reason": comment_status_reason.get(
+                        cid, "Not actionable or filtered"
+                    ),
                     "resolved": resolution.get("resolved", False),
                     "replied": resolution.get("replied", False),
                 }
