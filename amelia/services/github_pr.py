@@ -166,10 +166,13 @@ class GitHubPRService:
 
         # Step 1: REST -- fetch all review comments
         rest_raw = await self._run_gh(
-            "api", "--paginate",
+            "api",
+            "--paginate",
+            "--slurp",
             f"/repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments",
         )
-        comments_data: list[dict[str, Any]] = json.loads(rest_raw)
+        comment_pages: list[list[dict[str, Any]]] = json.loads(rest_raw)
+        comments_data: list[dict[str, Any]] = [c for page in comment_pages for c in page]
 
         # Step 2: GraphQL -- get thread IDs and resolution status
         owner, repo_name = await self._resolve_owner_repo()
@@ -218,6 +221,10 @@ class GitHubPRService:
 
             # Filter: resolved threads
             thread_info = comment_thread_map.get(comment_id)
+            if thread_info is None:
+                parent_id = comment.get("in_reply_to_id")
+                if isinstance(parent_id, int):
+                    thread_info = comment_thread_map.get(parent_id)
             if thread_info is not None:
                 thread_id, is_resolved = thread_info
                 if is_resolved:

@@ -155,7 +155,7 @@ async def test_fetch_review_comments_returns_unresolved(
     service: GitHubPRService,
 ) -> None:
     """Fetch review comments filters out resolved threads and returns PRReviewComment."""
-    rest_proc = _make_mock_process(stdout=json.dumps(_REST_COMMENTS))
+    rest_proc = _make_mock_process(stdout=json.dumps([_REST_COMMENTS]))
     graphql_proc = _make_mock_process(stdout=json.dumps(_GRAPHQL_THREADS))
 
     with (
@@ -227,7 +227,7 @@ async def test_fetch_review_comments_captures_context_fields(
         },
     }
 
-    rest_proc = _make_mock_process(stdout=json.dumps(rest_data))
+    rest_proc = _make_mock_process(stdout=json.dumps([rest_data]))
     graphql_proc = _make_mock_process(stdout=json.dumps(graphql_data))
 
     with (
@@ -288,7 +288,7 @@ async def test_fetch_review_comments_outdated_line_preserved(
         },
     }
 
-    rest_proc = _make_mock_process(stdout=json.dumps(rest_data))
+    rest_proc = _make_mock_process(stdout=json.dumps([rest_data]))
     graphql_proc = _make_mock_process(stdout=json.dumps(graphql_data))
 
     with (
@@ -313,7 +313,7 @@ async def test_fetch_review_comments_skips_self_and_ignored(
     service: GitHubPRService,
 ) -> None:
     """Amelia footer comments and ignore-listed authors are filtered out."""
-    rest_proc = _make_mock_process(stdout=json.dumps(_REST_COMMENTS))
+    rest_proc = _make_mock_process(stdout=json.dumps([_REST_COMMENTS]))
     graphql_proc = _make_mock_process(stdout=json.dumps(_GRAPHQL_THREADS))
 
     with (

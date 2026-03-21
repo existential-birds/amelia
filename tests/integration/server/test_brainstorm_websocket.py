@@ -459,7 +459,7 @@ class TestBrainstormEventDataField:
         event = complete_events[0]
         assert event.data is not None, "Event data field must not be None"
         assert "session_id" in event.data, "Event must have session_id in data"
-        assert event.data["session_id"] == uuid.UUID(session_id)
+        assert event.data["session_id"] == session_id
         assert "message_id" in event.data, "Event must have message_id in data"
 
 

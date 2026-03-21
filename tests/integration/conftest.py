@@ -7,6 +7,7 @@ This module provides:
 
 import os
 import socket
+import uuid
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -514,7 +515,7 @@ def create_planning_graph_mock(
     return mock_graph
 
 
-async def await_planning_task(orchestrator: OrchestratorService, workflow_id: str) -> None:
+async def await_planning_task(orchestrator: OrchestratorService, workflow_id: uuid.UUID) -> None:
     import asyncio
 
     # Poll for task registration — the background task may not have added it yet
