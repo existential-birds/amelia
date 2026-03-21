@@ -845,3 +845,115 @@ class TestWorkflowCompletion:
         assert update_state.issue_cache["pr_number"] == 42
         assert update_state.issue_cache["pr_title"] == "PR #42"
         assert "comment_count" in update_state.issue_cache
+
+
+class TestBuildPrCommentsStatusReason:
+    """Tests that _build_pr_comments includes status_reason for each status type."""
+
+    def test_fixed_comment_has_none_status_reason(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+    ) -> None:
+        final_state = {
+            "comments": [
+                {"id": 1, "path": "src/main.py", "line": 10, "body": "Fix this", "author": "r1"},
+            ],
+            "group_results": [
+                {"file_path": "src/main.py", "status": "fixed", "comment_ids": [1], "error": None},
+            ],
+            "resolution_results": [],
+        }
+        result = orchestrator._build_pr_comments(final_state)
+        assert len(result) == 1
+        assert result[0]["status"] == "fixed"
+        assert result[0]["status_reason"] is None
+
+    def test_failed_comment_has_error_as_status_reason(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+    ) -> None:
+        final_state = {
+            "comments": [
+                {"id": 2, "path": "src/db.py", "line": 5, "body": "Fix query", "author": "r1"},
+            ],
+            "group_results": [
+                {
+                    "file_path": "src/db.py",
+                    "status": "failed",
+                    "comment_ids": [2],
+                    "error": "Circular dependency detected",
+                },
+            ],
+            "resolution_results": [],
+        }
+        result = orchestrator._build_pr_comments(final_state)
+        assert len(result) == 1
+        assert result[0]["status"] == "failed"
+        assert result[0]["status_reason"] == "Circular dependency detected"
+
+    def test_no_changes_comment_has_descriptive_status_reason(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+    ) -> None:
+        final_state = {
+            "comments": [
+                {"id": 3, "path": "src/util.py", "line": 1, "body": "Rename this", "author": "r1"},
+            ],
+            "group_results": [
+                {
+                    "file_path": "src/util.py",
+                    "status": "no_changes",
+                    "comment_ids": [3],
+                    "error": None,
+                },
+            ],
+            "resolution_results": [],
+        }
+        result = orchestrator._build_pr_comments(final_state)
+        assert len(result) == 1
+        assert result[0]["status"] == "no_changes"
+        assert result[0]["status_reason"] == "No code changes needed"
+
+    def test_ungrouped_comment_has_not_actionable_status_reason(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+    ) -> None:
+        """Comments not in any group_result get the default 'skipped' status
+        and 'Not actionable or filtered' reason."""
+        final_state = {
+            "comments": [
+                {"id": 4, "path": None, "line": None, "body": "Looks good overall", "author": "r2"},
+            ],
+            "group_results": [],
+            "resolution_results": [],
+        }
+        result = orchestrator._build_pr_comments(final_state)
+        assert len(result) == 1
+        assert result[0]["status"] == "skipped"
+        assert result[0]["status_reason"] == "Not actionable or filtered"
+
+    def test_mixed_statuses_all_have_status_reason(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+    ) -> None:
+        """All four status types in a single call produce correct status_reason values."""
+        final_state = {
+            "comments": [
+                {"id": 1, "path": "a.py", "line": 1, "body": "Fix", "author": "r1"},
+                {"id": 2, "path": "b.py", "line": 2, "body": "Fix", "author": "r1"},
+                {"id": 3, "path": "c.py", "line": 3, "body": "Fix", "author": "r1"},
+                {"id": 4, "path": None, "line": None, "body": "LGTM", "author": "r1"},
+            ],
+            "group_results": [
+                {"file_path": "a.py", "status": "fixed", "comment_ids": [1], "error": None},
+                {"file_path": "b.py", "status": "failed", "comment_ids": [2], "error": "Timeout"},
+                {"file_path": "c.py", "status": "no_changes", "comment_ids": [3], "error": None},
+            ],
+            "resolution_results": [],
+        }
+        result = orchestrator._build_pr_comments(final_state)
+        by_id = {c["comment_id"]: c for c in result}
+        assert by_id[1]["status_reason"] is None
+        assert by_id[2]["status_reason"] == "Timeout"
+        assert by_id[3]["status_reason"] == "No code changes needed"
+        assert by_id[4]["status_reason"] == "Not actionable or filtered"

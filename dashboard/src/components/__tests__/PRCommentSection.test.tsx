@@ -87,4 +87,13 @@ describe('PRCommentSection', () => {
     render(<PRCommentSection comments={mockComments} />);
     expect(screen.getByText('REVIEW COMMENTS')).toBeInTheDocument();
   });
+
+  it('renders status_reason text when a comment row is expanded', async () => {
+    render(<PRCommentSection comments={mockComments} />);
+    // The failed comment (3rd row, index 2) has status_reason 'Circular dependency detected'
+    const triggers = screen.getAllByRole('button');
+    // Click the 3rd trigger to expand the failed comment
+    await triggers[2].click();
+    expect(screen.getByText(/Circular dependency detected/)).toBeInTheDocument();
+  });
 });
