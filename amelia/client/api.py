@@ -139,7 +139,7 @@ class AmeliaClient:
 
         Raises:
             WorkflowNotFoundError: If workflow not found (404).
-            InvalidRequestError: If action invalid (400/409).
+            InvalidRequestError: If action invalid (400/409/422).
             httpx.HTTPStatusError: For other non-2xx status codes.
         """
         if response.status_code == 200:
