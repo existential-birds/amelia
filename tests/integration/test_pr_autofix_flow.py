@@ -4,13 +4,6 @@ Tests the full pipeline graph: classify_node → develop_node →
 commit_push_node → reply_resolve_node.
 
 Mocks at external boundaries: LLM driver, git operations, GitHub API.
-
-NOTE: Developer is also mocked as a pragmatic choice. Using the real
-Developer would require wiring up a mock driver that yields realistic
-AgenticMessage sequences through execute_agentic, plus an
-ImplementationState round-trip — complexity that doesn't add meaningful
-coverage for the *pipeline graph wiring* under test here. The Developer
-agent itself is covered by its own unit and integration tests.
 """
 
 from __future__ import annotations
@@ -28,6 +21,8 @@ from amelia.agents.schemas.classifier import (
     CommentCategory,
     CommentClassification,
 )
+from amelia.drivers.base import AgenticMessage, AgenticMessageType
+from tests.conftest import create_mock_execute_agentic
 from amelia.core.types import (
     AgentConfig,
     DriverType,
@@ -145,31 +140,17 @@ def orchestrator(event_bus: EventBus) -> PRAutoFixOrchestrator:
 # ---------------------------------------------------------------------------
 
 
-def _mock_driver_for_classify(comment_ids: list[int]) -> MagicMock:
-    """Create a mock driver that returns valid ClassificationOutput."""
+def _mock_unified_driver(comment_ids: list[int]) -> MagicMock:
+    """Create a mock driver for both classify (generate) and develop (execute_agentic)."""
     driver = MagicMock()
+    # classify_node uses driver.generate()
     output = _make_classification_output(comment_ids)
     driver.generate = AsyncMock(return_value=(output, None))
+    # Developer.run() uses driver.execute_agentic()
+    driver.execute_agentic = create_mock_execute_agentic([
+        AgenticMessage(type=AgenticMessageType.RESULT, content="Applied fix."),
+    ])
     return driver
-
-
-def _mock_developer() -> MagicMock:
-    """Create a mock Developer whose run() yields one state then stops.
-
-    Pragmatic mock: the real Developer internally calls get_driver() and
-    execute_agentic(), which would require a full AgenticMessage stream
-    to exercise. Since these tests focus on pipeline graph wiring (not
-    Developer internals), we replace Developer with a stub that passes
-    state through unchanged.
-    """
-
-    async def fake_run(state: Any, **kwargs: Any):
-        """Yield the state back unchanged (simulates successful fix)."""
-        yield state, None
-
-    dev = MagicMock()
-    dev.run = fake_run
-    return dev
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +159,7 @@ def _mock_developer() -> MagicMock:
 
 
 class TestPipelineEndToEnd:
-    """Run the real LangGraph graph with mocks at external boundaries and Developer."""
+    """Run the real LangGraph graph with mocks at external boundaries."""
 
     async def test_comments_flow_through_classify_to_develop(
         self,
@@ -212,8 +193,7 @@ class TestPipelineEndToEnd:
             },
         }
 
-        mock_driver = _mock_driver_for_classify([100, 101])
-        mock_dev = _mock_developer()
+        mock_driver = _mock_unified_driver([100, 101])
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
@@ -233,8 +213,8 @@ class TestPipelineEndToEnd:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.pipelines.pr_auto_fix.nodes.Developer",
-                return_value=mock_dev,
+                "amelia.agents.developer.get_driver",
+                return_value=mock_driver,
             ),
             patch(
                 "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
@@ -392,8 +372,7 @@ class TestOrchestratorThreadsComments:
         """trigger_fix_cycle must pass comments and autofix_config
         through to the graph execution."""
 
-        mock_driver = _mock_driver_for_classify([100, 101])
-        mock_dev = _mock_developer()
+        mock_driver = _mock_unified_driver([100, 101])
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
@@ -419,8 +398,8 @@ class TestOrchestratorThreadsComments:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.pipelines.pr_auto_fix.nodes.Developer",
-                return_value=mock_dev,
+                "amelia.agents.developer.get_driver",
+                return_value=mock_driver,
             ),
             patch(
                 "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
@@ -649,8 +628,7 @@ class TestEventEmissionSequence:
         emitted_events: list[Any] = []
         event_bus.subscribe(lambda e: emitted_events.append(e))
 
-        mock_driver = _mock_driver_for_classify([100, 101])
-        mock_dev = _mock_developer()
+        mock_driver = _mock_unified_driver([100, 101])
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
@@ -673,8 +651,8 @@ class TestEventEmissionSequence:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.pipelines.pr_auto_fix.nodes.Developer",
-                return_value=mock_dev,
+                "amelia.agents.developer.get_driver",
+                return_value=mock_driver,
             ),
             patch(
                 "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
@@ -867,24 +845,16 @@ class TestMultiFileGroupPartialFailure:
         mock_driver.generate = AsyncMock(return_value=(classification_output, None))
 
         # Developer succeeds for src/app.py group, fails for src/utils.py group
-        dev_call_count = 0
+        call_count = 0
 
-        def make_developer(*args: Any, **kwargs: Any) -> MagicMock:
-            nonlocal dev_call_count
-            dev_call_count += 1
+        async def execute_agentic_with_failure(*args: Any, **kwargs: Any):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise RuntimeError("LLM refused to generate code")
+            yield AgenticMessage(type=AgenticMessageType.RESULT, content="Applied fix.")
 
-            if dev_call_count == 2:
-                # Second group fails
-                async def failing_run(state: Any, **kw: Any):
-                    raise RuntimeError("LLM refused to generate code")
-                    yield  # noqa: B027 - makes it a generator
-
-                dev = MagicMock()
-                dev.run = failing_run
-                return dev
-
-            # First group succeeds
-            return _mock_developer()
+        mock_driver.execute_agentic = execute_agentic_with_failure
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
@@ -927,8 +897,8 @@ class TestMultiFileGroupPartialFailure:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.pipelines.pr_auto_fix.nodes.Developer",
-                side_effect=make_developer,
+                "amelia.agents.developer.get_driver",
+                return_value=mock_driver,
             ),
             patch(
                 "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
@@ -1038,8 +1008,9 @@ class TestConfidenceThresholdFiltering:
 
         mock_driver = MagicMock()
         mock_driver.generate = AsyncMock(return_value=(classification_output, None))
-
-        mock_dev = _mock_developer()
+        mock_driver.execute_agentic = create_mock_execute_agentic([
+            AgenticMessage(type=AgenticMessageType.RESULT, content="Applied fix."),
+        ])
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
@@ -1080,8 +1051,8 @@ class TestConfidenceThresholdFiltering:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.pipelines.pr_auto_fix.nodes.Developer",
-                return_value=mock_dev,
+                "amelia.agents.developer.get_driver",
+                return_value=mock_driver,
             ),
             patch(
                 "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
@@ -1174,8 +1145,9 @@ class TestAggressivenessFiltering:
 
         mock_driver = MagicMock()
         mock_driver.generate = AsyncMock(return_value=(classification_output, None))
-
-        mock_dev = _mock_developer()
+        mock_driver.execute_agentic = create_mock_execute_agentic([
+            AgenticMessage(type=AgenticMessageType.RESULT, content="Applied fix."),
+        ])
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=False)
@@ -1215,8 +1187,8 @@ class TestAggressivenessFiltering:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.pipelines.pr_auto_fix.nodes.Developer",
-                return_value=mock_dev,
+                "amelia.agents.developer.get_driver",
+                return_value=mock_driver,
             ),
             patch(
                 "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
@@ -1255,8 +1227,7 @@ class TestCommitMessageContent:
         """Commit message must start with commit_prefix and reference
         the addressed comments."""
 
-        mock_driver = _mock_driver_for_classify([100, 101])
-        mock_dev = _mock_developer()
+        mock_driver = _mock_unified_driver([100, 101])
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
@@ -1297,8 +1268,8 @@ class TestCommitMessageContent:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.pipelines.pr_auto_fix.nodes.Developer",
-                return_value=mock_dev,
+                "amelia.agents.developer.get_driver",
+                return_value=mock_driver,
             ),
             patch(
                 "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
@@ -1360,8 +1331,7 @@ class TestWorkflowStatusLifecycle:
             workflow_repo=mock_workflow_repo,
         )
 
-        mock_driver = _mock_driver_for_classify([100, 101])
-        mock_dev = _mock_developer()
+        mock_driver = _mock_unified_driver([100, 101])
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
@@ -1384,8 +1354,8 @@ class TestWorkflowStatusLifecycle:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.pipelines.pr_auto_fix.nodes.Developer",
-                return_value=mock_dev,
+                "amelia.agents.developer.get_driver",
+                return_value=mock_driver,
             ),
             patch(
                 "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
@@ -1453,8 +1423,7 @@ class TestMetricsPersistence:
             metrics_repo=mock_metrics_repo,
         )
 
-        mock_driver = _mock_driver_for_classify([100, 101])
-        mock_dev = _mock_developer()
+        mock_driver = _mock_unified_driver([100, 101])
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
@@ -1477,8 +1446,8 @@ class TestMetricsPersistence:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.pipelines.pr_auto_fix.nodes.Developer",
-                return_value=mock_dev,
+                "amelia.agents.developer.get_driver",
+                return_value=mock_driver,
             ),
             patch(
                 "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
