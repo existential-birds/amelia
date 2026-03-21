@@ -911,7 +911,7 @@ class TestBuildPrCommentsStatusReason:
         }
         result = orchestrator._build_pr_comments(final_state)
         assert len(result) == 1
-        assert result[0]["status"] == "no_changes"
+        assert result[0]["status"] == "skipped"  # NO_CHANGES normalized to "skipped"
         assert result[0]["status_reason"] == "No code changes needed"
 
     def test_ungrouped_comment_has_not_actionable_status_reason(
