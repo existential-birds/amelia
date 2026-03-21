@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from typer.testing import CliRunner
 
 from amelia.client.api import ServerUnreachableError
@@ -26,29 +25,6 @@ def _invoke_fix_pr(args: list[str], mock_client: AsyncMock, mock_summary: Workfl
 
 class TestFixPRCommand:
     """Tests for the fix-pr CLI command."""
-
-    @pytest.fixture
-    def mock_client(self) -> AsyncMock:
-        """Create a mock AmeliaClient with default success behavior."""
-        client = AsyncMock()
-        client.get_pr_autofix_status.return_value = AsyncMock(
-            enabled=True,
-            config=AsyncMock(),
-        )
-        client.trigger_pr_autofix.return_value = AsyncMock(
-            workflow_id="wf-test-123",
-        )
-        return client
-
-    @pytest.fixture
-    def mock_summary(self) -> WorkflowSummary:
-        """Create a default WorkflowSummary."""
-        return WorkflowSummary(
-            fixed=2,
-            skipped=1,
-            failed=0,
-            commit_sha="abc123def456",
-        )
 
     def test_happy_path(self, mock_client: AsyncMock, mock_summary: WorkflowSummary) -> None:
         """fix-pr triggers fix, streams events, prints summary."""

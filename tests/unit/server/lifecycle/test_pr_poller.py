@@ -27,13 +27,6 @@ from amelia.server.models.events import _WARNING_TYPES, EventType
 
 
 @pytest.fixture()
-def mock_profile_repo() -> AsyncMock:
-    """Mock ProfileRepository with list_profiles."""
-    repo = AsyncMock()
-    return repo
-
-
-@pytest.fixture()
 def mock_settings_repo() -> AsyncMock:
     """Mock SettingsRepository with get_server_settings."""
     repo = AsyncMock()
@@ -176,7 +169,7 @@ class TestListLabeledPRs:
 
 @pytest.fixture()
 def poller(
-    mock_profile_repo: AsyncMock,
+    mock_profile_repo: MagicMock,
     mock_settings_repo: AsyncMock,
     mock_orchestrator: AsyncMock,
     mock_event_bus: MagicMock,
@@ -253,7 +246,7 @@ class TestPollAllProfiles:
     async def test_skips_profiles_without_pr_autofix(
         self,
         poller: PRCommentPoller,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         sample_profile_no_autofix: Profile,
     ) -> None:
         mock_profile_repo.list_profiles.return_value = [sample_profile_no_autofix]
@@ -269,7 +262,7 @@ class TestPollAllProfiles:
     async def test_polls_only_profiles_whose_next_poll_time_has_passed(
         self,
         poller: PRCommentPoller,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         sample_profile: Profile,
     ) -> None:
         mock_profile_repo.list_profiles.return_value = [sample_profile]
@@ -287,7 +280,7 @@ class TestPollAllProfiles:
     async def test_polls_eligible_profile(
         self,
         poller: PRCommentPoller,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         sample_profile: Profile,
     ) -> None:
         mock_profile_repo.list_profiles.return_value = [sample_profile]
@@ -304,7 +297,7 @@ class TestPollAllProfiles:
     async def test_sets_next_poll_before_polling(
         self,
         poller: PRCommentPoller,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         sample_profile: Profile,
     ) -> None:
         """next_poll is set BEFORE _poll_profile is called (prevents overlap)."""
@@ -442,7 +435,7 @@ class TestRateLimit:
     async def test_rate_limit_backoff_emits_event(
         self,
         poller: PRCommentPoller,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         mock_event_bus: MagicMock,
         sample_profile: Profile,
     ) -> None:
@@ -470,7 +463,7 @@ class TestExceptionResilience:
     async def test_exception_in_poll_profile_is_caught(
         self,
         poller: PRCommentPoller,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         sample_profile: Profile,
     ) -> None:
         mock_profile_repo.list_profiles.return_value = [sample_profile]
@@ -494,7 +487,7 @@ class TestRuntimeToggle:
         self,
         poller: PRCommentPoller,
         mock_settings_repo: AsyncMock,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
     ) -> None:
         settings = MagicMock()
         settings.pr_polling_enabled = False
@@ -515,7 +508,7 @@ class TestNoOverlap:
     async def test_next_poll_set_before_polling_starts(
         self,
         poller: PRCommentPoller,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         sample_profile: Profile,
     ) -> None:
         mock_profile_repo.list_profiles.return_value = [sample_profile]

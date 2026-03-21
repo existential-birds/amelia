@@ -13,13 +13,8 @@ from amelia.services.github_pr import AMELIA_FOOTER, GitHubPRService
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Helpers
 # ---------------------------------------------------------------------------
-
-@pytest.fixture
-def service(tmp_path: object) -> GitHubPRService:
-    """Create a GitHubPRService with a temporary repo root."""
-    return GitHubPRService(repo_root=str(tmp_path))
 
 
 def _make_mock_process(

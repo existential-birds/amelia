@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from typer.testing import CliRunner
 
 from amelia.client.api import PRCommentsResponse, ServerUnreachableError
@@ -32,19 +31,6 @@ def _invoke_watch_pr(args: list[str], mock_client: AsyncMock, mock_summary: Work
 
 class TestWatchPRCommand:
     """Tests for the watch-pr CLI command."""
-
-    @pytest.fixture
-    def mock_client(self) -> AsyncMock:
-        """Create a mock AmeliaClient with default behavior."""
-        client = AsyncMock()
-        client.get_pr_autofix_status.return_value = AsyncMock(enabled=True)
-        client.trigger_pr_autofix.return_value = AsyncMock(workflow_id="wf-watch-1")
-        return client
-
-    @pytest.fixture
-    def mock_summary(self) -> WorkflowSummary:
-        """Default workflow summary."""
-        return WorkflowSummary(fixed=1, skipped=0, failed=0, commit_sha="abc123")
 
     def test_auto_stop_zero_comments(
         self, mock_client: AsyncMock, mock_summary: WorkflowSummary

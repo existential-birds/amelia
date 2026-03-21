@@ -1,5 +1,4 @@
 """Tests for config routes."""
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -7,35 +6,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from amelia.core.types import AgentConfig, Profile
-from amelia.server.database.settings_repository import ServerSettings
 from amelia.server.dependencies import get_profile_repository, get_settings_repository
 from amelia.server.routes.config import router
 
-
-def _make_server_settings(**overrides: object) -> ServerSettings:
-    """Create ServerSettings with sensible defaults, overridable per-field."""
-    defaults = dict(
-        log_retention_days=30,
-        checkpoint_retention_days=0,
-        websocket_idle_timeout_seconds=300.0,
-        workflow_start_timeout_seconds=30.0,
-        max_concurrent=5,
-        pr_polling_enabled=False,
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
-    )
-    return ServerSettings(**{**defaults, **overrides})  # type: ignore[arg-type]
+from .conftest import _make_server_settings
 
 
 class TestGetConfig:
     """Tests for GET /api/config endpoint."""
-
-    @pytest.fixture
-    def mock_profile_repo(self) -> MagicMock:
-        """Create a mock profile repository."""
-        repo = MagicMock()
-        repo.get_active_profile = AsyncMock(return_value=None)
-        return repo
 
     @pytest.fixture
     def mock_settings_repo(self) -> MagicMock:

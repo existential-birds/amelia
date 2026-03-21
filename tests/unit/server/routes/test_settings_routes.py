@@ -1,6 +1,5 @@
 # tests/unit/server/routes/test_settings_routes.py
 """Tests for settings API routes."""
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -8,14 +7,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
-from amelia.server.database import ServerSettings
 from amelia.server.dependencies import get_profile_repository, get_settings_repository
 from amelia.server.routes.settings import router
 
+from .conftest import _make_server_settings
+
 
 # --- Shared constants ---
-
-_DEFAULT_TIMESTAMP = datetime(2024, 1, 1, 12, 0, 0)
 
 _REQUIRED_AGENTS = (
     "architect", "developer", "reviewer",
@@ -30,22 +28,6 @@ def _full_agents_json(
     base = {name: {"driver": driver, "model": model} for name in _REQUIRED_AGENTS}
     base.update(overrides)
     return base
-
-
-def _make_server_settings(**overrides) -> ServerSettings:
-    """Build ServerSettings with defaults."""
-    defaults = dict(
-        log_retention_days=30,
-        checkpoint_retention_days=0,
-        websocket_idle_timeout_seconds=300.0,
-        workflow_start_timeout_seconds=60.0,
-        max_concurrent=5,
-        pr_polling_enabled=False,
-        created_at=_DEFAULT_TIMESTAMP,
-        updated_at=_DEFAULT_TIMESTAMP,
-    )
-    defaults.update(overrides)
-    return ServerSettings(**defaults)
 
 
 def make_test_profile(
@@ -89,21 +71,6 @@ def app(mock_repo: MagicMock) -> FastAPI:
 def client(app: FastAPI) -> TestClient:
     """Create test client."""
     return TestClient(app)
-
-
-
-@pytest.fixture
-def mock_profile_repo() -> MagicMock:
-    """Create mock profile repository."""
-    repo = MagicMock()
-    repo.list_profiles = AsyncMock()
-    repo.create_profile = AsyncMock()
-    repo.get_profile = AsyncMock()
-    repo.get_active_profile = AsyncMock(return_value=None)
-    repo.update_profile = AsyncMock()
-    repo.delete_profile = AsyncMock()
-    repo.set_active = AsyncMock()
-    return repo
 
 
 @pytest.fixture

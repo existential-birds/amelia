@@ -15,6 +15,20 @@ from amelia.server.database.connection import Database
 from amelia.server.dependencies import get_repository
 
 
+@pytest.fixture
+def mock_profile_repo() -> MagicMock:
+    """Create mock profile repository (superset of all route/lifecycle needs)."""
+    repo = MagicMock()
+    repo.list_profiles = AsyncMock()
+    repo.create_profile = AsyncMock()
+    repo.get_profile = AsyncMock()
+    repo.get_active_profile = AsyncMock(return_value=None)
+    repo.update_profile = AsyncMock()
+    repo.delete_profile = AsyncMock()
+    repo.set_active = AsyncMock()
+    return repo
+
+
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql://amelia:amelia@localhost:5434/amelia_test",

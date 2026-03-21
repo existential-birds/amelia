@@ -11,11 +11,6 @@ from amelia.core.types import PRSummary
 from amelia.services.github_pr import GitHubPRService
 
 
-@pytest.fixture
-def service() -> GitHubPRService:
-    return GitHubPRService(repo_root="/tmp/test-repo")
-
-
 class TestGetPRSummary:
     async def test_returns_pr_summary_for_valid_pr(self, service: GitHubPRService) -> None:
         """get_pr_summary returns PRSummary with correct fields."""
