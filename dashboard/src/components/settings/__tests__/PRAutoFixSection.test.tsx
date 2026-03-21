@@ -18,50 +18,47 @@ const DEFAULT_CONFIG: PRAutoFixConfig = {
   confidence_threshold: 0.7,
 };
 
+function renderSection(props?: Partial<{ enabled: boolean; config: PRAutoFixConfig | null }>) {
+  const onChange = vi.fn();
+  render(
+    <PRAutoFixSection
+      enabled={props?.enabled ?? false}
+      config={props?.config ?? null}
+      onChange={onChange}
+    />
+  );
+  return { onChange };
+}
+
 describe('PRAutoFixSection', () => {
   it('renders enable toggle Switch', () => {
-    const onChange = vi.fn();
-    render(
-      <PRAutoFixSection enabled={false} config={null} onChange={onChange} />
-    );
+    renderSection();
     expect(screen.getByRole('switch')).toBeInTheDocument();
     expect(screen.getByText('Enable PR Auto-Fix')).toBeInTheDocument();
   });
 
   it('hides aggressiveness and poll_label when disabled', () => {
-    const onChange = vi.fn();
-    render(
-      <PRAutoFixSection enabled={false} config={null} onChange={onChange} />
-    );
+    renderSection();
     expect(screen.queryByText('Aggressiveness')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/poll label/i)).not.toBeInTheDocument();
   });
 
   it('shows aggressiveness and poll_label when enabled', () => {
-    const onChange = vi.fn();
-    render(
-      <PRAutoFixSection enabled={true} config={DEFAULT_CONFIG} onChange={onChange} />
-    );
+    renderSection({ enabled: true, config: DEFAULT_CONFIG });
     expect(screen.getByText('Aggressiveness')).toBeInTheDocument();
     expect(screen.getByLabelText(/poll label/i)).toBeInTheDocument();
   });
 
   it('calls onChange(null) when toggling off', async () => {
     const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(
-      <PRAutoFixSection enabled={true} config={DEFAULT_CONFIG} onChange={onChange} />
-    );
+    const { onChange } = renderSection({ enabled: true, config: DEFAULT_CONFIG });
     await user.click(screen.getByRole('switch'));
     expect(onChange).toHaveBeenCalledWith(null);
   });
 
   it('calls onChange with default config when toggling on', async () => {
     const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(
-      <PRAutoFixSection enabled={false} config={null} onChange={onChange} />
-    );
+    const { onChange } = renderSection();
     await user.click(screen.getByRole('switch'));
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ aggressiveness: 'standard' })
@@ -70,10 +67,7 @@ describe('PRAutoFixSection', () => {
 
   it('calls onChange with updated aggressiveness when changed', async () => {
     const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(
-      <PRAutoFixSection enabled={true} config={DEFAULT_CONFIG} onChange={onChange} />
-    );
+    const { onChange } = renderSection({ enabled: true, config: DEFAULT_CONFIG });
     // Open the aggressiveness select
     await user.click(screen.getByRole('combobox'));
     // Select "Thorough"
@@ -85,10 +79,7 @@ describe('PRAutoFixSection', () => {
 
   it('shows 4 aggressiveness options', async () => {
     const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(
-      <PRAutoFixSection enabled={true} config={DEFAULT_CONFIG} onChange={onChange} />
-    );
+    renderSection({ enabled: true, config: DEFAULT_CONFIG });
     await user.click(screen.getByRole('combobox'));
     const options = screen.getAllByRole('option');
     expect(options).toHaveLength(4);

@@ -46,28 +46,32 @@ const mockComments: PRCommentData[] = [
   },
 ];
 
+function renderComments(comments: PRCommentData[] = mockComments) {
+  render(<PRCommentSection comments={comments} />);
+}
+
 describe('PRCommentSection', () => {
   it('renders summary bar with correct fixed/failed/skipped counts', () => {
-    render(<PRCommentSection comments={mockComments} />);
+    renderComments();
     expect(screen.getByText('2 fixed')).toBeInTheDocument();
     expect(screen.getByText('1 failed')).toBeInTheDocument();
     expect(screen.getByText('1 skipped')).toBeInTheDocument();
   });
 
   it('renders file_path:line for each comment', () => {
-    render(<PRCommentSection comments={mockComments} />);
+    renderComments();
     expect(screen.getByText('src/auth.ts:42')).toBeInTheDocument();
     expect(screen.getByText('src/db.ts:10')).toBeInTheDocument();
     expect(screen.getByText('src/utils.ts:5')).toBeInTheDocument();
   });
 
   it('renders "General" when file_path is null', () => {
-    render(<PRCommentSection comments={mockComments} />);
+    renderComments();
     expect(screen.getByText('General')).toBeInTheDocument();
   });
 
   it('renders external link with correct href', () => {
-    render(<PRCommentSection comments={mockComments} />);
+    renderComments();
     const links = screen.getAllByRole('link');
     expect(links.length).toBe(4);
     expect(links[0]).toHaveAttribute('href', 'https://github.com/org/repo/pull/1/comment/1');
@@ -76,7 +80,7 @@ describe('PRCommentSection', () => {
   });
 
   it('handles empty comments array gracefully', () => {
-    render(<PRCommentSection comments={[]} />);
+    renderComments([]);
     // Should render without crashing, showing zero counts
     expect(screen.getByText('0 fixed')).toBeInTheDocument();
     expect(screen.getByText('0 failed')).toBeInTheDocument();
@@ -84,12 +88,12 @@ describe('PRCommentSection', () => {
   });
 
   it('renders section header', () => {
-    render(<PRCommentSection comments={mockComments} />);
+    renderComments();
     expect(screen.getByText('REVIEW COMMENTS')).toBeInTheDocument();
   });
 
   it('renders status_reason text when a comment row is expanded', async () => {
-    render(<PRCommentSection comments={mockComments} />);
+    renderComments();
     // The failed comment (3rd row, index 2) has status_reason 'Circular dependency detected'
     const triggers = screen.getAllByRole('button');
     // Click the 3rd trigger to expand the failed comment
