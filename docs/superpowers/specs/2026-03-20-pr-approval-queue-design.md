@@ -75,7 +75,7 @@ Note: Reuses the existing `CommentCategory` enum from `amelia/agents/schemas/cla
 ```python
 class ConfirmationService:
     def __init__(self, orchestrator, event_bus, classify_fn):
-        self._pending: dict[tuple[str, int], PendingApproval] = {}
+        self._pending: dict[tuple[str, str, int], PendingApproval] = {}  # (profile_id, repo, pr_number)
         self._timers: dict[UUID, asyncio.TimerHandle] = {}
         self._dismiss_deadlines: dict[UUID, float] = {}  # monotonic deadline for undo window
         self._orchestrator = orchestrator
@@ -112,6 +112,7 @@ class ConfirmationService:
 
     async def auto_approve(approval_id):
         # called by timer, same as approve() with no exclusions
+        # sets approved_by="auto_timeout" in the PR_FIX_APPROVED event payload
 
     def notify_dismissed_comments(self, poller, profile_name, pr_number, comment_ids):
         # called by cleanup task after undo window expires
@@ -172,6 +173,8 @@ PR_FIX_AUTO_APPROVE_TICK = "pr_fix_auto_approve_tick"
     -> payload: {approval_id, pr_number, repo, remaining_seconds: int}
     -> sent every 60s as a sync correction; the frontend runs a local countdown
        seeded from expires_at, using ticks only to correct drift
+    -> note: for short timeouts (e.g., 1-2 minutes), few or no ticks will fire
+       before auto-approval; this is acceptable since the local countdown is authoritative
 ```
 
 ## Frontend
@@ -180,7 +183,7 @@ PR_FIX_AUTO_APPROVE_TICK = "pr_fix_auto_approve_tick"
 
 New sidebar nav item "Approvals" under WORKFLOWS group, between "Active Jobs" and "Past Runs." `ShieldCheck` icon with live badge count from Zustand store updated via WebSocket.
 
-Hidden when count is 0 and no profiles use manual/supervised mode. The profiles API already returns `pr_autofix` config per profile — the frontend checks if any profile has `oversight_mode` set to `manual` or `supervised` to determine nav visibility. `MobileCommandBar` gets notification dot when count > 0.
+Hidden when count is 0 and no profiles use manual/supervised mode. The profiles API already returns `pr_autofix` config per profile — once the new `oversight_mode` field is added (see Configuration section), the frontend checks if any profile has it set to `manual` or `supervised` to determine nav visibility. `MobileCommandBar` gets notification dot when count > 0.
 
 ### Route
 
