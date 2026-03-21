@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+import { cn, formatTime } from '@/lib/utils';
 import type { WorkflowEvent } from '@/types';
 
 const DEFAULT_STYLE = { text: 'text-muted-foreground', bg: '' } as const;
@@ -12,14 +12,6 @@ const AGENT_STYLES: Record<string, { text: string; bg: string }> = {
   HUMAN_APPROVAL: { text: 'text-destructive', bg: 'bg-destructive/5' },
   SYSTEM: DEFAULT_STYLE,
 };
-
-function formatTime(timestamp: string): string {
-  const date = new Date(timestamp);
-  // Validate date before formatting to prevent crashes on malformed timestamps
-  if (isNaN(date.getTime())) return '--:--:--';
-  // Use toISOString for consistent UTC output (avoids timezone issues in tests)
-  return date.toISOString().slice(11, 19);
-}
 
 interface ActivityLogEventProps {
   event: WorkflowEvent;

@@ -5,16 +5,7 @@
  */
 
 import { parseErrorDetail } from './errors';
-
-const API_BASE_URL = "/api";
-const DEFAULT_TIMEOUT_MS = 30000;
-
-/**
- * Creates an AbortSignal that triggers after the specified timeout.
- */
-function createTimeoutSignal(timeoutMs: number = DEFAULT_TIMEOUT_MS): AbortSignal {
-  return AbortSignal.timeout(timeoutMs);
-}
+import { API_BASE_URL, createTimeoutSignal } from './utils';
 
 /**
  * Handles HTTP response parsing and error handling.
