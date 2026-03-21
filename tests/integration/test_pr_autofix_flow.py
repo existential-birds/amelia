@@ -21,8 +21,6 @@ from amelia.agents.schemas.classifier import (
     CommentCategory,
     CommentClassification,
 )
-from amelia.drivers.base import AgenticMessage, AgenticMessageType
-from tests.conftest import create_mock_execute_agentic
 from amelia.core.types import (
     AgentConfig,
     DriverType,
@@ -31,10 +29,12 @@ from amelia.core.types import (
     PRReviewComment,
     PRSummary,
 )
+from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.pr_auto_fix.graph import create_pr_auto_fix_graph
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.pipelines.pr_auto_fix.state import GroupFixStatus, PRAutoFixState
 from amelia.server.events.bus import EventBus
+from tests.conftest import create_mock_execute_agentic
 
 
 # ---------------------------------------------------------------------------
