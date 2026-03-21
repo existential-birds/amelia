@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import WorkflowsPage from './WorkflowsPage';
+import { createMockWorkflowSummary, createMockWorkflowDetail, createMockEvent } from '@/__tests__/fixtures';
 import type { WorkflowSummary, WorkflowDetail } from '@/types';
 
 // Mock modules
@@ -30,76 +31,73 @@ vi.mock('@tanstack/react-virtual', () => ({
 
 import { getActiveWorkflow, formatElapsedTime } from '@/utils/workflow';
 
-// Mock data
-const mockWorkflowSummary: WorkflowSummary = {
+// Mock data using fixture factories
+const mockWorkflowSummary = createMockWorkflowSummary({
   id: 'wf-001',
   issue_id: 'PROJ-123',
   worktree_path: '/tmp/worktrees/proj-123-feature',
-  profile: null,
   status: 'in_progress',
   created_at: '2025-12-07T08:55:00Z',
   started_at: '2025-12-07T09:00:00Z',
-  total_cost_usd: null,
-  total_tokens: null,
-  total_duration_ms: null,
-  pipeline_type: null,
-  pr_number: null,
-  pr_title: null,
-  pr_comment_count: null,
-};
+});
 
-const mockWorkflowDetail: WorkflowDetail = {
-  ...mockWorkflowSummary,
-  completed_at: null,
-  failure_reason: null,
-  token_usage: null,
+const mockWorkflowDetail = createMockWorkflowDetail({
+  id: 'wf-001',
+  issue_id: 'PROJ-123',
+  worktree_path: '/tmp/worktrees/proj-123-feature',
+  status: 'in_progress',
+  created_at: '2025-12-07T08:55:00Z',
+  started_at: '2025-12-07T09:00:00Z',
   recent_events: [
-    { id: 'e1', workflow_id: '1', sequence: 1, timestamp: '2025-12-07T09:01:00Z', event_type: 'stage_started', agent: 'developer', message: 'Started coding', level: 'info' },
+    createMockEvent({
+      id: 'e1',
+      workflow_id: '1',
+      sequence: 1,
+      timestamp: '2025-12-07T09:01:00Z',
+      event_type: 'stage_started',
+      agent: 'developer',
+      message: 'Started coding',
+    }),
   ],
-  // Agentic execution fields
   goal: null,
-  plan_markdown: null,
-  plan_path: null,
-  pr_comments: null,
-};
+});
 
 // Second workflow for testing selection behavior
-const mockSecondWorkflowSummary: WorkflowSummary = {
+const mockSecondWorkflowSummary = createMockWorkflowSummary({
   id: 'wf-002',
   issue_id: 'PROJ-456',
   worktree_path: '/tmp/worktrees/proj-456-bugfix',
-  profile: null,
   status: 'blocked',
   created_at: '2025-12-07T07:55:00Z',
   started_at: '2025-12-07T08:00:00Z',
-  total_cost_usd: null,
-  total_tokens: null,
-  total_duration_ms: null,
-  pipeline_type: null,
-  pr_number: null,
-  pr_title: null,
-  pr_comment_count: null,
-};
+});
 
-const mockSecondWorkflowDetail: WorkflowDetail = {
-  ...mockSecondWorkflowSummary,
-  completed_at: null,
-  failure_reason: null,
-  token_usage: null,
+const mockSecondWorkflowDetail = createMockWorkflowDetail({
+  id: 'wf-002',
+  issue_id: 'PROJ-456',
+  worktree_path: '/tmp/worktrees/proj-456-bugfix',
+  status: 'blocked',
+  created_at: '2025-12-07T07:55:00Z',
+  started_at: '2025-12-07T08:00:00Z',
   recent_events: [
-    { id: 'e2', workflow_id: 'wf-002', sequence: 1, timestamp: '2025-12-07T08:01:00Z', event_type: 'stage_started', agent: 'reviewer', message: 'Started review', level: 'info' },
+    createMockEvent({
+      id: 'e2',
+      workflow_id: 'wf-002',
+      sequence: 1,
+      timestamp: '2025-12-07T08:01:00Z',
+      event_type: 'stage_started',
+      agent: 'reviewer',
+      message: 'Started review',
+    }),
   ],
-  // Agentic execution fields
   goal: 'Fix the login bug',
   plan_markdown: '## Plan\n\n1. Identify the issue\n2. Fix the bug',
-  plan_path: null,
-  pr_comments: null,
-};
+});
 
 /**
  * Helper to render WorkflowsPage with router context and loader data
  */
-function renderWithRouter(
+function renderPage(
   loaderData: { workflows: WorkflowSummary[]; detail: WorkflowDetail | null },
   initialPath = '/'
 ) {
@@ -150,7 +148,7 @@ describe('WorkflowsPage', () => {
   it('should render WorkflowEmptyState when no workflows and no detail', async () => {
     vi.mocked(getActiveWorkflow).mockReturnValue(null);
 
-    renderWithRouter({ workflows: [], detail: null }, '/workflows');
+    renderPage({ workflows: [], detail: null }, '/workflows');
 
     await waitFor(() => {
       expect(screen.getByText(/no active workflows/i)).toBeInTheDocument();
@@ -161,7 +159,7 @@ describe('WorkflowsPage', () => {
     vi.mocked(getActiveWorkflow).mockReturnValue(null);
 
     // Simulate viewing a past workflow when no active workflows exist
-    renderWithRouter({ workflows: [], detail: mockWorkflowDetail }, '/workflows/wf-001');
+    renderPage({ workflows: [], detail: mockWorkflowDetail }, '/workflows/wf-001');
 
     await waitFor(() => {
       // Should NOT show the WorkflowEmptyState component (uses data-slot="empty-state")
@@ -174,7 +172,7 @@ describe('WorkflowsPage', () => {
   });
 
   it('should display workflow header with issue info when detail exists', async () => {
-    renderWithRouter({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
+    renderPage({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
 
     await waitFor(() => {
       // PageHeader uses banner role
@@ -188,7 +186,7 @@ describe('WorkflowsPage', () => {
   });
 
   it('should display job queue and activity log side by side', async () => {
-    renderWithRouter({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
+    renderPage({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
 
     await waitFor(() => {
       // JobQueue renders the section title
@@ -199,7 +197,7 @@ describe('WorkflowsPage', () => {
   });
 
   it('should not show loading skeleton when detail is pre-loaded from loader', async () => {
-    renderWithRouter({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
+    renderPage({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
 
     await waitFor(() => {
       // Should not see loading text when detail is pre-loaded
@@ -210,7 +208,7 @@ describe('WorkflowsPage', () => {
   });
 
   it('should highlight selected workflow in job queue', async () => {
-    renderWithRouter({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
+    renderPage({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
 
     await waitFor(() => {
       // Query the job queue button directly by its accessible name
@@ -224,7 +222,7 @@ describe('WorkflowsPage', () => {
     const user = userEvent.setup();
 
     // Render with two workflows, active workflow is wf-001
-    renderWithRouter(
+    renderPage(
       {
         workflows: [mockWorkflowSummary, mockSecondWorkflowSummary],
         detail: mockWorkflowDetail,
