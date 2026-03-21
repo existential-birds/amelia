@@ -79,7 +79,7 @@ function getPresetDescription(preset: string | null): string {
 function escapeCsvField(value: string | number): string {
   let text = String(value);
   // Neutralize spreadsheet formula interpretation
-  if (/^[=+\-@]/.test(text)) {
+  if (/^[=+\-@\t\0]/.test(text)) {
     text = `'${text}`;
   }
   // Check if quoting is needed
