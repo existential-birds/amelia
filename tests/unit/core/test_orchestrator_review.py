@@ -3,35 +3,12 @@
 Tests the review node behavior including base_commit fallback computation.
 """
 
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from amelia.core.types import ReviewResult
 from amelia.pipelines.nodes import call_reviewer_node
-
-
-@pytest.fixture
-def mock_runnable_config(mock_profile_factory):
-    """Create a mock RunnableConfig for review node tests."""
-    def _create(
-        profile=None,
-        workflow_id: str = "test-workflow-123",
-        event_bus=None,
-        repository=None,
-    ) -> dict[str, Any]:
-        if profile is None:
-            profile = mock_profile_factory(preset="cli_single")
-        return {
-            "configurable": {
-                "thread_id": workflow_id,
-                "profile": profile,
-                "event_bus": event_bus,
-                "repository": repository,
-            }
-        }
-    return _create
 
 
 @pytest.fixture(autouse=True)

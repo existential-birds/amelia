@@ -18,16 +18,11 @@ from amelia.core.types import (
     TrackerType,
 )
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
-from amelia.server.database import ProfileRepository, WorkflowRepository
+from amelia.server.database import WorkflowRepository
 from amelia.server.dependencies import get_profile_repository, get_repository
 from amelia.server.events.bus import EventBus
 from amelia.server.routes.github import router
 from amelia.services.github_pr import GitHubPRService
-
-
-@pytest.fixture
-def mock_profile_repo() -> AsyncMock:
-    return AsyncMock(spec=ProfileRepository)
 
 
 @pytest.fixture
@@ -36,7 +31,7 @@ def event_bus() -> EventBus:
 
 
 @pytest.fixture
-def app(mock_profile_repo: AsyncMock, event_bus: EventBus) -> FastAPI:
+def app(mock_profile_repo: MagicMock, event_bus: EventBus) -> FastAPI:
     application = FastAPI()
     application.include_router(router, prefix="/api")
     application.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
@@ -117,7 +112,7 @@ class TestListPRs:
     def test_returns_prs_for_github_profile(
         self,
         client: TestClient,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         github_profile: Profile,
         mock_pr_summaries: list[PRSummary],
     ) -> None:
@@ -140,7 +135,7 @@ class TestListPRs:
     def test_returns_404_for_unknown_profile(
         self,
         client: TestClient,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
     ) -> None:
         mock_profile_repo.get_profile.return_value = None
         response = client.get("/api/github/prs?profile=unknown")
@@ -149,7 +144,7 @@ class TestListPRs:
     def test_returns_400_for_non_github_profile(
         self,
         client: TestClient,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
     ) -> None:
         noop_profile = Profile(name="noop", tracker=TrackerType.NOOP, repo_root="/tmp/repo")
         mock_profile_repo.get_profile.return_value = noop_profile
@@ -161,7 +156,7 @@ class TestGetPRComments:
     def test_returns_comments_for_pr(
         self,
         client: TestClient,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         github_profile: Profile,
         mock_pr_comments: list[PRReviewComment],
     ) -> None:
@@ -183,7 +178,7 @@ class TestGetPRComments:
     def test_returns_404_for_unknown_profile(
         self,
         client: TestClient,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
     ) -> None:
         mock_profile_repo.get_profile.return_value = None
         response = client.get("/api/github/prs/42/comments?profile=unknown")
@@ -194,7 +189,7 @@ class TestPRAutoFixConfig:
     def test_returns_enabled_when_pr_autofix_set(
         self,
         client: TestClient,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         github_profile: Profile,
     ) -> None:
         mock_profile_repo.get_profile.return_value = github_profile
@@ -209,7 +204,7 @@ class TestPRAutoFixConfig:
     def test_returns_disabled_when_pr_autofix_none(
         self,
         client: TestClient,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         github_profile_no_autofix: Profile,
     ) -> None:
         mock_profile_repo.get_profile.return_value = github_profile_no_autofix
@@ -223,7 +218,7 @@ class TestPRAutoFixConfig:
     def test_returns_404_for_unknown_profile(
         self,
         client: TestClient,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
     ) -> None:
         mock_profile_repo.get_profile.return_value = None
         response = client.get("/api/github/prs/config?profile=unknown")
@@ -268,7 +263,7 @@ class TestTriggerPRAutoFix:
         self,
         client: TestClient,
         app: FastAPI,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         github_profile: Profile,
     ) -> None:
         response, _ = self._trigger_autofix_with_mocks(client, app, mock_profile_repo, github_profile)
@@ -281,7 +276,7 @@ class TestTriggerPRAutoFix:
     def test_returns_400_when_pr_autofix_none(
         self,
         client: TestClient,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         github_profile_no_autofix: Profile,
     ) -> None:
         mock_profile_repo.get_profile.return_value = github_profile_no_autofix
@@ -293,7 +288,7 @@ class TestTriggerPRAutoFix:
     def test_returns_404_for_unknown_profile(
         self,
         client: TestClient,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
     ) -> None:
         mock_profile_repo.get_profile.return_value = None
         response = client.post("/api/github/prs/42/auto-fix?profile=unknown")
@@ -303,7 +298,7 @@ class TestTriggerPRAutoFix:
         self,
         client: TestClient,
         app: FastAPI,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         github_profile: Profile,
     ) -> None:
         response, mock_orch = self._trigger_autofix_with_mocks(
@@ -319,7 +314,7 @@ class TestTriggerPRAutoFix:
         self,
         client: TestClient,
         app: FastAPI,
-        mock_profile_repo: AsyncMock,
+        mock_profile_repo: MagicMock,
         github_profile: Profile,
     ) -> None:
         pr_summary = self._make_pr_summary(head_branch="feat/my-branch")
