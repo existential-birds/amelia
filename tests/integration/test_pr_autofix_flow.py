@@ -197,9 +197,9 @@ class TestPipelineEndToEnd:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
-        # _run_git is called twice per group: once for baseline, once for current.
-        # Return empty first (baseline), then non-empty (current) to simulate changes.
-        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/foo.py"])
+        # _run_git is called 4 times per group: baseline porcelain, baseline HEAD,
+        # current porcelain, current HEAD. Diff in porcelain → FIXED.
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "sha1", "M src/foo.py", "sha2"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
 
@@ -274,7 +274,9 @@ class TestPipelineEndToEnd:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=False)
-        mock_git_ops._run_git = AsyncMock(side_effect=["", ""])
+        # 4 calls per group: baseline porcelain, baseline HEAD, current porcelain, current HEAD.
+        # Same values → NO_CHANGES.
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "sha1", "", "sha1"])
         mock_git_ops.stage_and_commit = AsyncMock()
 
         mock_github_service = MagicMock()
@@ -376,7 +378,7 @@ class TestOrchestratorThreadsComments:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
-        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/changed.py"])
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "sha1", "M src/changed.py", "sha2"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
         mock_git_ops.fetch_origin = AsyncMock()
@@ -632,7 +634,7 @@ class TestEventEmissionSequence:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
-        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/changed.py"])
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "sha1", "M src/changed.py", "sha2"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
 
@@ -858,9 +860,9 @@ class TestMultiFileGroupPartialFailure:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
-        # _run_git: group 1 (success): baseline empty, current changed;
-        # group 2 (failure): baseline empty, then exception before current
-        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/good.py", ""])
+        # _run_git: group 1 (success): baseline porcelain, baseline HEAD, current porcelain, current HEAD;
+        # group 2 (failure): baseline porcelain, baseline HEAD, then exception before current
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "sha1", "M src/good.py", "sha2", "", "sha1"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="def5678")
         mock_git_ops.safe_push = AsyncMock()
 
@@ -1014,7 +1016,7 @@ class TestConfidenceThresholdFiltering:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
-        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/changed.py"])
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "sha1", "M src/changed.py", "sha2"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
 
@@ -1151,7 +1153,7 @@ class TestAggressivenessFiltering:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=False)
-        mock_git_ops._run_git = AsyncMock(side_effect=["", ""])
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "sha1", "", "sha1"])
         mock_git_ops.stage_and_commit = AsyncMock()
 
         mock_github_service = MagicMock()
@@ -1231,7 +1233,7 @@ class TestCommitMessageContent:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
-        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/changed.py"])
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "sha1", "M src/changed.py", "sha2"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
 
@@ -1335,7 +1337,7 @@ class TestWorkflowStatusLifecycle:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
-        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/changed.py"])
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "sha1", "M src/changed.py", "sha2"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
 
@@ -1427,7 +1429,7 @@ class TestMetricsPersistence:
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
-        mock_git_ops._run_git = AsyncMock(side_effect=["", "M src/changed.py"])
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "sha1", "M src/changed.py", "sha2"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
 
