@@ -28,7 +28,6 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverInterface
 from amelia.server.database.connection import Database
 from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.events.bus import EventBus
@@ -39,7 +38,6 @@ from amelia.server.services.brainstorm import BrainstormService
 from .conftest import (
     AsyncClientFactory,
     _create_app_with_overrides,
-    _create_mock_execute_agentic_with_plan_file,
 )
 
 
@@ -240,28 +238,6 @@ class TestBrainstormEventEmission:
 @pytest.mark.integration
 class TestBrainstormArtifactEvents:
     """Test artifact-related event emission."""
-
-    @pytest.fixture
-    def mock_driver_with_write_file(self) -> MagicMock:
-        """Create a mock driver that creates the plan file on disk.
-
-        The service detects artifacts by checking if the plan file exists
-        after driver execution, so the mock must actually create the file.
-        """
-        driver = MagicMock(spec=DriverInterface)
-        messages = [
-            AgenticMessage(
-                type=AgenticMessageType.THINKING,
-                content="I'll create a design document...",
-            ),
-            AgenticMessage(
-                type=AgenticMessageType.RESULT,
-                content="Created the document.",
-                session_id="driver-session-artifact",
-            ),
-        ]
-        driver.execute_agentic = _create_mock_execute_agentic_with_plan_file(messages)
-        return driver
 
     @pytest.fixture
     async def test_client_with_write_file(

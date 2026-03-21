@@ -34,7 +34,6 @@ from tests.conftest import create_mock_execute_agentic
 from .conftest import (
     AsyncClientFactory,
     _create_app_with_overrides,
-    _create_mock_execute_agentic_with_plan_file,
 )
 
 
@@ -264,24 +263,6 @@ class TestBrainstormArtifactDetection:
 @pytest.mark.integration
 class TestBrainstormHandoffFlow:
     """Test full handoff flow from brainstorming to implementation."""
-
-    @pytest.fixture
-    def mock_driver_with_write_file(self) -> MagicMock:
-        """Create a mock driver that creates the plan file on disk.
-
-        The service detects artifacts by checking if the plan file exists
-        after driver execution, so the mock must actually create the file.
-        """
-        driver = MagicMock(spec=DriverInterface)
-        messages = [
-            AgenticMessage(
-                type=AgenticMessageType.RESULT,
-                content="I've created the system architecture document.",
-                session_id="driver-handoff-session",
-            ),
-        ]
-        driver.execute_agentic = _create_mock_execute_agentic_with_plan_file(messages)
-        return driver
 
     @pytest.fixture
     async def handoff_test_client(
