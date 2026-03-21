@@ -98,28 +98,45 @@ class TestCountAmeliaReplies:
         assert count_amelia_replies([]) == 0
 
 
+def _thread(*bodies: str) -> list[PRReviewComment]:
+    """Build a comment thread with auto-incrementing timestamps.
+
+    Plain strings become human comments; strings starting with ``amelia:``
+    have the prefix stripped and get the AMELIA_FOOTER appended automatically.
+
+    Example::
+
+        _thread("Fix this", "amelia:Done.", "Still broken")
+    """
+    _BASE_HOUR = 10
+    comments: list[PRReviewComment] = []
+    for i, body in enumerate(bodies):
+        is_amelia = body.startswith("amelia:")
+        if is_amelia:
+            body = f"{body.removeprefix('amelia:')}\n\n{AMELIA_FOOTER}"
+        comments.append(
+            _comment(
+                i + 1,
+                body=body,
+                created_at=datetime(2026, 3, 13, _BASE_HOUR + i, 0, 0, tzinfo=UTC),
+            )
+        )
+    return comments
+
+
 class TestHasNewFeedbackAfterAmelia:
     """Tests for has_new_feedback_after_amelia."""
 
     def test_has_new_feedback_after_amelia(self) -> None:
-        thread = [
-            _comment(1, body="Fix this", created_at=datetime(2026, 3, 13, 10, 0, 0, tzinfo=UTC)),
-            _comment(2, body=f"Done.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 11, 0, 0, tzinfo=UTC)),
-            _comment(3, body="Still not right", created_at=datetime(2026, 3, 13, 12, 0, 0, tzinfo=UTC)),
-        ]
+        thread = _thread("Fix this", "amelia:Done.", "Still not right")
         assert has_new_feedback_after_amelia(thread) is True
 
     def test_no_feedback_after_amelia(self) -> None:
-        thread = [
-            _comment(1, body="Fix this", created_at=datetime(2026, 3, 13, 10, 0, 0, tzinfo=UTC)),
-            _comment(2, body=f"Done.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 11, 0, 0, tzinfo=UTC)),
-        ]
+        thread = _thread("Fix this", "amelia:Done.")
         assert has_new_feedback_after_amelia(thread) is False
 
     def test_no_amelia_replies_at_all(self) -> None:
-        thread = [
-            _comment(1, body="Fix this", created_at=datetime(2026, 3, 13, 10, 0, 0, tzinfo=UTC)),
-        ]
+        thread = _thread("Fix this")
         assert has_new_feedback_after_amelia(thread) is False
 
 
@@ -128,65 +145,48 @@ class TestShouldSkipThread:
 
     def test_skip_comments_with_amelia_reply(self) -> None:
         """Comment with Amelia reply and no new feedback is skipped."""
-        thread = [
-            _comment(1, body="Fix this", created_at=datetime(2026, 3, 13, 10, 0, 0, tzinfo=UTC)),
-            _comment(2, body=f"Done.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 11, 0, 0, tzinfo=UTC)),
-        ]
+        thread = _thread("Fix this", "amelia:Done.")
         assert should_skip_thread(thread, max_iterations=3) is True
 
     def test_fresh_feedback_after_amelia_not_skipped(self) -> None:
         """Comment with new reviewer feedback after Amelia is NOT skipped."""
-        thread = [
-            _comment(1, body="Fix this", created_at=datetime(2026, 3, 13, 10, 0, 0, tzinfo=UTC)),
-            _comment(2, body=f"Done.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 11, 0, 0, tzinfo=UTC)),
-            _comment(3, body="Still broken", created_at=datetime(2026, 3, 13, 12, 0, 0, tzinfo=UTC)),
-        ]
+        thread = _thread("Fix this", "amelia:Done.", "Still broken")
         assert should_skip_thread(thread, max_iterations=3) is False
 
     def test_max_iterations_enforcement(self) -> None:
         """Comment at iteration limit with no new feedback is skipped."""
-        thread = [
-            _comment(1, body="Fix this", created_at=datetime(2026, 3, 13, 10, 0, 0, tzinfo=UTC)),
-            _comment(2, body=f"Done.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 11, 0, 0, tzinfo=UTC)),
-            _comment(3, body="Try again", created_at=datetime(2026, 3, 13, 12, 0, 0, tzinfo=UTC)),
-            _comment(4, body=f"Done again.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 13, 0, 0, tzinfo=UTC)),
-            _comment(5, body="One more time", created_at=datetime(2026, 3, 13, 14, 0, 0, tzinfo=UTC)),
-            _comment(6, body=f"Third fix.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 15, 0, 0, tzinfo=UTC)),
-        ]
+        thread = _thread(
+            "Fix this", "amelia:Done.",
+            "Try again", "amelia:Done again.",
+            "One more time", "amelia:Third fix.",
+        )
         # 3 Amelia replies, max_iterations=3, no new feedback after last Amelia reply
         assert should_skip_thread(thread, max_iterations=3) is True
 
     def test_iteration_cap_is_hard_limit(self) -> None:
         """Thread at iteration cap is skipped even with new feedback (hard cap)."""
-        thread = [
-            _comment(1, body="Fix this", created_at=datetime(2026, 3, 13, 10, 0, 0, tzinfo=UTC)),
-            _comment(2, body=f"Done.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 11, 0, 0, tzinfo=UTC)),
-            _comment(3, body="Try again", created_at=datetime(2026, 3, 13, 12, 0, 0, tzinfo=UTC)),
-            _comment(4, body=f"Done again.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 13, 0, 0, tzinfo=UTC)),
-            _comment(5, body="One more time", created_at=datetime(2026, 3, 13, 14, 0, 0, tzinfo=UTC)),
-            _comment(6, body=f"Third fix.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 15, 0, 0, tzinfo=UTC)),
-            _comment(7, body="Actually this needs more work", created_at=datetime(2026, 3, 13, 16, 0, 0, tzinfo=UTC)),
-        ]
+        thread = _thread(
+            "Fix this", "amelia:Done.",
+            "Try again", "amelia:Done again.",
+            "One more time", "amelia:Third fix.",
+            "Actually this needs more work",
+        )
         # 3 Amelia replies, max_iterations=3 -> skipped (hard cap)
         assert should_skip_thread(thread, max_iterations=3) is True
 
     def test_iteration_resets_on_new_feedback_below_cap(self) -> None:
         """Thread below iteration cap with new feedback is not skipped."""
-        thread = [
-            _comment(1, body="Fix this", created_at=datetime(2026, 3, 13, 10, 0, 0, tzinfo=UTC)),
-            _comment(2, body=f"Done.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 11, 0, 0, tzinfo=UTC)),
-            _comment(3, body="Try again", created_at=datetime(2026, 3, 13, 12, 0, 0, tzinfo=UTC)),
-            _comment(4, body=f"Done again.\n\n{AMELIA_FOOTER}", created_at=datetime(2026, 3, 13, 13, 0, 0, tzinfo=UTC)),
-            _comment(5, body="One more time", created_at=datetime(2026, 3, 13, 14, 0, 0, tzinfo=UTC)),
-        ]
+        thread = _thread(
+            "Fix this", "amelia:Done.",
+            "Try again", "amelia:Done again.",
+            "One more time",
+        )
         # 2 Amelia replies, max_iterations=3, new feedback exists -> not skipped
         assert should_skip_thread(thread, max_iterations=3) is False
 
     def test_no_amelia_replies_not_skipped(self) -> None:
         """Thread with no Amelia replies is not skipped."""
-        thread = [
-            _comment(1, body="Fix this"),
-        ]
+        thread = _thread("Fix this")
         assert should_skip_thread(thread, max_iterations=3) is False
 
 

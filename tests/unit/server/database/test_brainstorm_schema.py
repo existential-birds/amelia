@@ -110,6 +110,27 @@ class TestBrainstormConstraints:
             """)
 
 
+_CASCADE_DELETE_CASES = [
+    pytest.param(
+        "brainstorm_messages",
+        [
+            "INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at) VALUES ('msg-1', 'session-1', 1, 'user', 'Hello', NOW())",
+            "INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at) VALUES ('msg-2', 'session-1', 2, 'assistant', 'Hi', NOW())",
+        ],
+        2,
+        id="messages",
+    ),
+    pytest.param(
+        "brainstorm_artifacts",
+        [
+            "INSERT INTO brainstorm_artifacts (id, session_id, type, path, title, created_at) VALUES ('art-1', 'session-1', 'spec', '/path/to/spec.md', 'Feature Spec', NOW())",
+        ],
+        1,
+        id="artifacts",
+    ),
+]
+
+
 class TestBrainstormCascadeDeletes:
     """Tests for cascade delete behavior."""
 
@@ -120,40 +141,24 @@ class TestBrainstormCascadeDeletes:
             VALUES ('{session_id}', 'profile-1', 'active', NOW(), NOW())
         """)
 
-    async def test_deleting_session_deletes_messages(self, db_with_schema: Database) -> None:
-        """Deleting a session cascades to delete its messages."""
+    @pytest.mark.parametrize("child_table,inserts,expected_count", _CASCADE_DELETE_CASES)
+    async def test_deleting_session_cascades_to_children(
+        self,
+        db_with_schema: Database,
+        child_table: str,
+        inserts: list[str],
+        expected_count: int,
+    ) -> None:
+        """Deleting a session cascades to delete its child rows."""
         await self._insert_session(db_with_schema)
-        await db_with_schema.execute("""
-            INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at)
-            VALUES ('msg-1', 'session-1', 1, 'user', 'Hello', NOW())
-        """)
-        await db_with_schema.execute("""
-            INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at)
-            VALUES ('msg-2', 'session-1', 2, 'assistant', 'Hi', NOW())
-        """)
-        messages = await db_with_schema.fetch_all(
-            "SELECT id FROM brainstorm_messages WHERE session_id = 'session-1'"
+        for stmt in inserts:
+            await db_with_schema.execute(stmt)
+        rows = await db_with_schema.fetch_all(
+            f"SELECT id FROM {child_table} WHERE session_id = 'session-1'"
         )
-        assert len(messages) == 2
+        assert len(rows) == expected_count
         await db_with_schema.execute("DELETE FROM brainstorm_sessions WHERE id = 'session-1'")
-        messages = await db_with_schema.fetch_all(
-            "SELECT id FROM brainstorm_messages WHERE session_id = 'session-1'"
+        rows = await db_with_schema.fetch_all(
+            f"SELECT id FROM {child_table} WHERE session_id = 'session-1'"
         )
-        assert len(messages) == 0
-
-    async def test_deleting_session_deletes_artifacts(self, db_with_schema: Database) -> None:
-        """Deleting a session cascades to delete its artifacts."""
-        await self._insert_session(db_with_schema)
-        await db_with_schema.execute("""
-            INSERT INTO brainstorm_artifacts (id, session_id, type, path, title, created_at)
-            VALUES ('art-1', 'session-1', 'spec', '/path/to/spec.md', 'Feature Spec', NOW())
-        """)
-        artifacts = await db_with_schema.fetch_all(
-            "SELECT id FROM brainstorm_artifacts WHERE session_id = 'session-1'"
-        )
-        assert len(artifacts) == 1
-        await db_with_schema.execute("DELETE FROM brainstorm_sessions WHERE id = 'session-1'")
-        artifacts = await db_with_schema.fetch_all(
-            "SELECT id FROM brainstorm_artifacts WHERE session_id = 'session-1'"
-        )
-        assert len(artifacts) == 0
+        assert len(rows) == 0

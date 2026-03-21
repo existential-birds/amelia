@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, patch
+
+from tests.conftest import AsyncIteratorMock
 
 from amelia.client.streaming import WorkflowSummary, stream_workflow_events
 
@@ -17,26 +18,10 @@ def _make_ws_messages(events: list[dict]) -> list[str]:
     return messages
 
 
-class _AsyncIter:
-    """Wraps a list into an async iterator for mocking websocket messages."""
-
-    def __init__(self, items: list[str]) -> None:
-        self._items = iter(items)
-
-    def __aiter__(self) -> AsyncIterator[str]:
-        return self  # type: ignore[return-value]
-
-    async def __anext__(self) -> str:
-        try:
-            return next(self._items)
-        except StopIteration:
-            raise StopAsyncIteration from None
-
-
 async def _run_streaming_events(
     messages: list[str], wf_id: str, **kwargs
-) -> tuple[WorkflowSummary, _AsyncIter]:
-    mock_ws = _AsyncIter(messages)
+) -> tuple[WorkflowSummary, AsyncIteratorMock]:
+    mock_ws = AsyncIteratorMock(messages)
     mock_ws.send = AsyncMock()  # type: ignore[attr-defined]
 
     with patch("websockets.connect") as mock_connect:

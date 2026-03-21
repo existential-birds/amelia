@@ -126,17 +126,17 @@ class TestBuildDeveloperGoal:
         goal = _build_developer_goal("src/app.py", [c], {}, pr_number=1, head_branch="main")
         assert "**Lines:** 18-28" in goal
 
-    def test_includes_side_label(self) -> None:
+    @pytest.mark.parametrize(
+        ("side", "expected_label"),
+        [("RIGHT", "new code"), ("LEFT", "old code")],
+        ids=["right-side", "left-side"],
+    )
+    def test_includes_side_label(self, side: str, expected_label: str) -> None:
         """Side field is rendered as human-readable label."""
-        c_right = make_comment(id=1, path="src/app.py", side="RIGHT")
-        goal = _build_developer_goal("src/app.py", [c_right], {}, pr_number=1, head_branch="main")
-        assert "new code" in goal
-        assert "RIGHT" in goal
-
-        c_left = make_comment(id=2, path="src/app.py", side="LEFT")
-        goal = _build_developer_goal("src/app.py", [c_left], {}, pr_number=1, head_branch="main")
-        assert "old code" in goal
-        assert "LEFT" in goal
+        c = make_comment(id=1, path="src/app.py", side=side)
+        goal = _build_developer_goal("src/app.py", [c], {}, pr_number=1, head_branch="main")
+        assert expected_label in goal
+        assert side in goal
 
     def test_includes_file_level_scope(self) -> None:
         """File-level comments are labeled as such."""
@@ -295,8 +295,36 @@ class TestDevelopNode:
         assert result["agentic_status"] == AgenticStatus.FAILED
         assert all(r.status == GroupFixStatus.FAILED for r in result["group_results"])
 
-    async def test_develop_no_file_changes_marks_no_changes(self) -> None:
-        """Developer completes without error but produces no file changes."""
+    @pytest.mark.parametrize(
+        ("has_changes", "porcelain_side_effects", "expected_status"),
+        [
+            pytest.param(
+                False,
+                ["", "abc123", "", "abc123"],
+                GroupFixStatus.NO_CHANGES,
+                id="no-changes-both-match",
+            ),
+            pytest.param(
+                False,
+                ["", "aaa111", "", "bbb222"],
+                GroupFixStatus.FIXED,
+                id="committed-changes-head-sha-differs",
+            ),
+            pytest.param(
+                True,
+                ["", "aaa111", "M src/app.py", "aaa111"],
+                GroupFixStatus.FIXED,
+                id="uncommitted-changes-porcelain-differs",
+            ),
+        ],
+    )
+    async def test_develop_change_detection(
+        self,
+        has_changes: bool,
+        porcelain_side_effects: list[str],
+        expected_status: GroupFixStatus,
+    ) -> None:
+        """Parameterized: detect changes via porcelain diff and/or HEAD SHA movement."""
         c1 = make_comment(id=1, path="src/app.py", body="Fix this")
         state = make_state(
             comments=[c1],
@@ -307,9 +335,8 @@ class TestDevelopNode:
         mock_dev_instance = MagicMock()
         mock_dev_instance.run = _fake_dev_run_success
         mock_git = AsyncMock()
-        mock_git.has_changes.return_value = False
-        # Both baseline and current return empty porcelain, same HEAD -- no changes
-        mock_git._run_git = AsyncMock(side_effect=["", "abc123", "", "abc123"])
+        mock_git.has_changes.return_value = has_changes
+        mock_git._run_git = AsyncMock(side_effect=porcelain_side_effects)
 
         with (
             patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
@@ -318,98 +345,7 @@ class TestDevelopNode:
             result = await develop_node(state, make_runnable_config())
 
         assert len(result["group_results"]) == 1
-        assert result["group_results"][0].status == GroupFixStatus.NO_CHANGES
-        assert result["agentic_status"] == AgenticStatus.COMPLETED
-
-    async def test_develop_detects_committed_changes_via_head_sha(self) -> None:
-        """Developer commits its own changes -- porcelain is clean but HEAD moves."""
-        c1 = make_comment(id=1, path="src/app.py", body="Fix this")
-        state = make_state(
-            comments=[c1],
-            file_groups={"src/app.py": [1]},
-            classified_comments=[make_classification(1)],
-        )
-
-        mock_dev_instance = MagicMock()
-        mock_dev_instance.run = _fake_dev_run_success
-        mock_git = AsyncMock()
-        mock_git.has_changes.return_value = False
-        # Porcelain empty both times, but HEAD SHA changes (Developer committed)
-        mock_git._run_git = AsyncMock(side_effect=[
-            "",          # baseline porcelain
-            "aaa111",    # baseline HEAD
-            "",          # current porcelain (still clean)
-            "bbb222",    # current HEAD (changed!)
-        ])
-
-        with (
-            patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
-            patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", return_value=mock_git),
-        ):
-            result = await develop_node(state, make_runnable_config())
-
-        assert len(result["group_results"]) == 1
-        assert result["group_results"][0].status == GroupFixStatus.FIXED
-
-    async def test_develop_detects_uncommitted_changes_only(self) -> None:
-        """Developer leaves uncommitted changes -- porcelain differs, HEAD same."""
-        c1 = make_comment(id=1, path="src/app.py", body="Fix this")
-        state = make_state(
-            comments=[c1],
-            file_groups={"src/app.py": [1]},
-            classified_comments=[make_classification(1)],
-        )
-
-        mock_dev_instance = MagicMock()
-        mock_dev_instance.run = _fake_dev_run_success
-        mock_git = AsyncMock()
-        mock_git.has_changes.return_value = True
-        # Porcelain changes but HEAD stays the same
-        mock_git._run_git = AsyncMock(side_effect=[
-            "",              # baseline porcelain
-            "aaa111",        # baseline HEAD
-            "M src/app.py",  # current porcelain (changed!)
-            "aaa111",        # current HEAD (same)
-        ])
-
-        with (
-            patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
-            patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", return_value=mock_git),
-        ):
-            result = await develop_node(state, make_runnable_config())
-
-        assert len(result["group_results"]) == 1
-        assert result["group_results"][0].status == GroupFixStatus.FIXED
-
-    async def test_develop_no_changes_when_both_match(self) -> None:
-        """No changes when both porcelain and HEAD SHA are identical."""
-        c1 = make_comment(id=1, path="src/app.py", body="Fix this")
-        state = make_state(
-            comments=[c1],
-            file_groups={"src/app.py": [1]},
-            classified_comments=[make_classification(1)],
-        )
-
-        mock_dev_instance = MagicMock()
-        mock_dev_instance.run = _fake_dev_run_success
-        mock_git = AsyncMock()
-        mock_git.has_changes.return_value = False
-        # Everything identical -- no changes
-        mock_git._run_git = AsyncMock(side_effect=[
-            "",          # baseline porcelain
-            "aaa111",    # baseline HEAD
-            "",          # current porcelain (same)
-            "aaa111",    # current HEAD (same)
-        ])
-
-        with (
-            patch("amelia.pipelines.pr_auto_fix.nodes.Developer", return_value=mock_dev_instance),
-            patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", return_value=mock_git),
-        ):
-            result = await develop_node(state, make_runnable_config())
-
-        assert len(result["group_results"]) == 1
-        assert result["group_results"][0].status == GroupFixStatus.NO_CHANGES
+        assert result["group_results"][0].status == expected_status
 
 
 # ---------------------------------------------------------------------------

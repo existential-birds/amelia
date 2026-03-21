@@ -132,15 +132,6 @@ class TestListPRs:
         assert data["prs"][0]["number"] == 42
         assert data["prs"][0]["head_branch"] == "fix/login-bug"
 
-    def test_returns_404_for_unknown_profile(
-        self,
-        client: TestClient,
-        mock_profile_repo: MagicMock,
-    ) -> None:
-        mock_profile_repo.get_profile.return_value = None
-        response = client.get("/api/github/prs?profile=unknown")
-        assert response.status_code == 404
-
     def test_returns_400_for_non_github_profile(
         self,
         client: TestClient,
@@ -175,15 +166,6 @@ class TestGetPRComments:
         assert len(data["comments"]) == 1
         assert data["comments"][0]["body"] == "Please use snake_case here"
 
-    def test_returns_404_for_unknown_profile(
-        self,
-        client: TestClient,
-        mock_profile_repo: MagicMock,
-    ) -> None:
-        mock_profile_repo.get_profile.return_value = None
-        response = client.get("/api/github/prs/42/comments?profile=unknown")
-        assert response.status_code == 404
-
 
 class TestPRAutoFixConfig:
     def test_returns_enabled_when_pr_autofix_set(
@@ -215,14 +197,26 @@ class TestPRAutoFixConfig:
         assert data["enabled"] is False
         assert data["config"] is None
 
-    def test_returns_404_for_unknown_profile(
-        self,
-        client: TestClient,
-        mock_profile_repo: MagicMock,
-    ) -> None:
-        mock_profile_repo.get_profile.return_value = None
-        response = client.get("/api/github/prs/config?profile=unknown")
-        assert response.status_code == 404
+
+@pytest.mark.parametrize(
+    "path,method",
+    [
+        pytest.param("/api/github/prs?profile=unknown", "get", id="list-prs"),
+        pytest.param("/api/github/prs/42/comments?profile=unknown", "get", id="pr-comments"),
+        pytest.param("/api/github/prs/config?profile=unknown", "get", id="pr-config"),
+        pytest.param("/api/github/prs/42/auto-fix?profile=unknown", "post", id="trigger-autofix"),
+    ],
+)
+def test_returns_404_for_unknown_profile(
+    client: TestClient,
+    mock_profile_repo: MagicMock,
+    path: str,
+    method: str,
+) -> None:
+    """All PR endpoints return 404 when profile is not found."""
+    mock_profile_repo.get_profile.return_value = None
+    response = getattr(client, method)(path)
+    assert response.status_code == 404
 
 
 class TestTriggerPRAutoFix:
@@ -284,15 +278,6 @@ class TestTriggerPRAutoFix:
 
         assert response.status_code == 400
         assert "pr_autofix" in response.json()["detail"].lower()
-
-    def test_returns_404_for_unknown_profile(
-        self,
-        client: TestClient,
-        mock_profile_repo: MagicMock,
-    ) -> None:
-        mock_profile_repo.get_profile.return_value = None
-        response = client.post("/api/github/prs/42/auto-fix?profile=unknown")
-        assert response.status_code == 404
 
     def test_aggressiveness_override(
         self,

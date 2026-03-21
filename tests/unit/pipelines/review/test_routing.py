@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import pytest
 from langgraph.graph import END
 
 from amelia.agents.schemas.evaluator import (
@@ -60,37 +61,59 @@ def _make_state(
 
 class TestRouteAfterEvaluation:
 
-    def test_review_only_routes_to_end(self) -> None:
-        state = _make_state(review_mode="review_only", has_items=True)
-        assert route_after_evaluation(state) == END
-
-    def test_review_only_routes_to_end_even_without_items(self) -> None:
-        state = _make_state(review_mode="review_only", has_items=False)
-        assert route_after_evaluation(state) == END
-
-    def test_review_fix_with_items_routes_to_developer(self) -> None:
-        state = _make_state(review_mode="review_fix", has_items=True)
-        assert route_after_evaluation(state) == "developer_node"
-
-    def test_review_fix_without_items_routes_to_end(self) -> None:
-        state = _make_state(review_mode="review_fix", has_items=False)
-        assert route_after_evaluation(state) == END
-
-    def test_no_mode_with_items_routes_to_developer(self) -> None:
-        state = _make_state(has_items=True)
-        assert route_after_evaluation(state) == "developer_node"
-
-    def test_no_mode_without_eval_result_routes_to_end(self) -> None:
-        state = _make_state(has_eval=False)
-        assert route_after_evaluation(state) == END
+    @pytest.mark.parametrize(
+        ("state_kwargs", "expected"),
+        [
+            pytest.param(
+                {"review_mode": "review_only", "has_items": True},
+                END,
+                id="review-only-with-items-ends",
+            ),
+            pytest.param(
+                {"review_mode": "review_only", "has_items": False},
+                END,
+                id="review-only-without-items-ends",
+            ),
+            pytest.param(
+                {"review_mode": "review_fix", "has_items": True},
+                "developer_node",
+                id="review-fix-with-items-develops",
+            ),
+            pytest.param(
+                {"review_mode": "review_fix", "has_items": False},
+                END,
+                id="review-fix-without-items-ends",
+            ),
+            pytest.param(
+                {"has_items": True},
+                "developer_node",
+                id="no-mode-with-items-develops",
+            ),
+            pytest.param(
+                {"has_eval": False},
+                END,
+                id="no-mode-without-eval-ends",
+            ),
+        ],
+    )
+    def test_routes_correctly(
+        self, state_kwargs: dict[str, object], expected: str,
+    ) -> None:
+        state = _make_state(**state_kwargs)  # type: ignore[arg-type]
+        assert route_after_evaluation(state) == expected
 
 
 class TestRouteAfterFixes:
 
-    def test_max_passes_reached_routes_to_end(self) -> None:
-        state = _make_state(review_pass=3, max_review_passes=3)
-        assert route_after_fixes(state) == END
-
-    def test_under_max_passes_routes_to_reviewer(self) -> None:
-        state = _make_state(review_pass=1, max_review_passes=3)
-        assert route_after_fixes(state) == "reviewer_node"
+    @pytest.mark.parametrize(
+        ("review_pass", "max_review_passes", "expected"),
+        [
+            pytest.param(3, 3, END, id="max-passes-reached-ends"),
+            pytest.param(1, 3, "reviewer_node", id="under-max-continues"),
+        ],
+    )
+    def test_routes_correctly(
+        self, review_pass: int, max_review_passes: int, expected: str,
+    ) -> None:
+        state = _make_state(review_pass=review_pass, max_review_passes=max_review_passes)
+        assert route_after_fixes(state) == expected

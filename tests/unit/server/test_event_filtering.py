@@ -109,6 +109,19 @@ class TestWorkflowTypePRAutoFix:
 # ---------------------------------------------------------------------------
 
 
+def _make_summary(**kwargs: object) -> WorkflowSummary:
+    """Build a WorkflowSummary with sensible defaults, overridable via kwargs."""
+    defaults: dict[str, object] = {
+        "id": uuid.uuid4(),
+        "issue_id": "ISSUE-1",
+        "worktree_path": "/tmp/repo",
+        "status": WorkflowStatus.COMPLETED,
+        "created_at": datetime.now(UTC),
+    }
+    defaults.update(kwargs)
+    return WorkflowSummary(**defaults)  # type: ignore[arg-type]
+
+
 class TestWorkflowSummaryFields:
     """Tests for pipeline_type, pr_number, pr_title, pr_comment_count on WorkflowSummary."""
 
@@ -117,33 +130,16 @@ class TestWorkflowSummaryFields:
         ["pipeline_type", "pr_number", "pr_title", "pr_comment_count"],
     )
     def test_field_defaults_to_none(self, field: str) -> None:
-        summary = WorkflowSummary(
-            id=uuid.uuid4(),
-            issue_id="ISSUE-1",
-            worktree_path="/tmp/repo",
-            status=WorkflowStatus.COMPLETED,
-            created_at=datetime.now(UTC),
-        )
+        summary = _make_summary()
         assert getattr(summary, field) is None
 
     def test_pipeline_type_accepts_value(self) -> None:
-        summary = WorkflowSummary(
-            id=uuid.uuid4(),
-            issue_id="ISSUE-1",
-            worktree_path="/tmp/repo",
-            status=WorkflowStatus.COMPLETED,
-            created_at=datetime.now(UTC),
-            pipeline_type="pr_auto_fix",
-        )
+        summary = _make_summary(pipeline_type="pr_auto_fix")
         assert summary.pipeline_type == "pr_auto_fix"
 
     def test_pr_fields_accept_values(self) -> None:
-        summary = WorkflowSummary(
-            id=uuid.uuid4(),
+        summary = _make_summary(
             issue_id="PR-42",
-            worktree_path="/tmp/repo",
-            status=WorkflowStatus.COMPLETED,
-            created_at=datetime.now(UTC),
             pipeline_type="pr_auto_fix",
             pr_number=42,
             pr_title="Fix: broken tests",

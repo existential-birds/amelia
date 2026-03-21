@@ -354,23 +354,6 @@ class TestPollProfile:
         await asyncio.sleep(0)
         mock_orchestrator.trigger_fix_cycle.assert_not_called()
 
-    async def test_fire_and_forget_dispatch(
-        self,
-        poller: PRCommentPoller,
-        mock_orchestrator: AsyncMock,
-        sample_profile: Profile,
-    ) -> None:
-        """trigger_fix_cycle is dispatched via asyncio.create_task (fire-and-forget)."""
-        pr = _make_pr_summary()
-        comment = _make_comment()
-
-        with _mock_pr_service(poller, [pr], [comment]):
-            await poller._poll_profile(sample_profile)
-
-        # Let fire-and-forget task run
-        await asyncio.sleep(0)
-        mock_orchestrator.trigger_fix_cycle.assert_called_once()
-
     async def test_silent_when_no_labeled_prs(
         self,
         poller: PRCommentPoller,

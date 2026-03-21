@@ -677,7 +677,7 @@ class TestWorkflowRecordCreation:
                 **pipeline_kwargs,
             )
 
-    async def test_execute_pipeline_creates_workflow_record(
+    async def test_workflow_record_created_with_correct_fields_and_metadata(
         self,
         orchestrator: PRAutoFixOrchestrator,
         workflow_repo: MagicMock,
@@ -687,30 +687,13 @@ class TestWorkflowRecordCreation:
         await self._run_execute_pipeline(orchestrator, orch_profile, pr_autofix_config)
         workflow_repo.create.assert_awaited_once()
         state = workflow_repo.create.call_args[0][0]
+        # Workflow type
         assert state.workflow_type == WorkflowType.PR_AUTO_FIX
-
-    async def test_workflow_record_has_correct_fields(
-        self,
-        orchestrator: PRAutoFixOrchestrator,
-        workflow_repo: MagicMock,
-        orch_profile: Profile,
-        pr_autofix_config: PRAutoFixConfig,
-    ) -> None:
-        await self._run_execute_pipeline(orchestrator, orch_profile, pr_autofix_config)
-        state = workflow_repo.create.call_args[0][0]
+        # Core fields
         assert state.issue_id == "PR-42"
         assert state.worktree_path == orch_profile.repo_root
         assert state.profile_id == orch_profile.name
-
-    async def test_issue_cache_contains_pr_metadata(
-        self,
-        orchestrator: PRAutoFixOrchestrator,
-        workflow_repo: MagicMock,
-        orch_profile: Profile,
-        pr_autofix_config: PRAutoFixConfig,
-    ) -> None:
-        await self._run_execute_pipeline(orchestrator, orch_profile, pr_autofix_config)
-        state = workflow_repo.create.call_args[0][0]
+        # Issue cache / PR metadata
         assert state.issue_cache is not None
         assert state.issue_cache["pr_number"] == 42
         assert state.issue_cache["pr_title"] == "PR #42"
@@ -850,87 +833,56 @@ class TestWorkflowCompletion:
 class TestBuildPrCommentsStatusReason:
     """Tests that _build_pr_comments includes status_reason for each status type."""
 
-    def test_fixed_comment_has_none_status_reason(
-        self,
-        orchestrator: PRAutoFixOrchestrator,
-    ) -> None:
-        final_state = {
-            "comments": [
+    @pytest.mark.parametrize(
+        ("comment", "group_result", "expected_status", "expected_reason"),
+        [
+            pytest.param(
                 {"id": 1, "path": "src/main.py", "line": 10, "body": "Fix this", "author": "r1"},
-            ],
-            "group_results": [
                 {"file_path": "src/main.py", "status": "fixed", "comment_ids": [1], "error": None},
-            ],
-            "resolution_results": [],
-        }
-        result = orchestrator._build_pr_comments(final_state)
-        assert len(result) == 1
-        assert result[0]["status"] == "fixed"
-        assert result[0]["status_reason"] is None
-
-    def test_failed_comment_has_error_as_status_reason(
-        self,
-        orchestrator: PRAutoFixOrchestrator,
-    ) -> None:
-        final_state = {
-            "comments": [
+                "fixed",
+                None,
+                id="fixed-has-none-reason",
+            ),
+            pytest.param(
                 {"id": 2, "path": "src/db.py", "line": 5, "body": "Fix query", "author": "r1"},
-            ],
-            "group_results": [
-                {
-                    "file_path": "src/db.py",
-                    "status": "failed",
-                    "comment_ids": [2],
-                    "error": "Circular dependency detected",
-                },
-            ],
-            "resolution_results": [],
-        }
-        result = orchestrator._build_pr_comments(final_state)
-        assert len(result) == 1
-        assert result[0]["status"] == "failed"
-        assert result[0]["status_reason"] == "Circular dependency detected"
-
-    def test_no_changes_comment_has_descriptive_status_reason(
-        self,
-        orchestrator: PRAutoFixOrchestrator,
-    ) -> None:
-        final_state = {
-            "comments": [
+                {"file_path": "src/db.py", "status": "failed", "comment_ids": [2], "error": "Circular dependency detected"},
+                "failed",
+                "Circular dependency detected",
+                id="failed-has-error-reason",
+            ),
+            pytest.param(
                 {"id": 3, "path": "src/util.py", "line": 1, "body": "Rename this", "author": "r1"},
-            ],
-            "group_results": [
-                {
-                    "file_path": "src/util.py",
-                    "status": "no_changes",
-                    "comment_ids": [3],
-                    "error": None,
-                },
-            ],
-            "resolution_results": [],
-        }
-        result = orchestrator._build_pr_comments(final_state)
-        assert len(result) == 1
-        assert result[0]["status"] == "skipped"  # NO_CHANGES normalized to "skipped"
-        assert result[0]["status_reason"] == "No code changes needed"
-
-    def test_ungrouped_comment_has_not_actionable_status_reason(
+                {"file_path": "src/util.py", "status": "no_changes", "comment_ids": [3], "error": None},
+                "skipped",
+                "No code changes needed",
+                id="no-changes-normalized-to-skipped",
+            ),
+            pytest.param(
+                {"id": 4, "path": None, "line": None, "body": "Looks good overall", "author": "r2"},
+                None,
+                "skipped",
+                "Not actionable or filtered",
+                id="ungrouped-not-actionable",
+            ),
+        ],
+    )
+    def test_single_comment_status_reason(
         self,
         orchestrator: PRAutoFixOrchestrator,
+        comment: dict[str, object],
+        group_result: dict[str, object] | None,
+        expected_status: str,
+        expected_reason: str | None,
     ) -> None:
-        """Comments not in any group_result get the default 'skipped' status
-        and 'Not actionable or filtered' reason."""
         final_state = {
-            "comments": [
-                {"id": 4, "path": None, "line": None, "body": "Looks good overall", "author": "r2"},
-            ],
-            "group_results": [],
+            "comments": [comment],
+            "group_results": [group_result] if group_result else [],
             "resolution_results": [],
         }
         result = orchestrator._build_pr_comments(final_state)
         assert len(result) == 1
-        assert result[0]["status"] == "skipped"
-        assert result[0]["status_reason"] == "Not actionable or filtered"
+        assert result[0]["status"] == expected_status
+        assert result[0]["status_reason"] == expected_reason
 
     def test_mixed_statuses_all_have_status_reason(
         self,

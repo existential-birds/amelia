@@ -158,19 +158,30 @@ def test_get_metrics_with_date_range(client: TestClient, mock_metrics_repo: Magi
     assert call_args[1]["end"] == date(2026, 1, 15)
 
 
-def test_get_metrics_preset_and_dates_returns_400(client: TestClient) -> None:
-    """Providing both preset and start/end returns 400."""
-    response = client.get(
-        "/api/github/pr-autofix/metrics?preset=7d&start=2026-01-01&end=2026-01-15"
-    )
-
-    assert response.status_code == 400
-
-
-def test_get_metrics_start_without_end_returns_400(client: TestClient) -> None:
-    """Providing start without end returns 400."""
-    response = client.get("/api/github/pr-autofix/metrics?start=2026-01-01")
-
+@pytest.mark.parametrize(
+    "path",
+    [
+        pytest.param(
+            "/api/github/pr-autofix/metrics?preset=7d&start=2026-01-01&end=2026-01-15",
+            id="metrics-preset-and-dates",
+        ),
+        pytest.param(
+            "/api/github/pr-autofix/metrics?start=2026-01-01",
+            id="metrics-start-without-end",
+        ),
+        pytest.param(
+            "/api/github/pr-autofix/metrics?preset=invalid",
+            id="metrics-invalid-preset",
+        ),
+        pytest.param(
+            "/api/github/pr-autofix/classifications?preset=7d&start=2026-01-01&end=2026-01-15",
+            id="classifications-preset-and-dates",
+        ),
+    ],
+)
+def test_invalid_query_params_return_400(client: TestClient, path: str) -> None:
+    """Invalid query param combinations return 400."""
+    response = client.get(path)
     assert response.status_code == 400
 
 
@@ -200,13 +211,6 @@ def test_get_metrics_with_aggressiveness_filter(
 
     call_args = mock_metrics_repo.get_metrics_summary.call_args
     assert call_args[1]["aggressiveness"] == "cautious"
-
-
-def test_get_metrics_invalid_preset(client: TestClient) -> None:
-    """Invalid preset returns 400."""
-    response = client.get("/api/github/pr-autofix/metrics?preset=invalid")
-
-    assert response.status_code == 400
 
 
 # ---- Classifications endpoint tests ----
@@ -253,15 +257,6 @@ def test_get_classifications_with_date_range(
     call_args = mock_metrics_repo.get_classifications.call_args
     assert call_args[1]["start"] == date(2026, 2, 1)
     assert call_args[1]["end"] == date(2026, 2, 28)
-
-
-def test_get_classifications_preset_and_dates_returns_400(client: TestClient) -> None:
-    """Providing both preset and start/end returns 400."""
-    response = client.get(
-        "/api/github/pr-autofix/classifications?preset=7d&start=2026-01-01&end=2026-01-15"
-    )
-
-    assert response.status_code == 400
 
 
 def test_get_metrics_empty_response(

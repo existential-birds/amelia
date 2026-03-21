@@ -2,14 +2,14 @@
 
 import pytest
 
+from amelia.sandbox.network import generate_allowlist_rules
+
 
 class TestGenerateAllowlistRules:
     """Tests for generate_allowlist_rules()."""
 
     def test_default_rules_structure(self) -> None:
         """Should generate rules with established, loopback, DNS, proxy, and DROP."""
-        from amelia.sandbox.network import generate_allowlist_rules
-
         rules = generate_allowlist_rules(allowed_hosts=[])
 
         assert "ESTABLISHED,RELATED" in rules
@@ -20,8 +20,6 @@ class TestGenerateAllowlistRules:
 
     def test_custom_hosts_included(self) -> None:
         """Custom hosts should appear in the generated rules."""
-        from amelia.sandbox.network import generate_allowlist_rules
-
         rules = generate_allowlist_rules(
             allowed_hosts=["api.example.com", "cdn.example.com"],
         )
@@ -31,16 +29,12 @@ class TestGenerateAllowlistRules:
 
     def test_proxy_always_allowed(self) -> None:
         """Proxy host should always be in rules regardless of allowed_hosts."""
-        from amelia.sandbox.network import generate_allowlist_rules
-
         rules = generate_allowlist_rules(allowed_hosts=[])
 
         assert "host.docker.internal" in rules
 
     def test_custom_proxy_host(self) -> None:
         """Should use custom proxy host when specified."""
-        from amelia.sandbox.network import generate_allowlist_rules
-
         rules = generate_allowlist_rules(
             allowed_hosts=[], proxy_host="custom-proxy.local",
         )
@@ -50,8 +44,6 @@ class TestGenerateAllowlistRules:
 
     def test_empty_host_list_still_allows_infra(self) -> None:
         """With no custom hosts, should still allow DNS + loopback + proxy."""
-        from amelia.sandbox.network import generate_allowlist_rules
-
         rules = generate_allowlist_rules(allowed_hosts=[])
 
         lines = rules.strip().split("\n")
@@ -60,8 +52,6 @@ class TestGenerateAllowlistRules:
 
     def test_drop_is_last_rule(self) -> None:
         """DROP should be the final iptables rule."""
-        from amelia.sandbox.network import generate_allowlist_rules
-
         rules = generate_allowlist_rules(allowed_hosts=["example.com"])
 
         iptables_lines = [
@@ -72,16 +62,12 @@ class TestGenerateAllowlistRules:
 
     def test_output_is_valid_shell(self) -> None:
         """Output should start with shebang and set -e."""
-        from amelia.sandbox.network import generate_allowlist_rules
-
         rules = generate_allowlist_rules(allowed_hosts=[])
 
         assert rules.startswith("#!/bin/sh\nset -e\n")
 
     def test_dns_restricted_to_docker_resolver(self) -> None:
         """DNS rules must only allow Docker's internal resolver, not any destination."""
-        from amelia.sandbox.network import generate_allowlist_rules
-
         rules = generate_allowlist_rules(allowed_hosts=[])
 
         # Must target Docker's internal DNS
@@ -93,38 +79,26 @@ class TestGenerateAllowlistRules:
 
     def test_custom_dns_server(self) -> None:
         """Should use custom DNS server when specified."""
-        from amelia.sandbox.network import generate_allowlist_rules
-
         rules = generate_allowlist_rules(allowed_hosts=[], dns_server="8.8.8.8")
         assert "-d 8.8.8.8" in rules
         assert "127.0.0.11" not in rules
 
-    def test_invalid_dns_server_raises_error(self) -> None:
-        """Should raise ValueError for invalid DNS server IP address."""
-        from amelia.sandbox.network import generate_allowlist_rules
-
-        with pytest.raises(ValueError, match="dns_server must be a valid IPv4 address"):
-            generate_allowlist_rules(allowed_hosts=[], dns_server="not-an-ip")
-
-        with pytest.raises(ValueError, match="dns_server must be a valid IPv4 address"):
-            generate_allowlist_rules(allowed_hosts=[], dns_server="8.8.8.8; rm -rf /")
-
-        with pytest.raises(ValueError, match="dns_server must be a valid IPv4 address"):
-            generate_allowlist_rules(allowed_hosts=[], dns_server="")
-
-    def test_ipv6_dns_server_rejected(self) -> None:
-        """Should reject IPv6 DNS server since iptables is IPv4-only."""
-        from amelia.sandbox.network import generate_allowlist_rules
-
-        with pytest.raises(ValueError, match="must be IPv4"):
-            generate_allowlist_rules(allowed_hosts=[], dns_server="::1")
-
-        with pytest.raises(ValueError, match="must be IPv4"):
-            generate_allowlist_rules(allowed_hosts=[], dns_server="2001:4860:4860::8888")
+    @pytest.mark.parametrize(
+        "dns_server,match",
+        [
+            pytest.param("not-an-ip", "dns_server must be a valid IPv4 address", id="not-an-ip"),
+            pytest.param("8.8.8.8; rm -rf /", "dns_server must be a valid IPv4 address", id="injection"),
+            pytest.param("", "dns_server must be a valid IPv4 address", id="empty"),
+            pytest.param("::1", "must be IPv4", id="ipv6-loopback"),
+            pytest.param("2001:4860:4860::8888", "must be IPv4", id="ipv6-full"),
+        ],
+    )
+    def test_invalid_dns_server_raises(self, dns_server: str, match: str) -> None:
+        """Invalid DNS server values raise ValueError."""
+        with pytest.raises(ValueError, match=match):
+            generate_allowlist_rules(allowed_hosts=[], dns_server=dns_server)
 
     def test_ipv6_output_blocked(self) -> None:
         """Should block all IPv6 outbound traffic."""
-        from amelia.sandbox.network import generate_allowlist_rules
-
         rules = generate_allowlist_rules(allowed_hosts=[])
         assert "ip6tables -P OUTPUT DROP" in rules

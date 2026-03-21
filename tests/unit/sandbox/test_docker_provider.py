@@ -17,6 +17,32 @@ async def _async_iter[T](items: list[T]) -> AsyncIterator[T]:
         yield item
 
 
+def _mock_start_container() -> tuple[AsyncMock, AsyncMock]:
+    """Create mock restart (fail) and mock run (succeed) for _start_container tests."""
+    mock_restart = AsyncMock()
+    mock_restart.returncode = 1  # No existing container to restart
+    mock_restart.wait = AsyncMock()
+
+    mock_run = AsyncMock()
+    mock_run.communicate.return_value = (b"container-id", b"")
+    mock_run.returncode = 0
+
+    return mock_restart, mock_run
+
+
+@pytest.fixture
+def mocked_provider(monkeypatch: pytest.MonkeyPatch) -> DockerSandboxProvider:
+    """DockerSandboxProvider with all async methods monkeypatched for ensure_running tests."""
+    provider = DockerSandboxProvider(profile_name="test")
+    monkeypatch.setattr(provider, "health_check", AsyncMock(return_value=False))
+    monkeypatch.setattr(provider, "_image_exists", AsyncMock(return_value=False))
+    monkeypatch.setattr(provider, "_build_image", AsyncMock())
+    monkeypatch.setattr(provider, "_start_container", AsyncMock())
+    monkeypatch.setattr(provider, "_wait_for_ready", AsyncMock())
+    monkeypatch.setattr(provider, "_apply_network_allowlist", AsyncMock())
+    return provider
+
+
 class TestDockerProviderProtocol:
     """DockerSandboxProvider satisfies SandboxProvider protocol."""
 
@@ -48,38 +74,25 @@ class TestHealthCheck:
     def provider(self) -> DockerSandboxProvider:
         return DockerSandboxProvider(profile_name="test")
 
-    async def test_healthy_container(self, provider: DockerSandboxProvider) -> None:
+    @pytest.mark.parametrize(
+        "stdout,returncode,expected",
+        [
+            pytest.param(b"true\n", 0, True, id="healthy"),
+            pytest.param(b"false\n", 0, False, id="unhealthy"),
+            pytest.param(b"", 1, False, id="missing"),
+        ],
+    )
+    async def test_health_check(
+        self, provider: DockerSandboxProvider, stdout: bytes, returncode: int, expected: bool,
+    ) -> None:
         mock_proc = AsyncMock()
-        mock_proc.communicate.return_value = (b"true\n", b"")
-        mock_proc.returncode = 0
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
-            result = await provider.health_check()
-
-        assert result is True
-        args = mock_exec.call_args[0]
-        assert "docker" in args
-        assert "inspect" in args
-
-    async def test_unhealthy_container(self, provider: DockerSandboxProvider) -> None:
-        mock_proc = AsyncMock()
-        mock_proc.communicate.return_value = (b"false\n", b"")
-        mock_proc.returncode = 0
+        mock_proc.communicate.return_value = (stdout, b"")
+        mock_proc.returncode = returncode
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
             result = await provider.health_check()
 
-        assert result is False
-
-    async def test_missing_container(self, provider: DockerSandboxProvider) -> None:
-        mock_proc = AsyncMock()
-        mock_proc.communicate.return_value = (b"", b"No such object")
-        mock_proc.returncode = 1
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            result = await provider.health_check()
-
-        assert result is False
+        assert result is expected
 
 
 class TestExecStream:
@@ -151,60 +164,26 @@ class TestTeardown:
 class TestEnsureRunning:
     """Tests for ensure_running() — starts container if not healthy."""
 
-    async def test_noop_when_healthy(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        provider = DockerSandboxProvider(profile_name="test")
-        mock_health_check = AsyncMock(return_value=True)
-        mock_build_image = AsyncMock()
-        mock_start_container = AsyncMock()
-        monkeypatch.setattr(provider, "health_check", mock_health_check)
-        monkeypatch.setattr(provider, "_build_image", mock_build_image)
-        monkeypatch.setattr(provider, "_start_container", mock_start_container)
+    async def test_noop_when_healthy(self, mocked_provider: DockerSandboxProvider) -> None:
+        mocked_provider.health_check.return_value = True  # type: ignore[attr-defined]
+        await mocked_provider.ensure_running()
 
-        await provider.ensure_running()
+        mocked_provider.health_check.assert_awaited_once()  # type: ignore[attr-defined]
+        mocked_provider._build_image.assert_not_awaited()  # type: ignore[attr-defined]
+        mocked_provider._start_container.assert_not_awaited()  # type: ignore[attr-defined]
 
-        mock_health_check.assert_awaited_once()
-        mock_build_image.assert_not_awaited()
-        mock_start_container.assert_not_awaited()
+    async def test_builds_and_starts_when_not_healthy(self, mocked_provider: DockerSandboxProvider) -> None:
+        await mocked_provider.ensure_running()
 
-    async def test_builds_and_starts_when_not_healthy(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        provider = DockerSandboxProvider(profile_name="test")
-        mock_health_check = AsyncMock(return_value=False)
-        mock_image_exists = AsyncMock(return_value=False)
-        mock_build_image = AsyncMock()
-        mock_start_container = AsyncMock()
-        mock_wait_for_ready = AsyncMock()
-        mock_apply_allowlist = AsyncMock()
-        monkeypatch.setattr(provider, "health_check", mock_health_check)
-        monkeypatch.setattr(provider, "_image_exists", mock_image_exists)
-        monkeypatch.setattr(provider, "_build_image", mock_build_image)
-        monkeypatch.setattr(provider, "_start_container", mock_start_container)
-        monkeypatch.setattr(provider, "_wait_for_ready", mock_wait_for_ready)
-        monkeypatch.setattr(provider, "_apply_network_allowlist", mock_apply_allowlist)
+        mocked_provider._build_image.assert_awaited_once()  # type: ignore[attr-defined]
+        mocked_provider._start_container.assert_awaited_once()  # type: ignore[attr-defined]
 
-        await provider.ensure_running()
+    async def test_skips_build_when_image_exists(self, mocked_provider: DockerSandboxProvider) -> None:
+        mocked_provider._image_exists.return_value = True  # type: ignore[attr-defined]
+        await mocked_provider.ensure_running()
 
-        mock_build_image.assert_awaited_once()
-        mock_start_container.assert_awaited_once()
-
-    async def test_skips_build_when_image_exists(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        provider = DockerSandboxProvider(profile_name="test")
-        mock_health_check = AsyncMock(return_value=False)
-        mock_image_exists = AsyncMock(return_value=True)
-        mock_build_image = AsyncMock()
-        mock_start_container = AsyncMock()
-        mock_wait_for_ready = AsyncMock()
-        mock_apply_allowlist = AsyncMock()
-        monkeypatch.setattr(provider, "health_check", mock_health_check)
-        monkeypatch.setattr(provider, "_image_exists", mock_image_exists)
-        monkeypatch.setattr(provider, "_build_image", mock_build_image)
-        monkeypatch.setattr(provider, "_start_container", mock_start_container)
-        monkeypatch.setattr(provider, "_wait_for_ready", mock_wait_for_ready)
-        monkeypatch.setattr(provider, "_apply_network_allowlist", mock_apply_allowlist)
-
-        await provider.ensure_running()
-
-        mock_build_image.assert_not_awaited()
-        mock_start_container.assert_awaited_once()
+        mocked_provider._build_image.assert_not_awaited()  # type: ignore[attr-defined]
+        mocked_provider._start_container.assert_awaited_once()  # type: ignore[attr-defined]
 
 
 class TestNetworkAllowlist:
@@ -221,9 +200,10 @@ class TestNetworkAllowlist:
         )
         call_order: list[str] = []
 
-        mock_health_check = AsyncMock(return_value=False)
-        mock_image_exists = AsyncMock(return_value=True)
-        mock_start_container = AsyncMock()
+        monkeypatch.setattr(provider, "health_check", AsyncMock(return_value=False))
+        monkeypatch.setattr(provider, "_image_exists", AsyncMock(return_value=True))
+        monkeypatch.setattr(provider, "_build_image", AsyncMock())
+        monkeypatch.setattr(provider, "_start_container", AsyncMock())
 
         async def mock_wait() -> None:
             call_order.append("wait_for_ready")
@@ -231,10 +211,6 @@ class TestNetworkAllowlist:
         async def mock_allowlist() -> None:
             call_order.append("apply_network_allowlist")
 
-        monkeypatch.setattr(provider, "health_check", mock_health_check)
-        monkeypatch.setattr(provider, "_image_exists", mock_image_exists)
-        monkeypatch.setattr(provider, "_build_image", AsyncMock())
-        monkeypatch.setattr(provider, "_start_container", mock_start_container)
         monkeypatch.setattr(provider, "_wait_for_ready", mock_wait)
         monkeypatch.setattr(provider, "_apply_network_allowlist", mock_allowlist)
 
@@ -328,13 +304,7 @@ class TestProxyTokenGeneration:
         provider = DockerSandboxProvider(
             profile_name="test", network_allowlist_enabled=False,
         )
-        mock_restart = AsyncMock()
-        mock_restart.returncode = 1
-        mock_restart.wait = AsyncMock()
-
-        mock_run = AsyncMock()
-        mock_run.communicate.return_value = (b"container-id", b"")
-        mock_run.returncode = 0
+        mock_restart, mock_run = _mock_start_container()
 
         with patch("asyncio.create_subprocess_exec", side_effect=[mock_restart, mock_run]) as mock_exec:
             await provider._start_container()
@@ -350,45 +320,28 @@ class TestProxyTokenGeneration:
 class TestContainerCapabilities:
     """NET_ADMIN/NET_RAW should only be added when allowlist is enabled."""
 
-    async def test_capabilities_present_when_allowlist_enabled(self) -> None:
+    @pytest.mark.parametrize(
+        "allowlist_enabled,cap_present",
+        [
+            pytest.param(True, True, id="enabled"),
+            pytest.param(False, False, id="disabled"),
+        ],
+    )
+    async def test_capabilities_match_allowlist_setting(
+        self, allowlist_enabled: bool, cap_present: bool,
+    ) -> None:
         provider = DockerSandboxProvider(
-            profile_name="test", network_allowlist_enabled=True,
+            profile_name="test", network_allowlist_enabled=allowlist_enabled,
         )
-        mock_restart = AsyncMock()
-        mock_restart.returncode = 1  # No existing container to restart
-        mock_restart.wait = AsyncMock()
-
-        mock_run = AsyncMock()
-        mock_run.communicate.return_value = (b"container-id", b"")
-        mock_run.returncode = 0
+        mock_restart, mock_run = _mock_start_container()
 
         with patch("asyncio.create_subprocess_exec", side_effect=[mock_restart, mock_run]) as mock_exec:
             await provider._start_container()
 
         run_args = mock_exec.call_args_list[1][0]
-        assert "--cap-add" in run_args
-        assert "NET_ADMIN" in run_args
-        assert "NET_RAW" in run_args
-
-    async def test_no_capabilities_when_allowlist_disabled(self) -> None:
-        provider = DockerSandboxProvider(
-            profile_name="test", network_allowlist_enabled=False,
-        )
-        mock_restart = AsyncMock()
-        mock_restart.returncode = 1
-        mock_restart.wait = AsyncMock()
-
-        mock_run = AsyncMock()
-        mock_run.communicate.return_value = (b"container-id", b"")
-        mock_run.returncode = 0
-
-        with patch("asyncio.create_subprocess_exec", side_effect=[mock_restart, mock_run]) as mock_exec:
-            await provider._start_container()
-
-        run_args = mock_exec.call_args_list[1][0]
-        assert "--cap-add" not in run_args
-        assert "NET_ADMIN" not in run_args
-        assert "NET_RAW" not in run_args
+        assert ("--cap-add" in run_args) is cap_present
+        assert ("NET_ADMIN" in run_args) is cap_present
+        assert ("NET_RAW" in run_args) is cap_present
 
 
 class TestProxyTokenSyncOnRestart:
