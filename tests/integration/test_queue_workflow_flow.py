@@ -20,7 +20,6 @@ Real components:
 """
 
 import uuid
-from collections.abc import AsyncGenerator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,11 +33,7 @@ from fastapi import status
 
 from amelia.core.types import Profile
 from amelia.server.database.repository import WorkflowRepository
-from amelia.server.dependencies import get_orchestrator, get_repository
-from amelia.server.main import create_app
 from amelia.server.models.state import ServerExecutionState
-from amelia.server.orchestrator.service import OrchestratorService
-from tests.integration.server.conftest import noop_lifespan
 
 
 # =============================================================================
@@ -47,26 +42,9 @@ from tests.integration.server.conftest import noop_lifespan
 
 
 @pytest.fixture
-async def test_client(
-    test_orchestrator: OrchestratorService,
-    test_repository: WorkflowRepository,
-) -> AsyncGenerator[httpx.AsyncClient, None]:
-    """Create async test client with real dependencies.
-
-    Uses httpx.AsyncClient with ASGITransport so the ASGI app runs in the
-    same event loop as the asyncpg pool created by test_db.
-    """
-    app = create_app()
-
-    app.router.lifespan_context = noop_lifespan
-    app.dependency_overrides[get_orchestrator] = lambda: test_orchestrator
-    app.dependency_overrides[get_repository] = lambda: test_repository
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        yield client
+def test_client(orchestrator_test_client: httpx.AsyncClient) -> httpx.AsyncClient:
+    """Alias shared orchestrator_test_client fixture for local use."""
+    return orchestrator_test_client
 
 
 @contextmanager

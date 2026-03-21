@@ -4,8 +4,10 @@ Provides common test utilities for FastAPI async client testing,
 reducing duplication across test_brainstorm_*.py files.
 """
 
+import re
 from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -13,6 +15,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverInterface
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.connection import Database
 from amelia.server.dependencies import get_orchestrator, get_profile_repository
@@ -24,6 +27,7 @@ from amelia.server.routes.brainstorm import (
     get_driver,
 )
 from amelia.server.services.brainstorm import BrainstormService
+from tests.conftest import create_mock_execute_agentic
 
 
 # Type alias for the async client factory
@@ -112,3 +116,112 @@ def _create_app_with_overrides(
     app.dependency_overrides[get_orchestrator] = lambda: mock_orch
 
     return app
+
+
+# =============================================================================
+# Shared brainstorm test helpers
+# =============================================================================
+
+
+def create_realistic_driver_messages(
+    *,
+    thinking_content: str = "Let me analyze this request...",
+    tool_name: str = "read_file",
+    tool_input: dict[str, Any] | None = None,
+    tool_output: str = "File contents here",
+    result_content: str = "Based on my analysis, here's the answer.",
+    session_id: str = "driver-session-123",
+) -> list[AgenticMessage]:
+    """Create a realistic sequence of driver messages.
+
+    Returns:
+        List of AgenticMessage objects simulating THINKING -> TOOL_CALL -> TOOL_RESULT -> RESULT.
+    """
+    if tool_input is None:
+        tool_input = {"path": "README.md"}
+
+    return [
+        AgenticMessage(
+            type=AgenticMessageType.THINKING,
+            content=thinking_content,
+        ),
+        AgenticMessage(
+            type=AgenticMessageType.TOOL_CALL,
+            tool_name=tool_name,
+            tool_input=tool_input,
+            tool_call_id="call-1",
+        ),
+        AgenticMessage(
+            type=AgenticMessageType.TOOL_RESULT,
+            tool_name=tool_name,
+            tool_output=tool_output,
+            tool_call_id="call-1",
+            is_error=False,
+        ),
+        AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content=result_content,
+            session_id=session_id,
+        ),
+    ]
+
+
+def _create_mock_execute_agentic_with_plan_file(
+    messages: list[AgenticMessage],
+) -> Any:
+    """Create a mock execute_agentic that also creates the plan file on disk.
+
+    The service detects artifacts by checking if the plan file exists after
+    driver execution. This wrapper creates that file based on the cwd kwarg
+    passed by the service, so the filesystem check succeeds.
+    """
+
+    async def mock_execute_agentic(
+        *args: Any, **kwargs: Any
+    ) -> AsyncGenerator[AgenticMessage, None]:
+        cwd = kwargs.get("cwd", "")
+        if cwd:
+            instructions = kwargs.get("instructions", "")
+            match = re.search(r"Write the validated design to `([^`]+)`", instructions)
+            if match:
+                plan_path = match.group(1)
+                abs_path = Path(cwd) / plan_path
+                abs_path.parent.mkdir(parents=True, exist_ok=True)
+                abs_path.write_text("# Design\n\nOverview...")
+
+        for msg in messages:
+            yield msg
+
+    return mock_execute_agentic
+
+
+@pytest.fixture
+def mock_driver() -> MagicMock:
+    """Create a mock driver with realistic message flow."""
+    driver = MagicMock(spec=DriverInterface)
+    messages = create_realistic_driver_messages()
+    driver.execute_agentic = create_mock_execute_agentic(messages)
+    return driver
+
+
+@pytest.fixture
+def mock_driver_with_write_file() -> MagicMock:
+    """Create a mock driver that creates the plan file on disk.
+
+    The service detects artifacts by checking if the plan file exists
+    after driver execution, so the mock must actually create the file.
+    """
+    driver = MagicMock(spec=DriverInterface)
+    messages = [
+        AgenticMessage(
+            type=AgenticMessageType.THINKING,
+            content="I'll create a design document...",
+        ),
+        AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content="I've created the design document.",
+            session_id="driver-session-artifact",
+        ),
+    ]
+    driver.execute_agentic = _create_mock_execute_agentic_with_plan_file(messages)
+    return driver

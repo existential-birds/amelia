@@ -14,9 +14,7 @@ Test Strategy:
 
 import os
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -35,6 +33,8 @@ from amelia.server.routes.brainstorm import (
     get_driver,
 )
 from amelia.server.services.brainstorm import BrainstormService
+
+from .conftest import noop_lifespan
 
 
 DATABASE_URL = os.environ.get(
@@ -182,11 +182,6 @@ class TestBrainstormDependencyResolution:
             yaml.dump(settings_data, f)
 
         app = create_app()
-
-        @asynccontextmanager
-        async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-            yield
-
         app.router.lifespan_context = noop_lifespan
 
         # Mock brainstorm service (avoids real database in TestClient's event loop)
@@ -237,11 +232,6 @@ class TestBrainstormDependencyResolution:
         repo_root.mkdir()
 
         app = create_app()
-
-        @asynccontextmanager
-        async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-            yield
-
         app.router.lifespan_context = noop_lifespan
 
         # Only override brainstorm_service (needs app.state from lifespan)
@@ -277,11 +267,6 @@ class TestBrainstormDependencyResolution:
         import os
 
         app = create_app()
-
-        @asynccontextmanager
-        async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-            yield
-
         app.router.lifespan_context = noop_lifespan
 
         # Only override brainstorm_service (needs app.state from lifespan)
@@ -351,11 +336,6 @@ class TestBrainstormDependencyResolution:
             yaml.dump(settings_data, f)
 
         app = create_app()
-
-        @asynccontextmanager
-        async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-            yield
-
         app.router.lifespan_context = noop_lifespan
 
         # Mock brainstorm service (avoids real database in TestClient's event loop)

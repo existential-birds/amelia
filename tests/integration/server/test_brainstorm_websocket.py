@@ -18,12 +18,10 @@ with its own event loop, causing asyncpg event loop mismatches).
 """
 
 import json
-import re
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -37,9 +35,12 @@ from amelia.server.events.bus import EventBus
 from amelia.server.events.connection_manager import ConnectionManager
 from amelia.server.models.events import EventDomain, EventType, WorkflowEvent
 from amelia.server.services.brainstorm import BrainstormService
-from tests.conftest import create_mock_execute_agentic
 
-from .conftest import AsyncClientFactory, _create_app_with_overrides
+from .conftest import (
+    AsyncClientFactory,
+    _create_app_with_overrides,
+    _create_mock_execute_agentic_with_plan_file,
+)
 
 
 # =============================================================================
@@ -65,46 +66,6 @@ def test_event_bus(captured_events: list[WorkflowEvent]) -> EventBus:
     bus = EventBus()
     bus.subscribe(captured_events.append)
     return bus
-
-
-def create_realistic_driver_messages(
-    *,
-    session_id: str = "driver-session-123",
-) -> list[AgenticMessage]:
-    """Create a realistic sequence of driver messages."""
-    return [
-        AgenticMessage(
-            type=AgenticMessageType.THINKING,
-            content="Let me analyze this...",
-        ),
-        AgenticMessage(
-            type=AgenticMessageType.TOOL_CALL,
-            tool_name="read_file",
-            tool_input={"path": "README.md"},
-            tool_call_id="call-1",
-        ),
-        AgenticMessage(
-            type=AgenticMessageType.TOOL_RESULT,
-            tool_name="read_file",
-            tool_output="File contents",
-            tool_call_id="call-1",
-            is_error=False,
-        ),
-        AgenticMessage(
-            type=AgenticMessageType.RESULT,
-            content="Here's my analysis.",
-            session_id=session_id,
-        ),
-    ]
-
-
-@pytest.fixture
-def mock_driver() -> MagicMock:
-    """Create a mock driver with realistic message flow."""
-    driver = MagicMock(spec=DriverInterface)
-    messages = create_realistic_driver_messages()
-    driver.execute_agentic = create_mock_execute_agentic(messages)
-    return driver
 
 
 @pytest.fixture
@@ -299,26 +260,7 @@ class TestBrainstormArtifactEvents:
                 session_id="driver-session-artifact",
             ),
         ]
-
-        async def mock_execute_agentic(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[AgenticMessage, None]:
-            # Extract cwd and instructions to create the plan file on disk
-            cwd = kwargs.get("cwd", "")
-            instructions = kwargs.get("instructions", "")
-            match = re.search(
-                r"Write the validated design to `([^`]+)`", instructions
-            )
-            if match and cwd:
-                plan_path = match.group(1)
-                abs_path = Path(cwd) / plan_path
-                abs_path.parent.mkdir(parents=True, exist_ok=True)
-                abs_path.write_text("# Design\n\nOverview...")
-
-            for msg in messages:
-                yield msg
-
-        driver.execute_agentic = mock_execute_agentic
+        driver.execute_agentic = _create_mock_execute_agentic_with_plan_file(messages)
         return driver
 
     @pytest.fixture

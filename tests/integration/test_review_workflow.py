@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -34,20 +33,17 @@ from fastapi import status
 
 from amelia.core.types import Issue
 from amelia.server.database.repository import WorkflowRepository
-from amelia.server.dependencies import get_orchestrator, get_repository
 from amelia.server.exceptions import (
     ConcurrencyLimitError,
     WorkflowConflictError,
     WorkflowNotFoundError,
 )
-from amelia.server.main import create_app
 from amelia.server.models.state import (
     ServerExecutionState,
     WorkflowStatus,
     WorkflowType,
 )
 from amelia.server.orchestrator.service import OrchestratorService
-from tests.integration.server.conftest import noop_lifespan
 
 
 # =============================================================================
@@ -124,22 +120,9 @@ async def _create_completed_workflow(
 
 
 @pytest.fixture
-async def test_client(
-    test_orchestrator: OrchestratorService,
-    test_repository: WorkflowRepository,
-) -> AsyncGenerator[httpx.AsyncClient, None]:
-    """Create async test client with real dependencies."""
-    app = create_app()
-
-    app.router.lifespan_context = noop_lifespan
-    app.dependency_overrides[get_orchestrator] = lambda: test_orchestrator
-    app.dependency_overrides[get_repository] = lambda: test_repository
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        yield client
+def test_client(orchestrator_test_client: httpx.AsyncClient) -> httpx.AsyncClient:
+    """Alias shared orchestrator_test_client fixture for local use."""
+    return orchestrator_test_client
 
 
 # =============================================================================

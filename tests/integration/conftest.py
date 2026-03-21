@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
@@ -669,3 +670,89 @@ async def active_test_profile(
     await test_profile_repository.create_profile(profile)
     await test_profile_repository.set_active("test")
     return profile
+
+
+# ---------------------------------------------------------------------------
+# Shared orchestrator test client fixture
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def orchestrator_test_client(
+    test_orchestrator: OrchestratorService,
+    test_repository: WorkflowRepository,
+) -> AsyncGenerator[httpx.AsyncClient, None]:
+    """Create async test client with real orchestrator and repository.
+
+    Uses httpx.AsyncClient with ASGITransport so the ASGI app runs in the
+    same event loop as the asyncpg pool created by test_db.
+
+    Replaces duplicate test_client fixtures across multiple test modules.
+    """
+    from amelia.server.dependencies import get_orchestrator, get_repository  # noqa: PLC0415
+    from amelia.server.main import create_app  # noqa: PLC0415
+    from tests.integration.server.conftest import noop_lifespan  # noqa: PLC0415
+
+    app = create_app()
+
+    app.router.lifespan_context = noop_lifespan
+    app.dependency_overrides[get_orchestrator] = lambda: test_orchestrator
+    app.dependency_overrides[get_repository] = lambda: test_repository
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        yield client
+
+
+# ---------------------------------------------------------------------------
+# Shared create_test_workflow helper
+# ---------------------------------------------------------------------------
+
+
+async def create_test_workflow(
+    repository: WorkflowRepository,
+    workflow_id: uuid.UUID | None = None,
+    issue_id: str = "TEST-001",
+    worktree_path: str = "/tmp/test-repo",
+    workflow_status: str = "pending",
+    profile_id: str = "test",
+) -> ServerExecutionState:
+    """Create and persist a test workflow.
+
+    Args:
+        repository: Repository to persist to.
+        workflow_id: Workflow ID (UUID). Generated if not provided.
+        issue_id: Issue ID.
+        worktree_path: Worktree path.
+        workflow_status: Initial status.
+        profile_id: Profile ID for execution state.
+
+    Returns:
+        Created ServerExecutionState.
+    """
+    from datetime import UTC, datetime  # noqa: PLC0415
+
+    if workflow_id is None:
+        workflow_id = uuid.uuid4()
+    workflow = ServerExecutionState(
+        id=workflow_id,
+        issue_id=issue_id,
+        worktree_path=worktree_path,
+        workflow_status=workflow_status,
+        started_at=datetime.now(UTC),
+    )
+    await repository.create(workflow)
+    return workflow
+
+
+# ---------------------------------------------------------------------------
+# Shared mock_api_key fixture
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mock_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Set API key env var to allow driver construction."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-for-integration-tests")

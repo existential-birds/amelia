@@ -12,10 +12,7 @@ Real components:
 - import_external_plan function with regex extraction
 """
 
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
 
 import httpx
 import pytest
@@ -25,9 +22,6 @@ from amelia.core.constants import resolve_plan_path
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
-from amelia.server.dependencies import get_orchestrator, get_repository
-from amelia.server.main import create_app
-from amelia.server.orchestrator.service import OrchestratorService
 
 
 # =============================================================================
@@ -70,25 +64,9 @@ async def setup_test_profile(test_profile_repository: ProfileRepository) -> Prof
 
 
 @pytest.fixture
-async def test_client(
-    test_orchestrator: OrchestratorService,
-    test_repository: WorkflowRepository,
-) -> AsyncGenerator[httpx.AsyncClient, None]:
-    """Create async test client with real dependencies."""
-    app = create_app()
-
-    # Create a no-op lifespan that doesn't initialize database/orchestrator
-    @asynccontextmanager
-    async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-        yield
-
-    app.router.lifespan_context = noop_lifespan
-    app.dependency_overrides[get_orchestrator] = lambda: test_orchestrator
-    app.dependency_overrides[get_repository] = lambda: test_repository
-
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        yield client
+def test_client(orchestrator_test_client: httpx.AsyncClient) -> httpx.AsyncClient:
+    """Alias shared orchestrator_test_client fixture for local use."""
+    return orchestrator_test_client
 
 
 # =============================================================================

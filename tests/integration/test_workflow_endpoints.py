@@ -17,9 +17,6 @@ Real components:
 """
 
 import tempfile
-import uuid
-from collections.abc import AsyncGenerator
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -30,11 +27,8 @@ import pytest
 from fastapi import status
 
 from amelia.server.database.repository import WorkflowRepository
-from amelia.server.dependencies import get_orchestrator, get_repository
-from amelia.server.main import create_app
-from amelia.server.models.state import ServerExecutionState, WorkflowStatus
-from amelia.server.orchestrator.service import OrchestratorService
-from tests.integration.server.conftest import noop_lifespan
+from amelia.server.models.state import WorkflowStatus
+from tests.integration.conftest import create_test_workflow
 
 
 # =============================================================================
@@ -43,60 +37,9 @@ from tests.integration.server.conftest import noop_lifespan
 
 
 @pytest.fixture
-async def test_client(
-    test_orchestrator: OrchestratorService,
-    test_repository: WorkflowRepository,
-) -> AsyncGenerator[httpx.AsyncClient, None]:
-    """Create async test client with real dependencies.
-
-    Uses httpx.AsyncClient with ASGITransport so the ASGI app runs in the
-    same event loop as the asyncpg pool created by test_db.
-    """
-    app = create_app()
-
-    app.router.lifespan_context = noop_lifespan
-    app.dependency_overrides[get_orchestrator] = lambda: test_orchestrator
-    app.dependency_overrides[get_repository] = lambda: test_repository
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        yield client
-
-
-async def create_test_workflow(
-    repository: WorkflowRepository,
-    workflow_id: uuid.UUID | None = None,
-    issue_id: str = "TEST-001",
-    worktree_path: str = "/tmp/test-repo",
-    workflow_status: WorkflowStatus = "pending",
-    profile_id: str = "test",
-) -> ServerExecutionState:
-    """Create and persist a test workflow.
-
-    Args:
-        repository: Repository to persist to.
-        workflow_id: Workflow ID (UUID). Generated if not provided.
-        issue_id: Issue ID.
-        worktree_path: Worktree path.
-        workflow_status: Initial status.
-        profile_id: Profile ID for execution state.
-
-    Returns:
-        Created ServerExecutionState.
-    """
-    if workflow_id is None:
-        workflow_id = uuid4()
-    workflow = ServerExecutionState(
-        id=workflow_id,
-        issue_id=issue_id,
-        worktree_path=worktree_path,
-        workflow_status=workflow_status,
-        started_at=datetime.now(UTC),
-    )
-    await repository.create(workflow)
-    return workflow
+def test_client(orchestrator_test_client: httpx.AsyncClient) -> httpx.AsyncClient:
+    """Alias shared orchestrator_test_client fixture for local use."""
+    return orchestrator_test_client
 
 
 # =============================================================================

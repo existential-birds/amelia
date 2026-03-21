@@ -78,9 +78,8 @@ def git_repo(tmp_path: Path) -> Path:
 
 
 @pytest.fixture(autouse=True)
-def mock_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Set API key env var to allow driver construction."""
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-for-integration-tests")
+def _mock_api_key(mock_api_key: None) -> None:
+    """Use shared mock_api_key fixture (autouse wrapper)."""
 
 
 @pytest.fixture
