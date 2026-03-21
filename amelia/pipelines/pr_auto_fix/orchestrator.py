@@ -408,6 +408,7 @@ class PRAutoFixOrchestrator:
                     # Count per-comment (iterate comment_ids, not groups -- Pitfall 3)
                     fixed = 0
                     failed = 0
+                    no_changes = 0
                     for result in group_results:
                         result_dict = (
                             result
@@ -422,6 +423,8 @@ class PRAutoFixOrchestrator:
                             fixed += comment_count
                         elif status == GroupFixStatus.FAILED:
                             failed += comment_count
+                        elif status == GroupFixStatus.NO_CHANGES:
+                            no_changes += comment_count
 
                     comments_processed = len(comments_raw)
                     skipped = comments_processed - fixed - failed
@@ -538,6 +541,11 @@ class PRAutoFixOrchestrator:
             )
             for cid in result_dict.get("comment_ids", []):
                 comment_fix_status[cid] = result_dict.get("status", "unknown")
+
+        # Normalize NO_CHANGES -> skipped for dashboard compatibility
+        for cid in comment_fix_status:
+            if comment_fix_status[cid] == GroupFixStatus.NO_CHANGES:
+                comment_fix_status[cid] = "skipped"
 
         # comment_id -> resolution result
         resolution_map: dict[int, dict[str, Any]] = {}

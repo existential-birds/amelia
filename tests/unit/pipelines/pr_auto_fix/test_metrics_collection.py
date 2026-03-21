@@ -138,3 +138,119 @@ class TestPromptHash:
 
     def test_different_for_different_input(self) -> None:
         assert get_prompt_hash("critical") != get_prompt_hash("thorough")
+
+
+class TestNoChangesStatus:
+    """Verify NO_CHANGES status is counted as skipped in metrics."""
+
+    async def test_no_changes_counted_as_skipped_in_metrics(self) -> None:
+        """NO_CHANGES group results should be excluded from fixed/failed,
+        and their comments counted as skipped."""
+        group_results = [
+            GroupFixResult(
+                file_path="a.py",
+                status=GroupFixStatus.NO_CHANGES,
+                comment_ids=[1, 2],
+            ),
+        ]
+        final_state = {
+            "comments": [MagicMock(id=i) for i in range(1, 4)],
+            "group_results": group_results,
+            "resolution_results": [],
+            "commit_sha": None,
+        }
+
+        metrics_repo, _ = await _run_pipeline_with_metrics(final_state=final_state)
+        assert metrics_repo is not None
+        kw = metrics_repo.save_run_metrics.call_args[1]
+        assert kw["fixes_applied"] == 0
+        assert kw["fixes_failed"] == 0
+        # 3 comments total - 0 fixed - 0 failed = 3 skipped
+        assert kw["fixes_skipped"] == 3
+
+    async def test_mixed_statuses_counted_correctly(self) -> None:
+        """FIXED, FAILED, and NO_CHANGES groups produce correct counters."""
+        group_results = [
+            GroupFixResult(
+                file_path="a.py",
+                status=GroupFixStatus.FIXED,
+                comment_ids=[1, 2],
+            ),
+            GroupFixResult(
+                file_path="b.py",
+                status=GroupFixStatus.FAILED,
+                comment_ids=[3],
+            ),
+            GroupFixResult(
+                file_path="c.py",
+                status=GroupFixStatus.NO_CHANGES,
+                comment_ids=[4, 5],
+            ),
+        ]
+        final_state = {
+            "comments": [MagicMock(id=i) for i in range(1, 8)],
+            "group_results": group_results,
+            "resolution_results": [],
+            "commit_sha": "abc123",
+        }
+
+        metrics_repo, _ = await _run_pipeline_with_metrics(final_state=final_state)
+        assert metrics_repo is not None
+        kw = metrics_repo.save_run_metrics.call_args[1]
+        assert kw["fixes_applied"] == 2
+        assert kw["fixes_failed"] == 1
+        # 7 comments - 2 fixed - 1 failed = 4 skipped
+        assert kw["fixes_skipped"] == 4
+
+
+class TestBuildPrCommentsStatusNormalization:
+    """Verify _build_pr_comments normalizes NO_CHANGES to 'skipped'."""
+
+    def test_build_pr_comments_normalizes_no_changes_to_skipped(self) -> None:
+        """Comments with NO_CHANGES group status should get status='skipped'."""
+        orchestrator = make_orchestrator()
+        final_state = {
+            "comments": [
+                {"id": 1, "body": "Fix this", "path": "a.py", "line": 10},
+            ],
+            "group_results": [
+                GroupFixResult(
+                    file_path="a.py",
+                    status=GroupFixStatus.NO_CHANGES,
+                    comment_ids=[1],
+                ),
+            ],
+            "resolution_results": [],
+        }
+
+        result = orchestrator._build_pr_comments(final_state)
+        assert len(result) == 1
+        assert result[0]["status"] == "skipped"
+
+    def test_build_pr_comments_preserves_fixed_and_failed(self) -> None:
+        """FIXED and FAILED statuses should be preserved as-is."""
+        orchestrator = make_orchestrator()
+        final_state = {
+            "comments": [
+                {"id": 1, "body": "Fix bug", "path": "a.py", "line": 10},
+                {"id": 2, "body": "Fix crash", "path": "b.py", "line": 20},
+            ],
+            "group_results": [
+                GroupFixResult(
+                    file_path="a.py",
+                    status=GroupFixStatus.FIXED,
+                    comment_ids=[1],
+                ),
+                GroupFixResult(
+                    file_path="b.py",
+                    status=GroupFixStatus.FAILED,
+                    comment_ids=[2],
+                ),
+            ],
+            "resolution_results": [],
+        }
+
+        result = orchestrator._build_pr_comments(final_state)
+        statuses = {c["comment_id"]: c["status"] for c in result}
+        assert statuses[1] == "fixed"
+        assert statuses[2] == "failed"
