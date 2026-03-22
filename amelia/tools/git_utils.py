@@ -331,13 +331,16 @@ class GitOperations:
         logger.opt(colors=False).info("Committed changes", sha=sha[:8], message=message)
         return sha
 
-    async def safe_push(self, branch: str) -> str:
+    async def safe_push(self, branch: str, *, skip_hooks: bool = False) -> str:
         """Push current branch to origin with safety guards.
 
         Refuses protected branches, detects divergence, never force-pushes.
 
         Args:
             branch: Branch name to push.
+            skip_hooks: If True, pass --no-verify to skip pre-push hooks.
+                Use for automated pipelines where the repo's pre-push hook
+                (e.g. pre-commit running lint/tests) would block the push.
 
         Returns:
             The local SHA that was pushed.
@@ -363,14 +366,39 @@ class GitOperations:
         # Divergence check
         if remote_sha is not None and remote_sha != local_sha:
             merge_base = await self._run_git("merge-base", local_sha, remote_sha)
+            logger.info(
+                "Divergence check",
+                branch=branch,
+                local_sha=local_sha[:8],
+                remote_sha=remote_sha[:8],
+                merge_base=merge_base[:8],
+                is_fast_forward=(merge_base == remote_sha),
+            )
             if merge_base != remote_sha:
                 raise ValueError(
                     f"Remote branch '{branch}' has diverged from local. "
                     f"merge-base={merge_base[:8]}, remote={remote_sha[:8]}. "
                     f"Aborting push (never rebase)."
                 )
+        else:
+            logger.info(
+                "Push pre-check",
+                branch=branch,
+                local_sha=local_sha[:8],
+                remote_sha=remote_sha[:8] if remote_sha else "none",
+                status="in-sync" if remote_sha == local_sha else "new-branch",
+            )
 
-        await self._run_git("push", "origin", f"HEAD:refs/heads/{branch}")
+        logger.info(
+            "Pushing to remote",
+            branch=branch,
+            refspec=f"HEAD:refs/heads/{branch}",
+            local_sha=local_sha[:8],
+        )
+        push_args = ["push", "origin", f"HEAD:refs/heads/{branch}"]
+        if skip_hooks:
+            push_args.insert(1, "--no-verify")
+        await self._run_git(*push_args)
         logger.info("Pushed to remote", branch=branch, sha=local_sha[:8])
         return local_sha
 

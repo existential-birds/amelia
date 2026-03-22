@@ -382,7 +382,7 @@ class TestCommitPushNode:
         assert result["status"] == "completed"
         assert result["commit_sha"] == "abc123def456"
         mock_git.stage_and_commit.assert_called_once()
-        mock_git.safe_push.assert_called_once_with("feat/my-feature")
+        mock_git.safe_push.assert_called_once_with("feat/my-feature", skip_hooks=True)
 
         commit_msg = mock_git.stage_and_commit.call_args[0][0]
         assert "fix(review):" in commit_msg

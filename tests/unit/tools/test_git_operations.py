@@ -162,6 +162,41 @@ async def test_safe_push_never_force_pushes(git_ops, mock_subprocess):
         assert "-f" not in all_args, "push must not use -f"
 
 
+async def test_safe_push_skip_hooks(git_ops, mock_subprocess):
+    """safe_push with skip_hooks=True passes --no-verify."""
+    setup, mock_exec, _ = mock_subprocess
+    setup(
+        ("", "", 0),  # git fetch
+        ("aaa111", "", 0),  # local SHA
+        ("", "unknown revision", 1),  # remote doesn't exist
+        ("", "", 0),  # git push --no-verify
+    )
+
+    await git_ops.safe_push("feat-new", skip_hooks=True)
+
+    push_call = mock_exec.call_args_list[-1]
+    assert push_call.args[:5] == (
+        "git", "push", "--no-verify", "origin", "HEAD:refs/heads/feat-new"
+    )
+
+
+async def test_safe_push_default_no_skip_hooks(git_ops, mock_subprocess):
+    """safe_push without skip_hooks does not pass --no-verify."""
+    setup, mock_exec, _ = mock_subprocess
+    setup(
+        ("", "", 0),  # git fetch
+        ("aaa111", "", 0),  # local SHA
+        ("", "unknown revision", 1),  # remote doesn't exist
+        ("", "", 0),  # git push
+    )
+
+    await git_ops.safe_push("feat-new")
+
+    push_call = mock_exec.call_args_list[-1]
+    all_args = push_call.args
+    assert "--no-verify" not in all_args, "default push should not skip hooks"
+
+
 async def test_git_command_timeout(git_ops, mock_subprocess):
     """Git command timeout raises ValueError."""
     _, mock_exec, _ = mock_subprocess

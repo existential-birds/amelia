@@ -406,7 +406,7 @@ async def commit_push_node(
 
     # Push separately so commit_sha is always returned on commit success
     try:
-        await git_ops.safe_push(state.head_branch)
+        await git_ops.safe_push(state.head_branch, skip_hooks=True)
         logger.info(
             "Committed and pushed fixes",
             sha=sha[:8],
@@ -415,7 +415,13 @@ async def commit_push_node(
         return {"status": "completed", "commit_sha": sha}
 
     except ValueError as e:
-        logger.error("Git push failed", error=str(e), sha=sha[:8])
+        logger.error(
+            "Git push failed",
+            error=str(e),
+            sha=sha[:8],
+            branch=state.head_branch,
+            repo_root=str(profile.repo_root),
+        )
         return {"status": "failed", "commit_sha": sha, "error": str(e)}
 
 
