@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, patch
 
-from tests.conftest import AsyncIteratorMock
-
 from amelia.client.streaming import WorkflowSummary, stream_workflow_events
+from tests.conftest import AsyncIteratorMock
 
 
 def _make_ws_messages(events: list[dict]) -> list[str]:
