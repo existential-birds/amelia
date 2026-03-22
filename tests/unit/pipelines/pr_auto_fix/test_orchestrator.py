@@ -923,6 +923,83 @@ class TestStageCompletedEventEmission:
         assert "failed" in statuses
 
 
+class TestPRCommentsResolvedEvent:
+    """Tests for PR_COMMENTS_RESOLVED event emission after successful pipeline."""
+
+    async def test_emits_pr_comments_resolved_when_threads_resolved(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        captured_events: list[WorkflowEvent],
+        orch_profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
+    ) -> None:
+        """After successful pipeline with resolved threads, PR_COMMENTS_RESOLVED is emitted."""
+        final_state = {
+            "comments": [
+                {"id": 1, "path": "a.py", "line": 1, "body": "Fix", "author": "r1"},
+                {"id": 2, "path": "b.py", "line": 2, "body": "Fix", "author": "r1"},
+            ],
+            "group_results": [
+                {"file_path": "a.py", "status": "fixed", "comment_ids": [1]},
+                {"file_path": "b.py", "status": "fixed", "comment_ids": [2]},
+            ],
+            "resolution_results": [
+                {"comment_id": 1, "replied": True, "resolved": True},
+                {"comment_id": 2, "replied": True, "resolved": False},
+            ],
+        }
+        async with mock_pipeline_context(ainvoke_return=final_state):
+            await orchestrator._execute_pipeline(
+                pr_number=42,
+                repo="owner/repo",
+                profile=orch_profile,
+                config=pr_autofix_config,
+                head_branch="feat/test",
+            )
+
+        resolved_events = [
+            e for e in captured_events if e.event_type == EventType.PR_COMMENTS_RESOLVED
+        ]
+        assert len(resolved_events) == 1
+        event = resolved_events[0]
+        assert event.data is not None
+        assert event.data["resolved_count"] == 1
+        assert event.data["total_count"] == 2
+
+    async def test_no_pr_comments_resolved_when_zero_resolved(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        captured_events: list[WorkflowEvent],
+        orch_profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
+    ) -> None:
+        """When no threads are resolved, PR_COMMENTS_RESOLVED is NOT emitted."""
+        final_state = {
+            "comments": [
+                {"id": 1, "path": "a.py", "line": 1, "body": "Fix", "author": "r1"},
+            ],
+            "group_results": [
+                {"file_path": "a.py", "status": "failed", "comment_ids": [1]},
+            ],
+            "resolution_results": [
+                {"comment_id": 1, "replied": False, "resolved": False},
+            ],
+        }
+        async with mock_pipeline_context(ainvoke_return=final_state):
+            await orchestrator._execute_pipeline(
+                pr_number=42,
+                repo="owner/repo",
+                profile=orch_profile,
+                config=pr_autofix_config,
+                head_branch="feat/test",
+            )
+
+        resolved_events = [
+            e for e in captured_events if e.event_type == EventType.PR_COMMENTS_RESOLVED
+        ]
+        assert len(resolved_events) == 0
+
+
 class TestBuildPrCommentsStatusReason:
     """Tests that _build_pr_comments includes status_reason for each status type."""
 
