@@ -1161,7 +1161,7 @@ class TestWorkflowIdThreading:
         self,
         orchestrator: PRAutoFixOrchestrator,
     ) -> None:
-        """_emit_event with workflow_id=None does not crash (no get_workflow_id fallback)."""
+        """_emit_event with workflow_id=None does not crash (no synthetic ID fallback)."""
         # Should not raise AttributeError or KeyError
         orchestrator._emit_event(
             EventType.PR_FIX_QUEUED,

@@ -70,8 +70,6 @@ class PRAutoFixOrchestrator:
         # Repo-level git serialization (keyed by repo_path)
         self._repo_locks: dict[str, asyncio.Lock] = {}
 
-        # Per-PR synthetic workflow IDs for orchestration events
-        self._pr_workflow_ids: dict[tuple[str, int], UUID] = {}
 
     def _get_pr_lock(self, repo: str, pr_number: int) -> asyncio.Lock:
         """Get or create the per-PR asyncio lock."""
@@ -86,13 +84,6 @@ class PRAutoFixOrchestrator:
             self._repo_locks[repo_path] = asyncio.Lock()
         return self._repo_locks[repo_path]
 
-    def get_workflow_id(self, repo: str, pr_number: int) -> UUID:
-        """Get or create a synthetic workflow ID for orchestration events."""
-        key = (repo, pr_number)
-        if key not in self._pr_workflow_ids:
-            self._pr_workflow_ids[key] = uuid4()
-        return self._pr_workflow_ids[key]
-
     async def trigger_fix_cycle(
         self,
         pr_number: int,
@@ -102,6 +93,7 @@ class PRAutoFixOrchestrator:
         config: PRAutoFixConfig | None = None,
         pr_title: str = "",
         comments: list[PRReviewComment] | None = None,
+        workflow_id: UUID | None = None,
     ) -> None:
         """Trigger a fix cycle for a PR with concurrency control.
 
@@ -163,6 +155,7 @@ class PRAutoFixOrchestrator:
                 head_branch=head_branch,
                 pr_title=effective_title,
                 comments=comments,
+                workflow_id=workflow_id,
             )
 
             # Process pending cycle if any (with cooldown between)
@@ -190,6 +183,7 @@ class PRAutoFixOrchestrator:
         head_branch: str = "",
         pr_title: str = "",
         comments: list[PRReviewComment] | None = None,
+        workflow_id: UUID | None = None,
     ) -> None:
         """Run a single fix cycle with divergence recovery.
 
@@ -217,6 +211,7 @@ class PRAutoFixOrchestrator:
                         head_branch,
                         pr_title=pr_title,
                         comments=comments,
+                        workflow_id=workflow_id,
                     )
                     return  # Success
 
@@ -233,6 +228,7 @@ class PRAutoFixOrchestrator:
                         head_branch,
                         pr_title=pr_title,
                         comments=comments,
+                        workflow_id=workflow_id,
                     )
                     return  # Success
 
@@ -253,6 +249,7 @@ class PRAutoFixOrchestrator:
                         f"Branch diverged for PR #{pr_number}, retrying ({attempt + 1}/{_MAX_DIVERGENCE_RETRIES})",
                         data={"attempt": attempt + 1, "max_retries": _MAX_DIVERGENCE_RETRIES},
                         repo=repo,
+                        workflow_id=workflow_id,
                     )
                     logger.warning(
                         "Branch diverged, retrying",
@@ -267,6 +264,7 @@ class PRAutoFixOrchestrator:
                         f"All divergence retries exhausted for PR #{pr_number}",
                         data={"total_attempts": _MAX_DIVERGENCE_RETRIES + 1},
                         repo=repo,
+                        workflow_id=workflow_id,
                     )
                     logger.error(
                         "Divergence retries exhausted",
@@ -293,6 +291,7 @@ class PRAutoFixOrchestrator:
         head_branch: str = "",
         pr_title: str = "",
         comments: list[PRReviewComment] | None = None,
+        workflow_id: UUID | None = None,
     ) -> None:
         """Execute the PR auto-fix pipeline with workflow record tracking.
 
@@ -310,7 +309,7 @@ class PRAutoFixOrchestrator:
         pr_title = pr_title or f"PR #{pr_number}"
 
         # Create workflow record for dashboard visibility
-        workflow_id = uuid4()
+        workflow_id = workflow_id or uuid4()
         now = datetime.now(UTC)
         issue_cache: dict[str, Any] = {
             "pr_number": pr_number,
@@ -839,7 +838,7 @@ class PRAutoFixOrchestrator:
             message: Human-readable message.
             data: Optional structured payload.
             repo: Repository in 'owner/repo' format.
-            workflow_id: Explicit workflow ID to use. Falls back to synthetic ID.
+            workflow_id: Explicit workflow ID to use. None for pre-pipeline events.
         """
         event_data: dict[str, object] = {"pr_number": pr_number}
         if data:
@@ -847,7 +846,7 @@ class PRAutoFixOrchestrator:
 
         event = WorkflowEvent(
             id=uuid4(),
-            workflow_id=workflow_id or self.get_workflow_id(repo, pr_number),
+            workflow_id=workflow_id or uuid4(),
             sequence=0,  # Orchestration events don't need sequence ordering
             timestamp=datetime.now(UTC),
             agent="pr_auto_fix",

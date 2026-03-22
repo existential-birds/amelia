@@ -21,6 +21,8 @@ from amelia.core.types import (
     PRSummary,
     TrackerType,
 )
+from uuid import uuid4
+
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.server.database import ProfileRepository
 from amelia.server.dependencies import get_profile_repository
@@ -383,11 +385,7 @@ async def trigger_pr_autofix(
         )
 
     orchestrator: PRAutoFixOrchestrator = request.app.state.pr_autofix_orchestrator
-    # This is a synthetic per-PR orchestration ID used for pre-pipeline event
-    # routing and concurrency tracking. The actual DB workflow ID is created
-    # inside _execute_pipeline() when the background task runs. Clients can
-    # discover the real workflow_id via PR_AUTO_FIX_STARTED events.
-    workflow_id = orchestrator.get_workflow_id(repo, number)
+    workflow_id = uuid4()
 
     def _log_task_error(task: asyncio.Task[None]) -> None:
         if not task.cancelled():
@@ -409,6 +407,7 @@ async def trigger_pr_autofix(
             config=effective_config,
             pr_title=pr_summary.title,
             comments=comments,
+            workflow_id=workflow_id,
         )
     )
     task.add_done_callback(_log_task_error)
