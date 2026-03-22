@@ -212,9 +212,10 @@ Plans:
   2. `PR_COMMENTS_DETECTED` event is emitted when new comments are discovered
   3. `PR_COMMENTS_RESOLVED` event is emitted when threads are resolved
   4. Frontend `EventType` union includes `pr_auto_fix_failed`
+**Plans:** 1 plan
 
 Plans:
-- (to be planned)
+- [ ] 12-01-PLAN.md -- Wire pr_title forwarding, emit PR_COMMENTS_DETECTED/RESOLVED events, add pr_auto_fix_failed to frontend types
 
 ## Progress
 
@@ -233,5 +234,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7/8 (parallel) ->
 | 8. Polling Service | 0/2 | Not started | - |
 | 9. Events & Dashboard | 0/3 | Not started | - |
 | 10. Metrics & Benchmarking | 3/3 | Complete   | 2026-03-14 |
-| 11. Fix Streaming & Stage Events | 1/1 | Complete   | 2026-03-22 |
-| 12. Wire Missing Events & Data | 0/0 | Not started | - |
+| 11. Fix Streaming & Stage Events | 1/1 | Complete    | 2026-03-22 |
+| 12. Wire Missing Events & Data | 0/1 | Not started | - |
