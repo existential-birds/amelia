@@ -78,6 +78,7 @@ def make_state(
     commit_sha: str | None = None,
     group_results: list[Any] | None = None,
     autofix_config: PRAutoFixConfig | None = None,
+    status: str = "pending",
 ) -> PRAutoFixState:
     kwargs: dict[str, Any] = {
         "workflow_id": uuid.uuid4(),
@@ -96,6 +97,8 @@ def make_state(
         kwargs["group_results"] = group_results
     if autofix_config is not None:
         kwargs["autofix_config"] = autofix_config
+    if status != "pending":
+        kwargs["status"] = status
     return PRAutoFixState(**kwargs)
 
 

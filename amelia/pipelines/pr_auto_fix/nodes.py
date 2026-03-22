@@ -397,10 +397,16 @@ async def commit_push_node(
             state.comments,
         )
 
-        # Commit and push
+        # Commit first — preserve SHA even if push fails
         sha = await git_ops.stage_and_commit(message)
-        await git_ops.safe_push(state.head_branch)
 
+    except ValueError as e:
+        logger.error("Git commit failed", error=str(e))
+        return {"status": "failed", "error": str(e)}
+
+    # Push separately so commit_sha is always returned on commit success
+    try:
+        await git_ops.safe_push(state.head_branch)
         logger.info(
             "Committed and pushed fixes",
             sha=sha[:8],
@@ -409,8 +415,8 @@ async def commit_push_node(
         return {"status": "completed", "commit_sha": sha}
 
     except ValueError as e:
-        logger.error("Git operation failed", error=str(e))
-        return {"status": "failed", "error": str(e)}
+        logger.error("Git push failed", error=str(e), sha=sha[:8])
+        return {"status": "failed", "commit_sha": sha, "error": str(e)}
 
 
 def _build_reply_body(
@@ -476,10 +482,9 @@ async def reply_resolve_node(
                 )
                 continue
 
-            # Guard: skip reply/resolve for FIXED groups when no commit was made.
-            # The developer may have "completed" without producing real file changes,
-            # so commit_push_node returned commit_sha=None.
+            # Guard: skip reply/resolve when commit or push failed.
             if group_result.status == GroupFixStatus.FIXED and not state.commit_sha:
+                # Developer "completed" without producing real file changes
                 logger.warning(
                     "Group marked FIXED but no commit was made, skipping reply/resolve",
                     comment_id=comment_id,
@@ -491,6 +496,24 @@ async def reply_resolve_node(
                         replied=False,
                         resolved=False,
                         error="No commit was made despite FIXED status",
+                    )
+                )
+                continue
+
+            if group_result.status == GroupFixStatus.FIXED and state.status == "failed":
+                # Commit succeeded but push failed — changes aren't on the remote
+                logger.warning(
+                    "Group marked FIXED but push failed, skipping reply/resolve",
+                    comment_id=comment_id,
+                    file_path=group_result.file_path,
+                    commit_sha=state.commit_sha,
+                )
+                resolution_results.append(
+                    ResolutionResult(
+                        comment_id=comment.id,
+                        replied=False,
+                        resolved=False,
+                        error="Fix committed but push to remote failed",
                     )
                 )
                 continue

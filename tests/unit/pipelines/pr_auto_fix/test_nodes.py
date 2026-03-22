@@ -407,6 +407,26 @@ class TestCommitPushNode:
         assert result["status"] == "failed"
         assert "nothing to commit" in result["error"]
 
+    async def test_push_failure_preserves_commit_sha(self) -> None:
+        """When commit succeeds but push fails, commit_sha should still be returned."""
+        mock_git_cls, mock_git = self._mock_git(commit_sha="deadbeef123456")
+        mock_git.safe_push.side_effect = ValueError("failed to push some refs")
+
+        c1 = make_comment(id=1, path="src/app.py", line=42, body="Fix this")
+        state = make_state(comments=[c1], file_groups={"src/app.py": [1]})
+        state = state.model_copy(update={
+            "group_results": [
+                GroupFixResult(file_path="src/app.py", status=GroupFixStatus.FIXED, comment_ids=[1]),
+            ],
+        })
+
+        with patch("amelia.pipelines.pr_auto_fix.nodes.GitOperations", mock_git_cls):
+            result = await commit_push_node(state, make_runnable_config())
+
+        assert result["status"] == "failed"
+        assert result["commit_sha"] == "deadbeef123456"
+        assert "failed to push" in result["error"]
+
     async def test_commit_message_format(self) -> None:
         c1 = make_comment(id=1, path="src/app.py", line=10, body="Fix null check")
         c2 = make_comment(id=2, path="src/utils.py", line=20, body="Add validation")
@@ -443,6 +463,7 @@ def _make_reply_resolve_state(
     authors: list[str] | None = None,
     thread_ids: list[str | None] | None = None,
     autofix_config: PRAutoFixConfig | None = None,
+    pipeline_status: str = "pending",
 ) -> tuple[Any, dict[str, Any]]:
     """Build state + config for reply_resolve_node tests."""
     cids = comment_ids or [1]
@@ -467,6 +488,7 @@ def _make_reply_resolve_state(
         commit_sha=commit_sha,
         group_results=groups,
         autofix_config=autofix_config,
+        status=pipeline_status,
     )
     return state, make_runnable_config()
 
@@ -591,6 +613,24 @@ class TestReplyResolveNode:
         assert res.resolved is False
         assert res.error is not None
         assert "No commit" in res.error
+
+    async def test_fixed_but_push_failed_skips_reply_and_resolve(self) -> None:
+        """When commit succeeded but push failed, FIXED groups should not be resolved."""
+        state, config = _make_reply_resolve_state(
+            status=GroupFixStatus.FIXED,
+            commit_sha="deadbeef123456",
+            pipeline_status="failed",
+        )
+        result, mock_gh = await self._run_node(state, config)
+
+        mock_gh.reply_to_comment.assert_not_called()
+        mock_gh.resolve_thread.assert_not_called()
+
+        assert len(result["resolution_results"]) == 1
+        res = result["resolution_results"][0]
+        assert res.replied is False
+        assert res.resolved is False
+        assert "push" in res.error.lower()
 
     async def test_failed_group_still_replies_when_no_commit(self) -> None:
         """FAILED groups should still get reply even without commit_sha."""
