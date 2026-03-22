@@ -1255,25 +1255,31 @@ class OrchestratorService:
         # Create shared sandbox provider if Daytona mode
         sandbox_provider: SandboxProvider | None = None
         try:
-            try:
-                sandbox_provider = await self._create_sandbox_provider(profile)
-            except Exception as e:
-                logger.exception("Daytona sandbox bootstrap failed", workflow_id=workflow_id)
-                await self._emit(
-                    workflow_id,
-                    EventType.WORKFLOW_FAILED,
-                    f"Sandbox bootstrap failed: {e!s}",
-                    data={"error": str(e), "error_type": "sandbox_bootstrap"},
-                )
-                await self._repository.set_status(
-                    workflow_id, WorkflowStatus.FAILED, failure_reason=f"Sandbox bootstrap failed: {e}"
-                )
-                return
-
             attempt = 0
 
             while attempt <= retry_config.max_retries:
                 try:
+                    # Create sandbox inside retry loop so transient Daytona failures are retried
+                    if sandbox_provider is None:
+                        try:
+                            sandbox_provider = await self._create_sandbox_provider(profile)
+                        except ValueError:
+                            raise  # Non-transient config errors fail immediately
+                        except TRANSIENT_EXCEPTIONS:
+                            raise  # Let outer handler apply retry logic
+                        except Exception as e:
+                            logger.exception("Daytona sandbox bootstrap failed", workflow_id=workflow_id)
+                            await self._emit(
+                                workflow_id,
+                                EventType.WORKFLOW_FAILED,
+                                f"Sandbox bootstrap failed: {e!s}",
+                                data={"error": str(e), "error_type": "sandbox_bootstrap"},
+                            )
+                            await self._repository.set_status(
+                                workflow_id, WorkflowStatus.FAILED, failure_reason=f"Sandbox bootstrap failed: {e}"
+                            )
+                            return
+
                     await self._run_workflow(workflow_id, state, sandbox_provider=sandbox_provider)
                     return  # Success
 
@@ -1308,6 +1314,13 @@ class OrchestratorService:
                         delay=delay,
                         error=str(e),
                     )
+                    # Tear down sandbox so it's re-created on next attempt
+                    if sandbox_provider is not None:
+                        try:
+                            await sandbox_provider.teardown()
+                        except Exception:
+                            logger.warning("Sandbox teardown failed during retry", exc_info=True)
+                        sandbox_provider = None
                     await asyncio.sleep(delay)
 
                 except Exception as e:
@@ -1374,12 +1387,25 @@ class OrchestratorService:
 
         sandbox_provider: SandboxProvider | None = None
         try:
-            sandbox_provider = await self._create_sandbox_provider(profile)
+            try:
+                sandbox_provider = await self._create_sandbox_provider(profile)
 
-            config = self._build_runnable_config(
-                workflow_id, profile, prompts, sandbox_provider,
-                review_mode=review_mode, review_types=review_types,
-            )
+                config = self._build_runnable_config(
+                    workflow_id, profile, prompts, sandbox_provider,
+                    review_mode=review_mode, review_types=review_types,
+                )
+            except Exception as e:
+                logger.exception("Review workflow setup failed", workflow_id=workflow_id)
+                await self._emit(
+                    workflow_id,
+                    EventType.WORKFLOW_FAILED,
+                    f"Review workflow setup failed: {e}",
+                    data={"error": str(e), "error_type": "setup"},
+                )
+                await self._repository.set_status(
+                    workflow_id, WorkflowStatus.FAILED, failure_reason=f"Setup failed: {e}"
+                )
+                return
 
             await self._emit(
                 workflow_id,

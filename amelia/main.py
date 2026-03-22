@@ -8,8 +8,10 @@ from amelia.cli.config import config_app
 from amelia.client.api import (
     AmeliaClient,
     InvalidRequestError,
+    RateLimitError,
     ServerUnreachableError,
     WorkflowConflictError,
+    WorkflowNotFoundError,
 )
 from amelia.client.cli import (
     approve_command,
@@ -179,6 +181,15 @@ def fix_pr(
     except ServerUnreachableError:
         typer.echo("Server not running. Start with: amelia server", err=True)
         raise typer.Exit(code=1) from None
+    except (WorkflowNotFoundError, WorkflowConflictError) as e:
+        typer.echo(f"Workflow error: {e}", err=True)
+        raise typer.Exit(code=1) from None
+    except InvalidRequestError as e:
+        typer.echo(f"Invalid request: {e}", err=True)
+        raise typer.Exit(code=1) from None
+    except RateLimitError as e:
+        typer.echo(f"Rate limit exceeded: {e}", err=True)
+        raise typer.Exit(code=1) from None
 
 
 @app.command(name="watch-pr")
@@ -214,6 +225,8 @@ def watch_pr(
             )
             raise typer.Exit(code=1)
 
+        previous_comment_ids: set[int] = set()
+
         while True:
             # Trigger a fix cycle
             response = await client.trigger_pr_autofix(
@@ -246,6 +259,17 @@ def watch_pr(
                 typer.echo("All comments resolved. Stopping.")
                 break
 
+            # Stop if the set of unresolved comments hasn't changed —
+            # remaining comments were skipped/failed and won't resolve
+            current_comment_ids = {c.id for c in comments_response.comments}
+            if current_comment_ids == previous_comment_ids:
+                typer.echo(
+                    f"{len(current_comment_ids)} unresolved comments remain "
+                    "unchanged after fix cycle. Stopping watch."
+                )
+                break
+            previous_comment_ids = current_comment_ids
+
             typer.echo(
                 f"Waiting for new comments... next check in {interval}s"
             )
@@ -257,6 +281,15 @@ def watch_pr(
         typer.echo("\nStopped watching.")
     except ServerUnreachableError:
         typer.echo("Server not running. Start with: amelia server", err=True)
+        raise typer.Exit(code=1) from None
+    except (WorkflowNotFoundError, WorkflowConflictError) as e:
+        typer.echo(f"Workflow error: {e}", err=True)
+        raise typer.Exit(code=1) from None
+    except InvalidRequestError as e:
+        typer.echo(f"Invalid request: {e}", err=True)
+        raise typer.Exit(code=1) from None
+    except RateLimitError as e:
+        typer.echo(f"Rate limit exceeded: {e}", err=True)
         raise typer.Exit(code=1) from None
 
 

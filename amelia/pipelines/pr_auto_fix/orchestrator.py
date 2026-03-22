@@ -122,6 +122,7 @@ class PRAutoFixOrchestrator:
                 "pr_title": pr_title,
                 "profile": profile,
                 "effective_config": effective_config,
+                "workflow_id": workflow_id,
             }
             # If in cooldown, reset the timer
             if key in self._cooldown_events:
@@ -171,6 +172,7 @@ class PRAutoFixOrchestrator:
                     head_branch=pending_payload["head_branch"],
                     pr_title=pending_payload["pr_title"] or effective_title,
                     comments=pending_payload["comments"],
+                    workflow_id=pending_payload.get("workflow_id"),
                 )
                 pending_payload = self._pr_pending.pop(key, None)
 
@@ -234,12 +236,37 @@ class PRAutoFixOrchestrator:
 
             except ValueError as exc:
                 if "diverged" not in str(exc).lower():
-                    # Non-divergence error -- log and return (don't retry)
+                    # Non-divergence error -- emit failure and return (don't retry)
                     logger.error(
                         "Fix cycle failed with non-divergence error",
                         pr_number=pr_number,
                         error=str(exc),
                     )
+                    self._emit_event(
+                        EventType.PR_AUTO_FIX_FAILED,
+                        pr_number,
+                        f"PR auto-fix failed for PR #{pr_number}: {exc}",
+                        data={
+                            "workflow_id": str(workflow_id) if workflow_id else None,
+                            "status": "failed",
+                            "failure_reason": str(exc),
+                        },
+                        repo=repo,
+                        workflow_id=workflow_id,
+                    )
+                    if workflow_id and self._workflow_repo is not None:
+                        failed_state = ServerExecutionState(
+                            id=workflow_id,
+                            issue_id=f"PR-{pr_number}",
+                            worktree_path=profile.repo_root,
+                            workflow_type=WorkflowType.PR_AUTO_FIX,
+                            profile_id=profile.name,
+                            workflow_status=WorkflowStatus.FAILED,
+                            started_at=datetime.now(UTC),
+                            completed_at=datetime.now(UTC),
+                            failure_reason=str(exc),
+                        )
+                        await self._workflow_repo.update(failed_state)
                     return
 
                 if attempt < _MAX_DIVERGENCE_RETRIES:
@@ -280,6 +307,31 @@ class PRAutoFixOrchestrator:
                     error=str(exc),
                     error_type=type(exc).__name__,
                 )
+                self._emit_event(
+                    EventType.PR_AUTO_FIX_FAILED,
+                    pr_number,
+                    f"PR auto-fix failed for PR #{pr_number}: {exc}",
+                    data={
+                        "workflow_id": str(workflow_id) if workflow_id else None,
+                        "status": "failed",
+                        "failure_reason": str(exc),
+                    },
+                    repo=repo,
+                    workflow_id=workflow_id,
+                )
+                if workflow_id and self._workflow_repo is not None:
+                    failed_state = ServerExecutionState(
+                        id=workflow_id,
+                        issue_id=f"PR-{pr_number}",
+                        worktree_path=profile.repo_root,
+                        workflow_type=WorkflowType.PR_AUTO_FIX,
+                        profile_id=profile.name,
+                        workflow_status=WorkflowStatus.FAILED,
+                        started_at=datetime.now(UTC),
+                        completed_at=datetime.now(UTC),
+                        failure_reason=str(exc),
+                    )
+                    await self._workflow_repo.update(failed_state)
                 return
 
     async def _execute_pipeline(
