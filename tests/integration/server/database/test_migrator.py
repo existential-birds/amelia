@@ -64,7 +64,7 @@ async def test_migrator_records_version(db):
     migrator = Migrator(db)
     await migrator.run()
     version = await db.fetch_scalar("SELECT MAX(version) FROM schema_migrations")
-    assert version == 11
+    assert version == 12
 
 
 async def test_migrator_is_idempotent(db):
@@ -72,4 +72,4 @@ async def test_migrator_is_idempotent(db):
     await migrator.run()
     await migrator.run()  # Should not fail
     version = await db.fetch_scalar("SELECT MAX(version) FROM schema_migrations")
-    assert version == 11
+    assert version == 12

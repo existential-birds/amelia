@@ -268,12 +268,16 @@ export default function DevelopPage() {
       setIsSubmitting(true);
 
       try {
+        // Only send task_title/task_description for noop tracker profiles.
+        // Non-noop trackers (e.g., github) fetch issue details server-side.
+        const isNoopTracker = !trackerType || trackerType === 'noop';
+
         const result = await api.createWorkflow({
           issue_id: data.issue_id,
           worktree_path: data.worktree_path,
           profile: data.profile || undefined,
-          task_title: data.task_title,
-          task_description: data.task_description || undefined,
+          task_title: isNoopTracker ? data.task_title : undefined,
+          task_description: isNoopTracker ? (data.task_description || undefined) : undefined,
           start: action === 'start',
           plan_now: action === 'plan_queue',
           plan_file: planData.plan_file,

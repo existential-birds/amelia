@@ -520,8 +520,8 @@ export interface CreateWorkflowRequest {
   /** Optional profile name from settings.amelia.yaml. */
   profile?: string;
 
-  /** Human-readable title for the task. */
-  task_title: string;
+  /** Human-readable title for the task. Required for noop tracker profiles. */
+  task_title?: string;
 
   /** Detailed description of the task (defaults to title if empty). */
   task_description?: string;
