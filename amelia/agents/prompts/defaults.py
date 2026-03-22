@@ -219,6 +219,7 @@ Apply the following actionability rules based on the configured aggressiveness l
 - **CRITICAL**: Only classify bug and security comments as actionable. All other categories are non-actionable.
 - **STANDARD**: Classify bug, security, and style comments as actionable. Suggestions and questions are non-actionable.
 - **THOROUGH**: Classify bug, security, style, suggestion, and question comments as actionable.
+- **EXEMPLARY**: Classify all substantive comments as actionable — everything THOROUGH fixes plus lower-confidence suggestions and questions that have a clear resolution path.
 - Praise is ALWAYS non-actionable regardless of aggressiveness level.
 
 ## Classification Heuristics
