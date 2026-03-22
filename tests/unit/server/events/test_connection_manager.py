@@ -76,7 +76,7 @@ class TestConnectionManager:
         # Handle the "same workflow" sentinel
         if subscription_workflow == "SAME" and event_workflow == "SAME":
             shared_wf_id = uuid4()
-            subscription_workflow = shared_wf_id
+            subscription_workflow = str(shared_wf_id)
             event_workflow = shared_wf_id
 
         await manager.connect(mock_websocket)
@@ -96,6 +96,35 @@ class TestConnectionManager:
             mock_websocket.send_text.assert_awaited_once()
         else:
             mock_websocket.send_text.assert_not_awaited()
+
+    async def test_broadcast_uuid_event_matches_string_subscription(
+        self, manager, mock_websocket, event_factory
+    ) -> None:
+        """broadcast() delivers UUID-typed event to str-subscribed client."""
+        wf_id = uuid4()
+        await manager.connect(mock_websocket)
+        await manager.subscribe(mock_websocket, str(wf_id))  # str subscription
+
+        event = event_factory(
+            id=uuid4(), workflow_id=wf_id,  # UUID in event
+            timestamp=datetime.now(UTC), message="test",
+        )
+        await manager.broadcast(event)
+        mock_websocket.send_text.assert_awaited_once()
+
+    async def test_broadcast_unrelated_uuid_event_skips_subscribed_clients(
+        self, manager, mock_websocket, event_factory
+    ) -> None:
+        """broadcast() skips subscribed clients when event has unrelated workflow_id."""
+        await manager.connect(mock_websocket)
+        await manager.subscribe(mock_websocket, str(uuid4()))
+
+        event = event_factory(
+            id=uuid4(), workflow_id=uuid4(),  # Different UUID
+            timestamp=datetime.now(UTC), message="orchestration event",
+        )
+        await manager.broadcast(event)
+        mock_websocket.send_text.assert_not_awaited()
 
     async def test_broadcast_handles_disconnected_socket(self, manager, mock_websocket, event_factory) -> None:
         """broadcast() removes disconnected sockets gracefully."""
