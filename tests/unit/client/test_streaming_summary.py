@@ -136,3 +136,75 @@ class TestStreamWorkflowSummary:
         assert isinstance(summary, WorkflowSummary)
         # Verify pong was sent
         mock_ws.send.assert_any_call(json.dumps({"type": "pong"}))
+
+    async def test_terminates_on_pr_auto_fix_completed(self) -> None:
+        """stream_workflow_events breaks on pr_auto_fix_completed event."""
+        events = [
+            {"event_type": "pr_auto_fix_started", "message": "Started"},
+            {
+                "event_type": "pr_auto_fix_completed",
+                "message": "Done",
+                "data": {"commit_sha": "abc123", "workflow_id": "wf-pr"},
+            },
+        ]
+        summary, _ = await _run_streaming_events(
+            _make_ws_messages(events), "wf-pr-fix"
+        )
+
+        assert isinstance(summary, WorkflowSummary)
+        assert summary.commit_sha == "abc123"
+
+    async def test_terminates_on_pr_auto_fix_failed(self) -> None:
+        """stream_workflow_events breaks on pr_auto_fix_failed event."""
+        events = [
+            {"event_type": "pr_auto_fix_started", "message": "Started"},
+            {
+                "event_type": "pr_auto_fix_failed",
+                "message": "Something went wrong",
+                "data": {"failure_reason": "LLM error"},
+            },
+        ]
+        summary, _ = await _run_streaming_events(
+            _make_ws_messages(events), "wf-pr-fail"
+        )
+
+        assert isinstance(summary, WorkflowSummary)
+
+    async def test_collects_summary_before_pr_auto_fix_completed(self) -> None:
+        """stage_completed events are counted before pr_auto_fix_completed."""
+        events = [
+            {"event_type": "pr_auto_fix_started", "message": "Started"},
+            {
+                "event_type": "stage_completed",
+                "message": "Done",
+                "data": {"stage": "develop_node", "result": {"status": "fixed"}},
+            },
+            {
+                "event_type": "stage_completed",
+                "message": "Done",
+                "data": {"stage": "develop_node", "result": {"status": "fixed"}},
+            },
+            {
+                "event_type": "stage_completed",
+                "message": "Done",
+                "data": {"stage": "develop_node", "result": {"status": "skipped"}},
+            },
+            {
+                "event_type": "stage_completed",
+                "message": "Done",
+                "data": {"stage": "develop_node", "result": {"status": "failed"}},
+            },
+            {
+                "event_type": "pr_auto_fix_completed",
+                "message": "Complete",
+                "data": {"commit_sha": "def456"},
+            },
+        ]
+        summary, _ = await _run_streaming_events(
+            _make_ws_messages(events), "wf-pr-summary"
+        )
+
+        assert summary.fixed == 2
+        assert summary.skipped == 1
+        assert summary.failed == 1
+        assert summary.commit_sha == "def456"

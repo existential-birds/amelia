@@ -48,6 +48,15 @@ _SIMPLE_EVENT_FORMATS: dict[str, EventFormat] = {
     "approval_required": EventFormat(
         style="yellow bold", prefix="Approval required: ", newline_before=True
     ),
+    "pr_auto_fix_completed": EventFormat(
+        style="bold green",
+        prefix="PR auto-fix completed!",
+        include_message=False,
+        newline_before=True,
+    ),
+    "pr_auto_fix_failed": EventFormat(
+        style="bold red", prefix="PR auto-fix failed: ", newline_before=True
+    ),
 }
 
 # Event types that require custom formatting logic
@@ -208,7 +217,15 @@ async def stream_workflow_events(
                     event_data = event.get("data", {}) or {}
                     commit_sha = event_data.get("commit_sha") or None
 
-                if event_type in {"workflow_completed", "workflow_failed", "workflow_cancelled"}:
+                # Collect commit SHA from pr_auto_fix_completed
+                if event_type == "pr_auto_fix_completed":
+                    event_data = event.get("data", {}) or {}
+                    commit_sha = event_data.get("commit_sha") or None
+
+                if event_type in {
+                    "workflow_completed", "workflow_failed", "workflow_cancelled",
+                    "pr_auto_fix_completed", "pr_auto_fix_failed",
+                }:
                     break
             elif message_type == "backfill_complete":
                 if console:
