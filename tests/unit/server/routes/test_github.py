@@ -49,6 +49,7 @@ def mock_gh_output() -> str:
         {
             "number": 42,
             "title": "Fix login bug",
+            "body": "The login page crashes when clicking submit",
             "labels": [{"name": "bug", "color": "d73a4a"}],
             "assignees": [{"login": "alice"}],
             "createdAt": "2026-03-01T10:00:00Z",
@@ -57,6 +58,7 @@ def mock_gh_output() -> str:
         {
             "number": 17,
             "title": "Add dark mode",
+            "body": "",
             "labels": [],
             "assignees": [],
             "createdAt": "2026-02-15T08:00:00Z",
@@ -93,6 +95,7 @@ class TestListGitHubIssues:
         assert len(data["issues"]) == 2
         assert data["issues"][0]["number"] == 42
         assert data["issues"][0]["title"] == "Fix login bug"
+        assert data["issues"][0]["body"] == "The login page crashes when clicking submit"
         assert data["issues"][0]["labels"] == [{"name": "bug", "color": "d73a4a"}]
         assert data["issues"][0]["assignee"] == "alice"
         assert data["issues"][1]["assignee"] is None

@@ -520,7 +520,7 @@ export interface CreateWorkflowRequest {
   /** Optional profile name from settings.amelia.yaml. */
   profile?: string;
 
-  /** Human-readable title for the task. Required for noop tracker profiles. */
+  /** Human-readable title for the task. Skips tracker fetch when provided. */
   task_title?: string;
 
   /** Detailed description of the task (defaults to title if empty). */
@@ -1063,6 +1063,7 @@ export interface GitHubIssueLabel {
 export interface GitHubIssueSummary {
   number: number;
   title: string;
+  body: string;
   labels: GitHubIssueLabel[];
   assignee: string | null;
   created_at: string;

@@ -74,6 +74,7 @@ export default function DevelopPage() {
   const [planData, setPlanData] = useState<PlanData>({});
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [trackerType, setTrackerType] = useState<string>('');
+  const [hasSelectedIssue, setHasSelectedIssue] = useState(false);
 
   const hasExternalPlan = !!(planData.plan_file || planData.plan_content);
   const hasDesignDoc = !!importPath;
@@ -175,6 +176,9 @@ export default function DevelopPage() {
     (issue: GitHubIssueSummary | { number: number; title: string }) => {
       setValue('issue_id', String(issue.number), { shouldValidate: true });
       setValue('task_title', issue.title, { shouldValidate: true });
+      const body = 'body' in issue ? issue.body : '';
+      setValue('task_description', body || '', { shouldValidate: true });
+      setHasSelectedIssue(true);
     },
     [setValue],
   );
@@ -268,16 +272,12 @@ export default function DevelopPage() {
       setIsSubmitting(true);
 
       try {
-        // Only send task_title/task_description for noop tracker profiles.
-        // Non-noop trackers (e.g., github) fetch issue details server-side.
-        const isNoopTracker = !trackerType || trackerType === 'noop';
-
         const result = await api.createWorkflow({
           issue_id: data.issue_id,
           worktree_path: data.worktree_path,
           profile: data.profile || undefined,
-          task_title: isNoopTracker ? data.task_title : undefined,
-          task_description: isNoopTracker ? (data.task_description || undefined) : undefined,
+          task_title: data.task_title,
+          task_description: data.task_description || undefined,
           start: action === 'start',
           plan_now: action === 'plan_queue',
           plan_file: planData.plan_file,
@@ -305,6 +305,7 @@ export default function DevelopPage() {
         reset();
         setPlanData({});
         setImportPath('');
+        setHasSelectedIssue(false);
       } catch (error) {
         if (error instanceof ApiError) {
           toast.error(error.message);
@@ -420,10 +421,12 @@ export default function DevelopPage() {
               aria-invalid={!!errors.issue_id}
               aria-required
               aria-describedby={errors.issue_id ? 'issue_id-error' : undefined}
+              readOnly={hasSelectedIssue}
               className={cn(
                 'mt-1 font-mono text-sm bg-background border-input',
                 'focus:border-primary focus:ring-primary/15 focus:ring-[3px]',
                 errors.issue_id && 'border-destructive',
+                hasSelectedIssue && 'opacity-60 cursor-not-allowed',
               )}
               {...register('issue_id')}
             />
@@ -448,10 +451,12 @@ export default function DevelopPage() {
               aria-invalid={!!errors.task_title}
               aria-required
               aria-describedby={errors.task_title ? 'task_title-error' : undefined}
+              readOnly={hasSelectedIssue}
               className={cn(
                 'mt-1 font-mono text-sm bg-background border-input',
                 'focus:border-primary focus:ring-primary/15 focus:ring-[3px]',
                 errors.task_title && 'border-destructive',
+                hasSelectedIssue && 'opacity-60 cursor-not-allowed',
               )}
               {...register('task_title')}
             />
@@ -475,10 +480,12 @@ export default function DevelopPage() {
               placeholder="Add a logout button to the top navigation bar..."
               aria-invalid={!!errors.task_description}
               aria-describedby={errors.task_description ? 'task_description-error' : undefined}
+              readOnly={hasSelectedIssue}
               className={cn(
                 'mt-1 font-mono text-sm bg-background border-input',
                 'focus:border-primary focus:ring-primary/15 focus:ring-[3px]',
                 errors.task_description && 'border-destructive',
+                hasSelectedIssue && 'opacity-60 cursor-not-allowed',
               )}
               rows={3}
               {...register('task_description')}

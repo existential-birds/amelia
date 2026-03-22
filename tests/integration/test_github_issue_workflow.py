@@ -1,12 +1,9 @@
 """Integration tests for creating workflows with GitHub tracker profiles.
 
-Verifies that selecting a GitHub issue in the dashboard (or omitting task_title
-in API requests) correctly fetches the issue from GitHub instead of raising
-a validation error.
-
-Bug: When a profile uses tracker='github', sending task_title in the request
-caused "task_title can only be used with noop tracker" error. The fix ensures
-task_title is omitted for non-noop tracker profiles.
+Verifies that:
+- Omitting task_title fetches the issue from GitHub via the tracker
+- Providing task_title skips the tracker fetch (used when the frontend
+  already has the issue data from the combobox selection)
 
 Mock boundaries:
 - create_tracker: Returns mock tracker that returns Issue (no real GitHub calls)
@@ -138,9 +135,8 @@ def mock_graph(langgraph_mock_factory: Any):
 class TestGitHubIssueWorkflowCreation:
     """Tests for creating workflows when profile uses GitHub tracker.
 
-    These tests verify the fix for the bug where selecting a GitHub issue
-    in the develop modal caused a validation error because task_title was
-    sent alongside a non-noop tracker profile.
+    Verifies both paths: tracker fetch (no task_title) and direct title
+    passthrough (task_title provided by the frontend from issue selection).
     """
 
     async def test_queue_workflow_with_github_tracker_without_task_title(
@@ -150,11 +146,7 @@ class TestGitHubIssueWorkflowCreation:
         active_github_profile: Profile,
         github_worktree: str,
     ) -> None:
-        """Queuing a workflow with GitHub tracker succeeds without task_title.
-
-        This is the fixed flow: the frontend omits task_title when the profile
-        uses a non-noop tracker, so the backend fetches the issue from GitHub.
-        """
+        """Queuing a workflow without task_title fetches from GitHub tracker."""
         with mock_github_tracker(issue_id="42") as tracker:
             response = await test_client.post(
                 "/api/workflows",
@@ -189,10 +181,7 @@ class TestGitHubIssueWorkflowCreation:
         github_worktree: str,
         langgraph_mock_factory: Any,
     ) -> None:
-        """Starting a workflow immediately with GitHub tracker succeeds.
-
-        Verifies the start=True (default) path also works without task_title.
-        """
+        """Starting a workflow immediately without task_title fetches from tracker."""
         with (
             mock_github_tracker(issue_id="99") as tracker,
             mock_graph(langgraph_mock_factory),
@@ -209,55 +198,68 @@ class TestGitHubIssueWorkflowCreation:
         assert response.status_code == status.HTTP_201_CREATED
         tracker.get_issue.assert_called_once_with("99", cwd=github_worktree)
 
-    async def test_github_tracker_with_task_title_returns_400(
+    async def test_github_tracker_with_task_title_skips_fetch(
         self,
         test_client: httpx.AsyncClient,
+        test_repository: WorkflowRepository,
         active_github_profile: Profile,
         github_worktree: str,
     ) -> None:
-        """Sending task_title with a GitHub tracker profile returns 400.
+        """Sending task_title with a GitHub tracker skips the tracker fetch.
 
-        This validates the backend guard is still in place: task_title is only
-        valid for noop tracker profiles. The frontend should not send it for
-        GitHub profiles.
+        When the frontend already has the issue data (from the combobox),
+        it sends task_title/task_description to avoid a redundant server-side fetch.
         """
-        response = await test_client.post(
-            "/api/workflows",
-            json={
-                "issue_id": "42",
-                "worktree_path": github_worktree,
-                "profile": "github-project",
-                "task_title": "This should not be sent",
-                "start": False,
-            },
-        )
+        with mock_github_tracker(issue_id="42") as tracker:
+            response = await test_client.post(
+                "/api/workflows",
+                json={
+                    "issue_id": "42",
+                    "worktree_path": github_worktree,
+                    "profile": "github-project",
+                    "task_title": "Fix login bug",
+                    "task_description": "The login page crashes on submit",
+                    "start": False,
+                },
+            )
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        data = response.json()
-        assert "task_title can only be used with noop tracker" in data["error"]
+        assert response.status_code == status.HTTP_201_CREATED
+        # Tracker should NOT have been called — title was provided directly
+        tracker.get_issue.assert_not_called()
 
-    async def test_error_message_includes_profile_name(
+        # Verify the workflow uses the provided title/description
+        workflow_id = response.json()["id"]
+        workflow = await test_repository.get(workflow_id)
+        assert workflow is not None
+        assert workflow.issue_cache is not None
+        assert workflow.issue_cache["title"] == "Fix login bug"
+        assert workflow.issue_cache["description"] == "The login page crashes on submit"
+
+    async def test_github_tracker_with_task_title_only_uses_title_as_description(
         self,
         test_client: httpx.AsyncClient,
+        test_repository: WorkflowRepository,
         active_github_profile: Profile,
         github_worktree: str,
     ) -> None:
-        """Error message for task_title with non-noop tracker includes profile name.
+        """When task_description is omitted, description defaults to task_title."""
+        with mock_github_tracker() as tracker:
+            response = await test_client.post(
+                "/api/workflows",
+                json={
+                    "issue_id": "42",
+                    "worktree_path": github_worktree,
+                    "profile": "github-project",
+                    "task_title": "Add dark mode",
+                    "start": False,
+                },
+            )
 
-        Helps users identify which profile is misconfigured.
-        """
-        response = await test_client.post(
-            "/api/workflows",
-            json={
-                "issue_id": "42",
-                "worktree_path": github_worktree,
-                "profile": "github-project",
-                "task_title": "Should fail",
-                "start": False,
-            },
-        )
+        assert response.status_code == status.HTTP_201_CREATED
+        tracker.get_issue.assert_not_called()
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        error_msg = response.json()["error"]
-        assert "github-project" in error_msg
-        assert "github" in error_msg
+        workflow_id = response.json()["id"]
+        workflow = await test_repository.get(workflow_id)
+        assert workflow is not None
+        assert workflow.issue_cache is not None
+        assert workflow.issue_cache["description"] == "Add dark mode"

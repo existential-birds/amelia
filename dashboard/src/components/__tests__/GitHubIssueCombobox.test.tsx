@@ -20,6 +20,7 @@ const mockIssues: GitHubIssueSummary[] = [
   {
     number: 42,
     title: 'Fix login bug',
+    body: 'The login page crashes when clicking submit',
     labels: [{ name: 'bug', color: 'd73a4a' }],
     assignee: 'alice',
     created_at: '2026-03-01T10:00:00Z',
@@ -28,6 +29,7 @@ const mockIssues: GitHubIssueSummary[] = [
   {
     number: 17,
     title: 'Add dark mode',
+    body: '',
     labels: [],
     assignee: null,
     created_at: '2026-02-15T08:00:00Z',

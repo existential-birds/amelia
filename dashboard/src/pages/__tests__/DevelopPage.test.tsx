@@ -51,11 +51,11 @@ vi.mock('@/components/GitHubIssueCombobox', () => ({
     onSelect,
   }: {
     profile: string;
-    onSelect: (issue: { number: number; title: string }) => void;
+    onSelect: (issue: { number: number; title: string; body: string }) => void;
   }) => (
     <button
       data-testid="issue-combobox"
-      onClick={() => onSelect({ number: 42, title: 'Fix login bug' })}
+      onClick={() => onSelect({ number: 42, title: 'Fix login bug', body: 'Login crashes on submit' })}
     >
       mock combobox
     </button>
@@ -127,7 +127,7 @@ describe('DevelopPage', () => {
     });
   });
 
-  it('pre-fills form when issue selected', async () => {
+  it('pre-fills form and makes fields read-only when issue selected', async () => {
     const user = userEvent.setup();
     renderPage();
 
@@ -139,7 +139,13 @@ describe('DevelopPage', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(/task id/i)).toHaveValue('42');
       expect(screen.getByLabelText(/task title/i)).toHaveValue('Fix login bug');
+      expect(screen.getByLabelText(/description/i)).toHaveValue('Login crashes on submit');
     });
+
+    // Fields should be read-only after issue selection
+    expect(screen.getByLabelText(/task id/i)).toHaveAttribute('readonly');
+    expect(screen.getByLabelText(/task title/i)).toHaveAttribute('readonly');
+    expect(screen.getByLabelText(/description/i)).toHaveAttribute('readonly');
   });
 
   it('renders Start and Queue buttons', () => {
