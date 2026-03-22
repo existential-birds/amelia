@@ -106,9 +106,10 @@ class ConnectionManager:
                 targets = list(self._connections.keys())
             else:
                 # Regular events filtered by workflow subscription
+                wid_str = str(event.workflow_id) if event.workflow_id else None
                 for ws, subscribed_ids in self._connections.items():
                     # Empty set = subscribed to all workflows
-                    if not subscribed_ids or event.workflow_id in subscribed_ids:
+                    if not subscribed_ids or (wid_str and wid_str in subscribed_ids):
                         targets.append(ws)
 
         logger.debug(

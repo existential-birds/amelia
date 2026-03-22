@@ -147,10 +147,19 @@ class IngestionPipeline:
                         driver_type=self.tag_derivation_driver,
                     )
 
-                    # Update document with derived tags (non-blocking)
+                    # Merge derived tags with existing user-provided tags
                     if derived_tags:
                         try:
-                            await self.repository.update_document_tags(document_id, derived_tags)
+                            existing_doc = await self.repository.get_document(document_id)
+                            existing_tags = existing_doc.tags if existing_doc else []
+                            # Deduplicate while preserving order: existing first, then new
+                            seen = set(existing_tags)
+                            merged_tags = list(existing_tags)
+                            for tag in derived_tags:
+                                if tag not in seen:
+                                    merged_tags.append(tag)
+                                    seen.add(tag)
+                            await self.repository.update_document_tags(document_id, merged_tags)
                         except Exception as exc:
                             logger.warning(
                                 "Failed to update document tags",

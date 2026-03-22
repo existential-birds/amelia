@@ -121,18 +121,49 @@ def _streaming_response(
     )
 
 
+@pytest.fixture
+def mock_upstream(monkeypatch: pytest.MonkeyPatch):
+    """Monkeypatch ``httpx.AsyncClient.send`` to return a canned response.
+
+    Returns a callable ``(status, body, *, raise_exc=None)`` that wires up
+    the mock and returns a dict where captured request fields are stored.
+
+    If *raise_exc* is given, the mock raises that exception instead of
+    returning a response.
+    """
+
+    def _configure(
+        status: int = 200,
+        body: bytes = b'{"choices": []}',
+        *,
+        raise_exc: Exception | None = None,
+    ) -> dict[str, Any]:
+        captured: dict[str, Any] = {}
+
+        async def _send(
+            self: Any,
+            request: httpx.Request,
+            *,
+            stream: bool = False,
+            **kwargs: Any,
+        ) -> httpx.Response:
+            captured["method"] = request.method
+            captured["url"] = str(request.url)
+            captured["headers"] = dict(request.headers)
+            if raise_exc is not None:
+                raise raise_exc
+            return _streaming_response(status, body, request)
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", _send)
+        return captured
+
+    return _configure
+
+
 class TestProxyForwarding:
-    def test_chat_completions_forwards_with_auth(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_chat_completions_forwards_with_auth(self, client: TestClient, mock_upstream) -> None:
         """Verify proxy attaches auth header and forwards to upstream."""
-        captured_request: dict[str, Any] = {}
-
-        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
-            captured_request["method"] = request.method
-            captured_request["url"] = str(request.url)
-            captured_request["headers"] = dict(request.headers)
-            return _streaming_response(200, b'{"choices": []}', request)
-
-        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+        captured = mock_upstream(200, b'{"choices": []}')
 
         response = client.post(
             "/proxy/v1/chat/completions",
@@ -141,20 +172,13 @@ class TestProxyForwarding:
         )
 
         assert response.status_code == 200
-        assert captured_request["url"] == "https://openrouter.ai/api/v1/chat/completions"
-        assert captured_request["headers"]["authorization"] == "Bearer sk-or-test-key"
-        assert "x-amelia-profile" not in captured_request["headers"]
+        assert captured["url"] == "https://openrouter.ai/api/v1/chat/completions"
+        assert captured["headers"]["authorization"] == "Bearer sk-or-test-key"
+        assert "x-amelia-profile" not in captured["headers"]
 
-    def test_embeddings_forwards_with_auth(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_embeddings_forwards_with_auth(self, client: TestClient, mock_upstream) -> None:
         """Verify embeddings endpoint forwards correctly."""
-        captured_request: dict[str, Any] = {}
-
-        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
-            captured_request["url"] = str(request.url)
-            captured_request["headers"] = dict(request.headers)
-            return _streaming_response(200, b'{"data": []}', request)
-
-        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+        captured = mock_upstream(200, b'{"data": []}')
 
         response = client.post(
             "/proxy/v1/embeddings",
@@ -163,16 +187,12 @@ class TestProxyForwarding:
         )
 
         assert response.status_code == 200
-        assert captured_request["url"] == "https://api.anthropic.com/v1/embeddings"
-        assert captured_request["headers"]["authorization"] == "Bearer sk-ant-test-key"
+        assert captured["url"] == "https://api.anthropic.com/v1/embeddings"
+        assert captured["headers"]["authorization"] == "Bearer sk-ant-test-key"
 
-    def test_upstream_error_passed_through(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_upstream_error_passed_through(self, client: TestClient, mock_upstream) -> None:
         """Verify upstream errors are forwarded to the caller."""
-
-        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
-            return _streaming_response(429, b'{"error": "rate limited"}', request)
-
-        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+        mock_upstream(429, b'{"error": "rate limited"}')
 
         response = client.post(
             "/proxy/v1/chat/completions",
@@ -186,11 +206,8 @@ class TestProxyForwarding:
 class TestProxyErrorSanitization:
     """Upstream errors must not leak internal details to the caller."""
 
-    def test_connect_error_is_generic(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
-            raise httpx.ConnectError("Connection refused: 10.0.0.5:443")
-
-        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+    def test_connect_error_is_generic(self, client: TestClient, mock_upstream) -> None:
+        mock_upstream(raise_exc=httpx.ConnectError("Connection refused: 10.0.0.5:443"))
 
         response = client.post(
             "/proxy/v1/chat/completions",
@@ -202,11 +219,8 @@ class TestProxyErrorSanitization:
         assert "10.0.0.5" not in detail
         assert "Connection refused" not in detail
 
-    def test_timeout_error_is_generic(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
-            raise httpx.ReadTimeout("Read timed out on host api.openrouter.ai:443")
-
-        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+    def test_timeout_error_is_generic(self, client: TestClient, mock_upstream) -> None:
+        mock_upstream(raise_exc=httpx.ReadTimeout("Read timed out on host api.openrouter.ai:443"))
 
         response = client.post(
             "/proxy/v1/chat/completions",
@@ -217,11 +231,8 @@ class TestProxyErrorSanitization:
         detail = response.json()["detail"]
         assert "openrouter" not in detail
 
-    def test_http_error_is_generic(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
-            raise httpx.DecodingError("Invalid chunk encoding from 10.0.0.5")
-
-        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+    def test_http_error_is_generic(self, client: TestClient, mock_upstream) -> None:
+        mock_upstream(raise_exc=httpx.DecodingError("Invalid chunk encoding from 10.0.0.5"))
 
         response = client.post(
             "/proxy/v1/chat/completions",
@@ -293,13 +304,10 @@ class TestProxyBodySizeLimit:
         assert response.status_code == 413
 
     def test_normal_request_passes_size_check(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch,
+        self, client: TestClient, mock_upstream,
     ) -> None:
         """Normal-sized request passes through."""
-        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
-            return _streaming_response(200, b'{"choices": []}', request)
-
-        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+        mock_upstream(200, b'{"choices": []}')
 
         response = client.post(
             "/proxy/v1/chat/completions",
@@ -360,12 +368,9 @@ class TestProxyTokenAuth:
         assert response.status_code == 401
 
     def test_valid_token_passes_through(
-        self, authed_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+        self, authed_client: TestClient, mock_upstream,
     ) -> None:
-        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
-            return _streaming_response(200, b'{"choices": []}', request)
-
-        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+        mock_upstream(200, b'{"choices": []}')
 
         response = authed_client.post(
             "/proxy/v1/chat/completions",
@@ -378,16 +383,10 @@ class TestProxyTokenAuth:
         assert response.status_code == 200
 
     def test_token_not_forwarded_upstream(
-        self, authed_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+        self, authed_client: TestClient, mock_upstream,
     ) -> None:
         """Proxy token must be stripped before forwarding."""
-        captured_headers: dict[str, str] = {}
-
-        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
-            captured_headers.update(dict(request.headers))
-            return _streaming_response(200, b'{"choices": []}', request)
-
-        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+        captured = mock_upstream(200, b'{"choices": []}')
 
         authed_client.post(
             "/proxy/v1/chat/completions",
@@ -397,14 +396,11 @@ class TestProxyTokenAuth:
                 "X-Amelia-Proxy-Token": "valid-secret-token",
             },
         )
-        assert "x-amelia-proxy-token" not in captured_headers
+        assert "x-amelia-proxy-token" not in captured["headers"]
 
-    def test_no_validator_skips_token_check(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_no_validator_skips_token_check(self, client: TestClient, mock_upstream) -> None:
         """When no token_validator is set, requests pass without a token."""
-        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
-            return _streaming_response(200, b'{"choices": []}', request)
-
-        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+        mock_upstream(200, b'{"choices": []}')
 
         response = client.post(
             "/proxy/v1/chat/completions",
@@ -458,12 +454,9 @@ class TestProxySyncTokenValidator:
         assert response.status_code == 401
 
     def test_sync_validator_accepts_valid_token(
-        self, sync_authed_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+        self, sync_authed_client: TestClient, mock_upstream,
     ) -> None:
-        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
-            return _streaming_response(200, b'{"choices": []}', request)
-
-        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
+        mock_upstream(200, b'{"choices": []}')
 
         response = sync_authed_client.post(
             "/proxy/v1/chat/completions",

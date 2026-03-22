@@ -6,7 +6,7 @@ from typing import Any
 import asyncpg
 from pydantic import BaseModel
 
-from amelia.core.types import AgentConfig, Profile, SandboxConfig
+from amelia.core.types import AgentConfig, PRAutoFixConfig, Profile, SandboxConfig
 from amelia.server.database.connection import Database
 
 
@@ -24,6 +24,7 @@ class ProfileRecord(BaseModel):
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
     agents: str  # JSON blob of dict[str, AgentConfig]
     sandbox: str = "{}"  # JSON blob of SandboxConfig
+    pr_autofix: str | None = None  # JSON blob of PRAutoFixConfig
     is_active: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -88,21 +89,18 @@ class ProfileRepository:
             asyncpg.UniqueViolationError: If profile name already exists.
         """
         agents_data = {
-            name: {
-                "driver": config.driver,
-                "model": config.model,
-                "options": config.options,
-            }
+            name: config.model_dump()
             for name, config in profile.agents.items()
         }
 
         sandbox_data = profile.sandbox.model_dump()
+        pr_autofix_data = profile.pr_autofix.model_dump() if profile.pr_autofix else None
 
         await self._db.execute(
             """INSERT INTO profiles (
                 id, tracker, repo_root, plan_output_dir, plan_path_pattern,
-                agents, sandbox, is_active
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
+                agents, sandbox, pr_autofix, is_active
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""",
             profile.name,
             profile.tracker,
             profile.repo_root,
@@ -110,6 +108,7 @@ class ProfileRepository:
             profile.plan_path_pattern,
             agents_data,
             sandbox_data,
+            pr_autofix_data,
             False,
         )
         result = await self.get_profile(profile.name)
@@ -139,6 +138,7 @@ class ProfileRepository:
             "plan_path_pattern",
             "agents",
             "sandbox",
+            "pr_autofix",
         }
         invalid = set(updates.keys()) - valid_fields
         if invalid:
@@ -231,6 +231,9 @@ class ProfileRepository:
         sandbox_data = row.get("sandbox", {})
         sandbox = SandboxConfig(**sandbox_data) if sandbox_data else SandboxConfig()
 
+        pr_autofix_data = row.get("pr_autofix")
+        pr_autofix = PRAutoFixConfig(**pr_autofix_data) if pr_autofix_data else None
+
         return Profile(
             name=row["id"],
             tracker=row["tracker"],
@@ -239,4 +242,5 @@ class ProfileRepository:
             plan_path_pattern=row["plan_path_pattern"],
             agents=agents,
             sandbox=sandbox,
+            pr_autofix=pr_autofix,
         )

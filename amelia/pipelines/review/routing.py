@@ -19,6 +19,10 @@ def route_after_evaluation(state: ImplementationState) -> str:
     Returns:
         END if no issues to fix, "developer_node" if there are items to implement.
     """
+    if state.review_mode == "review_only":
+        logger.info("Review-only mode, skipping fixes")
+        return END
+
     if not state.evaluation_result or not state.evaluation_result.items_to_implement:
         logger.info("No items to implement, ending workflow")
         return END

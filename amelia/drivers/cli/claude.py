@@ -233,6 +233,8 @@ async def _safe_receive_response(
                 _handle_parse_error(e)
                 continue
 
+            if message is None:
+                continue
             yield message
             if isinstance(message, ResultMessage):
                 return

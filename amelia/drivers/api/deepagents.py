@@ -256,6 +256,26 @@ def _create_chat_model(
     return init_chat_model(model)
 
 
+def _extract_text_content(content: str | list[str | dict[str, Any]]) -> str:
+    """Extract plain text from an AI message's content field.
+
+    Handles both string content and list-of-blocks content (where text
+    is found in dicts with type='text').
+
+    Args:
+        content: Either a plain string or a list of content block dicts.
+
+    Returns:
+        The extracted text as a single string.
+    """
+    if isinstance(content, str):
+        return content
+    return "".join(
+        block.get("text", "") if isinstance(block, dict) else str(block)
+        for block in content
+    )
+
+
 class ApiDriver(DriverInterface):
     """DeepAgents-based driver for LLM generation and agentic execution.
 
@@ -368,7 +388,7 @@ class ApiDriver(DriverInterface):
         try:
             chat_model = _create_chat_model(self.model, provider=self.provider)
             # Use FilesystemBackend for non-agentic generation - no shell execution needed
-            backend = FilesystemBackend(root_dir=self.cwd or ".")
+            backend = FilesystemBackend(root_dir=self.cwd or ".", virtual_mode=False)
 
             # Configure structured output via ToolStrategy when schema is provided
             agent_kwargs: dict[str, Any] = {
@@ -417,20 +437,7 @@ class ApiDriver(DriverInterface):
                     raise RuntimeError("No response messages from agent")
 
                 final_message = messages[-1]
-                if isinstance(final_message, AIMessage):
-                    content = final_message.content
-                    if isinstance(content, list):
-                        text_parts = [
-                            block.get("text", "")
-                            if isinstance(block, dict)
-                            else str(block)
-                            for block in content
-                        ]
-                        output = "".join(text_parts)
-                    else:
-                        output = str(content)
-                else:
-                    output = str(final_message.content)
+                output = _extract_text_content(final_message.content)
 
             logger.debug(
                 "DeepAgents generate completed",
@@ -761,14 +768,7 @@ class ApiDriver(DriverInterface):
                         break
 
                     # Extract agent's final response for debugging
-                    agent_response = ""
-                    if last_message:
-                        if isinstance(last_message.content, str):
-                            agent_response = last_message.content
-                        elif isinstance(last_message.content, list):
-                            for block in last_message.content:
-                                if isinstance(block, dict) and block.get("type") == "text":
-                                    agent_response += block.get("text", "")
+                    agent_response = _extract_text_content(last_message.content) if last_message else ""
 
                     response_preview = agent_response[:500] if agent_response else "EMPTY"
                     logger.info(
@@ -839,13 +839,7 @@ class ApiDriver(DriverInterface):
                 )
 
             if last_message:
-                final_content = ""
-                if isinstance(last_message.content, str):
-                    final_content = last_message.content
-                elif isinstance(last_message.content, list):
-                    for block in last_message.content:
-                        if isinstance(block, dict) and block.get("type") == "text":
-                            final_content += block.get("text", "")
+                final_content = _extract_text_content(last_message.content)
 
                 # Log the model's final response to understand why it stopped
                 preview = final_content[:500] if final_content else "EMPTY"
@@ -898,6 +892,12 @@ class ApiDriver(DriverInterface):
         except (httpx.TransportError, openai.APIConnectionError) as e:
             raise ModelProviderError(
                 f"Transient connection error: {e}",
+                provider_name="openai-compatible",
+                original_message=str(e),
+            ) from e
+        except openai.APIStatusError as e:
+            raise ModelProviderError(
+                f"API error (status {e.status_code}): {e.message}",
                 provider_name="openai-compatible",
                 original_message=str(e),
             ) from e

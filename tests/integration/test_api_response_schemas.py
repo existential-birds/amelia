@@ -25,14 +25,18 @@ from amelia.server.main import app
 from amelia.server.models.state import ServerExecutionState
 
 
-async def create_test_workflow(
+async def create_test_workflow_with_state(
     repository: WorkflowRepository,
     workflow_id: str,
     issue_id: str = "TEST-456",
     worktree_path: str = "/test/path",
     workflow_status: str = "pending",
 ) -> ServerExecutionState:
-    """Create and persist a test workflow."""
+    """Create and persist a test workflow with execution_state.
+
+    This variant includes an ImplementationState (execution_state) which is
+    needed by tests that verify full workflow detail responses.
+    """
     execution_state = ImplementationState(
         workflow_id=workflow_id,
         profile_id="test",
@@ -75,7 +79,7 @@ class TestAPIResponseSchemas:
     ) -> AsyncGenerator[str, None]:
         """Start server with real repository and mocked orchestrator."""
         # Create the test workflow in the real database
-        await create_test_workflow(
+        await create_test_workflow_with_state(
             test_repository,
             workflow_id="00000000-0000-4000-8000-000000000123",
             issue_id="TEST-456",
@@ -138,7 +142,7 @@ class TestAPIResponseSchemas:
         assert isinstance(response, CreateWorkflowResponse)
 
         # Verify only the minimal fields are present
-        assert response.id == "00000000-0000-4000-8000-000000000123"
+        assert str(response.id) == "00000000-0000-4000-8000-000000000123"
         assert response.status == "pending"
         assert "TEST-123" in response.message
 
@@ -181,7 +185,7 @@ class TestAPIResponseSchemas:
 
         # Verify correct response type with full details
         assert isinstance(response, WorkflowResponse)
-        assert response.id == "00000000-0000-4000-8000-000000000123"
+        assert str(response.id) == "00000000-0000-4000-8000-000000000123"
         assert response.issue_id == "TEST-456"
         assert response.worktree_path == "/test/path"
         assert response.status == "pending"

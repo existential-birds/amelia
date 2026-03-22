@@ -9,6 +9,7 @@ Exports:
     files_router: File access endpoints for design document import.
     health_router: Health check and readiness endpoints.
     paths_router: Path validation endpoints for worktree verification.
+    metrics_router: PR auto-fix metrics and classification audit endpoints.
     usage_router: Usage metrics endpoints for costs view.
     websocket_router: WebSocket endpoint for event streaming.
     workflows_router: REST endpoints for workflow management.
@@ -18,6 +19,7 @@ from amelia.server.routes.files import router as files_router
 from amelia.server.routes.github import router as github_router
 from amelia.server.routes.health import router as health_router
 from amelia.server.routes.knowledge import router as knowledge_router
+from amelia.server.routes.metrics import router as metrics_router
 from amelia.server.routes.paths import router as paths_router
 from amelia.server.routes.usage import router as usage_router
 from amelia.server.routes.websocket import router as websocket_router
@@ -30,6 +32,7 @@ __all__ = [
     "github_router",
     "health_router",
     "knowledge_router",
+    "metrics_router",
     "paths_router",
     "usage_router",
     "websocket_router",

@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
+from pydantic import BaseModel
 
 from amelia.client.models import (
     BatchStartResponse,
@@ -15,18 +16,15 @@ from amelia.client.models import (
     WorkflowListResponse,
     WorkflowResponse,
 )
+from amelia.core.types import PRAutoFixConfig, PRReviewComment, PRSummary
 
 
 class AmeliaClientError(Exception):
     """Base exception for API client errors."""
 
-    pass
-
 
 class ServerUnreachableError(AmeliaClientError):
     """Raised when server cannot be reached."""
-
-    pass
 
 
 class WorkflowConflictError(AmeliaClientError):
@@ -56,13 +54,35 @@ class RateLimitError(AmeliaClientError):
 class WorkflowNotFoundError(AmeliaClientError):
     """Raised when workflow is not found (404)."""
 
-    pass
-
 
 class InvalidRequestError(AmeliaClientError):
     """Raised when request validation fails (400/422)."""
 
-    pass
+
+class TriggerPRAutoFixResponse(BaseModel):
+    """Response from triggering PR auto-fix."""
+
+    workflow_id: str
+    message: str
+
+
+class PRAutoFixStatusResponse(BaseModel):
+    """Response with PR auto-fix configuration status."""
+
+    enabled: bool
+    config: PRAutoFixConfig | None = None
+
+
+class PRListResponse(BaseModel):
+    """Response containing a list of open PRs."""
+
+    prs: list[PRSummary]
+
+
+class PRCommentsResponse(BaseModel):
+    """Response containing PR review comments."""
+
+    comments: list[PRReviewComment]
 
 
 class AmeliaClient:
@@ -107,6 +127,32 @@ class AmeliaClient:
                 f"Cannot connect to Amelia server at {self.base_url}. "
                 f"Is the server running? Try: amelia server"
             ) from e
+
+    def _handle_action_response(
+        self, response: httpx.Response, workflow_id: str | uuid.UUID
+    ) -> None:
+        """Handle response for workflow action endpoints (approve/reject/cancel/resume).
+
+        Args:
+            response: HTTP response to check.
+            workflow_id: Workflow ID for error messages.
+
+        Raises:
+            WorkflowNotFoundError: If workflow not found (404).
+            InvalidRequestError: If action invalid (400/409/422).
+            httpx.HTTPStatusError: For other non-2xx status codes.
+        """
+        if response.status_code == 200:
+            return
+        elif response.status_code == 404:
+            raise WorkflowNotFoundError(f"Workflow {workflow_id} not found")
+        elif response.status_code in (400, 409, 422):
+            data = response.json()
+            raise InvalidRequestError(
+                data.get("detail", "Invalid request")
+            )
+        else:
+            response.raise_for_status()
 
     def _handle_workflow_create_errors(self, response: httpx.Response) -> None:
         """Handle error responses for workflow creation endpoints.
@@ -190,7 +236,6 @@ class AmeliaClient:
 
             self._handle_workflow_create_errors(response)
 
-        # This should never be reached, but mypy needs it
         raise RuntimeError("Unexpected code path in create_workflow")
 
     async def create_review_workflow(
@@ -232,7 +277,6 @@ class AmeliaClient:
 
             self._handle_workflow_create_errors(response)
 
-        # This should never be reached, but mypy needs it
         raise RuntimeError("Unexpected code path in create_review_workflow")
 
     async def approve_workflow(self, workflow_id: str | uuid.UUID) -> None:
@@ -250,15 +294,7 @@ class AmeliaClient:
             response = await client.post(
                 f"{self.base_url}/api/workflows/{workflow_id}/approve"
             )
-
-            if response.status_code == 200:
-                return
-            elif response.status_code == 404:
-                raise WorkflowNotFoundError(f"Workflow {workflow_id} not found")
-            elif response.status_code == 400:
-                raise InvalidRequestError(response.json().get("detail", "Invalid request"))
-            else:
-                response.raise_for_status()
+            self._handle_action_response(response, workflow_id)
 
     async def reject_workflow(self, workflow_id: str | uuid.UUID, reason: str) -> None:
         """Reject a workflow plan.
@@ -280,14 +316,7 @@ class AmeliaClient:
                 json=request.model_dump(),
             )
 
-            if response.status_code == 200:
-                return
-            elif response.status_code == 404:
-                raise WorkflowNotFoundError(f"Workflow {workflow_id} not found")
-            elif response.status_code == 400:
-                raise InvalidRequestError(response.json().get("detail", "Invalid request"))
-            else:
-                response.raise_for_status()
+            self._handle_action_response(response, workflow_id)
 
     async def cancel_workflow(self, workflow_id: str | uuid.UUID) -> None:
         """Cancel an active workflow.
@@ -304,12 +333,7 @@ class AmeliaClient:
                 f"{self.base_url}/api/workflows/{workflow_id}/cancel"
             )
 
-            if response.status_code == 200:
-                return
-            elif response.status_code == 404:
-                raise WorkflowNotFoundError(f"Workflow {workflow_id} not found")
-            else:
-                response.raise_for_status()
+            self._handle_action_response(response, workflow_id)
 
     async def resume_workflow(self, workflow_id: str) -> None:
         """Resume a failed workflow from its last checkpoint.
@@ -327,15 +351,7 @@ class AmeliaClient:
                 f"{self.base_url}/api/workflows/{workflow_id}/resume"
             )
 
-            if response.status_code == 200:
-                return
-            elif response.status_code == 404:
-                raise WorkflowNotFoundError(f"Workflow {workflow_id} not found")
-            elif response.status_code == 409:
-                data = response.json()
-                raise InvalidRequestError(data.get("detail", "Cannot resume workflow"))
-            else:
-                response.raise_for_status()
+            self._handle_action_response(response, workflow_id)
 
     async def get_active_workflows(
         self, worktree_path: str | None = None
@@ -393,7 +409,6 @@ class AmeliaClient:
             else:
                 response.raise_for_status()
 
-        # This should never be reached, but mypy needs it
         raise RuntimeError("Unexpected code path in get_workflow")
 
     async def start_workflow(self, workflow_id: str) -> dict[str, str]:
@@ -427,7 +442,6 @@ class AmeliaClient:
             else:
                 response.raise_for_status()
 
-        # This should never be reached, but mypy needs it
         raise RuntimeError("Unexpected code path in start_workflow")
 
     async def start_batch(
@@ -464,5 +478,145 @@ class AmeliaClient:
             else:
                 response.raise_for_status()
 
-        # This should never be reached, but mypy needs it
         raise RuntimeError("Unexpected code path in start_batch")
+
+    async def trigger_pr_autofix(
+        self,
+        pr_number: int,
+        profile: str,
+        aggressiveness: str | None = None,
+    ) -> TriggerPRAutoFixResponse:
+        """Trigger a PR auto-fix cycle.
+
+        Args:
+            pr_number: PR number to fix.
+            profile: Profile name.
+            aggressiveness: Optional aggressiveness override (critical/standard/thorough).
+
+        Returns:
+            TriggerPRAutoFixResponse with workflow_id and message.
+
+        Raises:
+            ServerUnreachableError: If server is not running.
+            InvalidRequestError: If request validation fails.
+        """
+        async with self._http_client() as client:
+            kwargs: dict[str, Any] = {
+                "params": {"profile": profile},
+            }
+            if aggressiveness is not None:
+                kwargs["json"] = {"aggressiveness": aggressiveness}
+
+            response = await client.post(
+                f"{self.base_url}/api/github/prs/{pr_number}/auto-fix",
+                **kwargs,
+            )
+
+            if response.status_code == 202:
+                return TriggerPRAutoFixResponse.model_validate(response.json())
+            if response.status_code == 404:
+                raise WorkflowNotFoundError(f"Profile '{profile}' not found")
+
+            self._handle_workflow_create_errors(response)
+
+        raise RuntimeError("Unexpected code path in trigger_pr_autofix")
+
+    async def list_prs(self, profile: str) -> PRListResponse:
+        """List open PRs for a profile's repository.
+
+        Args:
+            profile: Profile name.
+
+        Returns:
+            PRListResponse with list of open PRs.
+
+        Raises:
+            WorkflowNotFoundError: If profile not found (404).
+            InvalidRequestError: On other errors.
+            ServerUnreachableError: If server is not running.
+        """
+        async with self._http_client() as client:
+            response = await client.get(
+                f"{self.base_url}/api/github/prs",
+                params={"profile": profile},
+            )
+
+            if response.status_code == 200:
+                return PRListResponse.model_validate(response.json())
+            elif response.status_code == 404:
+                raise WorkflowNotFoundError(
+                    f"Profile '{profile}' not found"
+                )
+            elif response.status_code in (400, 422):
+                raise InvalidRequestError(f"Failed to list PRs: {response.json()}")
+            else:
+                response.raise_for_status()
+
+        raise RuntimeError("Unexpected code path in list_prs")
+
+    async def get_pr_comments(
+        self, pr_number: int, profile: str
+    ) -> PRCommentsResponse:
+        """Get unresolved review comments for a PR.
+
+        Args:
+            pr_number: PR number.
+            profile: Profile name.
+
+        Returns:
+            PRCommentsResponse with list of review comments.
+
+        Raises:
+            InvalidRequestError: On error responses.
+            ServerUnreachableError: If server is not running.
+        """
+        async with self._http_client() as client:
+            response = await client.get(
+                f"{self.base_url}/api/github/prs/{pr_number}/comments",
+                params={"profile": profile},
+            )
+
+            if response.status_code == 200:
+                return PRCommentsResponse.model_validate(response.json())
+            elif response.status_code == 404:
+                raise WorkflowNotFoundError(
+                    f"PR #{pr_number} or profile '{profile}' not found"
+                )
+            elif response.status_code in (400, 422):
+                raise InvalidRequestError(
+                    f"Failed to get PR comments: {response.json()}"
+                )
+            else:
+                response.raise_for_status()
+
+        raise RuntimeError("Unexpected code path in get_pr_comments")
+
+    async def get_pr_autofix_status(self, profile: str) -> PRAutoFixStatusResponse:
+        """Get PR auto-fix configuration status for a profile.
+
+        Args:
+            profile: Profile name.
+
+        Returns:
+            PRAutoFixStatusResponse with enabled flag and config.
+
+        Raises:
+            WorkflowNotFoundError: If profile not found (404).
+            ServerUnreachableError: If server is not running.
+        """
+        async with self._http_client() as client:
+            response = await client.get(
+                f"{self.base_url}/api/github/prs/config",
+                params={"profile": profile},
+            )
+
+            if response.status_code == 200:
+                return PRAutoFixStatusResponse.model_validate(response.json())
+            elif response.status_code == 404:
+                raise WorkflowNotFoundError(
+                    f"Profile '{profile}' not found"
+                )
+            else:
+                response.raise_for_status()
+
+        raise RuntimeError("Unexpected code path in get_pr_autofix_status")

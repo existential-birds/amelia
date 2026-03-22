@@ -3,6 +3,7 @@
 Tests the review node behavior including base_commit fallback computation.
 """
 
+from collections.abc import Callable
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,26 +13,12 @@ from amelia.core.types import ReviewResult
 from amelia.pipelines.nodes import call_reviewer_node
 
 
-@pytest.fixture
-def mock_runnable_config(mock_profile_factory):
-    """Create a mock RunnableConfig for review node tests."""
-    def _create(
-        profile=None,
-        workflow_id: str = "test-workflow-123",
-        event_bus=None,
-        repository=None,
-    ) -> dict[str, Any]:
-        if profile is None:
-            profile = mock_profile_factory(preset="cli_single")
-        return {
-            "configurable": {
-                "thread_id": workflow_id,
-                "profile": profile,
-                "event_bus": event_bus,
-                "repository": repository,
-            }
-        }
-    return _create
+_APPROVED_RESULT = ReviewResult(
+    reviewer_persona="Agentic",
+    approved=True,
+    comments=[],
+    severity="none",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -39,12 +26,7 @@ def _mock_skill_detection():
     """Mock skill detection/loading for all review node tests."""
     with (
         patch(
-            "amelia.pipelines.nodes._get_changed_files",
-            new_callable=AsyncMock,
-            return_value=[],
-        ),
-        patch(
-            "amelia.pipelines.nodes._get_diff_content",
+            "amelia.pipelines.nodes._run_git_command",
             new_callable=AsyncMock,
             return_value="",
         ),
@@ -54,190 +36,110 @@ def _mock_skill_detection():
         yield
 
 
+@pytest.fixture
+def run_reviewer_node(
+    mock_execution_state_factory: Callable[..., Any],
+    mock_runnable_config: Callable[..., dict[str, Any]],
+) -> Callable[..., Any]:
+    """Run call_reviewer_node with a mock Reviewer wired up.
+
+    Returns a callable ``async (base_commit, get_commit_return, **state_kw)``
+    that yields ``(result, captured_base_commits, mock_get_commit, mock_reviewer)``.
+    """
+
+    async def _run(
+        base_commit: str | None = None,
+        get_commit_return: str | None = "abc123def456",
+        review_result: ReviewResult = _APPROVED_RESULT,
+        agentic_review_override: Any = None,
+        **state_kwargs: Any,
+    ) -> dict[str, Any]:
+        state, profile = mock_execution_state_factory(
+            goal=state_kwargs.pop("goal", "Test goal"),
+            base_commit=base_commit,
+            **state_kwargs,
+        )
+
+        captured_base_commit: list[str] = []
+
+        async def mock_agentic_review(state, base_commit: str, profile, *, workflow_id: str):
+            captured_base_commit.append(base_commit)
+            return review_result, "session-123"
+
+        config = mock_runnable_config(profile=profile)
+
+        with (
+            patch(
+                "amelia.pipelines.nodes.get_current_commit",
+                new_callable=AsyncMock,
+                return_value=get_commit_return,
+            ) as mock_get_commit,
+            patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class,
+            patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
+        ):
+            mock_reviewer = MagicMock()
+            mock_reviewer.driver = MagicMock()
+            if agentic_review_override is not None:
+                mock_reviewer.agentic_review = agentic_review_override
+            else:
+                mock_reviewer.agentic_review = mock_agentic_review
+            mock_reviewer.review = AsyncMock()
+            mock_reviewer_class.return_value = mock_reviewer
+
+            result = await call_reviewer_node(state, config)
+
+        return {
+            "result": result,
+            "captured_base_commit": captured_base_commit,
+            "mock_get_commit": mock_get_commit,
+            "mock_reviewer": mock_reviewer,
+        }
+
+    return _run
+
+
 class TestCallReviewNodeBaseCommitFallback:
     """Tests for base_commit fallback computation in call_reviewer_node."""
 
     @pytest.mark.asyncio
-    async def test_computes_base_commit_when_missing(
-        self,
-        mock_execution_state_factory,
-        mock_runnable_config,
-    ):
+    async def test_computes_base_commit_when_missing(self, run_reviewer_node):
         """When base_commit is None, review node should compute it using get_current_commit."""
-        state, profile = mock_execution_state_factory(
-            goal="Test goal",
-            base_commit=None,
-        )
+        out = await run_reviewer_node(base_commit=None, get_commit_return="abc123def456")
 
-        mock_review_result = ReviewResult(
-            reviewer_persona="Agentic",
-            approved=True,
-            comments=[],
-            severity="none",
-        )
-
-        captured_base_commit: list[str] = []
-
-        async def mock_agentic_review(state, base_commit: str, profile, *, workflow_id: str):
-            captured_base_commit.append(base_commit)
-            return mock_review_result, "session-123"
-
-        config = mock_runnable_config(profile=profile)
-
-        with (
-            patch(
-                "amelia.pipelines.nodes.get_current_commit",
-                new_callable=AsyncMock,
-                return_value="abc123def456",
-            ) as mock_get_commit,
-            patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class,
-            patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
-        ):
-            mock_reviewer = MagicMock()
-            mock_reviewer.driver = MagicMock()
-            mock_reviewer.agentic_review = mock_agentic_review
-            mock_reviewer_class.return_value = mock_reviewer
-
-            result = await call_reviewer_node(state, config)
-
-            mock_get_commit.assert_called_once()
-            assert len(captured_base_commit) == 1
-            assert captured_base_commit[0] == "abc123def456"
-
-            # reviewer_persona is overwritten with review_type ("general")
-            assert len(result["last_reviews"]) == 1
-            assert result["last_reviews"][0].reviewer_persona == "general"
+        out["mock_get_commit"].assert_called_once()
+        assert out["captured_base_commit"] == ["abc123def456"]
+        assert len(out["result"]["last_reviews"]) == 1
+        assert out["result"]["last_reviews"][0].reviewer_persona == "general"
 
     @pytest.mark.asyncio
-    async def test_uses_existing_base_commit_when_present(
-        self,
-        mock_execution_state_factory,
-        mock_runnable_config,
-    ):
+    async def test_uses_existing_base_commit_when_present(self, run_reviewer_node):
         """When base_commit is already set, review node should use it directly."""
-        existing_base_commit = "existing123commit"
-        state, profile = mock_execution_state_factory(
-            goal="Test goal",
-            base_commit=existing_base_commit,
-        )
+        out = await run_reviewer_node(base_commit="existing123commit")
 
-        mock_review_result = ReviewResult(
-            reviewer_persona="Agentic",
-            approved=True,
-            comments=[],
-            severity="none",
-        )
-
-        captured_base_commit: list[str] = []
-
-        async def mock_agentic_review(state, base_commit: str, profile, *, workflow_id: str):
-            captured_base_commit.append(base_commit)
-            return mock_review_result, "session-123"
-
-        config = mock_runnable_config(profile=profile)
-
-        with (
-            patch("amelia.pipelines.nodes.get_current_commit", new_callable=AsyncMock) as mock_get_commit,
-            patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class,
-            patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
-        ):
-            mock_reviewer = MagicMock()
-            mock_reviewer.driver = MagicMock()
-            mock_reviewer.agentic_review = mock_agentic_review
-            mock_reviewer_class.return_value = mock_reviewer
-
-            result = await call_reviewer_node(state, config)
-
-            mock_get_commit.assert_not_called()
-            assert len(captured_base_commit) == 1
-            assert captured_base_commit[0] == existing_base_commit
-            assert len(result["last_reviews"]) == 1
-            assert result["last_reviews"][0].reviewer_persona == "general"
+        out["mock_get_commit"].assert_not_called()
+        assert out["captured_base_commit"] == ["existing123commit"]
+        assert len(out["result"]["last_reviews"]) == 1
+        assert out["result"]["last_reviews"][0].reviewer_persona == "general"
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_head_when_get_current_commit_fails(
-        self,
-        mock_execution_state_factory,
-        mock_runnable_config,
-    ):
+    async def test_falls_back_to_head_when_get_current_commit_fails(self, run_reviewer_node):
         """When get_current_commit returns None, review node should fall back to HEAD."""
-        state, profile = mock_execution_state_factory(
-            goal="Test goal",
-            base_commit=None,
-        )
+        out = await run_reviewer_node(base_commit=None, get_commit_return=None)
 
-        mock_review_result = ReviewResult(
-            reviewer_persona="Agentic",
-            approved=True,
-            comments=[],
-            severity="none",
-        )
-
-        captured_base_commit: list[str] = []
-
-        async def mock_agentic_review(state, base_commit: str, profile, *, workflow_id: str):
-            captured_base_commit.append(base_commit)
-            return mock_review_result, "session-123"
-
-        config = mock_runnable_config(profile=profile)
-
-        with (
-            patch(
-                "amelia.pipelines.nodes.get_current_commit",
-                new_callable=AsyncMock,
-                return_value=None,
-            ) as mock_get_commit,
-            patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class,
-            patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
-        ):
-            mock_reviewer = MagicMock()
-            mock_reviewer.driver = MagicMock()
-            mock_reviewer.agentic_review = mock_agentic_review
-            mock_reviewer_class.return_value = mock_reviewer
-
-            await call_reviewer_node(state, config)
-
-            mock_get_commit.assert_called_once()
-            assert len(captured_base_commit) == 1
-            assert captured_base_commit[0] == "HEAD"
+        out["mock_get_commit"].assert_called_once()
+        assert out["captured_base_commit"] == ["HEAD"]
 
     @pytest.mark.asyncio
-    async def test_always_uses_agentic_review(
-        self,
-        mock_execution_state_factory,
-        mock_runnable_config,
-    ):
+    async def test_always_uses_agentic_review(self, run_reviewer_node):
         """Review node should always use agentic_review, never the old review() method."""
-        state, profile = mock_execution_state_factory(
-            goal="Test goal",
+        agentic_mock = AsyncMock(return_value=(_APPROVED_RESULT, "session-123"))
+        out = await run_reviewer_node(
             base_commit="abc123",
+            agentic_review_override=agentic_mock,
         )
 
-        mock_review_result = ReviewResult(
-            reviewer_persona="Agentic",
-            approved=True,
-            comments=[],
-            severity="none",
-        )
-
-        config = mock_runnable_config(profile=profile)
-
-        with (
-            patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class,
-            patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
-        ):
-            mock_reviewer = MagicMock()
-            mock_reviewer.driver = MagicMock()
-            mock_reviewer.agentic_review = AsyncMock(
-                return_value=(mock_review_result, "session-123")
-            )
-            mock_reviewer.review = AsyncMock()
-            mock_reviewer_class.return_value = mock_reviewer
-
-            await call_reviewer_node(state, config)
-
-            mock_reviewer.agentic_review.assert_called_once()
-            mock_reviewer.review.assert_not_called()
+        agentic_mock.assert_called_once()
+        out["mock_reviewer"].review.assert_not_called()
 
 
 class TestCallReviewNodeMultipleReviewTypes:
@@ -293,16 +195,15 @@ class TestCallReviewNodeMultipleReviewTypes:
                 return general_result, "session-1"
             return security_result, "session-2"
 
+        async def mock_git_cmd(cmd, repo_root, sandbox_provider=None):
+            if "--name-only" in cmd:
+                return "app.py\n"
+            return "import os"
+
         with (
             patch(
-                "amelia.pipelines.nodes._get_changed_files",
-                new_callable=AsyncMock,
-                return_value=["app.py"],
-            ),
-            patch(
-                "amelia.pipelines.nodes._get_diff_content",
-                new_callable=AsyncMock,
-                return_value="import os",
+                "amelia.pipelines.nodes._run_git_command",
+                side_effect=mock_git_cmd,
             ),
             patch("amelia.pipelines.nodes.detect_stack", return_value={"python"}),
             patch("amelia.pipelines.nodes.load_skills", return_value="# Guidelines") as mock_load,
@@ -369,12 +270,7 @@ class TestCallReviewNodeMultipleReviewTypes:
 
         with (
             patch(
-                "amelia.pipelines.nodes._get_changed_files",
-                new_callable=AsyncMock,
-                return_value=[],
-            ),
-            patch(
-                "amelia.pipelines.nodes._get_diff_content",
+                "amelia.pipelines.nodes._run_git_command",
                 new_callable=AsyncMock,
                 return_value="",
             ),

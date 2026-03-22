@@ -1,33 +1,10 @@
 """Tests for skill injection into the reviewer via call_reviewer_node."""
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from amelia.core.types import ReviewResult, Severity
 from amelia.pipelines.nodes import call_reviewer_node
-
-
-@pytest.fixture
-def mock_runnable_config(mock_profile_factory):
-    """Create a mock RunnableConfig for review node tests."""
-    def _create(
-        profile=None,
-        workflow_id: str = "test-workflow-123",
-        event_bus=None,
-        repository=None,
-    ) -> dict[str, Any]:
-        if profile is None:
-            profile = mock_profile_factory(preset="cli_single")
-        return {
-            "configurable": {
-                "thread_id": workflow_id,
-                "profile": profile,
-                "event_bus": event_bus,
-                "repository": repository,
-            }
-        }
-    return _create
 
 
 class TestSkillInjection:
@@ -70,14 +47,12 @@ class TestSkillInjection:
                 new_callable=AsyncMock,
             ),
             patch(
-                "amelia.pipelines.nodes._get_changed_files",
+                "amelia.pipelines.nodes._run_git_command",
                 new_callable=AsyncMock,
-                return_value=["src/app.py", "src/routes.py"],
-            ),
-            patch(
-                "amelia.pipelines.nodes._get_diff_content",
-                new_callable=AsyncMock,
-                return_value="from fastapi import FastAPI\n",
+                side_effect=lambda cmd, *a, **kw: (
+                    "src/app.py\nsrc/routes.py\n" if "--name-only" in cmd
+                    else "from fastapi import FastAPI\n"
+                ),
             ),
         ):
             mock_reviewer = MagicMock()
@@ -154,14 +129,10 @@ class TestSkillInjection:
                 new_callable=AsyncMock,
             ),
             patch(
-                "amelia.pipelines.nodes._get_changed_files",
-                new_callable=AsyncMock,
-                return_value=["app.py"],
-            ),
-            patch(
-                "amelia.pipelines.nodes._get_diff_content",
-                new_callable=AsyncMock,
-                return_value="",
+                "amelia.pipelines.nodes._run_git_command",
+                side_effect=lambda cmd, *a, **kw: (
+                    "app.py\n" if "--name-only" in cmd else ""
+                ),
             ),
         ):
             mock_reviewer = MagicMock()
@@ -214,12 +185,7 @@ class TestSkillInjection:
                 new_callable=AsyncMock,
             ),
             patch(
-                "amelia.pipelines.nodes._get_changed_files",
-                new_callable=AsyncMock,
-                return_value=[],
-            ),
-            patch(
-                "amelia.pipelines.nodes._get_diff_content",
+                "amelia.pipelines.nodes._run_git_command",
                 new_callable=AsyncMock,
                 return_value="",
             ),

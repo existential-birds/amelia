@@ -22,11 +22,6 @@ class TestCreateReviewWorkflow:
     """Tests for AmeliaClient.create_review_workflow."""
 
     @pytest.fixture
-    def client(self) -> AmeliaClient:
-        """Create client instance."""
-        return AmeliaClient(base_url="http://localhost:8420")
-
-    @pytest.fixture
     def mock_response_success(self) -> dict[str, Any]:
         """Successful response data."""
         return {
@@ -37,23 +32,19 @@ class TestCreateReviewWorkflow:
 
     async def test_create_review_workflow_success(
         self,
-        client: AmeliaClient,
+        api_client: AmeliaClient,
         mock_response_success: dict[str, Any],
-        tmp_path: Path,
+        mock_worktree: Path,
     ) -> None:
         """Successfully creates review workflow."""
-        worktree = tmp_path / "repo"
-        worktree.mkdir()
-
         mock_resp = AsyncMock()
         mock_resp.status_code = 201
-        # json() is a synchronous method, not async
         mock_resp.json = lambda: mock_response_success
 
         with patch("httpx.AsyncClient.post", return_value=mock_resp):
-            response = await client.create_review_workflow(
+            response = await api_client.create_review_workflow(
                 diff_content="+ new line",
-                worktree_path=str(worktree),
+                worktree_path=str(mock_worktree),
                 profile="default",
             )
 
@@ -62,37 +53,30 @@ class TestCreateReviewWorkflow:
 
     async def test_raises_server_unreachable_on_connect_error(
         self,
-        client: AmeliaClient,
-        tmp_path: Path,
+        api_client: AmeliaClient,
+        mock_worktree: Path,
     ) -> None:
         """Raises ServerUnreachableError when server is not running."""
-        worktree = tmp_path / "repo"
-        worktree.mkdir()
-
         with patch(
             "httpx.AsyncClient.post",
             side_effect=httpx.ConnectError("Connection refused"),
         ), pytest.raises(ServerUnreachableError) as exc_info:
-            await client.create_review_workflow(
+            await api_client.create_review_workflow(
                 diff_content="+ line",
-                worktree_path=str(worktree),
+                worktree_path=str(mock_worktree),
             )
 
         assert "Cannot connect" in str(exc_info.value)
 
     async def test_raises_workflow_conflict_on_409(
         self,
-        client: AmeliaClient,
-        tmp_path: Path,
+        api_client: AmeliaClient,
+        mock_worktree: Path,
     ) -> None:
         """Raises WorkflowConflictError on 409 response."""
-        worktree = tmp_path / "repo"
-        worktree.mkdir()
-
         wf_id = str(uuid4())
         mock_resp = AsyncMock()
         mock_resp.status_code = 409
-        # json() is a synchronous method, not async
         mock_resp.json = lambda: {
             "detail": {
                 "message": "Workflow already active",
@@ -108,9 +92,9 @@ class TestCreateReviewWorkflow:
             patch("httpx.AsyncClient.post", return_value=mock_resp),
             pytest.raises(WorkflowConflictError) as exc_info,
         ):
-            await client.create_review_workflow(
+            await api_client.create_review_workflow(
                 diff_content="+ line",
-                worktree_path=str(worktree),
+                worktree_path=str(mock_worktree),
             )
 
         assert exc_info.value.active_workflow is not None
@@ -118,13 +102,10 @@ class TestCreateReviewWorkflow:
 
     async def test_raises_rate_limit_on_429(
         self,
-        client: AmeliaClient,
-        tmp_path: Path,
+        api_client: AmeliaClient,
+        mock_worktree: Path,
     ) -> None:
         """Raises RateLimitError on 429 response."""
-        worktree = tmp_path / "repo"
-        worktree.mkdir()
-
         mock_resp = AsyncMock()
         mock_resp.status_code = 429
         mock_resp.headers = {"Retry-After": "30"}
@@ -133,9 +114,9 @@ class TestCreateReviewWorkflow:
             patch("httpx.AsyncClient.post", return_value=mock_resp),
             pytest.raises(RateLimitError) as exc_info,
         ):
-            await client.create_review_workflow(
+            await api_client.create_review_workflow(
                 diff_content="+ line",
-                worktree_path=str(worktree),
+                worktree_path=str(mock_worktree),
             )
 
         assert exc_info.value.retry_after == 30

@@ -747,7 +747,7 @@ class BrainstormService:
 
         # Build message complete event data with optional usage
         complete_data: dict[str, Any] = {
-            "session_id": session_id,
+            "session_id": str(session_id),
             "message_id": assistant_message.id,
         }
         if message_usage:

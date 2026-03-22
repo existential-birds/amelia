@@ -11,7 +11,7 @@ For CLI tests, the proper mock boundaries are:
 
 Internal components like Architect should NOT be mocked.
 """
-from collections.abc import AsyncIterator, Generator
+from collections.abc import Generator
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -28,9 +28,22 @@ from amelia.client.models import (
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.main import app
+from tests.conftest import create_mock_execute_agentic
 
 
 runner = CliRunner()
+
+
+def _make_workflow_list(issue_id: str, status: str, worktree_path: str | None = None, **overrides) -> WorkflowListResponse:
+    fields = {
+        "id": str(uuid4()),
+        "issue_id": issue_id,
+        "status": status,
+        "worktree_path": worktree_path or "/tmp/test-worktree",
+        "started_at": datetime.now(UTC),
+        **overrides,
+    }
+    return WorkflowListResponse(workflows=[WorkflowSummary(**fields)], total=1)
 
 
 @pytest.fixture(autouse=True)
@@ -101,26 +114,27 @@ class TestPlanCommand:
         full_plan_path.write_text("# Implementation Plan\n\n1. Step one\n2. Step two")
 
         # Mock driver's execute_agentic to yield messages simulating LLM execution
-        async def mock_execute_agentic(**kwargs: object) -> AsyncIterator[AgenticMessage]:
-            yield AgenticMessage(
+        mock_messages = [
+            AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
                 tool_name="write_file",
                 tool_input={"file_path": plan_path, "content": "# Plan"},
                 tool_call_id="call-0",
-            )
-            yield AgenticMessage(
+            ),
+            AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
                 tool_name="write_file",
                 tool_output="File written",
                 tool_call_id="call-0",
-            )
-            yield AgenticMessage(
+            ),
+            AgenticMessage(
                 type=AgenticMessageType.RESULT,
                 content="Plan generated successfully.",
-            )
+            ),
+        ]
 
         mock_driver = MagicMock()
-        mock_driver.execute_agentic = mock_execute_agentic
+        mock_driver.execute_agentic = create_mock_execute_agentic(mock_messages)
 
         with patch("amelia.client.cli._get_profile_from_server", new_callable=AsyncMock) as mock_get_profile, \
              patch("amelia.client.cli.create_tracker") as mock_create_tracker, \
@@ -173,26 +187,27 @@ class TestPlanCommand:
         full_plan_path.write_text("# Work Plan\n\n1. Do work")
 
         # Mock driver's execute_agentic to yield messages simulating LLM execution
-        async def mock_execute_agentic(**kwargs: object) -> AsyncIterator[AgenticMessage]:
-            yield AgenticMessage(
+        mock_messages = [
+            AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
                 tool_name="write_file",
                 tool_input={"file_path": plan_path, "content": "# Work Plan"},
                 tool_call_id="call-0",
-            )
-            yield AgenticMessage(
+            ),
+            AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
                 tool_name="write_file",
                 tool_output="File written",
                 tool_call_id="call-0",
-            )
-            yield AgenticMessage(
+            ),
+            AgenticMessage(
                 type=AgenticMessageType.RESULT,
                 content="Plan generated successfully.",
-            )
+            ),
+        ]
 
         mock_driver = MagicMock()
-        mock_driver.execute_agentic = mock_execute_agentic
+        mock_driver.execute_agentic = create_mock_execute_agentic(mock_messages)
 
         with patch("amelia.client.cli._get_profile_from_server", new_callable=AsyncMock) as mock_get_profile, \
              patch("amelia.client.cli.create_tracker") as mock_create_tracker, \
@@ -265,18 +280,7 @@ class TestApproveCommand:
         self, tmp_path: Path, mock_worktree_context: MagicMock
     ) -> None:
         """amelia approve should approve the pending workflow."""
-        mock_workflows = WorkflowListResponse(
-            workflows=[
-                WorkflowSummary(
-                    id=str(uuid4()),
-                    issue_id="TEST-789",
-                    status="awaiting_approval",
-                    worktree_path="/tmp/test-worktree",
-                    started_at=datetime.now(UTC),
-                )
-            ],
-            total=1,
-        )
+        mock_workflows = _make_workflow_list("TEST-789", "awaiting_approval")
 
         with patch("amelia.client.cli.get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:
@@ -323,18 +327,7 @@ class TestRejectCommand:
         self, tmp_path: Path, mock_worktree_context: MagicMock
     ) -> None:
         """amelia reject should reject with feedback."""
-        mock_workflows = WorkflowListResponse(
-            workflows=[
-                WorkflowSummary(
-                    id=str(uuid4()),
-                    issue_id="TEST-REJECT",
-                    status="awaiting_approval",
-                    worktree_path="/tmp/test-worktree",
-                    started_at=datetime.now(UTC),
-                )
-            ],
-            total=1,
-        )
+        mock_workflows = _make_workflow_list("TEST-REJECT", "awaiting_approval")
 
         with patch("amelia.client.cli.get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:
@@ -362,18 +355,7 @@ class TestStatusCommand:
         self, tmp_path: Path, mock_worktree_context: MagicMock
     ) -> None:
         """amelia status should show workflow for current worktree."""
-        mock_workflows = WorkflowListResponse(
-            workflows=[
-                WorkflowSummary(
-                    id=str(uuid4()),
-                    issue_id="TEST-STATUS",
-                    status="running",
-                    worktree_path="/tmp/test-worktree",
-                    started_at=datetime.now(UTC),
-                )
-            ],
-            total=1,
-        )
+        mock_workflows = _make_workflow_list("TEST-STATUS", "running")
 
         with patch("amelia.client.cli.get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:
@@ -386,7 +368,7 @@ class TestStatusCommand:
             result = runner.invoke(app, ["status"])
 
         assert result.exit_code == 0
-        assert "wf-status" in result.stdout or "TEST-STATUS" in result.stdout
+        assert "TEST-STATUS" in result.stdout or "TEST-S" in result.stdout
 
     def test_status_command_all_worktrees(self, tmp_path: Path) -> None:
         """amelia status --all should show all workflows."""
@@ -419,9 +401,9 @@ class TestStatusCommand:
 
         assert result.exit_code == 0
         assert "2" in result.stdout  # Total count
-        # Verify both worktrees appear
-        assert "worktree-1" in result.stdout or "wf-1" in result.stdout
-        assert "worktree-2" in result.stdout or "wf-2" in result.stdout
+        # Verify both workflows appear (by issue_id since worktree paths may be truncated)
+        assert "TEST-1" in result.stdout
+        assert "TEST-2" in result.stdout
 
     def test_status_command_no_workflows(
         self, tmp_path: Path, mock_worktree_context: MagicMock
@@ -454,18 +436,7 @@ class TestCancelCommand:
         self, tmp_path: Path, mock_worktree_context: MagicMock
     ) -> None:
         """amelia cancel --force should cancel without confirmation."""
-        mock_workflows = WorkflowListResponse(
-            workflows=[
-                WorkflowSummary(
-                    id=str(uuid4()),
-                    issue_id="TEST-CANCEL",
-                    status="running",
-                    worktree_path="/tmp/test-worktree",
-                    started_at=datetime.now(UTC),
-                )
-            ],
-            total=1,
-        )
+        mock_workflows = _make_workflow_list("TEST-CANCEL", "running")
 
         with patch("amelia.client.cli.get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:
@@ -504,18 +475,8 @@ class TestCancelCommand:
         self, tmp_path: Path, mock_worktree_context: MagicMock
     ) -> None:
         """amelia cancel without --force should prompt and cancel only after user confirms."""
-        mock_workflows = WorkflowListResponse(
-            workflows=[
-                WorkflowSummary(
-                    id=str(workflow_uuid := uuid4()),
-                    issue_id="TEST-CONFIRM",
-                    status="running",
-                    worktree_path="/tmp/test-worktree",
-                    started_at=datetime.now(UTC),
-                )
-            ],
-            total=1,
-        )
+        workflow_uuid = uuid4()
+        mock_workflows = _make_workflow_list("TEST-CONFIRM", "running", id=str(workflow_uuid))
 
         with patch("amelia.client.cli.get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:
@@ -538,18 +499,7 @@ class TestCancelCommand:
         self, tmp_path: Path, mock_worktree_context: MagicMock
     ) -> None:
         """amelia cancel should NOT cancel when user declines confirmation."""
-        mock_workflows = WorkflowListResponse(
-            workflows=[
-                WorkflowSummary(
-                    id=str(uuid4()),
-                    issue_id="TEST-DECLINE",
-                    status="running",
-                    worktree_path="/tmp/test-worktree",
-                    started_at=datetime.now(UTC),
-                )
-            ],
-            total=1,
-        )
+        mock_workflows = _make_workflow_list("TEST-DECLINE", "running")
 
         with patch("amelia.client.cli.get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:

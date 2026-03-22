@@ -114,6 +114,9 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
+# Planning artifacts
+.planning/
+
 # Project specific
 amelia.db
 checkpoints/

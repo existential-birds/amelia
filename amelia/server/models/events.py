@@ -112,6 +112,24 @@ class EventType(StrEnum):
     PLAN_VALIDATED = "plan_validated"
     PLAN_VALIDATION_FAILED = "plan_validation_failed"
 
+    # PR Auto-Fix orchestration
+    PR_FIX_QUEUED = "pr_fix_queued"
+    PR_FIX_DIVERGED = "pr_fix_diverged"
+    PR_FIX_COOLDOWN_STARTED = "pr_fix_cooldown_started"
+    PR_FIX_COOLDOWN_RESET = "pr_fix_cooldown_reset"
+    PR_FIX_RETRIES_EXHAUSTED = "pr_fix_retries_exhausted"
+
+    # PR Auto-Fix lifecycle
+    PR_COMMENTS_DETECTED = "pr_comments_detected"
+    PR_AUTO_FIX_STARTED = "pr_auto_fix_started"
+    PR_AUTO_FIX_COMPLETED = "pr_auto_fix_completed"
+    PR_AUTO_FIX_FAILED = "pr_auto_fix_failed"
+    PR_COMMENTS_RESOLVED = "pr_comments_resolved"
+    PR_POLL_ERROR = "pr_poll_error"
+
+    # PR Polling
+    PR_POLL_RATE_LIMITED = "pr_poll_rate_limited"
+
 
 # Persisted event types (written to workflow log)
 PERSISTED_TYPES: frozenset[EventType] = frozenset({
@@ -159,6 +177,20 @@ PERSISTED_TYPES: frozenset[EventType] = frozenset({
     # Plan validation
     EventType.PLAN_VALIDATED,
     EventType.PLAN_VALIDATION_FAILED,
+    # PR Auto-Fix orchestration
+    EventType.PR_FIX_QUEUED,
+    EventType.PR_FIX_DIVERGED,
+    EventType.PR_FIX_COOLDOWN_STARTED,
+    EventType.PR_FIX_COOLDOWN_RESET,
+    EventType.PR_FIX_RETRIES_EXHAUSTED,
+    # PR Auto-Fix lifecycle
+    EventType.PR_COMMENTS_DETECTED,
+    EventType.PR_AUTO_FIX_STARTED,
+    EventType.PR_AUTO_FIX_COMPLETED,
+    EventType.PR_AUTO_FIX_FAILED,
+    EventType.PR_COMMENTS_RESOLVED,
+    EventType.PR_POLL_ERROR,
+    EventType.PR_POLL_RATE_LIMITED,
 })
 
 _ERROR_TYPES: frozenset[EventType] = frozenset({
@@ -169,10 +201,15 @@ _ERROR_TYPES: frozenset[EventType] = frozenset({
     EventType.DOCUMENT_INGESTION_FAILED,
     EventType.PLAN_VALIDATION_FAILED,
     EventType.BRAINSTORM_MESSAGE_FAILED,
+    EventType.PR_FIX_RETRIES_EXHAUSTED,
+    EventType.PR_POLL_ERROR,
+    EventType.PR_AUTO_FIX_FAILED,
 })
 
 _WARNING_TYPES: frozenset[EventType] = frozenset({
     EventType.SYSTEM_WARNING,
+    EventType.PR_FIX_DIVERGED,
+    EventType.PR_POLL_RATE_LIMITED,
 })
 
 _INFO_TYPES: frozenset[EventType] = frozenset({
@@ -190,6 +227,14 @@ _INFO_TYPES: frozenset[EventType] = frozenset({
     EventType.ORACLE_CONSULTATION_COMPLETED,
     EventType.DOCUMENT_INGESTION_STARTED,
     EventType.DOCUMENT_INGESTION_COMPLETED,
+    EventType.PR_FIX_QUEUED,
+    EventType.PR_FIX_COOLDOWN_STARTED,
+    EventType.PR_FIX_COOLDOWN_RESET,
+    # PR Auto-Fix lifecycle
+    EventType.PR_COMMENTS_DETECTED,
+    EventType.PR_AUTO_FIX_STARTED,
+    EventType.PR_AUTO_FIX_COMPLETED,
+    EventType.PR_COMMENTS_RESOLVED,
 })
 
 

@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { TypeBadge } from '@/components/TypeBadge';
 import type { WorkflowSummary, WorkflowStatus, WorkflowEvent } from '@/types';
 
 /**
@@ -17,7 +18,12 @@ import type { WorkflowSummary, WorkflowStatus, WorkflowEvent } from '@/types';
  * @property className - Optional additional CSS classes
  */
 interface JobQueueItemProps {
-  workflow: Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_path' | 'status'>;
+  workflow: Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_path' | 'status'> & {
+    pipeline_type?: string | null;
+    pr_number?: number | null;
+    pr_title?: string | null;
+    pr_comment_count?: number | null;
+  };
   selected: boolean;
   onSelect: (id: string) => void;
   className?: string;
@@ -158,12 +164,22 @@ export function JobQueueItem({ workflow, selected, onSelect, className }: JobQue
           </div>
         </div>
 
-        {/* Row 2: Repo name */}
+        {/* Row 2: Repo name + Type badge */}
         <div className="flex items-center justify-between gap-2 text-xs">
           <span className="font-body text-foreground/80 truncate">
-            {repoName}
+            {workflow.pipeline_type === 'pr_auto_fix' && workflow.pr_title
+              ? workflow.pr_title
+              : repoName}
           </span>
+          <TypeBadge type={workflow.pipeline_type ?? null} />
         </div>
+
+        {/* Row 3: PR metadata for PR Fix workflows */}
+        {workflow.pipeline_type === 'pr_auto_fix' && workflow.pr_number != null && (
+          <div className="text-[10px] text-muted-foreground font-mono">
+            PR #{workflow.pr_number} &bull; {workflow.pr_comment_count ?? 0} comments
+          </div>
+        )}
       </div>
     </button>
   );

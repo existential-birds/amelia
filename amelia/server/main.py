@@ -38,7 +38,7 @@ def _check_dependencies() -> None:
 _check_dependencies()
 
 import os
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -62,10 +62,16 @@ from amelia.knowledge.repository import KnowledgeRepository
 from amelia.knowledge.service import KnowledgeService
 from amelia.logging import configure_logging, log_server_startup
 from amelia.pipelines.implementation.state import rebuild_implementation_state
+from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.sandbox.proxy import ProviderConfig, create_proxy_router
 from amelia.sandbox.teardown import teardown_all_sandbox_containers
 from amelia.server.config import ServerConfig
-from amelia.server.database import ProfileRepository, SettingsRepository, WorkflowRepository
+from amelia.server.database import (
+    MetricsRepository,
+    ProfileRepository,
+    SettingsRepository,
+    WorkflowRepository,
+)
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.connection import Database
 from amelia.server.database.migrator import Migrator
@@ -83,6 +89,7 @@ from amelia.server.dependencies import (
 )
 from amelia.server.events.bus import EventBus
 from amelia.server.lifecycle.health_checker import WorktreeHealthChecker
+from amelia.server.lifecycle.pr_poller import PRCommentPoller
 from amelia.server.lifecycle.retention import LogRetentionService
 from amelia.server.lifecycle.server import ServerLifecycle
 from amelia.server.orchestrator.service import OrchestratorService
@@ -92,6 +99,7 @@ from amelia.server.routes import (
     github_router,
     health_router,
     knowledge_router,
+    metrics_router,
     paths_router,
     usage_router,
     websocket_router,
@@ -112,19 +120,7 @@ from amelia.server.routes.settings import router as settings_router
 from amelia.server.routes.websocket import connection_manager
 from amelia.server.routes.workflows import configure_exception_handlers
 from amelia.server.services.brainstorm import BrainstormService
-
-
-def create_driver_cleanup_callback() -> Callable[[str, str], Awaitable[bool]]:
-    """Create async callback for cleaning up driver sessions.
-
-    Returns:
-        Async callback that takes (driver_type, driver_session_id) and returns bool.
-    """
-
-    async def cleanup(driver_type: str, driver_session_id: str) -> bool:
-        return await cleanup_driver_session(driver_type, driver_session_id)
-
-    return cleanup
+from amelia.services.github_pr import GitHubPRService
 
 
 @asynccontextmanager
@@ -215,7 +211,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     brainstorm_service = BrainstormService(
         repository=brainstorm_repo,
         event_bus=event_bus,
-        driver_cleanup=create_driver_cleanup_callback(),
+        driver_cleanup=cleanup_driver_session,
         profile_repo=profile_repo,
     )
     app.state.brainstorm_service = brainstorm_service
@@ -273,11 +269,33 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log_retention=log_retention,
     )
     health_checker = WorktreeHealthChecker(orchestrator=orchestrator)
+
+    # Create PR auto-fix orchestrator for polling service
+    # GitHubPRService needs a repo_root; the orchestrator uses it only for
+    # create_issue_comment on divergence failure. The poller creates per-profile
+    # services for actual PR listing and comment fetching.
+    # Use a placeholder -- profiles provide real repo_roots at poll time.
+    metrics_repo = MetricsRepository(database)
+    pr_fix_orchestrator = PRAutoFixOrchestrator(
+        event_bus=event_bus,
+        github_pr_service=GitHubPRService("."),
+        workflow_repo=repository,
+        metrics_repo=metrics_repo,
+    )
+    pr_poller = PRCommentPoller(
+        profile_repo=profile_repo,
+        settings_repo=settings_repo,
+        orchestrator=pr_fix_orchestrator,
+        event_bus=event_bus,
+    )
+
+    app.state.pr_autofix_orchestrator = pr_fix_orchestrator
     app.state.lifecycle = lifecycle
 
     # Start lifecycle components
     await lifecycle.startup()
     await health_checker.start()
+    await pr_poller.start()
 
     # Log server startup with styled banner
     log_server_startup(
@@ -290,14 +308,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.start_time = datetime.now(UTC)
     yield
 
-    # Shutdown - stop components in reverse order
-    # Wait for pending broadcast tasks before closing connections
-    await event_bus.cleanup()
-    # Close WebSocket connections
-    await connection_manager.close_all(code=1001, reason="Server shutting down")
-
+    # Shutdown - stop event producers first, then drain bus, then close connections
+    await pr_poller.stop()
     await health_checker.stop()
     await lifecycle.shutdown()
+    await event_bus.cleanup()
+    await connection_manager.close_all(code=1001, reason="Server shutting down")
     if knowledge_service is not None:
         await knowledge_service.cleanup()
         clear_knowledge_service()
@@ -350,6 +366,7 @@ def create_app() -> FastAPI:
     application.include_router(files_router, prefix="/api")
     application.include_router(github_router, prefix="/api")
     application.include_router(health_router, prefix="/api")
+    application.include_router(metrics_router, prefix="/api")
     application.include_router(paths_router, prefix="/api")
     application.include_router(usage_router, prefix="/api")
     application.include_router(workflows_router, prefix="/api")

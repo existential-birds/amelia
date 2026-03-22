@@ -242,7 +242,7 @@ def _extract_key_files_from_plan(plan_content: str) -> list[str]:
     # - Test: `tests/path/test.py`
     file_patterns = [
         r"(?:Create|Modify|Test|Edit|Update|Delete):\s*`([^`]+)`",
-        r"(?:Create|Modify|Test|Edit|Update|Delete):\s*(\S+\.(?:py|ts|tsx|js|jsx|go|rs|md))",
+        r"(?:Create|Modify|Test|Edit|Update|Delete):\s*(?!`)(\S+\.(?:py|ts|tsx|js|jsx|go|rs|md))",
     ]
 
     for pattern in file_patterns:
@@ -349,6 +349,61 @@ def extract_task_section(plan_markdown: str, task_index: int) -> str:
     return "".join(result_parts)
 
 
+class GitCommandError(Exception):
+    """Raised when a git subprocess fails or times out."""
+
+    def __init__(self, returncode: int, stderr: str) -> None:
+        self.returncode = returncode
+        self.stderr = stderr
+        super().__init__(f"git exited with {returncode}: {stderr}")
+
+
+async def _run_git(
+    args: list[str],
+    cwd: str | Path,
+    env: dict[str, str],
+    timeout: float = 60.0,
+) -> str:
+    """Run a git subprocess and return its stdout.
+
+    Args:
+        args: Git arguments (e.g. ``["add", "-A"]``).
+        cwd: Working directory for the subprocess.
+        env: Environment variables dict.
+        timeout: Seconds before the process is killed.
+
+    Returns:
+        Decoded stdout from the process.
+
+    Raises:
+        GitCommandError: If the process exits with a non-zero return code.
+        TimeoutError: If the process exceeds *timeout* seconds.
+    """
+    proc = await asyncio.create_subprocess_exec(
+        "git",
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=cwd,
+        env=env,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except TimeoutError:
+        try:
+            proc.kill()
+            await proc.wait()
+        except ProcessLookupError:
+            pass
+        raise
+
+    rc = proc.returncode or 0
+    if rc != 0:
+        raise GitCommandError(rc, stderr.decode())
+
+    return stdout.decode()
+
+
 async def commit_task_changes(state: ImplementationState, config: RunnableConfig) -> bool:
     """Commit changes for completed task.
 
@@ -368,157 +423,102 @@ async def commit_task_changes(state: ImplementationState, config: RunnableConfig
 
     # Disable git prompts to prevent hangs in headless/server contexts
     git_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-    timeout_seconds = 60
 
     # Stage all changes
-    proc = await asyncio.create_subprocess_exec(
-        "git", "add", "-A",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=working_dir,
-        env=git_env,
-    )
     try:
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+        await _run_git(["add", "-A"], cwd=working_dir, env=git_env)
     except TimeoutError:
         logger.warning("Timeout staging changes for task commit", task=task_number)
-        proc.kill()
-        await proc.wait()
         return False
-    if proc.returncode != 0:
-        logger.warning(
-            "Failed to stage changes for task commit",
-            error=stderr.decode(),
-        )
+    except GitCommandError as exc:
+        logger.warning("Failed to stage changes for task commit", error=exc.stderr)
         return False
 
-    # Check if there are staged changes
-    proc = await asyncio.create_subprocess_exec(
-        "git", "diff", "--cached", "--quiet",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=working_dir,
-        env=git_env,
-    )
+    # Check if there are staged changes (exit 0 = no changes, 1 = changes exist)
     try:
-        await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
-    except TimeoutError:
-        logger.warning("Timeout checking staged changes for task", task=task_number)
-        proc.kill()
-        await proc.wait()
-        return False
-    if proc.returncode == 0:
+        await _run_git(["diff", "--cached", "--quiet"], cwd=working_dir, env=git_env)
         # Exit code 0 means no changes (diff is quiet/empty)
         logger.info("No changes to commit for task", task=task_number)
         return True
-    if proc.returncode != 1:
-        # Exit code 1 means changes exist; any other code is an error
-        logger.warning(
-            "Failed to check staged diff for task commit",
-            returncode=proc.returncode,
-            task=task_number,
-        )
+    except TimeoutError:
+        logger.warning("Timeout checking staged changes for task", task=task_number)
         return False
+    except GitCommandError as exc:
+        if exc.returncode != 1:
+            logger.warning(
+                "Failed to check staged diff for task commit",
+                returncode=exc.returncode,
+                task=task_number,
+            )
+            return False
+        # returncode 1 means changes exist — continue to commit
 
     # Commit with task reference
     issue_key = state.issue.id if state.issue else "unknown"
     commit_msg = f"feat({issue_key}): complete task {task_number}"
 
-    proc = await asyncio.create_subprocess_exec(
-        "git", "commit", "-m", commit_msg,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=working_dir,
-        env=git_env,
-    )
     try:
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
-    except TimeoutError:
-        logger.warning("Timeout committing task changes", task=task_number)
-        proc.kill()
-        await proc.wait()
-        return False
-    if proc.returncode == 0:
+        await _run_git(["commit", "-m", commit_msg], cwd=working_dir, env=git_env)
         logger.info("Committed task changes", task=task_number, message=commit_msg)
         return True
+    except TimeoutError:
+        logger.warning("Timeout committing task changes", task=task_number)
+        return False
+    except GitCommandError as commit_exc:
+        stderr = commit_exc.stderr
 
     # Commit failed - check if hooks modified files (common with auto-formatters)
     logger.debug("Initial commit failed, checking for hook modifications", task=task_number)
 
-    # Check if there are unstaged changes (modified by hooks)
-    proc = await asyncio.create_subprocess_exec(
-        "git", "diff", "--quiet",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=working_dir,
-        env=git_env,
-    )
     try:
-        await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+        await _run_git(["diff", "--quiet"], cwd=working_dir, env=git_env)
     except TimeoutError:
         logger.warning("Timeout checking for hook modifications", task=task_number)
-        proc.kill()
-        await proc.wait()
         return False
+    except GitCommandError as exc:
+        if exc.returncode != 1:
+            # Unexpected error
+            logger.warning("Failed to commit task changes", error=stderr)
+            return False
 
-    # returncode 0 = no unstaged changes, 1 = unstaged changes exist
-    if proc.returncode == 1:
-        # Hooks modified files - re-stage and retry commit
+        # returncode 1 = unstaged changes exist (hooks modified files)
         logger.info(
             "Git hooks modified files during commit, re-staging and retrying",
             task=task_number,
         )
 
         # Re-stage all changes
-        proc = await asyncio.create_subprocess_exec(
-            "git", "add", "-A",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=working_dir,
-            env=git_env,
-        )
         try:
-            _, restage_stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+            await _run_git(["add", "-A"], cwd=working_dir, env=git_env)
         except TimeoutError:
             logger.warning("Timeout re-staging hook modifications", task=task_number)
-            proc.kill()
-            await proc.wait()
             return False
-        if proc.returncode != 0:
+        except GitCommandError as restage_exc:
             logger.warning(
                 "Failed to re-stage hook modifications",
-                error=restage_stderr.decode(),
+                error=restage_exc.stderr,
             )
             return False
 
         # Retry commit
-        proc = await asyncio.create_subprocess_exec(
-            "git", "commit", "-m", commit_msg,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=working_dir,
-            env=git_env,
-        )
         try:
-            _, retry_stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
-        except TimeoutError:
-            logger.warning("Timeout on commit retry after hook modifications", task=task_number)
-            proc.kill()
-            await proc.wait()
-            return False
-        if proc.returncode == 0:
+            await _run_git(["commit", "-m", commit_msg], cwd=working_dir, env=git_env)
             logger.info(
                 "Committed task changes after hook modifications",
                 task=task_number,
                 message=commit_msg,
             )
             return True
-        logger.warning(
-            "Failed to commit task changes on retry",
-            error=retry_stderr.decode(),
-        )
+        except TimeoutError:
+            logger.warning("Timeout on commit retry after hook modifications", task=task_number)
+            return False
+        except GitCommandError as retry_exc:
+            logger.warning(
+                "Failed to commit task changes on retry",
+                error=retry_exc.stderr,
+            )
+            return False
+    else:
+        # No unstaged changes, commit failed for another reason
+        logger.warning("Failed to commit task changes", error=stderr)
         return False
-
-    # No unstaged changes, commit failed for another reason
-    logger.warning("Failed to commit task changes", error=stderr.decode())
-    return False

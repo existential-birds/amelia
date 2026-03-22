@@ -23,6 +23,8 @@ import type {
   UsageResponse,
   GitHubIssuesResponse,
   RequestReviewRequest,
+  PRAutoFixMetricsResponse,
+  ClassificationsResponse,
 } from '../types';
 import type {
   KnowledgeDocument,
@@ -30,28 +32,7 @@ import type {
   SearchResult,
 } from '../types/knowledge';
 import { parseErrorDetail } from './errors';
-
-/**
- * Base URL for all API requests.
- *
- * Defaults to '/api' if VITE_API_BASE_URL environment variable is not set.
- */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-
-/**
- * Default timeout for API requests in milliseconds (30 seconds).
- */
-const DEFAULT_TIMEOUT_MS = 30000;
-
-/**
- * Creates an AbortSignal that triggers after the specified timeout.
- *
- * @param timeoutMs - Timeout duration in milliseconds.
- * @returns An AbortSignal that will abort after the timeout.
- */
-function createTimeoutSignal(timeoutMs: number = DEFAULT_TIMEOUT_MS): AbortSignal {
-  return AbortSignal.timeout(timeoutMs);
-}
+import { API_BASE_URL, createTimeoutSignal } from './utils';
 
 /**
  * Wraps fetch with timeout support.
@@ -971,6 +952,66 @@ export const api = {
       }
     );
     await handleResponse<void>(response);
+  },
+
+  // ==========================================================================
+  // PR Auto-Fix Metrics API
+  // ==========================================================================
+
+  /**
+   * Retrieves PR auto-fix metrics for a date range.
+   *
+   * @param params - Query parameters (preset or start/end dates, optional filters).
+   * @returns PRAutoFixMetricsResponse with summary, daily, and by_aggressiveness.
+   * @throws {ApiError} When the API request fails.
+   */
+  async getAutoFixMetrics(params: {
+    start?: string;
+    end?: string;
+    preset?: string;
+    profile?: string;
+    aggressiveness?: string;
+  }): Promise<PRAutoFixMetricsResponse> {
+    const searchParams = new URLSearchParams();
+
+    if (params.start) searchParams.set('start', params.start);
+    if (params.end) searchParams.set('end', params.end);
+    if (params.preset) searchParams.set('preset', params.preset);
+    if (params.profile) searchParams.set('profile', params.profile);
+    if (params.aggressiveness) searchParams.set('aggressiveness', params.aggressiveness);
+
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/github/pr-autofix/metrics?${searchParams.toString()}`
+    );
+    return handleResponse<PRAutoFixMetricsResponse>(response);
+  },
+
+  /**
+   * Retrieves paginated classification audit log.
+   *
+   * @param params - Query parameters (preset or start/end dates, pagination).
+   * @returns ClassificationsResponse with classifications list and total count.
+   * @throws {ApiError} When the API request fails.
+   */
+  async getClassifications(params: {
+    start?: string;
+    end?: string;
+    preset?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ClassificationsResponse> {
+    const searchParams = new URLSearchParams();
+
+    if (params.start) searchParams.set('start', params.start);
+    if (params.end) searchParams.set('end', params.end);
+    if (params.preset) searchParams.set('preset', params.preset);
+    if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+    if (params.offset !== undefined) searchParams.set('offset', String(params.offset));
+
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/github/pr-autofix/classifications?${searchParams.toString()}`
+    );
+    return handleResponse<ClassificationsResponse>(response);
   },
 };
 

@@ -19,31 +19,21 @@ Real components:
 - Request/Response model validation
 """
 
-import tempfile
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
+import httpx
 import pytest
 from fastapi import status
-from fastapi.testclient import TestClient
 
-from amelia.pipelines.implementation.state import ImplementationState
-from amelia.server.database.connection import Database
-from amelia.server.database.migrator import Migrator
+from amelia.core.types import Profile
 from amelia.server.database.repository import WorkflowRepository
-from amelia.server.dependencies import get_orchestrator, get_repository
-from amelia.server.events.bus import EventBus
-from amelia.server.main import create_app
 from amelia.server.models.state import ServerExecutionState
-from amelia.server.orchestrator.service import OrchestratorService
-
-
-DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
 
 
 # =============================================================================
@@ -52,93 +42,53 @@ DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
 
 
 @pytest.fixture
-async def test_db() -> AsyncGenerator[Database, None]:
-    """Create and initialize PostgreSQL test database."""
-    db = Database(DATABASE_URL)
-    await db.connect()
-    migrator = Migrator(db)
-    await migrator.run()
-    yield db
-    await db.close()
+def test_client(orchestrator_test_client: httpx.AsyncClient) -> httpx.AsyncClient:
+    """Alias shared orchestrator_test_client fixture for local use."""
+    return orchestrator_test_client
 
 
-@pytest.fixture
-def test_repository(test_db: Database) -> WorkflowRepository:
-    """Create repository backed by test database."""
-    return WorkflowRepository(test_db)
+@contextmanager
+def patched_graph(langgraph_mock_factory: Any):
+    """Patch create_implementation_graph to return a mock graph.
 
-
-@pytest.fixture
-def test_event_bus() -> EventBus:
-    """Create event bus for testing."""
-    return EventBus()
-
-
-@pytest.fixture
-def test_orchestrator(
-    test_event_bus: EventBus,
-    test_repository: WorkflowRepository,
-) -> OrchestratorService:
-    """Create real OrchestratorService with test dependencies."""
-    return OrchestratorService(
-        event_bus=test_event_bus,
-        repository=test_repository,
-        checkpointer=AsyncMock(),
-    )
-
-
-@pytest.fixture
-def test_client(
-    test_orchestrator: OrchestratorService,
-    test_repository: WorkflowRepository,
-) -> TestClient:
-    """Create test client with real dependencies."""
-    app = create_app()
-
-    # Create a no-op lifespan that doesn't initialize database/orchestrator
-    @asynccontextmanager
-    async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-        yield
-
-    app.router.lifespan_context = noop_lifespan
-    app.dependency_overrides[get_orchestrator] = lambda: test_orchestrator
-    app.dependency_overrides[get_repository] = lambda: test_repository
-
-    return TestClient(app)
+    Consolidates the repeated pattern of creating langgraph mocks and
+    patching create_implementation_graph.
+    """
+    mocks = langgraph_mock_factory(astream_items=[])
+    with patch(
+        "amelia.server.orchestrator.service.create_implementation_graph"
+    ) as mock_create_graph:
+        mock_create_graph.return_value = mocks.graph
+        yield mocks
 
 
 async def create_pending_workflow(
     repository: WorkflowRepository,
-    workflow_id: str = "wf-001",
+    workflow_id: uuid.UUID | None = None,
     issue_id: str = "TEST-001",
     worktree_path: str = "/tmp/test-repo",
-    profile_id: str = "test",
 ) -> ServerExecutionState:
     """Create and persist a pending workflow for testing.
 
     Args:
         repository: Repository to persist to.
-        workflow_id: Workflow ID.
+        workflow_id: Workflow ID (UUID). Generated if not provided.
         issue_id: Issue ID.
         worktree_path: Worktree path.
-        profile_id: Profile ID for execution state.
 
     Returns:
         Created ServerExecutionState in pending status.
     """
-    execution_state = ImplementationState(
-        workflow_id=workflow_id,
-        profile_id=profile_id,
-        created_at=datetime.now(UTC),
-        status="pending",
-    )
+    if workflow_id is None:
+        workflow_id = uuid4()
     workflow = ServerExecutionState(
         id=workflow_id,
         issue_id=issue_id,
         worktree_path=worktree_path,
         workflow_status="pending",
+        profile_id="test",
+        issue_cache={"title": "Test issue", "body": "Test body"},
         # Note: started_at is None for pending workflows (set when started)
-        execution_state=execution_state,
     )
     await repository.create(workflow)
     return workflow
@@ -155,36 +105,17 @@ class TestQueueWorkflowCreation:
 
     async def test_create_workflow_with_start_false_queues_without_starting(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
-        tmp_path: Path,
+        active_test_profile: Profile,
+        valid_worktree: str,
     ) -> None:
         """Creating workflow with start=False creates it in pending state."""
-        # Initialize a git repo with settings
-        git_dir = tmp_path / "git-repo"
-        git_dir.mkdir()
-        (git_dir / ".git").mkdir()
-        resolved_path = str(git_dir.resolve())
-
-        # Create settings file in git repo
-        settings_content = """
-active_profile: test
-profiles:
-  test:
-    name: test
-    driver: "claude"
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    strategy: single
-"""
-        (git_dir / "settings.amelia.yaml").write_text(settings_content)
-
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-QUEUE-001",
-                "worktree_path": resolved_path,
+                "worktree_path": valid_worktree,
                 "start": False,
                 "task_title": "Test task",
             },
@@ -203,38 +134,21 @@ profiles:
 
     async def test_create_workflow_defaults_to_immediate_start(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
-        mock_settings: MagicMock,
+        active_test_profile: Profile,
+        valid_worktree: str,
         langgraph_mock_factory: Any,
-        tmp_path: Path,
     ) -> None:
         """Creating workflow without start param defaults to start=True."""
-        # Initialize a git repo (required for worktree validation)
-        git_dir = tmp_path / "git-repo"
-        git_dir.mkdir()
-        (git_dir / ".git").mkdir()
-        resolved_path = str(git_dir.resolve())
-
         # Mock LangGraph to prevent actual graph execution
-        mocks = langgraph_mock_factory(astream_items=[])
-        with (
-            patch(
-                "amelia.server.orchestrator.service.create_implementation_graph"
-            ) as mock_create_graph,
-            patch.object(
-                OrchestratorService,
-                "_load_settings_for_worktree",
-                return_value=mock_settings,
-            ),
-        ):
-            mock_create_graph.return_value = mocks.graph
-
-            response = test_client.post(
+        with patched_graph(langgraph_mock_factory):
+            response = await test_client.post(
                 "/api/workflows",
                 json={
                     "issue_id": "TEST-IMMEDIATE-001",
-                    "worktree_path": resolved_path,
+                    "worktree_path": valid_worktree,
+                    "task_title": "Test task",
                     # No start param - defaults to True
                 },
             )
@@ -248,79 +162,60 @@ class TestStartPendingWorkflow:
 
     async def test_start_pending_workflow_returns_202(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
-        mock_settings: MagicMock,
         langgraph_mock_factory: Any,
+        tmp_path: Path,
     ) -> None:
         """Starting a pending workflow returns 202 Accepted."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            resolved_path = str(Path(tmp_dir).resolve())
+        resolved_path = str(tmp_path.resolve())
 
-            # Create pending workflow
-            await create_pending_workflow(
-                test_repository,
-                workflow_id=uuid4(),
-                issue_id="TEST-START",
-                worktree_path=resolved_path,
-            )
+        # Create pending workflow directly in DB
+        workflow = await create_pending_workflow(
+            test_repository,
+            issue_id="TEST-START",
+            worktree_path=resolved_path,
+        )
 
-            # Mock LangGraph to prevent actual graph execution
-            mocks = langgraph_mock_factory(astream_items=[])
-            with (
-                patch(
-                    "amelia.server.orchestrator.service.create_implementation_graph"
-                ) as mock_create_graph,
-                patch.object(
-                    OrchestratorService,
-                    "_load_settings_for_worktree",
-                    return_value=mock_settings,
-                ),
-            ):
-                mock_create_graph.return_value = mocks.graph
+        # Mock LangGraph to prevent actual graph execution
+        with patched_graph(langgraph_mock_factory):
+            response = await test_client.post(f"/api/workflows/{workflow.id}/start")
 
-                response = test_client.post("/api/workflows/wf-pending-start/start")
-
-            assert response.status_code == status.HTTP_202_ACCEPTED
-            data = response.json()
-            assert data["workflow_id"] == "wf-pending-start"
-            assert data["status"] == "started"
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        data = response.json()
+        assert data["workflow_id"] == str(workflow.id)
+        assert data["status"] == "started"
 
     async def test_start_nonexistent_workflow_returns_404(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """Starting a non-existent workflow returns 404."""
-        response = test_client.post("/api/workflows/wf-ghost/start")
+        fake_id = uuid4()
+        response = await test_client.post(f"/api/workflows/{fake_id}/start")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     async def test_start_already_running_workflow_returns_409(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
     ) -> None:
         """Starting a workflow that's not pending returns 409."""
         # Create workflow in in_progress state
-        execution_state = ImplementationState(
-            workflow_id=uuid4(),
-            profile_id="test",
-            created_at=datetime.now(UTC),
-            status="pending",
-        )
         workflow = ServerExecutionState(
             id=uuid4(),
             issue_id="TEST-RUNNING",
             worktree_path="/tmp/running",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
-            execution_state=execution_state,
         )
         await test_repository.create(workflow)
 
-        response = test_client.post("/api/workflows/wf-running/start")
+        response = await test_client.post(f"/api/workflows/{workflow.id}/start")
 
-        assert response.status_code == status.HTTP_409_CONFLICT
+        # Workflow is in_progress (not pending), so start returns INVALID_STATE
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 @pytest.mark.integration
@@ -329,129 +224,100 @@ class TestBatchStartWorkflows:
 
     async def test_batch_start_all_pending_workflows(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
-        mock_settings: MagicMock,
         langgraph_mock_factory: Any,
+        tmp_path: Path,
     ) -> None:
         """Batch start with no filters starts all pending workflows."""
-        # Create pending workflows in different temp directories to avoid conflicts
-        with tempfile.TemporaryDirectory() as tmp_dir1, \
-             tempfile.TemporaryDirectory() as tmp_dir2:
-            path1 = str(Path(tmp_dir1).resolve())
-            path2 = str(Path(tmp_dir2).resolve())
+        # Create pending workflows in different directories to avoid conflicts
+        path1 = str((tmp_path / "wt1").resolve())
+        path2 = str((tmp_path / "wt2").resolve())
+        (tmp_path / "wt1").mkdir()
+        (tmp_path / "wt2").mkdir()
 
-            await create_pending_workflow(
-                test_repository,
-                workflow_id=uuid4(),
-                issue_id="TEST-BATCH-1",
-                worktree_path=path1,
+        wf1 = await create_pending_workflow(
+            test_repository,
+            issue_id="TEST-BATCH-1",
+            worktree_path=path1,
+        )
+        wf2 = await create_pending_workflow(
+            test_repository,
+            issue_id="TEST-BATCH-2",
+            worktree_path=path2,
+        )
+
+        # Mock LangGraph
+        with patched_graph(langgraph_mock_factory):
+            response = await test_client.post(
+                "/api/workflows/start-batch",
+                json={},
             )
-            await create_pending_workflow(
-                test_repository,
-                workflow_id=uuid4(),
-                issue_id="TEST-BATCH-2",
-                worktree_path=path2,
-            )
 
-            # Mock LangGraph
-            mocks = langgraph_mock_factory(astream_items=[])
-            with (
-                patch(
-                    "amelia.server.orchestrator.service.create_implementation_graph"
-                ) as mock_create_graph,
-                patch.object(
-                    OrchestratorService,
-                    "_load_settings_for_worktree",
-                    return_value=mock_settings,
-                ),
-            ):
-                mock_create_graph.return_value = mocks.graph
-
-                response = test_client.post(
-                    "/api/workflows/start-batch",
-                    json={},
-                )
-
-            assert response.status_code == status.HTTP_200_OK
-            data = response.json()
-            assert "started" in data
-            assert "errors" in data
-            # Both workflows should be started
-            assert len(data["started"]) == 2
-            assert "wf-batch-1" in data["started"]
-            assert "wf-batch-2" in data["started"]
-            assert data["errors"] == {}
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "started" in data
+        assert "errors" in data
+        # Both workflows should be started
+        assert len(data["started"]) == 2
+        assert str(wf1.id) in data["started"]
+        assert str(wf2.id) in data["started"]
+        assert data["errors"] == {}
 
     async def test_batch_start_specific_workflow_ids(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
-        mock_settings: MagicMock,
         langgraph_mock_factory: Any,
+        tmp_path: Path,
     ) -> None:
         """Batch start with workflow_ids only starts specified workflows."""
-        with tempfile.TemporaryDirectory() as tmp_dir1, \
-             tempfile.TemporaryDirectory() as tmp_dir2, \
-             tempfile.TemporaryDirectory() as tmp_dir3:
-            path1 = str(Path(tmp_dir1).resolve())
-            path2 = str(Path(tmp_dir2).resolve())
-            path3 = str(Path(tmp_dir3).resolve())
+        path1 = str((tmp_path / "wt1").resolve())
+        path2 = str((tmp_path / "wt2").resolve())
+        path3 = str((tmp_path / "wt3").resolve())
+        (tmp_path / "wt1").mkdir()
+        (tmp_path / "wt2").mkdir()
+        (tmp_path / "wt3").mkdir()
 
-            await create_pending_workflow(
-                test_repository,
-                workflow_id=uuid4(),
-                issue_id="TEST-SEL-1",
-                worktree_path=path1,
+        wf1 = await create_pending_workflow(
+            test_repository,
+            issue_id="TEST-SEL-1",
+            worktree_path=path1,
+        )
+        wf2 = await create_pending_workflow(
+            test_repository,
+            issue_id="TEST-SEL-2",
+            worktree_path=path2,
+        )
+        wf3 = await create_pending_workflow(
+            test_repository,
+            issue_id="TEST-NOT-SEL",
+            worktree_path=path3,
+        )
+
+        # Mock LangGraph
+        with patched_graph(langgraph_mock_factory):
+            response = await test_client.post(
+                "/api/workflows/start-batch",
+                json={"workflow_ids": [str(wf1.id), str(wf2.id)]},
             )
-            await create_pending_workflow(
-                test_repository,
-                workflow_id=uuid4(),
-                issue_id="TEST-SEL-2",
-                worktree_path=path2,
-            )
-            await create_pending_workflow(
-                test_repository,
-                workflow_id=uuid4(),
-                issue_id="TEST-NOT-SEL",
-                worktree_path=path3,
-            )
 
-            # Mock LangGraph
-            mocks = langgraph_mock_factory(astream_items=[])
-            with (
-                patch(
-                    "amelia.server.orchestrator.service.create_implementation_graph"
-                ) as mock_create_graph,
-                patch.object(
-                    OrchestratorService,
-                    "_load_settings_for_worktree",
-                    return_value=mock_settings,
-                ),
-            ):
-                mock_create_graph.return_value = mocks.graph
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        # Only selected workflows should be started
+        assert set(data["started"]) == {str(wf1.id), str(wf2.id)}
 
-                response = test_client.post(
-                    "/api/workflows/start-batch",
-                    json={"workflow_ids": ["wf-selected-1", "wf-selected-2"]},
-                )
-
-            assert response.status_code == status.HTTP_200_OK
-            data = response.json()
-            # Only selected workflows should be started
-            assert set(data["started"]) == {"wf-selected-1", "wf-selected-2"}
-
-            # Verify wf-not-selected is still pending
-            not_selected = await test_repository.get("wf-not-selected")
-            assert not_selected is not None
-            assert not_selected.workflow_status == "pending"
+        # Verify wf3 is still pending
+        not_selected = await test_repository.get(wf3.id)
+        assert not_selected is not None
+        assert not_selected.workflow_status == "pending"
 
     async def test_batch_start_empty_result_when_no_pending(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """Batch start returns empty result when no pending workflows."""
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows/start-batch",
             json={},
         )
@@ -468,38 +334,19 @@ class TestQueueThenStartFlow:
 
     async def test_queue_then_start_workflow_flow(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
+        active_test_profile: Profile,
+        valid_worktree: str,
         langgraph_mock_factory: Any,
-        tmp_path: Path,
     ) -> None:
         """Complete flow: create queued, verify pending, start, verify in_progress."""
-        # Initialize a git repo with settings
-        git_dir = tmp_path / "git-repo"
-        git_dir.mkdir()
-        (git_dir / ".git").mkdir()
-        resolved_path = str(git_dir.resolve())
-
-        # Create settings file in git repo
-        settings_content = """
-active_profile: test
-profiles:
-  test:
-    name: test
-    driver: "claude"
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    strategy: single
-"""
-        (git_dir / "settings.amelia.yaml").write_text(settings_content)
-
         # Step 1: Create workflow without starting (queue it)
-        create_response = test_client.post(
+        create_response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-FLOW-001",
-                "worktree_path": resolved_path,
+                "worktree_path": valid_worktree,
                 "start": False,
                 "task_title": "Test task",
             },
@@ -508,66 +355,39 @@ profiles:
         workflow_id = create_response.json()["id"]
 
         # Step 2: Verify it's in pending state
-        get_response = test_client.get(f"/api/workflows/{workflow_id}")
+        get_response = await test_client.get(f"/api/workflows/{workflow_id}")
         assert get_response.status_code == status.HTTP_200_OK
         assert get_response.json()["status"] == "pending"
 
         # Step 3: Start the workflow
-        mocks = langgraph_mock_factory(astream_items=[])
-        with patch(
-            "amelia.server.orchestrator.service.create_implementation_graph"
-        ) as mock_create_graph:
-            mock_create_graph.return_value = mocks.graph
-
-            start_response = test_client.post(f"/api/workflows/{workflow_id}/start")
+        with patched_graph(langgraph_mock_factory):
+            start_response = await test_client.post(f"/api/workflows/{workflow_id}/start")
 
         assert start_response.status_code == status.HTTP_202_ACCEPTED
 
         # Step 4: Verify workflow was started (started_at should be set)
-        # NOTE: We can't reliably verify final status because the spawned task
-        # runs asynchronously outside the mock context. The unit test
-        # TestStartPendingWorkflow verifies the actual state transition logic.
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
         assert workflow.started_at is not None, "Workflow should have started_at set"
 
     async def test_queue_workflow_after_cancelled_succeeds(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
-        tmp_path: Path,
+        active_test_profile: Profile,
+        valid_worktree: str,
     ) -> None:
         """A new workflow can be queued after the previous one is cancelled.
 
         The system enforces one active workflow per worktree, but completed/cancelled
         workflows don't block new ones.
         """
-        # Initialize a git repo with settings
-        git_dir = tmp_path / "git-repo"
-        git_dir.mkdir()
-        (git_dir / ".git").mkdir()
-        resolved_path = str(git_dir.resolve())
-
-        # Create settings file in git repo
-        settings_content = """
-active_profile: test
-profiles:
-  test:
-    name: test
-    driver: "claude"
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    strategy: single
-"""
-        (git_dir / "settings.amelia.yaml").write_text(settings_content)
-
         # Create first pending workflow
-        response1 = test_client.post(
+        response1 = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-FIRST-001",
-                "worktree_path": resolved_path,
+                "worktree_path": valid_worktree,
                 "start": False,
                 "task_title": "First task",
             },
@@ -576,15 +396,15 @@ profiles:
         workflow_id = response1.json()["id"]
 
         # Cancel the first workflow
-        cancel_response = test_client.post(f"/api/workflows/{workflow_id}/cancel")
+        cancel_response = await test_client.post(f"/api/workflows/{workflow_id}/cancel")
         assert cancel_response.status_code == status.HTTP_200_OK
 
         # Now create a second pending workflow - should succeed since first is cancelled
-        response2 = test_client.post(
+        response2 = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-SECOND-001",
-                "worktree_path": resolved_path,
+                "worktree_path": valid_worktree,
                 "start": False,
                 "task_title": "Second task",
             },
@@ -607,41 +427,22 @@ class TestQueueMultiplePendingWorkflows:
 
     async def test_queue_two_workflows_same_worktree_succeeds(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
-        tmp_path: Path,
+        active_test_profile: Profile,
+        valid_worktree: str,
     ) -> None:
         """Two pending workflows on same worktree should be allowed.
 
         The uniqueness constraint should only apply to in_progress/blocked,
         not to pending workflows.
         """
-        # Initialize a git repo with settings
-        git_dir = tmp_path / "git-repo"
-        git_dir.mkdir()
-        (git_dir / ".git").mkdir()
-        resolved_path = str(git_dir.resolve())
-
-        # Create settings file in git repo
-        settings_content = """
-active_profile: test
-profiles:
-  test:
-    name: test
-    driver: "claude"
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    strategy: single
-"""
-        (git_dir / "settings.amelia.yaml").write_text(settings_content)
-
         # Create first pending workflow
-        response1 = test_client.post(
+        response1 = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-MULTI-001",
-                "worktree_path": resolved_path,
+                "worktree_path": valid_worktree,
                 "start": False,
                 "task_title": "First task",
             },
@@ -655,11 +456,11 @@ profiles:
         assert workflow1.workflow_status == "pending"
 
         # Create second pending workflow on SAME worktree - should succeed
-        response2 = test_client.post(
+        response2 = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-MULTI-002",
-                "worktree_path": resolved_path,
+                "worktree_path": valid_worktree,
                 "start": False,
                 "task_title": "Second task",
             },
@@ -678,41 +479,22 @@ profiles:
 
     async def test_cannot_have_two_running_workflows_same_worktree(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
+        active_test_profile: Profile,
+        valid_worktree: str,
         langgraph_mock_factory: Any,
-        tmp_path: Path,
     ) -> None:
         """Starting second workflow on same worktree should fail with 409.
 
         While multiple pending are allowed, only one can be in_progress/blocked.
         """
-        # Initialize a git repo with settings
-        git_dir = tmp_path / "git-repo"
-        git_dir.mkdir()
-        (git_dir / ".git").mkdir()
-        resolved_path = str(git_dir.resolve())
-
-        # Create settings file in git repo
-        settings_content = """
-active_profile: test
-profiles:
-  test:
-    name: test
-    driver: "claude"
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    strategy: single
-"""
-        (git_dir / "settings.amelia.yaml").write_text(settings_content)
-
         # Create two pending workflows
-        response1 = test_client.post(
+        response1 = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-CONFLICT-001",
-                "worktree_path": resolved_path,
+                "worktree_path": valid_worktree,
                 "start": False,
                 "task_title": "First task",
             },
@@ -720,11 +502,11 @@ profiles:
         assert response1.status_code == status.HTTP_201_CREATED
         workflow1_id = response1.json()["id"]
 
-        response2 = test_client.post(
+        response2 = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-CONFLICT-002",
-                "worktree_path": resolved_path,
+                "worktree_path": valid_worktree,
                 "start": False,
                 "task_title": "Second task",
             },
@@ -733,17 +515,12 @@ profiles:
         workflow2_id = response2.json()["id"]
 
         # Start first workflow
-        mocks = langgraph_mock_factory(astream_items=[])
-        with patch(
-            "amelia.server.orchestrator.service.create_implementation_graph"
-        ) as mock_create_graph:
-            mock_create_graph.return_value = mocks.graph
-
-            start1_response = test_client.post(f"/api/workflows/{workflow1_id}/start")
+        with patched_graph(langgraph_mock_factory):
+            start1_response = await test_client.post(f"/api/workflows/{workflow1_id}/start")
             assert start1_response.status_code == status.HTTP_202_ACCEPTED
 
             # Try to start second workflow - should fail with 409
-            start2_response = test_client.post(f"/api/workflows/{workflow2_id}/start")
+            start2_response = await test_client.post(f"/api/workflows/{workflow2_id}/start")
             assert start2_response.status_code == status.HTTP_409_CONFLICT
 
 
@@ -751,46 +528,26 @@ profiles:
 class TestQueuedWorkflowExecution:
     """Tests for starting and executing queued workflows.
 
-    Queued workflows must have execution_state populated to run successfully.
+    Queued workflows must have proper state populated to run successfully.
     """
 
-    async def test_queued_workflow_has_execution_state(
+    async def test_queued_workflow_has_issue_cache(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
-        tmp_path: Path,
+        active_test_profile: Profile,
+        valid_worktree: str,
     ) -> None:
-        """Queued workflow must have execution_state populated.
+        """Queued workflow must have issue_cache populated.
 
-        Without execution_state, the workflow will fail immediately on start
-        with 'Missing execution state' error.
+        Without issue_cache, the workflow cannot reconstruct initial state on start.
         """
-        # Initialize a git repo with settings
-        git_dir = tmp_path / "git-repo"
-        git_dir.mkdir()
-        (git_dir / ".git").mkdir()
-        resolved_path = str(git_dir.resolve())
-
-        # Create settings file in git repo
-        settings_content = """
-active_profile: test
-profiles:
-  test:
-    name: test
-    driver: "claude"
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    strategy: single
-"""
-        (git_dir / "settings.amelia.yaml").write_text(settings_content)
-
         # Queue a workflow
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-EXEC-001",
-                "worktree_path": resolved_path,
+                "worktree_path": valid_worktree,
                 "start": False,
                 "task_title": "Test task",
             },
@@ -798,53 +555,34 @@ profiles:
         assert response.status_code == status.HTTP_201_CREATED
         workflow_id = response.json()["id"]
 
-        # Verify execution_state exists
+        # Verify issue_cache and profile_id are set
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
         assert workflow.workflow_status == "pending"
-        # This is the critical assertion - execution_state must be set
-        assert workflow.execution_state is not None, (
-            "Queued workflow must have execution_state populated"
+        # Issue cache must be set for workflow to start later
+        assert workflow.issue_cache is not None, (
+            "Queued workflow must have issue_cache populated"
         )
-        assert workflow.execution_state.profile_id is not None
+        assert workflow.profile_id is not None
 
     async def test_start_queued_workflow_succeeds(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
+        active_test_profile: Profile,
+        valid_worktree: str,
         langgraph_mock_factory: Any,
-        tmp_path: Path,
     ) -> None:
         """Starting a queued workflow should transition to in_progress.
 
         The workflow should have all necessary state to execute without errors.
         """
-        # Initialize a git repo with settings
-        git_dir = tmp_path / "git-repo"
-        git_dir.mkdir()
-        (git_dir / ".git").mkdir()
-        resolved_path = str(git_dir.resolve())
-
-        # Create settings file in git repo
-        settings_content = """
-active_profile: test
-profiles:
-  test:
-    name: test
-    driver: "claude"
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    strategy: single
-"""
-        (git_dir / "settings.amelia.yaml").write_text(settings_content)
-
         # Queue a workflow
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-START-001",
-                "worktree_path": resolved_path,
+                "worktree_path": valid_worktree,
                 "start": False,
                 "task_title": "Test task",
             },
@@ -853,20 +591,13 @@ profiles:
         workflow_id = response.json()["id"]
 
         # Start the workflow
-        mocks = langgraph_mock_factory(astream_items=[])
-        with patch(
-            "amelia.server.orchestrator.service.create_implementation_graph"
-        ) as mock_create_graph:
-            mock_create_graph.return_value = mocks.graph
+        with patched_graph(langgraph_mock_factory):
+            start_response = await test_client.post(f"/api/workflows/{workflow_id}/start")
 
-            start_response = test_client.post(f"/api/workflows/{workflow_id}/start")
-
-        # Should succeed, not fail with "Missing execution state"
+        # Should succeed
         assert start_response.status_code == status.HTTP_202_ACCEPTED
 
         # Verify workflow was started (started_at should be set)
-        # NOTE: We can't reliably verify final status because the spawned task
-        # runs asynchronously outside the mock context.
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
         assert workflow.started_at is not None, "Workflow should have started_at set"
@@ -887,42 +618,23 @@ class TestQueuedWorkflowStateTransition:
 
     async def test_start_queued_workflow_accepted_and_started_at_set(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
+        active_test_profile: Profile,
+        valid_worktree: str,
         langgraph_mock_factory: Any,
-        tmp_path: Path,
     ) -> None:
         """Starting a queued workflow should return 202 and set started_at.
 
         This tests the API contract. The actual state transition logic
         (preventing double in_progress transition) is tested in unit tests.
         """
-        # Initialize a git repo with settings
-        git_dir = tmp_path / "git-repo"
-        git_dir.mkdir()
-        (git_dir / ".git").mkdir()
-        resolved_path = str(git_dir.resolve())
-
-        # Create settings file in git repo
-        settings_content = """
-active_profile: test
-profiles:
-  test:
-    name: test
-    driver: "claude"
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    strategy: single
-"""
-        (git_dir / "settings.amelia.yaml").write_text(settings_content)
-
         # Queue a workflow
-        response = test_client.post(
+        response = await test_client.post(
             "/api/workflows",
             json={
                 "issue_id": "TEST-TRANSITION-001",
-                "worktree_path": resolved_path,
+                "worktree_path": valid_worktree,
                 "start": False,
                 "task_title": "Test task",
             },
@@ -936,13 +648,8 @@ profiles:
         assert workflow.workflow_status == "pending"
 
         # Start the workflow (mocks apply to HTTP request context only)
-        mocks = langgraph_mock_factory(astream_items=[])
-        with patch(
-            "amelia.server.orchestrator.service.create_implementation_graph"
-        ) as mock_create_graph:
-            mock_create_graph.return_value = mocks.graph
-
-            start_response = test_client.post(f"/api/workflows/{workflow_id}/start")
+        with patched_graph(langgraph_mock_factory):
+            start_response = await test_client.post(f"/api/workflows/{workflow_id}/start")
 
         # Key assertion: HTTP request was accepted
         assert start_response.status_code == status.HTTP_202_ACCEPTED

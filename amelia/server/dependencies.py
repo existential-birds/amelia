@@ -9,6 +9,7 @@ from amelia.knowledge.service import KnowledgeService
 from amelia.server.config import ServerConfig
 from amelia.server.database import ProfileRepository, SettingsRepository, WorkflowRepository
 from amelia.server.database.connection import Database
+from amelia.server.database.metrics_repository import MetricsRepository
 from amelia.server.orchestrator.service import OrchestratorService
 
 
@@ -100,6 +101,11 @@ def get_knowledge_service() -> KnowledgeService:
     if _knowledge_service is None:
         raise HTTPException(status_code=503, detail="Knowledge service not available")
     return _knowledge_service
+
+
+def get_metrics_repository() -> MetricsRepository:
+    db = get_database()
+    return MetricsRepository(db)
 
 
 def get_knowledge_repository() -> KnowledgeRepository:

@@ -19,7 +19,7 @@ from amelia.server.models.events import EventType
 from amelia.server.models.requests import CreateWorkflowRequest
 from amelia.server.models.state import WorkflowStatus
 from amelia.server.orchestrator.service import OrchestratorService
-from tests.integration.conftest import mock_langgraph_for_planning
+from tests.integration.conftest import await_planning_task, mock_langgraph_for_planning
 
 
 @pytest.mark.integration
@@ -55,16 +55,15 @@ class TestReplanFlow:
             workflow_id = await test_orchestrator.queue_and_plan_workflow(request)
 
             # Wait for background planning task
-            if workflow_id in test_orchestrator._planning_tasks:
-                await test_orchestrator._planning_tasks[workflow_id]
+            await await_planning_task(test_orchestrator, workflow_id)
 
         # Verify Phase 1: workflow should be BLOCKED with original plan
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
         assert workflow.workflow_status == WorkflowStatus.BLOCKED
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.goal == "Original goal from architect"
-        assert "Original Plan" in (workflow.execution_state.plan_markdown or "")
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.goal == "Original goal from architect"
+        assert "Original Plan" in (workflow.plan_cache.plan_markdown or "")
 
         # Phase 2: replan -> PENDING -> BLOCKED (with new plan)
         async with mock_langgraph_for_planning(
@@ -74,16 +73,15 @@ class TestReplanFlow:
             await test_orchestrator.replan_workflow(workflow_id)
 
             # Wait for background planning task
-            if workflow_id in test_orchestrator._planning_tasks:
-                await test_orchestrator._planning_tasks[workflow_id]
+            await await_planning_task(test_orchestrator, workflow_id)
 
         # Verify Phase 2: workflow should be BLOCKED again with NEW plan
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
         assert workflow.workflow_status == WorkflowStatus.BLOCKED
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.goal == "New goal after replan"
-        assert "Revised Plan" in (workflow.execution_state.plan_markdown or "")
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.goal == "New goal after replan"
+        assert "Revised Plan" in (workflow.plan_cache.plan_markdown or "")
 
         # Verify events include replanning stage
         stage_events = [
@@ -129,8 +127,7 @@ class TestReplanFlow:
             workflow_id = await test_orchestrator.queue_and_plan_workflow(request)
 
             # Wait for planning to finish -> BLOCKED
-            if workflow_id in test_orchestrator._planning_tasks:
-                await test_orchestrator._planning_tasks[workflow_id]
+            await await_planning_task(test_orchestrator, workflow_id)
 
         # Manually set the workflow to PENDING to test rejection
         workflow = await test_repository.get(workflow_id)
@@ -164,14 +161,13 @@ class TestReplanFlow:
             plan_markdown="# Old Plan",
         ):
             workflow_id = await test_orchestrator.queue_and_plan_workflow(request)
-            if workflow_id in test_orchestrator._planning_tasks:
-                await test_orchestrator._planning_tasks[workflow_id]
+            await await_planning_task(test_orchestrator, workflow_id)
 
         # Verify old plan is set
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.goal == "Old goal"
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.goal == "Old goal"
 
         # Phase 2: replan with new plan
         async with mock_langgraph_for_planning(
@@ -179,15 +175,14 @@ class TestReplanFlow:
             plan_markdown="# Fresh Plan",
         ):
             await test_orchestrator.replan_workflow(workflow_id)
-            if workflow_id in test_orchestrator._planning_tasks:
-                await test_orchestrator._planning_tasks[workflow_id]
+            await await_planning_task(test_orchestrator, workflow_id)
 
         # Verify new plan replaced old one
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.goal == "Fresh goal"
-        assert "Fresh Plan" in (workflow.execution_state.plan_markdown or "")
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.goal == "Fresh goal"
+        assert "Fresh Plan" in (workflow.plan_cache.plan_markdown or "")
         # Old plan should be gone
-        assert "Old goal" not in (workflow.execution_state.goal or "")
-        assert "Old Plan" not in (workflow.execution_state.plan_markdown or "")
+        assert "Old goal" not in (workflow.plan_cache.goal or "")
+        assert "Old Plan" not in (workflow.plan_cache.plan_markdown or "")

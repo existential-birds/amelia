@@ -7,6 +7,7 @@ and workflow invocation with real components (mocking only at HTTP/LLM boundary)
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -19,6 +20,7 @@ from amelia.pipelines.implementation.nodes import (
     plan_validator_node,
 )
 from amelia.pipelines.nodes import call_developer_node, call_reviewer_node
+from tests.conftest import create_mock_execute_agentic
 from tests.integration.conftest import (
     make_agentic_messages,
     make_config,
@@ -30,9 +32,8 @@ from tests.integration.conftest import (
 
 
 @pytest.fixture(autouse=True)
-def mock_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Set API key env var to allow driver construction."""
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-for-integration-tests")
+def _mock_api_key(mock_api_key: None) -> None:
+    """Use shared mock_api_key fixture (autouse wrapper)."""
 
 
 @pytest.mark.integration
@@ -54,7 +55,7 @@ class TestArchitectNodeIntegration:
         )
         issue = make_issue(id="TEST-1", title="Add feature X", description="Add a new feature X to the system")
         state = make_execution_state(issue=issue, profile=profile)
-        config = make_config(thread_id="test-wf-1", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         # Mock at driver.execute_agentic level - this is the HTTP boundary
         plan_markdown = "# Plan\n\n**Goal:** Implement feature X by modifying component Y\n\n1. Do thing A\n2. Do thing B"
@@ -70,12 +71,7 @@ class TestArchitectNodeIntegration:
             ),
         ]
 
-        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
-            """Mock async generator that yields AgenticMessage objects."""
-            for msg in mock_messages:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result = await call_architect_node(state, cast(RunnableConfig, config))
 
         # Architect node returns raw output - goal/plan extraction is done by plan_validator_node
@@ -91,7 +87,7 @@ class TestArchitectNodeIntegration:
         """Architect node should raise error if no issue provided."""
         profile = make_profile(repo_root=str(tmp_path))
         state = make_execution_state(issue=None, profile=profile)
-        config = make_config(thread_id="test-wf-1", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         with pytest.raises(ValueError, match="no issue provided"):
             await call_architect_node(state, cast(RunnableConfig, config))
@@ -113,7 +109,7 @@ class TestDeveloperNodeIntegration:
             goal="Create a hello.txt file with 'Hello World'",
             plan_markdown="# Plan\n\nCreate hello.txt with content 'Hello World'",
         )
-        config = make_config(thread_id="test-wf-2", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         # Mock AgenticMessage stream from the driver's execute_agentic
         mock_messages = make_agentic_messages(
@@ -121,12 +117,7 @@ class TestDeveloperNodeIntegration:
             final_text="I created hello.txt with the content 'Hello World'",
         )
 
-        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
-            """Mock async generator that yields AgenticMessage objects."""
-            for msg in mock_messages:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result = await call_developer_node(state, cast(RunnableConfig, config))
 
         assert len(result["tool_calls"]) >= 1
@@ -138,7 +129,7 @@ class TestDeveloperNodeIntegration:
         """Developer node should raise error if no goal set."""
         profile = make_profile(repo_root=str(tmp_path))
         state = make_execution_state(profile=profile, goal=None)
-        config = make_config(thread_id="test-wf-3", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         with pytest.raises(ValueError, match="no goal"):
             await call_developer_node(state, cast(RunnableConfig, config))
@@ -160,15 +151,11 @@ class TestReviewerNodeIntegration:
             goal="Add logging to the application",
             code_changes_for_review="diff --git a/app.py b/app.py\n+import logging",
         )
-        config = make_config(thread_id="test-wf-4", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         mock_messages = make_reviewer_agentic_messages(approved=True)
 
-        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
-            for msg in mock_messages:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         assert result["last_reviews"] is not None
@@ -186,7 +173,7 @@ class TestReviewerNodeIntegration:
             goal="Implement secure authentication",
             code_changes_for_review="diff --git a/auth.py\n+password = 'hardcoded'",
         )
-        config = make_config(thread_id="test-wf-5", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         mock_messages = make_reviewer_agentic_messages(
             approved=False,
@@ -194,11 +181,7 @@ class TestReviewerNodeIntegration:
             severity="critical",
         )
 
-        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
-            for msg in mock_messages:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         assert result["last_reviews"][0].approved is False
@@ -220,7 +203,7 @@ class TestReviewerNodeIntegration:
             code_changes_for_review="diff --git a/fix.py\n+# partial fix",
             review_iteration=0,
         )
-        config = make_config(thread_id="test-wf-iteration", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         mock_messages = make_reviewer_agentic_messages(
             approved=False,
@@ -228,11 +211,7 @@ class TestReviewerNodeIntegration:
             severity="major",
         )
 
-        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
-            for msg in mock_messages:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         # Key assertion: review_iteration should be incremented
@@ -241,7 +220,7 @@ class TestReviewerNodeIntegration:
 
         # Run again with incremented state to verify it keeps incrementing
         state_round2 = state.model_copy(update={"review_iteration": 1})
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result2 = await call_reviewer_node(state_round2, cast(RunnableConfig, config))
 
         assert result2["review_iteration"] == 2, "review_iteration should increment from 1 to 2"
@@ -262,7 +241,7 @@ class TestReviewerNodeIntegration:
             code_changes_for_review="diff --git a/fix.py\n+# initial attempt",
             review_iteration=0,
         )
-        config = make_config(thread_id="test-wf-review-update", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         # Round 1: Reviewer rejects with severity "high"
         mock_messages_round1 = make_reviewer_agentic_messages(
@@ -271,11 +250,7 @@ class TestReviewerNodeIntegration:
             severity="major",
         )
 
-        async def mock_execute_round1(*_args: Any, **_kwargs: Any) -> Any:
-            for msg in mock_messages_round1:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_round1):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages_round1)):
             result1 = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         assert result1["last_reviews"][0].approved is False
@@ -293,11 +268,7 @@ class TestReviewerNodeIntegration:
             severity="minor",
         )
 
-        async def mock_execute_round2(*_args: Any, **_kwargs: Any) -> Any:
-            for msg in mock_messages_round2:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_round2):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages_round2)):
             result2 = await call_reviewer_node(state_round2, cast(RunnableConfig, config))
 
         # Verify last_reviews is UPDATED, not stale
@@ -312,11 +283,7 @@ class TestReviewerNodeIntegration:
         })
         mock_messages_round3 = make_reviewer_agentic_messages(approved=True)
 
-        async def mock_execute_round3(*_args: Any, **_kwargs: Any) -> Any:
-            for msg in mock_messages_round3:
-                yield msg
-
-        with patch.object(ApiDriver, "execute_agentic", mock_execute_round3):
+        with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages_round3)):
             result3 = await call_reviewer_node(state_round3, cast(RunnableConfig, config))
 
         assert result3["last_reviews"][0].approved is True, "should be approved in round 3"
@@ -352,7 +319,7 @@ class TestArchitectValidatorFlowIntegration:
             description="Implement JWT-based authentication for the API",
         )
         state = make_execution_state(issue=issue, profile=profile)
-        config = make_config(thread_id="test-flow-1", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         # Compute expected plan path
         plan_rel_path = resolve_plan_path(profile.plan_path_pattern, issue.id)
@@ -483,7 +450,7 @@ Add comprehensive tests for the authentication flow.
             profile=profile,
             raw_architect_output="Some content that wasn't written to disk",
         )
-        config = make_config(thread_id="test-missing-1", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         with pytest.raises(ValueError, match="Plan file not found"):
             await plan_validator_node(state, cast(RunnableConfig, config))
@@ -502,7 +469,7 @@ Add comprehensive tests for the authentication flow.
         )
         issue = make_issue(id="TEST-EMPTY-1")
         state = make_execution_state(issue=issue, profile=profile)
-        config = make_config(thread_id="test-empty-1", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         # Create empty plan file
         from amelia.core.constants import resolve_plan_path

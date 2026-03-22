@@ -12,7 +12,7 @@ from loguru import logger
 from amelia.agents.evaluator import Evaluator
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.nodes import _save_token_usage
-from amelia.pipelines.utils import extract_config_params
+from amelia.pipelines.utils import extract_node_config
 
 
 async def call_evaluation_node(
@@ -31,22 +31,16 @@ async def call_evaluation_node(
     Returns:
         Partial state dict with evaluation_result and driver_session_id.
     """
-    event_bus, workflow_id, profile = extract_config_params(config or {})
+    nc = extract_node_config(config)
 
-    config = config or {}
-    configurable = config.get("configurable", {})
-    prompts = configurable.get("prompts", {})
-    sandbox_provider = configurable.get("sandbox_provider")
-    repository = configurable.get("repository")
-
-    agent_config = profile.get_agent_config("evaluator")
-    evaluator = Evaluator(config=agent_config, event_bus=event_bus, prompts=prompts, sandbox_provider=sandbox_provider)
+    agent_config = nc.profile.get_agent_config("evaluator")
+    evaluator = Evaluator(config=agent_config, event_bus=nc.event_bus, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
 
     evaluation_result, new_session_id = await evaluator.evaluate(
-        state, profile, workflow_id=workflow_id
+        state, nc.profile, workflow_id=nc.workflow_id
     )
 
-    await _save_token_usage(evaluator.driver, workflow_id, "evaluator", repository)
+    await _save_token_usage(evaluator.driver, nc.workflow_id, "evaluator", nc.repository)
 
     logger.info(
         "Agent action completed",

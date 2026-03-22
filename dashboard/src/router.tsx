@@ -7,7 +7,7 @@ import { Layout } from '@/components/Layout';
 import { RootErrorBoundary } from '@/components/ErrorBoundary';
 import { workflowsLoader, workflowDetailLoader, historyLoader } from '@/loaders/workflows';
 import { promptsLoader } from '@/loaders/prompts';
-import { costsLoader, knowledgeLoader } from '@/loaders';
+import { analyticsLoader, knowledgeLoader } from '@/loaders';
 import { profilesLoader, serverSettingsLoader } from '@/loaders/settings';
 import { approveAction, rejectAction, cancelAction, replanAction } from '@/actions/workflows';
 
@@ -129,19 +129,16 @@ export const router = createBrowserRouter([
         },
       },
       {
-        path: 'develop',
+        path: 'analytics',
+        loader: analyticsLoader,
         lazy: async () => {
-          const { default: Component } = await import('@/pages/DevelopPage');
+          const { default: Component } = await import('@/pages/AnalyticsPage');
           return { Component };
         },
       },
       {
         path: 'costs',
-        loader: costsLoader,
-        lazy: async () => {
-          const { default: Component } = await import('@/pages/CostsPage');
-          return { Component };
-        },
+        element: <Navigate to="/analytics" replace />,
       },
       {
         path: 'knowledge',

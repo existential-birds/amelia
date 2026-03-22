@@ -1,5 +1,6 @@
 # amelia/server/routes/settings.py
 """API routes for server settings and profiles."""
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ from amelia.core.types import (
     REQUIRED_AGENTS,
     AgentConfig,
     DriverType,
+    PRAutoFixConfig,
     Profile,
     SandboxConfig,
     TrackerType,
@@ -28,6 +30,35 @@ from amelia.server.dependencies import (
 router = APIRouter(prefix="/api", tags=["settings"])
 
 
+def _validate_repo_root_absolute(v: str | None) -> str | None:
+    """Validate that repo_root is an absolute path when provided.
+
+    Args:
+        v: Repository root path or None.
+
+    Returns:
+        The validated absolute path or None.
+    """
+    if v is not None and not Path(v).is_absolute():
+        raise ValueError("repo_root must be an absolute path")
+    return v
+
+
+def _validate_required_agents(agents: Mapping[str, object] | None) -> None:
+    """Validate that all required agents are present when agents are provided.
+
+    Args:
+        agents: Agent configuration dict or None.
+
+    Raises:
+        ValueError: If required agents are missing.
+    """
+    if agents is not None:
+        missing = REQUIRED_AGENTS - agents.keys()
+        if missing:
+            raise ValueError(f"Missing required agents: {', '.join(sorted(missing))}")
+
+
 # Response models
 class ServerSettingsResponse(BaseModel):
     """Server settings API response."""
@@ -37,6 +68,7 @@ class ServerSettingsResponse(BaseModel):
     websocket_idle_timeout_seconds: float
     workflow_start_timeout_seconds: float
     max_concurrent: int
+    pr_polling_enabled: bool
 
 
 class ServerSettingsUpdate(BaseModel):
@@ -47,6 +79,7 @@ class ServerSettingsUpdate(BaseModel):
     websocket_idle_timeout_seconds: float | None = None
     workflow_start_timeout_seconds: float | None = None
     max_concurrent: int | None = None
+    pr_polling_enabled: bool | None = None
 
 
 class AgentConfigResponse(BaseModel):
@@ -71,6 +104,7 @@ class ProfileResponse(BaseModel):
     plan_path_pattern: str
     agents: dict[str, AgentConfigResponse]
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
+    pr_autofix: PRAutoFixConfig | None = None
     is_active: bool = False
 
 
@@ -95,28 +129,18 @@ class ProfileCreate(BaseModel):
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
     agents: dict[str, AgentConfigCreate]
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
+    pr_autofix: PRAutoFixConfig | None = None
 
     @field_validator("repo_root", mode="after")
     @classmethod
     def validate_repo_root_absolute(cls, v: str) -> str:
-        """Validate that repo_root is an absolute path.
-
-        Args:
-            v: Repository root path.
-
-        Returns:
-            The validated absolute path.
-        """
-        if not Path(v).is_absolute():
-            raise ValueError("repo_root must be an absolute path")
-        return v
+        """Validate that repo_root is an absolute path."""
+        return _validate_repo_root_absolute(v)  # type: ignore[return-value]
 
     @model_validator(mode="after")
     def validate_required_agents(self) -> "ProfileCreate":
         """Validate that all required agents are present."""
-        missing = REQUIRED_AGENTS - self.agents.keys()
-        if missing:
-            raise ValueError(f"Missing required agents: {', '.join(sorted(missing))}")
+        _validate_required_agents(self.agents)
         return self
 
 
@@ -132,31 +156,18 @@ class ProfileUpdate(BaseModel):
     plan_path_pattern: str | None = None
     agents: dict[str, AgentConfigCreate] | None = None
     sandbox: SandboxConfig | None = None
+    pr_autofix: PRAutoFixConfig | None = None
 
     @field_validator("repo_root", mode="after")
     @classmethod
     def validate_repo_root_absolute(cls, v: str | None) -> str | None:
-        """Validate that repo_root is an absolute path when provided.
-
-        Args:
-            v: Repository root path or None.
-
-        Returns:
-            The validated absolute path or None.
-        """
-        if v is not None and not Path(v).is_absolute():
-            raise ValueError("repo_root must be an absolute path")
-        return v
+        """Validate that repo_root is an absolute path when provided."""
+        return _validate_repo_root_absolute(v)
 
     @model_validator(mode="after")
     def validate_required_agents(self) -> "ProfileUpdate":
         """Validate that all required agents are present when agents are provided."""
-        if self.agents is not None:
-            missing = REQUIRED_AGENTS - self.agents.keys()
-            if missing:
-                raise ValueError(
-                    f"Missing required agents: {', '.join(sorted(missing))}"
-                )
+        _validate_required_agents(self.agents)
         return self
 
 
@@ -173,6 +184,7 @@ async def get_server_settings(
         websocket_idle_timeout_seconds=settings.websocket_idle_timeout_seconds,
         workflow_start_timeout_seconds=settings.workflow_start_timeout_seconds,
         max_concurrent=settings.max_concurrent,
+        pr_polling_enabled=settings.pr_polling_enabled,
     )
 
 
@@ -190,6 +202,7 @@ async def update_server_settings(
         websocket_idle_timeout_seconds=settings.websocket_idle_timeout_seconds,
         workflow_start_timeout_seconds=settings.workflow_start_timeout_seconds,
         max_concurrent=settings.max_concurrent,
+        pr_polling_enabled=settings.pr_polling_enabled,
     )
 
 
@@ -229,6 +242,7 @@ async def create_profile(
         plan_path_pattern=profile_req.plan_path_pattern,
         agents=agents,
         sandbox=profile_req.sandbox,
+        pr_autofix=profile_req.pr_autofix,
     )
 
     try:
@@ -278,9 +292,17 @@ async def update_profile(
             for name, config in updates.agents.items()
         }
 
-    # Handle sandbox field - pass as dict for JSONB storage
-    if updates.sandbox is not None:
-        update_dict["sandbox"] = updates.sandbox.model_dump()
+    # Handle sandbox field - use model_fields_set to distinguish omission from explicit null
+    if "sandbox" in updates.model_fields_set:
+        update_dict["sandbox"] = (
+            updates.sandbox.model_dump() if updates.sandbox is not None else None
+        )
+
+    # Handle pr_autofix field - use model_fields_set to distinguish omission from explicit null
+    if "pr_autofix" in updates.model_fields_set:
+        update_dict["pr_autofix"] = (
+            updates.pr_autofix.model_dump() if updates.pr_autofix is not None else None
+        )
 
     try:
         updated = await repo.update_profile(profile_id, update_dict)
@@ -343,5 +365,6 @@ def _profile_to_response(profile: Profile, is_active: bool = False) -> ProfileRe
             for name, config in profile.agents.items()
         },
         sandbox=profile.sandbox,
+        pr_autofix=profile.pr_autofix,
         is_active=is_active,
     )

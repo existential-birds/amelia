@@ -4,14 +4,16 @@
  * Displays the active workflow's header with job queue and activity log
  * in a split view below.
  */
-import { useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useLoaderData, useNavigate, useParams } from 'react-router-dom';
 import { Copy } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WorkflowEmptyState } from '@/components/WorkflowEmptyState';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
+import { TypeBadge } from '@/components/TypeBadge';
 import { ActivityLog } from '@/components/ActivityLog';
 import { JobQueue } from '@/components/JobQueue';
 import { ApprovalControls } from '@/components/ApprovalControls';
@@ -23,6 +25,7 @@ import { getActiveWorkflow } from '@/utils/workflow';
 import { truncateWorkflowId } from '@/utils';
 import { useElapsedTime, useAutoRevalidation } from '@/hooks';
 import { useIsTablet } from '@/hooks/use-tablet';
+import type { WorkflowSummary } from '@/types';
 import type { workflowsLoader } from '@/loaders/workflows';
 
 /**
@@ -45,9 +48,19 @@ export default function WorkflowsPage() {
   const navigate = useNavigate();
   const params = useParams<{ id?: string }>();
   const isTablet = useIsTablet();
+  const [activeTab, setActiveTab] = useState('all');
 
   // Auto-revalidate when any workflow's status changes (approval events, completion, etc.)
   useAutoRevalidation();
+
+  // Filter workflows by pipeline type tab
+  const filteredWorkflows = useMemo(() => {
+    if (activeTab === 'all') return workflows;
+    return workflows.filter((w: WorkflowSummary) => {
+      const type = w.pipeline_type ?? 'full';
+      return type === activeTab;
+    });
+  }, [workflows, activeTab]);
 
   // Determine which workflow is displayed
   const activeWorkflow = getActiveWorkflow(workflows);
@@ -115,11 +128,24 @@ export default function WorkflowsPage() {
         </PageHeader.Center>
         {detail && (
           <PageHeader.Right>
+            <TypeBadge type={detail.pipeline_type ?? null} />
             <StatusBadge status={detail.status} />
           </PageHeader.Right>
         )}
       </PageHeader>
       <Separator />
+
+      {/* Tab filtering by pipeline type */}
+      <div className="px-4 pt-3">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="full">Implementation</TabsTrigger>
+            <TabsTrigger value="review">Review</TabsTrigger>
+            <TabsTrigger value="pr_auto_fix">PR Fix</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
 
       {/* Plan Review - shown when workflow needs approval */}
       {detail?.status === 'blocked' && (
@@ -156,7 +182,7 @@ export default function WorkflowsPage() {
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(280px,320px)_1fr] gap-4 p-4 overflow-hidden relative z-10 min-h-[300px]">
         <ScrollArea className="h-full lg:max-h-none overflow-hidden">
           <JobQueue
-            workflows={workflows}
+            workflows={filteredWorkflows}
             selectedId={displayedId}
             onSelect={handleSelect}
             collapsible={isTablet}

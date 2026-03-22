@@ -8,12 +8,14 @@ from typing import Any
 
 from amelia.pipelines.base import Pipeline
 from amelia.pipelines.implementation.pipeline import ImplementationPipeline
+from amelia.pipelines.pr_auto_fix.pipeline import PRAutoFixPipeline
 from amelia.pipelines.review.pipeline import ReviewPipeline
 
 
 # Registry mapping pipeline names to their classes
 PIPELINES: dict[str, type[Pipeline[Any]]] = {
     "implementation": ImplementationPipeline,
+    "pr_auto_fix": PRAutoFixPipeline,
     "review": ReviewPipeline,
 }
 

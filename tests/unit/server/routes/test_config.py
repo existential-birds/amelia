@@ -1,5 +1,4 @@
 """Tests for config routes."""
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -7,36 +6,20 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from amelia.core.types import AgentConfig, Profile
-from amelia.server.database.settings_repository import ServerSettings
 from amelia.server.dependencies import get_profile_repository, get_settings_repository
 from amelia.server.routes.config import router
+
+from .conftest import _make_server_settings
 
 
 class TestGetConfig:
     """Tests for GET /api/config endpoint."""
 
     @pytest.fixture
-    def mock_profile_repo(self) -> MagicMock:
-        """Create a mock profile repository."""
-        repo = MagicMock()
-        repo.get_active_profile = AsyncMock(return_value=None)
-        return repo
-
-    @pytest.fixture
     def mock_settings_repo(self) -> MagicMock:
         """Create a mock settings repository."""
         repo = MagicMock()
-        repo.get_server_settings = AsyncMock(
-            return_value=ServerSettings(
-                log_retention_days=30,
-                checkpoint_retention_days=0,
-                websocket_idle_timeout_seconds=300.0,
-                workflow_start_timeout_seconds=30.0,
-                max_concurrent=5,
-                created_at=datetime.now(),
-                updated_at=datetime.now(),
-            )
-        )
+        repo.get_server_settings = AsyncMock(return_value=_make_server_settings())
         return repo
 
     @pytest.fixture
@@ -112,17 +95,8 @@ class TestGetConfig:
         client: TestClient,
     ) -> None:
         """Should return max_concurrent from server settings."""
-        # Override max_concurrent in server settings
         mock_settings_repo.get_server_settings = AsyncMock(
-            return_value=ServerSettings(
-                log_retention_days=30,
-                checkpoint_retention_days=0,
-                websocket_idle_timeout_seconds=300.0,
-                workflow_start_timeout_seconds=30.0,
-                max_concurrent=10,  # Different value
-                created_at=datetime.now(),
-                updated_at=datetime.now(),
-            )
+            return_value=_make_server_settings(max_concurrent=10)
         )
 
         response = client.get("/api/config")

@@ -17,7 +17,7 @@ from amelia.agents.developer import Developer
 from amelia.agents.reviewer import Reviewer
 from amelia.core.types import ReviewResult
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.pipelines.utils import extract_config_params
+from amelia.pipelines.utils import extract_node_config
 from amelia.server.models.tokens import TokenUsage, calculate_token_cost
 from amelia.skills.review import REVIEW_TYPE_SKILLS, detect_stack, load_skills
 from amelia.tools.git_utils import get_current_commit
@@ -33,18 +33,15 @@ async def _resolve_commit(
     sandbox_provider: "SandboxProvider | None" = None,
 ) -> str | None:
     """Resolve the current HEAD commit, preferring the sandbox repo when available."""
-    if sandbox_provider is not None:
-        try:
-            lines: list[str] = []
-            async for line in sandbox_provider.exec_stream(
-                ["git", "rev-parse", "HEAD"],
-            ):
-                lines.append(line.strip())
-            sha = "".join(lines).strip()
-            if sha:
-                return sha
-        except (OSError, RuntimeError):
-            logger.warning("Failed to resolve commit from sandbox, falling back to host")
+    sha = (
+        await _run_git_command(
+            ["git", "rev-parse", "HEAD"],
+            profile_repo_root,
+            sandbox_provider,
+        )
+    ).strip()
+    if sha:
+        return sha
     return await get_current_commit(cwd=profile_repo_root)
 
 
@@ -91,39 +88,6 @@ async def _run_git_command(
             stderr=stderr.decode().strip()[:500],
         )
     return stdout.decode()
-
-
-async def _get_changed_files(
-    base_commit: str,
-    repo_root: str,
-    sandbox_provider: "SandboxProvider | None" = None,
-) -> list[str]:
-    """Get list of changed file paths since base_commit.
-
-    Uses sandbox when available, falls back to local subprocess.
-    """
-    output = await _run_git_command(
-        ["git", "diff", "--name-only", base_commit, "HEAD"],
-        repo_root,
-        sandbox_provider,
-    )
-    return [line for line in output.splitlines() if line.strip()]
-
-
-async def _get_diff_content(
-    base_commit: str,
-    repo_root: str,
-    sandbox_provider: "SandboxProvider | None" = None,
-) -> str:
-    """Get unified diff content since base_commit for import scanning.
-
-    Uses sandbox when available, falls back to local subprocess.
-    """
-    return await _run_git_command(
-        ["git", "diff", base_commit, "HEAD"],
-        repo_root,
-        sandbox_provider,
-    )
 
 
 async def _save_token_usage(
@@ -226,17 +190,11 @@ async def call_developer_node(
     if not state.goal:
         raise ValueError("Developer node has no goal. The architect should have generated a goal first.")
 
-    # Extract event_bus, workflow_id, and profile from config
-    event_bus, workflow_id, profile = extract_config_params(config or {})
-
-    config = config or {}
-    configurable = config.get("configurable", {})
-    repository = configurable.get("repository")
-    prompts = configurable.get("prompts", {})
-    sandbox_provider = configurable.get("sandbox_provider")
+    # Extract all config params in one call
+    nc = extract_node_config(config)
 
     # Capture current HEAD so the next reviewer only diffs against this point
-    pre_dev_commit = await _resolve_commit(profile.repo_root, sandbox_provider)
+    pre_dev_commit = await _resolve_commit(nc.profile.repo_root, nc.sandbox_provider)
 
     # Task-based execution: clear session and inject task-scoped context
     task_number = state.current_task_index + 1  # 1-indexed for display
@@ -251,25 +209,25 @@ async def call_developer_node(
         # plan_markdown stays intact - extraction happens in Developer._build_prompt
     })
 
-    agent_config = profile.get_agent_config("developer")
-    developer = Developer(agent_config, prompts=prompts, sandbox_provider=sandbox_provider)
+    agent_config = nc.profile.get_agent_config("developer")
+    developer = Developer(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
 
     final_state = state
     try:
-        async for new_state, event in developer.run(state, profile, workflow_id=workflow_id):
+        async for new_state, event in developer.run(state, nc.profile, workflow_id=nc.workflow_id):
             final_state = new_state
-            if event_bus and event is not None:
-                event_bus.emit(event)
+            if nc.event_bus and event is not None:
+                nc.event_bus.emit(event)
     except Exception:
         logger.exception(
             "Developer execution failed",
             task=task_number,
             total_tasks=state.total_tasks,
-            workflow_id=str(workflow_id),
+            workflow_id=str(nc.workflow_id),
         )
         raise
 
-    await _save_token_usage(developer.driver, workflow_id, "developer", repository)
+    await _save_token_usage(developer.driver, nc.workflow_id, "developer", nc.repository)
 
     logger.info(
         "Agent action completed",
@@ -310,27 +268,21 @@ async def call_reviewer_node(
     """
     logger.info(f"Orchestrator: Calling Reviewer for issue {state.issue.id if state.issue else 'N/A'}")
 
-    # Extract event_bus, workflow_id, and profile from config
-    event_bus, workflow_id, profile = extract_config_params(config or {})
-
-    config = config or {}
-    configurable = config.get("configurable", {})
-    repository = configurable.get("repository")
-    prompts = configurable.get("prompts", {})
-    sandbox_provider = configurable.get("sandbox_provider")
+    # Extract all config params in one call
+    nc = extract_node_config(config)
 
     # Use "task_reviewer" only for non-final tasks in task-based execution
     is_non_final_task = state.current_task_index + 1 < state.total_tasks
     agent_name = "task_reviewer" if is_non_final_task else "reviewer"
     # Fall back to "reviewer" config if "task_reviewer" not configured
     try:
-        agent_config = profile.get_agent_config(agent_name)
+        agent_config = nc.profile.get_agent_config(agent_name)
     except ValueError:
-        agent_config = profile.get_agent_config("reviewer")
+        agent_config = nc.profile.get_agent_config("reviewer")
     # Compute base_commit if not in state
     base_commit = state.base_commit
     if not base_commit:
-        computed_commit = await _resolve_commit(profile.repo_root, sandbox_provider)
+        computed_commit = await _resolve_commit(nc.profile.repo_root, nc.sandbox_provider)
         if computed_commit:
             base_commit = computed_commit
             logger.info(
@@ -353,7 +305,8 @@ async def call_reviewer_node(
         )
 
     # Detect stack and load review skills
-    raw_review_types = agent_config.options.get("review_types", ["general"])
+    config_review_types = (config or {}).get("configurable", {}).get("review_types")
+    raw_review_types = config_review_types or agent_config.options.get("review_types", ["general"])
     if not isinstance(raw_review_types, list) or not raw_review_types:
         logger.warning(
             "Invalid review_types in agent options, falling back to ['general']",
@@ -372,10 +325,19 @@ async def call_reviewer_node(
             agent=agent_name,
         )
 
-    changed_files, diff_content = await asyncio.gather(
-        _get_changed_files(base_commit, profile.repo_root, sandbox_provider),
-        _get_diff_content(base_commit, profile.repo_root, sandbox_provider),
+    changed_files_raw, diff_content = await asyncio.gather(
+        _run_git_command(
+            ["git", "diff", "--name-only", base_commit, "HEAD"],
+            nc.profile.repo_root,
+            nc.sandbox_provider,
+        ),
+        _run_git_command(
+            ["git", "diff", base_commit, "HEAD"],
+            nc.profile.repo_root,
+            nc.sandbox_provider,
+        ),
     )
+    changed_files = [f for f in changed_files_raw.splitlines() if f.strip()]
     tags = detect_stack(changed_files, diff_content)
 
     logger.info(
@@ -400,18 +362,18 @@ async def call_reviewer_node(
 
         reviewer = Reviewer(
             agent_config,
-            event_bus=event_bus,
-            prompts=prompts,
+            event_bus=nc.event_bus,
+            prompts=nc.prompts,
             agent_name=agent_name,
-            sandbox_provider=sandbox_provider,
+            sandbox_provider=nc.sandbox_provider,
             review_guidelines=guidelines,
         )
 
         review_result, session_id = await reviewer.agentic_review(
-            state, base_commit, profile, workflow_id=workflow_id
+            state, base_commit, nc.profile, workflow_id=nc.workflow_id
         )
 
-        await _save_token_usage(reviewer.driver, workflow_id, agent_name, repository)
+        await _save_token_usage(reviewer.driver, nc.workflow_id, agent_name, nc.repository)
 
         # Tag result with the review type as reviewer_persona
         review_result = review_result.model_copy(update={"reviewer_persona": review_type})

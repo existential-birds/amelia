@@ -21,146 +21,20 @@ with its own event loop, causing asyncpg event loop mismatches).
 
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
-from fastapi import FastAPI
 
 from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverInterface
 from amelia.server.database.brainstorm_repository import BrainstormRepository
-from amelia.server.database.connection import Database
-from amelia.server.database.migrator import Migrator
-from amelia.server.dependencies import get_orchestrator, get_profile_repository
-from amelia.server.events.bus import EventBus
-from amelia.server.main import create_app
-from amelia.server.routes.brainstorm import (
-    get_brainstorm_service,
-    get_cwd,
-    get_driver,
-)
 from amelia.server.services.brainstorm import BrainstormService
 from tests.conftest import create_mock_execute_agentic
 
-from .conftest import AsyncClientFactory, noop_lifespan
-
-
-DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
-
-
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-
-@pytest.fixture
-async def test_db() -> AsyncGenerator[Database, None]:
-    """Create and initialize PostgreSQL test database."""
-    db = Database(DATABASE_URL)
-    await db.connect()
-    migrator = Migrator(db)
-    await migrator.run()
-    yield db
-    await db.close()
-
-
-@pytest.fixture
-def test_brainstorm_repository(test_db: Database) -> BrainstormRepository:
-    """Create repository backed by test database."""
-    return BrainstormRepository(test_db)
-
-
-@pytest.fixture
-def test_event_bus() -> EventBus:
-    """Create event bus for testing."""
-    return EventBus()
-
-
-@pytest.fixture
-def test_brainstorm_service(
-    test_brainstorm_repository: BrainstormRepository,
-    test_event_bus: EventBus,
-) -> BrainstormService:
-    """Create real BrainstormService with test dependencies."""
-    return BrainstormService(test_brainstorm_repository, test_event_bus)
-
-
-def create_realistic_driver_messages(
-    *,
-    thinking_content: str = "Let me analyze this request...",
-    tool_name: str = "read_file",
-    tool_input: dict[str, Any] | None = None,
-    tool_output: str = "File contents here",
-    result_content: str = "Based on my analysis, here's the answer.",
-    session_id: str = "driver-session-123",
-) -> list[AgenticMessage]:
-    """Create a realistic sequence of driver messages.
-
-    Returns:
-        List of AgenticMessage objects simulating THINKING -> TOOL_CALL -> TOOL_RESULT -> RESULT.
-    """
-    if tool_input is None:
-        tool_input = {"path": "README.md"}
-
-    return [
-        AgenticMessage(
-            type=AgenticMessageType.THINKING,
-            content=thinking_content,
-        ),
-        AgenticMessage(
-            type=AgenticMessageType.TOOL_CALL,
-            tool_name=tool_name,
-            tool_input=tool_input,
-            tool_call_id="call-1",
-        ),
-        AgenticMessage(
-            type=AgenticMessageType.TOOL_RESULT,
-            tool_name=tool_name,
-            tool_output=tool_output,
-            tool_call_id="call-1",
-            is_error=False,
-        ),
-        AgenticMessage(
-            type=AgenticMessageType.RESULT,
-            content=result_content,
-            session_id=session_id,
-        ),
-    ]
-
-
-@pytest.fixture
-def mock_driver() -> MagicMock:
-    """Create a mock driver with realistic message flow."""
-    driver = MagicMock(spec=DriverInterface)
-    messages = create_realistic_driver_messages()
-    driver.execute_agentic = create_mock_execute_agentic(messages)
-    return driver
-
-
-def _create_app_with_overrides(
-    brainstorm_service: BrainstormService,
-    driver: MagicMock,
-    cwd: str,
-) -> FastAPI:
-    """Create FastAPI app with noop lifespan and dependency overrides."""
-    app = create_app()
-
-    app.router.lifespan_context = noop_lifespan
-    app.dependency_overrides[get_brainstorm_service] = lambda: brainstorm_service
-    app.dependency_overrides[get_driver] = lambda: driver
-    app.dependency_overrides[get_cwd] = lambda: cwd
-
-    # Override dependencies that would otherwise require the database lifespan
-    mock_profile_repo = AsyncMock()
-    mock_profile_repo.get_profile = AsyncMock(return_value=None)
-    app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
-
-    mock_orch = MagicMock()
-    mock_orch.queue_workflow = AsyncMock(return_value="00000000-0000-4000-8000-000000000001")
-    app.dependency_overrides[get_orchestrator] = lambda: mock_orch
-
-    return app
+from .conftest import (
+    AsyncClientFactory,
+    _create_app_with_overrides,
+)
 
 
 @pytest.fixture
@@ -171,7 +45,7 @@ async def test_client(
     async_client_factory: AsyncClientFactory,
 ) -> AsyncGenerator[httpx.AsyncClient, None]:
     """Create async test client with real dependencies and mock driver."""
-    app = _create_app_with_overrides(test_brainstorm_service, mock_driver, str(tmp_path))
+    app = _create_app_with_overrides(test_brainstorm_service, lambda: mock_driver, str(tmp_path))
     async with async_client_factory(app) as client:
         yield client
 
@@ -288,39 +162,6 @@ class TestBrainstormArtifactDetection:
     """Test artifact creation from write_file tool calls."""
 
     @pytest.fixture
-    def mock_driver_with_write_file(self, tmp_path: Path) -> MagicMock:
-        """Create a mock driver that emits write_file tool call."""
-        driver = MagicMock(spec=DriverInterface)
-        artifact_path = "docs/plans/test-design.md"
-
-        messages = [
-            AgenticMessage(
-                type=AgenticMessageType.THINKING,
-                content="I'll create a design document...",
-            ),
-            AgenticMessage(
-                type=AgenticMessageType.TOOL_CALL,
-                tool_name="write_file",
-                tool_input={"path": artifact_path, "content": "# Design\n\nOverview..."},
-                tool_call_id="call-write-1",
-            ),
-            AgenticMessage(
-                type=AgenticMessageType.TOOL_RESULT,
-                tool_name="write_file",
-                tool_output=f"Successfully wrote to {artifact_path}",
-                tool_call_id="call-write-1",
-                is_error=False,
-            ),
-            AgenticMessage(
-                type=AgenticMessageType.RESULT,
-                content="I've created the design document at docs/plans/test-design.md",
-                session_id="driver-session-artifact",
-            ),
-        ]
-        driver.execute_agentic = create_mock_execute_agentic(messages)
-        return driver
-
-    @pytest.fixture
     async def test_client_with_write_file(
         self,
         test_brainstorm_service: BrainstormService,
@@ -328,9 +169,9 @@ class TestBrainstormArtifactDetection:
         tmp_path: Path,
         async_client_factory: AsyncClientFactory,
     ) -> AsyncGenerator[httpx.AsyncClient, None]:
-        """Create test client with driver that emits write_file."""
+        """Create test client with driver that creates plan file."""
         app = _create_app_with_overrides(
-            test_brainstorm_service, mock_driver_with_write_file, str(tmp_path)
+            test_brainstorm_service, lambda: mock_driver_with_write_file, str(tmp_path)
         )
         async with async_client_factory(app) as client:
             yield client
@@ -339,7 +180,7 @@ class TestBrainstormArtifactDetection:
         self,
         test_client_with_write_file: httpx.AsyncClient,
     ) -> None:
-        """write_file tool call should create an artifact in the session."""
+        """Driver creating the plan file should produce an artifact in the session."""
         # Create session
         create_resp = await test_client_with_write_file.post(
             "/api/brainstorm/sessions",
@@ -348,7 +189,7 @@ class TestBrainstormArtifactDetection:
         assert create_resp.status_code == 201
         session_id = create_resp.json()["session"]["id"]
 
-        # Send message (driver will emit write_file)
+        # Send message (driver mock will create the plan file on disk)
         msg_resp = await test_client_with_write_file.post(
             f"/api/brainstorm/sessions/{session_id}/message",
             json={"content": "Create a design document"},
@@ -365,7 +206,8 @@ class TestBrainstormArtifactDetection:
         artifacts = data["artifacts"]
         assert len(artifacts) == 1
         artifact = artifacts[0]
-        assert artifact["path"] == "docs/plans/test-design.md"
+        assert "docs/plans/" in artifact["path"]
+        assert artifact["path"].endswith(".md")
         assert artifact["type"] == "design"  # Inferred from /plans/ in path
 
     async def test_failed_write_file_does_not_create_artifact(
@@ -398,7 +240,7 @@ class TestBrainstormArtifactDetection:
         ]
         driver.execute_agentic = create_mock_execute_agentic(messages)
 
-        app = _create_app_with_overrides(test_brainstorm_service, driver, str(tmp_path))
+        app = _create_app_with_overrides(test_brainstorm_service, lambda: driver, str(tmp_path))
         async with async_client_factory(app) as client:
             # Create session and send message
             create_resp = await client.post(
@@ -423,36 +265,6 @@ class TestBrainstormHandoffFlow:
     """Test full handoff flow from brainstorming to implementation."""
 
     @pytest.fixture
-    def mock_driver_with_write_file(self) -> MagicMock:
-        """Create a mock driver that emits write_file tool call."""
-        driver = MagicMock(spec=DriverInterface)
-        messages = [
-            AgenticMessage(
-                type=AgenticMessageType.TOOL_CALL,
-                tool_name="write_file",
-                tool_input={
-                    "path": "docs/design/system-architecture.md",
-                    "content": "# System Architecture\n\n## Overview\n...",
-                },
-                tool_call_id="call-write",
-            ),
-            AgenticMessage(
-                type=AgenticMessageType.TOOL_RESULT,
-                tool_name="write_file",
-                tool_output="Successfully wrote docs/design/system-architecture.md",
-                tool_call_id="call-write",
-                is_error=False,
-            ),
-            AgenticMessage(
-                type=AgenticMessageType.RESULT,
-                content="I've created the system architecture document.",
-                session_id="driver-handoff-session",
-            ),
-        ]
-        driver.execute_agentic = create_mock_execute_agentic(messages)
-        return driver
-
-    @pytest.fixture
     async def handoff_test_client(
         self,
         test_brainstorm_service: BrainstormService,
@@ -462,7 +274,7 @@ class TestBrainstormHandoffFlow:
     ) -> AsyncGenerator[httpx.AsyncClient, None]:
         """Create test client for handoff testing."""
         app = _create_app_with_overrides(
-            test_brainstorm_service, mock_driver_with_write_file, str(tmp_path)
+            test_brainstorm_service, lambda: mock_driver_with_write_file, str(tmp_path)
         )
         async with async_client_factory(app) as client:
             yield client
@@ -494,7 +306,8 @@ class TestBrainstormHandoffFlow:
         artifacts = get_resp.json()["artifacts"]
         assert len(artifacts) == 1
         artifact_path = artifacts[0]["path"]
-        assert artifact_path == "docs/design/system-architecture.md"
+        assert "docs/plans/" in artifact_path
+        assert artifact_path.endswith(".md")
 
         # Step 3: Handoff to implementation
         handoff_resp = await handoff_test_client.post(
@@ -573,7 +386,7 @@ class TestBrainstormHandoffFlow:
     ) -> None:
         """Handoff should fail if the session doesn't exist."""
         handoff_resp = await test_client.post(
-            "/api/brainstorm/sessions/nonexistent-session-id/handoff",
+            "/api/brainstorm/sessions/00000000-0000-4000-8000-000000000099/handoff",
             json={"artifact_path": "docs/design.md"},
         )
         assert handoff_resp.status_code == 404

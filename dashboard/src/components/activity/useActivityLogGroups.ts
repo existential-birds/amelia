@@ -10,6 +10,12 @@ const TRACE_EVENT_TYPES = new Set([
   'agent_output',
 ]);
 
+/** Internal/ephemeral events that should not appear in the activity log. */
+const HIDDEN_EVENT_TYPES = new Set([
+  'pr_comments_detected',
+  'pr_comments_resolved',
+]);
+
 /**
  * Hook to group workflow events by stage for hierarchical display.
  *
@@ -22,9 +28,9 @@ export function useActivityLogGroups(
   collapsedStages: Set<string>
 ): { groups: StageGroup[]; rows: VirtualRow[] } {
   return useMemo(() => {
-    // Filter out trace events - ActivityLog shows only lifecycle events
+    // Filter out trace events and hidden internal events
     const lifecycleEvents = events.filter(
-      (e) => !TRACE_EVENT_TYPES.has(e.event_type)
+      (e) => !TRACE_EVENT_TYPES.has(e.event_type) && !HIDDEN_EVENT_TYPES.has(e.event_type)
     );
 
     // Group events by agent

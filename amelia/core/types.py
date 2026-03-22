@@ -6,12 +6,19 @@ the Amelia agentic coding orchestrator.
 """
 import uuid
 from datetime import datetime
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 
 # Default allowed hosts for sandbox network allowlist
@@ -144,6 +151,164 @@ class RetryConfig(BaseModel):
     )
 
 
+class AggressivenessLevel(IntEnum):
+    """Aggressiveness level for PR auto-fix comment classification.
+
+    Ordered for threshold comparisons: ``if level >= AggressivenessLevel.STANDARD``.
+
+    - CRITICAL (1): Only fix clear bugs, security issues, build failures
+    - STANDARD (2): Fix style issues, common patterns, and critical items
+    - THOROUGH (3): Fix all actionable comments including suggestions and nitpicks
+    - EXEMPLARY (4): Fix all substantive comments including everything THOROUGH fixes
+    """
+
+    CRITICAL = 1
+    STANDARD = 2
+    THOROUGH = 3
+    EXEMPLARY = 4
+
+
+class PRSummary(BaseModel):
+    """Summary of a GitHub pull request.
+
+    Attributes:
+        number: PR number.
+        title: PR title.
+        head_branch: Head branch name.
+        author: PR author login.
+        updated_at: Last update timestamp.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    number: int = Field(description="PR number")
+    title: str = Field(description="PR title")
+    head_branch: str = Field(description="Head branch name")
+    author: str = Field(description="PR author login")
+    updated_at: datetime = Field(description="Last update timestamp")
+
+
+class PRReviewComment(BaseModel):
+    """A review comment on a GitHub pull request.
+
+    Handles both inline (file-specific) and general review comments.
+    For general comments, path/line/diff_hunk are None.
+
+    Attributes:
+        id: GitHub comment ID.
+        body: Comment body text.
+        author: Comment author login.
+        created_at: Comment creation timestamp.
+        path: File path for inline comments (None for general).
+        line: End line number for inline comments (None for general or outdated).
+        original_line: Line number on the original commit (survives force-pushes).
+        start_line: Start line for multi-line comments (None for single-line).
+        original_start_line: Start line on original commit for multi-line comments.
+        side: Which diff side the comment is on ("LEFT" for base, "RIGHT" for head).
+        subject_type: Whether the comment targets a "line" or "file".
+        diff_hunk: Diff context for inline comments (None for general).
+        in_reply_to_id: Parent comment ID for threaded replies.
+        thread_id: Review thread ID from GraphQL.
+        node_id: GraphQL node ID for thread resolution.
+        pr_number: PR number this comment belongs to.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: int = Field(description="GitHub comment ID")
+    body: str = Field(description="Comment body text")
+    author: str = Field(description="Comment author login")
+    created_at: datetime = Field(description="Comment creation timestamp")
+    path: str | None = Field(default=None, description="File path for inline comments")
+    line: int | None = Field(default=None, description="End line number for inline comments")
+    original_line: int | None = Field(default=None, description="Line number on the original commit")
+    start_line: int | None = Field(default=None, description="Start line for multi-line comments")
+    original_start_line: int | None = Field(default=None, description="Start line on original commit")
+    side: str | None = Field(default=None, description="Diff side: LEFT (base) or RIGHT (head)")
+    subject_type: str | None = Field(default=None, description="Comment target: line or file")
+    diff_hunk: str | None = Field(default=None, description="Diff context for inline comments")
+    in_reply_to_id: int | None = Field(default=None, description="Parent comment ID for threaded replies")
+    thread_id: str | None = Field(default=None, description="Review thread ID from GraphQL")
+    node_id: str | None = Field(default=None, description="GraphQL node ID for thread resolution")
+    pr_number: int | None = Field(default=None, description="PR number this comment belongs to")
+
+
+class PRAutoFixConfig(BaseModel):
+    """Configuration for PR auto-fix behavior.
+
+    Frozen to support the stateless reducer pattern.
+    Use ``model_copy(update={...})`` for per-PR overrides.
+
+    Attributes:
+        aggressiveness: Which comment severity levels to auto-fix.
+        poll_interval: Polling interval in seconds (10--3600).
+        auto_resolve: Whether to auto-resolve review threads after fix.
+        max_iterations: Maximum fix attempts per review thread (1--10).
+        commit_prefix: Prefix for auto-fix commit messages.
+        ignore_authors: Comment authors to ignore (exact username match).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    aggressiveness: AggressivenessLevel = AggressivenessLevel.STANDARD
+    poll_interval: int = Field(default=60, ge=10, le=3600, description="Polling interval in seconds")
+    poll_label: str | None = Field(default="amelia", description="GitHub label to filter PRs for polling (null = all PRs)")
+    auto_resolve: bool = Field(default=True, description="Auto-resolve threads after fix")
+    max_iterations: int = Field(default=3, ge=1, le=10, description="Max fix attempts per thread")
+    commit_prefix: str = Field(default="fix(review):", description="Commit message prefix")
+    ignore_authors: list[str] = Field(
+        default_factory=list,
+        description="Comment authors to ignore (exact username match)",
+    )
+    resolve_no_changes: bool = Field(
+        default=True,
+        description="Resolve threads for no-changes comments",
+    )
+    confidence_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence to act on a classification",
+    )
+    post_push_cooldown_seconds: int = Field(
+        default=300,
+        ge=0,
+        le=3600,
+        description="Seconds to wait after push before next cycle",
+    )
+    max_cooldown_seconds: int = Field(
+        default=900,
+        ge=0,
+        le=7200,
+        description="Maximum cooldown duration (caps resets)",
+    )
+
+    @model_validator(mode="after")
+    def _validate_cooldown_bounds(self) -> Self:
+        if self.post_push_cooldown_seconds > self.max_cooldown_seconds:
+            raise ValueError(
+                f"post_push_cooldown_seconds ({self.post_push_cooldown_seconds}) "
+                f"must not exceed max_cooldown_seconds ({self.max_cooldown_seconds})"
+            )
+        return self
+
+    @field_validator("aggressiveness", mode="before")
+    @classmethod
+    def _parse_aggressiveness(cls, v: int | str | AggressivenessLevel) -> AggressivenessLevel:
+        if isinstance(v, str):
+            try:
+                return AggressivenessLevel[v.upper()]
+            except KeyError as err:
+                valid = ", ".join(e.name for e in AggressivenessLevel)
+                raise ValueError(f"Invalid aggressiveness level: '{v}'. Valid values: {valid}") from err
+        return AggressivenessLevel(v)
+
+    @field_serializer("aggressiveness")
+    @classmethod
+    def _serialize_aggressiveness(cls, v: AggressivenessLevel) -> str:
+        return v.name.lower()
+
+
 class Profile(BaseModel):
     """Configuration profile for Amelia execution.
 
@@ -161,6 +326,7 @@ class Profile(BaseModel):
     retry: RetryConfig = Field(default_factory=RetryConfig)
     agents: dict[str, AgentConfig] = Field(default_factory=dict)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
+    pr_autofix: PRAutoFixConfig | None = None
 
     def get_agent_config(self, agent_name: str) -> AgentConfig:
         """Get config for an agent with profile-level sandbox and name injected.
@@ -252,11 +418,7 @@ def collect_rejected_comments(reviews: list[ReviewResult]) -> list[str]:
     Returns:
         Flat list of comment strings from rejected reviews.
     """
-    comments: list[str] = []
-    for review in reviews:
-        if not review.approved:
-            comments.extend(review.comments)
-    return comments
+    return [c for review in reviews if not review.approved for c in review.comments]
 
 
 def collect_all_comments(reviews: list[ReviewResult]) -> list[str]:
@@ -268,10 +430,7 @@ def collect_all_comments(reviews: list[ReviewResult]) -> list[str]:
     Returns:
         Flat list of all comment strings.
     """
-    comments: list[str] = []
-    for review in reviews:
-        comments.extend(review.comments)
-    return comments
+    return [c for review in reviews for c in review.comments]
 
 
 class PlanValidationResult(BaseModel):

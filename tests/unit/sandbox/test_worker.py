@@ -8,15 +8,22 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from amelia.sandbox.worker import AgenticMessage, AgenticMessageType, DriverUsage
+from amelia.sandbox.worker import (
+    AgenticMessage,
+    AgenticMessageType,
+    DriverUsage,
+    _create_worker_chat_model,
+    _emit_line,
+    _emit_usage,
+    _import_schema,
+    _parse_args,
+)
 
 
 class TestWorkerEmitLine:
     """Tests for the JSON-line emission helper."""
 
     def test_emit_line_writes_json_to_stdout(self) -> None:
-        from amelia.sandbox.worker import _emit_line
-
         buf = StringIO()
         msg = AgenticMessage(type=AgenticMessageType.RESULT, content="done")
         _emit_line(msg, file=buf)
@@ -27,8 +34,6 @@ class TestWorkerEmitLine:
         assert parsed["content"] == "done"
 
     def test_emit_line_one_line_per_message(self) -> None:
-        from amelia.sandbox.worker import _emit_line
-
         buf = StringIO()
         _emit_line(AgenticMessage(type=AgenticMessageType.THINKING, content="hmm"), file=buf)
         _emit_line(AgenticMessage(type=AgenticMessageType.RESULT, content="ok"), file=buf)
@@ -41,8 +46,6 @@ class TestWorkerParseArgs:
     """Tests for CLI argument parsing."""
 
     def test_agentic_mode(self) -> None:
-        from amelia.sandbox.worker import _parse_args
-
         args = _parse_args([
             "agentic",
             "--prompt-file", "/tmp/prompt.txt",
@@ -55,8 +58,6 @@ class TestWorkerParseArgs:
         assert args.model == "anthropic/claude-sonnet-4-5"
 
     def test_generate_mode_with_schema(self) -> None:
-        from amelia.sandbox.worker import _parse_args
-
         args = _parse_args([
             "generate",
             "--prompt-file", "/tmp/prompt.txt",
@@ -67,8 +68,6 @@ class TestWorkerParseArgs:
         assert args.schema == "amelia.agents.schemas.evaluator:EvaluationOutput"
 
     def test_agentic_mode_with_instructions(self) -> None:
-        from amelia.sandbox.worker import _parse_args
-
         args = _parse_args([
             "agentic",
             "--prompt-file", "/tmp/prompt.txt",
@@ -83,22 +82,16 @@ class TestWorkerSchemaImport:
     """Tests for dynamic schema class import."""
 
     def test_import_known_schema(self) -> None:
-        from amelia.sandbox.worker import _import_schema
-
         cls = _import_schema("amelia.agents.schemas.evaluator:EvaluationOutput")
         from amelia.agents.schemas.evaluator import EvaluationOutput
 
         assert cls is EvaluationOutput
 
     def test_import_invalid_format_raises(self) -> None:
-        from amelia.sandbox.worker import _import_schema
-
         with pytest.raises(ValueError, match="must be 'module:ClassName'"):
             _import_schema("no_colon_here")
 
     def test_import_nonexistent_module_raises(self) -> None:
-        from amelia.sandbox.worker import _import_schema
-
         with pytest.raises(ImportError):
             _import_schema("nonexistent.module:Foo")
 
@@ -107,8 +100,6 @@ class TestWorkerUsageEmission:
     """Tests for final USAGE message emission."""
 
     def test_emit_usage(self) -> None:
-        from amelia.sandbox.worker import _emit_usage
-
         buf = StringIO()
         usage = DriverUsage(input_tokens=100, output_tokens=50)
         _emit_usage(usage, file=buf)
@@ -130,7 +121,6 @@ class TestCreateWorkerChatModel:
 
         mock_init = MagicMock(return_value="mock-model")
         with patch("langchain.chat_models.init_chat_model", mock_init):
-            from amelia.sandbox.worker import _create_worker_chat_model
             _create_worker_chat_model(model="test-model", base_url="http://localhost:8430/proxy/v1")
 
         call_kwargs = mock_init.call_args[1]
@@ -143,7 +133,6 @@ class TestCreateWorkerChatModel:
 
         mock_init = MagicMock(return_value="mock-model")
         with patch("langchain.chat_models.init_chat_model", mock_init):
-            from amelia.sandbox.worker import _create_worker_chat_model
             _create_worker_chat_model(model="test-model", base_url="http://localhost:8430/proxy/v1")
 
         call_kwargs = mock_init.call_args[1]

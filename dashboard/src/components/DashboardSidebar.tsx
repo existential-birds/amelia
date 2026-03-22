@@ -26,12 +26,12 @@ import {
   Radio,
   BookOpen,
   Library,
-  Target,
   MessageSquare,
   Coins,
   Settings,
   Bolt,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { APP_VERSION } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { useWorkflowStore } from '@/store/workflowStore';
@@ -47,6 +47,7 @@ interface SidebarNavLinkProps {
   label: string;
   onClick?: () => void;
   comingSoon?: boolean;
+  badge?: number | string;
 }
 
 /**
@@ -62,7 +63,7 @@ interface SidebarNavLinkProps {
  * @param props.comingSoon - If true, renders as disabled placeholder with "Soon" badge.
  * @returns A SidebarMenuItem element containing either a NavLink or disabled placeholder.
  */
-function SidebarNavLink({ to, icon: Icon, label, onClick, comingSoon }: SidebarNavLinkProps) {
+function SidebarNavLink({ to, icon: Icon, label, onClick, comingSoon, badge }: SidebarNavLinkProps) {
   // Coming soon items render as non-clickable placeholders
   if (comingSoon) {
     return (
@@ -107,8 +108,16 @@ function SidebarNavLink({ to, icon: Icon, label, onClick, comingSoon }: SidebarN
           }
         >
           <Icon className="h-4 w-4 shrink-0" />
-          <span className="font-heading font-semibold tracking-wide truncate group-data-[collapsible=icon]:hidden">
+          <span className="font-heading font-semibold tracking-wide truncate group-data-[collapsible=icon]:hidden flex items-center gap-2">
             {label}
+            {badge !== undefined && badge !== 0 && (
+              <Badge
+                variant="secondary"
+                className="text-[10px] px-1.5 py-0.5 group-data-[collapsible=icon]:hidden"
+              >
+                {badge}
+              </Badge>
+            )}
           </span>
         </NavLink>
       </SidebarMenuButton>
@@ -234,15 +243,9 @@ export function DashboardSidebar() {
                 label="Agent Prompts"
               />
               <SidebarNavLink
-                to="/benchmarks"
-                icon={Target}
-                label="Benchmarks"
-                comingSoon
-              />
-              <SidebarNavLink
-                to="/costs"
+                to="/analytics"
                 icon={Coins}
-                label="Costs"
+                label="Analytics"
               />
             </SidebarMenu>
           </SidebarGroupContent>

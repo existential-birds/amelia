@@ -36,49 +36,62 @@ async def _table_exists(db: Database, table: str) -> bool:
     return row[0] if row else False
 
 
-class TestBrainstormSessionsTable:
-    """Tests for brainstorm_sessions table schema."""
+# --- Parametrized schema checks across all brainstorm tables ---
 
-    async def test_table_exists(self, db_with_schema: Database) -> None:
-        """brainstorm_sessions table exists."""
-        assert await _table_exists(db_with_schema, "brainstorm_sessions") is True
+_TABLE_COLUMNS = {
+    "brainstorm_sessions": ["id", "profile_id", "driver_session_id", "driver_type", "status", "topic", "created_at", "updated_at"],
+    "brainstorm_messages": ["id", "session_id", "sequence", "role", "content", "parts", "created_at"],
+    "brainstorm_artifacts": ["id", "session_id", "type", "path", "title", "created_at"],
+}
 
-    async def test_has_expected_columns(self, db_with_schema: Database) -> None:
-        """brainstorm_sessions table has all expected columns."""
-        columns = await _get_columns(db_with_schema, "brainstorm_sessions")
-        expected = ["id", "profile_id", "driver_session_id", "driver_type", "status", "topic", "created_at", "updated_at"]
-        for col in expected:
-            assert col in columns, f"Missing column: {col}"
-
-    async def test_profile_id_index_exists(self, db_with_schema: Database) -> None:
-        """brainstorm_sessions has index on profile_id."""
-        indexes = await _get_indexes(db_with_schema, "brainstorm_sessions")
-        assert "idx_brainstorm_sessions_profile" in indexes
-
-    async def test_status_index_exists(self, db_with_schema: Database) -> None:
-        """brainstorm_sessions has index on status."""
-        indexes = await _get_indexes(db_with_schema, "brainstorm_sessions")
-        assert "idx_brainstorm_sessions_status" in indexes
+_TABLE_INDEXES = {
+    "brainstorm_sessions": [
+        "idx_brainstorm_sessions_profile",
+        "idx_brainstorm_sessions_status",
+    ],
+    "brainstorm_messages": ["idx_brainstorm_messages_session"],
+    "brainstorm_artifacts": ["idx_brainstorm_artifacts_session"],
+}
 
 
-class TestBrainstormMessagesTable:
-    """Tests for brainstorm_messages table schema."""
+class TestBrainstormTables:
+    """Tests for brainstorm table schemas."""
 
-    async def test_table_exists(self, db_with_schema: Database) -> None:
-        """brainstorm_messages table exists."""
-        assert await _table_exists(db_with_schema, "brainstorm_messages") is True
+    @pytest.mark.parametrize("table", list(_TABLE_COLUMNS))
+    async def test_table_exists(self, db_with_schema: Database, table: str) -> None:
+        """Brainstorm table exists after migration."""
+        assert await _table_exists(db_with_schema, table) is True
 
-    async def test_has_expected_columns(self, db_with_schema: Database) -> None:
-        """brainstorm_messages table has all expected columns."""
-        columns = await _get_columns(db_with_schema, "brainstorm_messages")
-        expected = ["id", "session_id", "sequence", "role", "content", "parts", "created_at"]
-        for col in expected:
-            assert col in columns, f"Missing column: {col}"
+    @pytest.mark.parametrize(
+        "table,expected_columns",
+        list(_TABLE_COLUMNS.items()),
+    )
+    async def test_has_expected_columns(
+        self, db_with_schema: Database, table: str, expected_columns: list[str]
+    ) -> None:
+        """Brainstorm table has all expected columns."""
+        columns = await _get_columns(db_with_schema, table)
+        for col in expected_columns:
+            assert col in columns, f"Missing column {col!r} in {table}"
 
-    async def test_session_sequence_index_exists(self, db_with_schema: Database) -> None:
-        """brainstorm_messages has composite index on session_id and sequence."""
-        indexes = await _get_indexes(db_with_schema, "brainstorm_messages")
-        assert "idx_brainstorm_messages_session" in indexes
+    @pytest.mark.parametrize(
+        "table,expected_index",
+        [
+            (table, index)
+            for table, indexes in _TABLE_INDEXES.items()
+            for index in indexes
+        ],
+    )
+    async def test_index_exists(
+        self, db_with_schema: Database, table: str, expected_index: str
+    ) -> None:
+        """Brainstorm table has expected index."""
+        indexes = await _get_indexes(db_with_schema, table)
+        assert expected_index in indexes
+
+
+class TestBrainstormConstraints:
+    """Tests for brainstorm table constraints."""
 
     async def test_unique_constraint_on_session_sequence(self, db_with_schema: Database) -> None:
         """(session_id, sequence) is unique in brainstorm_messages."""
@@ -97,69 +110,55 @@ class TestBrainstormMessagesTable:
             """)
 
 
-class TestBrainstormArtifactsTable:
-    """Tests for brainstorm_artifacts table schema."""
-
-    async def test_table_exists(self, db_with_schema: Database) -> None:
-        """brainstorm_artifacts table exists."""
-        assert await _table_exists(db_with_schema, "brainstorm_artifacts") is True
-
-    async def test_has_expected_columns(self, db_with_schema: Database) -> None:
-        """brainstorm_artifacts table has all expected columns."""
-        columns = await _get_columns(db_with_schema, "brainstorm_artifacts")
-        expected = ["id", "session_id", "type", "path", "title", "created_at"]
-        for col in expected:
-            assert col in columns, f"Missing column: {col}"
-
-    async def test_session_index_exists(self, db_with_schema: Database) -> None:
-        """brainstorm_artifacts has index on session_id."""
-        indexes = await _get_indexes(db_with_schema, "brainstorm_artifacts")
-        assert "idx_brainstorm_artifacts_session" in indexes
+_CASCADE_DELETE_CASES = [
+    pytest.param(
+        "brainstorm_messages",
+        [
+            "INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at) VALUES ('msg-1', 'session-1', 1, 'user', 'Hello', NOW())",
+            "INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at) VALUES ('msg-2', 'session-1', 2, 'assistant', 'Hi', NOW())",
+        ],
+        2,
+        id="messages",
+    ),
+    pytest.param(
+        "brainstorm_artifacts",
+        [
+            "INSERT INTO brainstorm_artifacts (id, session_id, type, path, title, created_at) VALUES ('art-1', 'session-1', 'spec', '/path/to/spec.md', 'Feature Spec', NOW())",
+        ],
+        1,
+        id="artifacts",
+    ),
+]
 
 
 class TestBrainstormCascadeDeletes:
     """Tests for cascade delete behavior."""
 
-    async def test_deleting_session_deletes_messages(self, db_with_schema: Database) -> None:
-        """Deleting a session cascades to delete its messages."""
-        await db_with_schema.execute("""
+    async def _insert_session(self, db: Database, session_id: str = "session-1") -> None:
+        """Insert a brainstorm session for cascade tests."""
+        await db.execute(f"""
             INSERT INTO brainstorm_sessions (id, profile_id, status, created_at, updated_at)
-            VALUES ('session-1', 'profile-1', 'active', NOW(), NOW())
+            VALUES ('{session_id}', 'profile-1', 'active', NOW(), NOW())
         """)
-        await db_with_schema.execute("""
-            INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at)
-            VALUES ('msg-1', 'session-1', 1, 'user', 'Hello', NOW())
-        """)
-        await db_with_schema.execute("""
-            INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at)
-            VALUES ('msg-2', 'session-1', 2, 'assistant', 'Hi', NOW())
-        """)
-        messages = await db_with_schema.fetch_all(
-            "SELECT id FROM brainstorm_messages WHERE session_id = 'session-1'"
-        )
-        assert len(messages) == 2
-        await db_with_schema.execute("DELETE FROM brainstorm_sessions WHERE id = 'session-1'")
-        messages = await db_with_schema.fetch_all(
-            "SELECT id FROM brainstorm_messages WHERE session_id = 'session-1'"
-        )
-        assert len(messages) == 0
 
-    async def test_deleting_session_deletes_artifacts(self, db_with_schema: Database) -> None:
-        """Deleting a session cascades to delete its artifacts."""
-        await db_with_schema.execute("""
-            INSERT INTO brainstorm_sessions (id, profile_id, status, created_at, updated_at)
-            VALUES ('session-1', 'profile-1', 'active', NOW(), NOW())
-        """)
-        await db_with_schema.execute("""
-            INSERT INTO brainstorm_artifacts (id, session_id, type, path, title, created_at)
-            VALUES ('art-1', 'session-1', 'spec', '/path/to/spec.md', 'Feature Spec', NOW())
-        """)
-        artifacts = await db_with_schema.fetch_all(
-            "SELECT id FROM brainstorm_artifacts WHERE session_id = 'session-1'"
+    @pytest.mark.parametrize("child_table,inserts,expected_count", _CASCADE_DELETE_CASES)
+    async def test_deleting_session_cascades_to_children(
+        self,
+        db_with_schema: Database,
+        child_table: str,
+        inserts: list[str],
+        expected_count: int,
+    ) -> None:
+        """Deleting a session cascades to delete its child rows."""
+        await self._insert_session(db_with_schema)
+        for stmt in inserts:
+            await db_with_schema.execute(stmt)
+        rows = await db_with_schema.fetch_all(
+            f"SELECT id FROM {child_table} WHERE session_id = 'session-1'"
         )
-        assert len(artifacts) == 1
+        assert len(rows) == expected_count
         await db_with_schema.execute("DELETE FROM brainstorm_sessions WHERE id = 'session-1'")
-        artifacts = await db_with_schema.fetch_all(
-            "SELECT id FROM brainstorm_artifacts WHERE session_id = 'session-1'"
+        rows = await db_with_schema.fetch_all(
+            f"SELECT id FROM {child_table} WHERE session_id = 'session-1'"
         )
-        assert len(artifacts) == 0
+        assert len(rows) == 0

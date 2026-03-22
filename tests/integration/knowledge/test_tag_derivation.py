@@ -5,16 +5,15 @@ components (repository, pipeline, database) and only mock external boundaries
 (LLM API and embedding client).
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from amelia.knowledge.embeddings import EmbeddingClient
 from amelia.knowledge.ingestion import IngestionPipeline
 from amelia.knowledge.models import DocumentStatus, TagExtractionOutput
 from amelia.knowledge.repository import KnowledgeRepository
-from amelia.server.database.connection import Database
 
 
 pytestmark = pytest.mark.integration
@@ -22,15 +21,13 @@ pytestmark = pytest.mark.integration
 
 @pytest.mark.asyncio
 async def test_tag_derivation_end_to_end(
-    test_db: Database,
+    knowledge_repo: KnowledgeRepository,
+    pipeline_factory: Callable[..., IngestionPipeline],
     tmp_path: Path,
 ) -> None:
     """Should derive tags and store them during real ingestion."""
-    # Create real repository
-    repo = KnowledgeRepository(test_db)
-
     # Create document
-    doc = await repo.create_document(
+    doc = await knowledge_repo.create_document(
         name="Kubernetes Guide",
         filename="k8s-guide.md",
         content_type="text/markdown",
@@ -53,20 +50,10 @@ This guide covers deploying applications to Kubernetes clusters.
 2. Apply the configuration
 """)
 
-    # Mock embedding client
-    mock_embedding = AsyncMock(spec=EmbeddingClient)
-    mock_embedding.embed_batch.return_value = [[0.1] * 1536] * 3  # 3 chunks
-
-    # Create pipeline with tag derivation enabled
-    pipeline = IngestionPipeline(
-        repository=repo,
-        embedding_client=mock_embedding,
-        tag_derivation_model="minimax/minimax-m2.5",
-        tag_derivation_driver="api",
-    )
+    pipeline = pipeline_factory()
 
     # Mock only the LLM call for tag extraction
-    with patch("amelia.knowledge.ingestion.extract_structured") as mock_extract:
+    with patch("amelia.core.extraction.extract_structured") as mock_extract:
         mock_extract.return_value = TagExtractionOutput(
             tags=["kubernetes", "deployment", "docker", "containers", "kubectl"],
             reasoning="Document is a technical guide for deploying to Kubernetes",
@@ -89,7 +76,7 @@ This guide covers deploying applications to Kubernetes clusters.
     assert "kubectl" in result.tags
 
     # Verify tags are persisted in database
-    retrieved = await repo.get_document(doc.id)
+    retrieved = await knowledge_repo.get_document(doc.id)
     assert retrieved is not None
     assert retrieved.tags == result.tags
     assert "kubernetes" in retrieved.tags
@@ -97,15 +84,13 @@ This guide covers deploying applications to Kubernetes clusters.
 
 @pytest.mark.asyncio
 async def test_tag_derivation_disabled(
-    test_db: Database,
+    knowledge_repo: KnowledgeRepository,
+    pipeline_factory: Callable[..., IngestionPipeline],
     tmp_path: Path,
 ) -> None:
     """Should not derive tags when tag_derivation_model is None."""
-    # Create real repository
-    repo = KnowledgeRepository(test_db)
-
     # Create document with initial tags
-    doc = await repo.create_document(
+    doc = await knowledge_repo.create_document(
         name="Python Guide",
         filename="python.md",
         content_type="text/markdown",
@@ -121,20 +106,11 @@ async def test_tag_derivation_disabled(
 Learn Python basics.
 """)
 
-    # Mock embedding client
-    mock_embedding = AsyncMock(spec=EmbeddingClient)
-    mock_embedding.embed_batch.return_value = [[0.1] * 1536] * 2
-
     # Create pipeline with tag derivation DISABLED
-    pipeline = IngestionPipeline(
-        repository=repo,
-        embedding_client=mock_embedding,
-        tag_derivation_model=None,  # Disabled
-        tag_derivation_driver="api",
-    )
+    pipeline = pipeline_factory(tag_derivation_model=None)
 
     # Run ingestion - should not call extract_structured
-    with patch("amelia.knowledge.ingestion.extract_structured") as mock_extract:
+    with patch("amelia.core.extraction.extract_structured") as mock_extract:
         result = await pipeline.ingest_document(
             document_id=doc.id,
             file_path=test_file,
@@ -149,22 +125,20 @@ Learn Python basics.
     assert result.tags == ["python", "programming"]
 
     # Verify in database
-    retrieved = await repo.get_document(doc.id)
+    retrieved = await knowledge_repo.get_document(doc.id)
     assert retrieved is not None
     assert retrieved.tags == ["python", "programming"]
 
 
 @pytest.mark.asyncio
 async def test_tag_derivation_failure_non_blocking(
-    test_db: Database,
+    knowledge_repo: KnowledgeRepository,
+    pipeline_factory: Callable[..., IngestionPipeline],
     tmp_path: Path,
 ) -> None:
     """Should continue ingestion even if tag derivation fails."""
-    # Create real repository
-    repo = KnowledgeRepository(test_db)
-
     # Create document
-    doc = await repo.create_document(
+    doc = await knowledge_repo.create_document(
         name="React Guide",
         filename="react.md",
         content_type="text/markdown",
@@ -179,20 +153,10 @@ async def test_tag_derivation_failure_non_blocking(
 Learn React components.
 """)
 
-    # Mock embedding client
-    mock_embedding = AsyncMock(spec=EmbeddingClient)
-    mock_embedding.embed_batch.return_value = [[0.1] * 1536] * 2
-
-    # Create pipeline with tag derivation enabled
-    pipeline = IngestionPipeline(
-        repository=repo,
-        embedding_client=mock_embedding,
-        tag_derivation_model="minimax/minimax-m2.5",
-        tag_derivation_driver="api",
-    )
+    pipeline = pipeline_factory()
 
     # Mock extract_structured to raise an exception
-    with patch("amelia.knowledge.ingestion.extract_structured") as mock_extract:
+    with patch("amelia.core.extraction.extract_structured") as mock_extract:
         mock_extract.side_effect = Exception("LLM API error")
 
         # Run ingestion - should complete despite tag derivation failure
@@ -208,7 +172,7 @@ Learn React components.
     assert result.chunk_count > 0
 
     # Verify in database
-    retrieved = await repo.get_document(doc.id)
+    retrieved = await knowledge_repo.get_document(doc.id)
     assert retrieved is not None
     assert retrieved.status == DocumentStatus.READY
     assert retrieved.tags == []
@@ -216,15 +180,13 @@ Learn React components.
 
 @pytest.mark.asyncio
 async def test_tag_derivation_merges_with_existing_tags(
-    test_db: Database,
+    knowledge_repo: KnowledgeRepository,
+    pipeline_factory: Callable[..., IngestionPipeline],
     tmp_path: Path,
 ) -> None:
     """Should merge derived tags with existing user-provided tags."""
-    # Create real repository
-    repo = KnowledgeRepository(test_db)
-
     # Create document with initial user-provided tags
-    doc = await repo.create_document(
+    doc = await knowledge_repo.create_document(
         name="AWS Lambda Guide",
         filename="lambda.md",
         content_type="text/markdown",
@@ -244,20 +206,10 @@ Deploy serverless functions to AWS Lambda using Python.
 - Python 3.12
 """)
 
-    # Mock embedding client
-    mock_embedding = AsyncMock(spec=EmbeddingClient)
-    mock_embedding.embed_batch.return_value = [[0.1] * 1536] * 3
-
-    # Create pipeline with tag derivation enabled
-    pipeline = IngestionPipeline(
-        repository=repo,
-        embedding_client=mock_embedding,
-        tag_derivation_model="minimax/minimax-m2.5",
-        tag_derivation_driver="api",
-    )
+    pipeline = pipeline_factory()
 
     # Mock LLM to derive additional tags
-    with patch("amelia.knowledge.ingestion.extract_structured") as mock_extract:
+    with patch("amelia.core.extraction.extract_structured") as mock_extract:
         mock_extract.return_value = TagExtractionOutput(
             tags=["lambda", "python", "deployment", "cloud", "functions"],
             reasoning="Guide covers Lambda deployment with Python",
@@ -281,7 +233,7 @@ Deploy serverless functions to AWS Lambda using Python.
     assert "python" in result.tags  # Derived
 
     # Verify in database
-    retrieved = await repo.get_document(doc.id)
+    retrieved = await knowledge_repo.get_document(doc.id)
     assert retrieved is not None
     assert "aws" in retrieved.tags
     assert "serverless" in retrieved.tags

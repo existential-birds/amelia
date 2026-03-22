@@ -88,6 +88,7 @@ class ImplementationState(BasePipelineState):
     evaluation_result: EvaluationResult | None = None
     approved_items: list[int] = Field(default_factory=list)
     review_pass: int = 0
+    review_mode: str | None = None
     max_review_passes: int = 3
 
     # External plan tracking

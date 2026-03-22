@@ -17,24 +17,18 @@ Real components:
 """
 
 import tempfile
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
+import httpx
 import pytest
 from fastapi import status
-from fastapi.testclient import TestClient
 
-from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.database.repository import WorkflowRepository
-from amelia.server.dependencies import get_orchestrator, get_repository
-from amelia.server.main import create_app
-from amelia.server.models.state import ServerExecutionState, WorkflowStatus
-from amelia.server.orchestrator.service import OrchestratorService
+from amelia.server.models.state import WorkflowStatus
+from tests.integration.conftest import create_test_workflow
 
 
 # =============================================================================
@@ -43,62 +37,9 @@ from amelia.server.orchestrator.service import OrchestratorService
 
 
 @pytest.fixture
-def test_client(
-    test_orchestrator: OrchestratorService,
-    test_repository: WorkflowRepository,
-) -> TestClient:
-    """Create test client with real dependencies."""
-    app = create_app()
-
-    # Create a no-op lifespan that doesn't initialize database/orchestrator
-    @asynccontextmanager
-    async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-        yield
-
-    app.router.lifespan_context = noop_lifespan
-    app.dependency_overrides[get_orchestrator] = lambda: test_orchestrator
-    app.dependency_overrides[get_repository] = lambda: test_repository
-
-    return TestClient(app)
-
-
-async def create_test_workflow(
-    repository: WorkflowRepository,
-    workflow_id: str = "wf-001",
-    issue_id: str = "TEST-001",
-    worktree_path: str = "/tmp/test-repo",
-    workflow_status: WorkflowStatus = "pending",
-    profile_id: str = "test",
-) -> ServerExecutionState:
-    """Create and persist a test workflow.
-
-    Args:
-        repository: Repository to persist to.
-        workflow_id: Workflow ID.
-        issue_id: Issue ID.
-        worktree_path: Worktree path.
-        workflow_status: Initial status.
-        profile_id: Profile ID for execution state.
-
-    Returns:
-        Created ServerExecutionState.
-    """
-    execution_state = ImplementationState(
-        workflow_id=workflow_id,
-        profile_id=profile_id,
-        created_at=datetime.now(UTC),
-        status="pending",
-    )
-    workflow = ServerExecutionState(
-        id=workflow_id,
-        issue_id=issue_id,
-        worktree_path=worktree_path,
-        workflow_status=workflow_status,
-        started_at=datetime.now(UTC),
-        execution_state=execution_state,
-    )
-    await repository.create(workflow)
-    return workflow
+def test_client(orchestrator_test_client: httpx.AsyncClient) -> httpx.AsyncClient:
+    """Alias shared orchestrator_test_client fixture for local use."""
+    return orchestrator_test_client
 
 
 # =============================================================================
@@ -115,46 +56,38 @@ class TestApproveWorkflowEndpoint:
 
     async def test_approve_workflow_returns_200(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
-        mock_settings: MagicMock,
         langgraph_mock_factory: Any,
     ) -> None:
         """Successful approval returns 200 with ActionResponse."""
         # Create workflow in "blocked" state (awaiting approval)
-        await create_test_workflow(
+        workflow = await create_test_workflow(
             test_repository,
-            workflow_id=uuid4(),
             workflow_status="blocked",
         )
 
         # Mock LangGraph to prevent actual graph execution
         mocks = langgraph_mock_factory(astream_items=[])
-        with (
-            patch(
-                "amelia.server.orchestrator.service.create_implementation_graph"
-            ) as mock_create_graph,
-            patch.object(
-                OrchestratorService,
-                "_load_settings_for_worktree",
-                return_value=mock_settings,
-            ),
-        ):
+        with patch(
+            "amelia.server.orchestrator.service.create_implementation_graph"
+        ) as mock_create_graph:
             mock_create_graph.return_value = mocks.graph
 
-            response = test_client.post("/api/workflows/wf-approve-ok/approve")
+            response = await test_client.post(f"/api/workflows/{workflow.id}/approve")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["status"] == "approved"
-        assert data["workflow_id"] == "wf-approve-ok"
+        assert data["workflow_id"] == str(workflow.id)
 
     async def test_approve_workflow_not_found_returns_404(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """Approving non-existent workflow returns 404."""
-        response = test_client.post("/api/workflows/wf-nonexistent/approve")
+        fake_id = uuid4()
+        response = await test_client.post(f"/api/workflows/{fake_id}/approve")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
         data = response.json()
@@ -162,23 +95,22 @@ class TestApproveWorkflowEndpoint:
 
     async def test_approve_workflow_invalid_state_returns_422(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
     ) -> None:
         """Approving workflow not in blocked state returns 422."""
         # Create workflow in "in_progress" state (not awaiting approval)
-        await create_test_workflow(
+        workflow = await create_test_workflow(
             test_repository,
-            workflow_id=uuid4(),
             workflow_status="in_progress",
         )
 
-        response = test_client.post("/api/workflows/wf-running/approve")
+        response = await test_client.post(f"/api/workflows/{workflow.id}/approve")
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         data = response.json()
         assert data["code"] == "INVALID_STATE"
-        assert data["details"]["workflow_id"] == "wf-running"
+        assert data["details"]["workflow_id"] == str(workflow.id)
         assert data["details"]["current_status"] == "in_progress"
 
 
@@ -191,56 +123,40 @@ class TestRejectWorkflowEndpoint:
 
     async def test_reject_workflow_returns_200(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
-        mock_settings: MagicMock,
-        langgraph_mock_factory: Any,
     ) -> None:
         """Successful rejection returns 200 with ActionResponse."""
         # Create workflow in "blocked" state
-        await create_test_workflow(
+        workflow = await create_test_workflow(
             test_repository,
-            workflow_id=uuid4(),
             workflow_status="blocked",
         )
 
-        # Mock LangGraph
-        mocks = langgraph_mock_factory()
-        with (
-            patch(
-                "amelia.server.orchestrator.service.create_implementation_graph"
-            ) as mock_create_graph,
-            patch.object(
-                OrchestratorService,
-                "_load_settings_for_worktree",
-                return_value=mock_settings,
-            ),
-        ):
-            mock_create_graph.return_value = mocks.graph
-
-            response = test_client.post(
-                "/api/workflows/wf-reject-ok/reject",
-                json={"feedback": "Please add more tests"},
-            )
+        response = await test_client.post(
+            f"/api/workflows/{workflow.id}/reject",
+            json={"feedback": "Please add more tests"},
+        )
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["status"] == "rejected"
-        assert data["workflow_id"] == "wf-reject-ok"
+        assert data["workflow_id"] == str(workflow.id)
 
         # Verify workflow status was updated to failed
-        workflow = await test_repository.get("wf-reject-ok")
-        assert workflow is not None
-        assert workflow.workflow_status == "failed"
-        assert workflow.failure_reason == "Please add more tests"
+        updated = await test_repository.get(workflow.id)
+        assert updated is not None
+        assert updated.workflow_status == "failed"
+        assert updated.failure_reason == "Please add more tests"
 
     async def test_reject_workflow_not_found_returns_404(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """Rejecting non-existent workflow returns 404."""
-        response = test_client.post(
-            "/api/workflows/wf-ghost/reject",
+        fake_id = uuid4()
+        response = await test_client.post(
+            f"/api/workflows/{fake_id}/reject",
             json={"feedback": "Rejected"},
         )
 
@@ -250,19 +166,18 @@ class TestRejectWorkflowEndpoint:
 
     async def test_reject_workflow_invalid_state_returns_422(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
     ) -> None:
         """Rejecting workflow not in blocked state returns 422."""
         # Create workflow in "completed" state
-        await create_test_workflow(
+        workflow = await create_test_workflow(
             test_repository,
-            workflow_id=uuid4(),
             workflow_status="completed",
         )
 
-        response = test_client.post(
-            "/api/workflows/wf-completed/reject",
+        response = await test_client.post(
+            f"/api/workflows/{workflow.id}/reject",
             json={"feedback": "Changes needed"},
         )
 
@@ -272,18 +187,17 @@ class TestRejectWorkflowEndpoint:
 
     async def test_reject_workflow_requires_feedback(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
     ) -> None:
         """Rejection without feedback returns 422 validation error."""
-        await create_test_workflow(
+        workflow = await create_test_workflow(
             test_repository,
-            workflow_id=uuid4(),
             workflow_status="blocked",
         )
 
-        response = test_client.post(
-            "/api/workflows/wf-needs-feedback/reject",
+        response = await test_client.post(
+            f"/api/workflows/{workflow.id}/reject",
             json={},  # Missing feedback
         )
 
@@ -299,35 +213,35 @@ class TestCancelWorkflowEndpoint:
 
     async def test_cancel_workflow_returns_200(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
     ) -> None:
         """Successful cancellation returns 200 with ActionResponse."""
         # Create workflow in "in_progress" state (cancellable)
-        await create_test_workflow(
+        workflow = await create_test_workflow(
             test_repository,
-            workflow_id=uuid4(),
             workflow_status="in_progress",
         )
 
-        response = test_client.post("/api/workflows/wf-cancel-ok/cancel")
+        response = await test_client.post(f"/api/workflows/{workflow.id}/cancel")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["status"] == "cancelled"
-        assert data["workflow_id"] == "wf-cancel-ok"
+        assert data["workflow_id"] == str(workflow.id)
 
         # Verify workflow status was updated
-        workflow = await test_repository.get("wf-cancel-ok")
-        assert workflow is not None
-        assert workflow.workflow_status == "cancelled"
+        updated = await test_repository.get(workflow.id)
+        assert updated is not None
+        assert updated.workflow_status == "cancelled"
 
     async def test_cancel_workflow_not_found_returns_404(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """Cancelling non-existent workflow returns 404."""
-        response = test_client.post("/api/workflows/wf-phantom/cancel")
+        fake_id = uuid4()
+        response = await test_client.post(f"/api/workflows/{fake_id}/cancel")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
         data = response.json()
@@ -339,18 +253,17 @@ class TestCancelWorkflowEndpoint:
     )
     async def test_cancel_workflow_terminal_state_returns_422(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         workflow_status: WorkflowStatus,
     ) -> None:
         """Cancelling workflow in terminal state returns 422."""
-        await create_test_workflow(
+        workflow = await create_test_workflow(
             test_repository,
-            workflow_id=f"wf-{workflow_status}",
             workflow_status=workflow_status,
         )
 
-        response = test_client.post(f"/api/workflows/wf-{workflow_status}/cancel")
+        response = await test_client.post(f"/api/workflows/{workflow.id}/cancel")
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         data = response.json()
@@ -367,22 +280,22 @@ class TestListWorkflowsEndpoint:
 
     async def test_list_workflows_returns_200(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
     ) -> None:
         """Successful list returns 200 with WorkflowListResponse."""
         # Create sample workflows
         await create_test_workflow(
-            test_repository, "wf-001", "TEST-001", "/tmp/repo1", "pending"
+            test_repository, issue_id="TEST-001", worktree_path="/tmp/repo1", workflow_status="pending"
         )
         await create_test_workflow(
-            test_repository, "wf-002", "TEST-002", "/tmp/repo2", "in_progress"
+            test_repository, issue_id="TEST-002", worktree_path="/tmp/repo2", workflow_status="in_progress"
         )
         await create_test_workflow(
-            test_repository, "wf-003", "TEST-003", "/tmp/repo3", "completed"
+            test_repository, issue_id="TEST-003", worktree_path="/tmp/repo3", workflow_status="completed"
         )
 
-        response = test_client.get("/api/workflows")
+        response = await test_client.get("/api/workflows")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -399,21 +312,21 @@ class TestListWorkflowsEndpoint:
 
     async def test_list_workflows_with_status_filter(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
     ) -> None:
         """List with status filter returns only matching workflows."""
         await create_test_workflow(
-            test_repository, "wf-pending-1", "TEST-P1", "/tmp/pending1", "pending"
+            test_repository, issue_id="TEST-P1", worktree_path="/tmp/pending1", workflow_status="pending"
         )
         await create_test_workflow(
-            test_repository, "wf-pending-2", "TEST-P2", "/tmp/pending2", "pending"
+            test_repository, issue_id="TEST-P2", worktree_path="/tmp/pending2", workflow_status="pending"
         )
         await create_test_workflow(
-            test_repository, "wf-completed", "TEST-C", "/tmp/completed", "completed"
+            test_repository, issue_id="TEST-C", worktree_path="/tmp/completed", workflow_status="completed"
         )
 
-        response = test_client.get("/api/workflows?status=pending")
+        response = await test_client.get("/api/workflows?status=pending")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -422,31 +335,31 @@ class TestListWorkflowsEndpoint:
 
     async def test_list_workflows_with_worktree_filter(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
     ) -> None:
         """List with worktree filter filters by path."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             # Resolve path to canonical form (e.g., /tmp -> /private/tmp on macOS)
             resolved_path = str(Path(tmp_dir).resolve())
-            await create_test_workflow(
-                test_repository, "wf-t1", "TEST-T1", resolved_path, "pending"
+            wf1 = await create_test_workflow(
+                test_repository, issue_id="TEST-T1", worktree_path=resolved_path, workflow_status="pending"
             )
             await create_test_workflow(
-                test_repository, "wf-t2", "TEST-T2", "/other/path", "pending"
+                test_repository, issue_id="TEST-T2", worktree_path="/other/path", workflow_status="pending"
             )
 
-            response = test_client.get(f"/api/workflows?worktree={tmp_dir}")
+            response = await test_client.get(f"/api/workflows?worktree={tmp_dir}")
 
             assert response.status_code == status.HTTP_200_OK
             data = response.json()
             # Should only return workflow matching the worktree
             assert data["total"] == 1
-            assert data["workflows"][0]["id"] == "wf-t1"
+            assert data["workflows"][0]["id"] == str(wf1.id)
 
     async def test_list_workflows_with_pagination(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
     ) -> None:
         """List with limit returns limited results with has_more indicator."""
@@ -454,13 +367,12 @@ class TestListWorkflowsEndpoint:
         for i in range(5):
             await create_test_workflow(
                 test_repository,
-                f"wf-page-{i}",
-                f"TEST-{i}",
-                f"/tmp/page{i}",
-                "pending",
+                issue_id=f"TEST-{i}",
+                worktree_path=f"/tmp/page{i}",
+                workflow_status="pending",
             )
 
-        response = test_client.get("/api/workflows?limit=2")
+        response = await test_client.get("/api/workflows?limit=2")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -470,19 +382,19 @@ class TestListWorkflowsEndpoint:
 
     async def test_list_workflows_invalid_cursor_returns_400(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """Invalid cursor returns 400 error."""
-        response = test_client.get("/api/workflows?cursor=invalid-base64!")
+        response = await test_client.get("/api/workflows?cursor=invalid-base64!")
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     async def test_list_workflows_empty_returns_empty_list(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
     ) -> None:
         """List with no workflows returns empty list."""
-        response = test_client.get("/api/workflows")
+        response = await test_client.get("/api/workflows")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -499,28 +411,28 @@ class TestListActiveWorkflowsEndpoint:
 
     async def test_list_active_returns_200(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
     ) -> None:
         """Successful list returns 200 with only active workflows."""
         # Create mix of active and terminal workflows
         await create_test_workflow(
-            test_repository, "wf-active-1", "TEST-A1", "/tmp/a1", "pending"
+            test_repository, issue_id="TEST-A1", worktree_path="/tmp/a1", workflow_status="pending"
         )
         await create_test_workflow(
-            test_repository, "wf-active-2", "TEST-A2", "/tmp/a2", "in_progress"
+            test_repository, issue_id="TEST-A2", worktree_path="/tmp/a2", workflow_status="in_progress"
         )
         await create_test_workflow(
-            test_repository, "wf-active-3", "TEST-A3", "/tmp/a3", "blocked"
+            test_repository, issue_id="TEST-A3", worktree_path="/tmp/a3", workflow_status="blocked"
         )
         await create_test_workflow(
-            test_repository, "wf-done", "TEST-D", "/tmp/done", "completed"
+            test_repository, issue_id="TEST-D", worktree_path="/tmp/done", workflow_status="completed"
         )
         await create_test_workflow(
-            test_repository, "wf-err", "TEST-E", "/tmp/err", "failed"
+            test_repository, issue_id="TEST-E", worktree_path="/tmp/err", workflow_status="failed"
         )
 
-        response = test_client.get("/api/workflows/active")
+        response = await test_client.get("/api/workflows/active")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -533,42 +445,42 @@ class TestListActiveWorkflowsEndpoint:
 
     async def test_list_active_with_worktree_filter(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
     ) -> None:
         """List active with worktree filter filters by path."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             # Resolve path to canonical form (e.g., /tmp -> /private/tmp on macOS)
             resolved_path = str(Path(tmp_dir).resolve())
-            await create_test_workflow(
-                test_repository, "wf-wt1", "TEST-WT1", resolved_path, "in_progress"
+            wf1 = await create_test_workflow(
+                test_repository, issue_id="TEST-WT1", worktree_path=resolved_path, workflow_status="in_progress"
             )
             await create_test_workflow(
-                test_repository, "wf-wt2", "TEST-WT2", "/other/path", "pending"
+                test_repository, issue_id="TEST-WT2", worktree_path="/other/path", workflow_status="pending"
             )
 
-            response = test_client.get(f"/api/workflows/active?worktree={tmp_dir}")
+            response = await test_client.get(f"/api/workflows/active?worktree={tmp_dir}")
 
             assert response.status_code == status.HTTP_200_OK
             data = response.json()
             assert data["total"] == 1
-            assert data["workflows"][0]["id"] == "wf-wt1"
+            assert data["workflows"][0]["id"] == str(wf1.id)
 
     async def test_list_active_empty_returns_empty_list(
         self,
-        test_client: TestClient,
+        test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
     ) -> None:
         """List active with no active workflows returns empty list."""
         # Create only terminal workflows
         await create_test_workflow(
-            test_repository, "wf-c1", "TEST-C1", "/tmp/c1", "completed"
+            test_repository, issue_id="TEST-C1", worktree_path="/tmp/c1", workflow_status="completed"
         )
         await create_test_workflow(
-            test_repository, "wf-c2", "TEST-C2", "/tmp/c2", "cancelled"
+            test_repository, issue_id="TEST-C2", worktree_path="/tmp/c2", workflow_status="cancelled"
         )
 
-        response = test_client.get("/api/workflows/active")
+        response = await test_client.get("/api/workflows/active")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()

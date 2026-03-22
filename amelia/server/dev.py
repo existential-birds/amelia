@@ -120,20 +120,24 @@ def check_port_available(host: str, port: int) -> bool:
             raise
 
 
-async def run_pnpm_install() -> bool:
-    """Run pnpm install in the dashboard directory.
+async def _run_pnpm_command(command: str, message: str) -> bool:
+    """Run a pnpm command in the dashboard directory.
 
-    Executes pnpm install asynchronously and streams output to console
+    Executes the command asynchronously and streams output to console
     with colored dashboard prefix.
 
+    Args:
+        command: The pnpm subcommand to run (e.g., 'install', 'build').
+        message: Status message to display before running.
+
     Returns:
-        True if installation succeeded (exit code 0), False otherwise.
+        True if the command succeeded (exit code 0), False otherwise.
     """
-    console.print(DASHBOARD_PREFIX + Text("Installing dependencies...", style=CREAM))
+    console.print(DASHBOARD_PREFIX + Text(message, style=CREAM))
 
     process = await asyncio.create_subprocess_exec(
         "pnpm",
-        "install",
+        command,
         cwd=Path.cwd() / "dashboard",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
@@ -149,37 +153,24 @@ async def run_pnpm_install() -> bool:
 
     await process.wait()
     return process.returncode == 0
+
+
+async def run_pnpm_install() -> bool:
+    """Run pnpm install in the dashboard directory.
+
+    Returns:
+        True if installation succeeded (exit code 0), False otherwise.
+    """
+    return await _run_pnpm_command("install", "Installing dependencies...")
 
 
 async def run_pnpm_build() -> bool:
     """Run pnpm build in the dashboard directory.
 
-    Executes pnpm build asynchronously and streams output to console
-    with colored dashboard prefix.
-
     Returns:
         True if build succeeded (exit code 0), False otherwise.
     """
-    console.print(DASHBOARD_PREFIX + Text("Building dashboard...", style=CREAM))
-
-    process = await asyncio.create_subprocess_exec(
-        "pnpm",
-        "build",
-        cwd=Path.cwd() / "dashboard",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-    )
-
-    assert process.stdout is not None
-    while True:
-        line = await process.stdout.readline()
-        if not line:
-            break
-        text = line.decode().rstrip()
-        console.print(DASHBOARD_PREFIX + Text(text, style=GRAY))
-
-    await process.wait()
-    return process.returncode == 0
+    return await _run_pnpm_command("build", "Building dashboard...")
 
 
 def _get_log_level_style(text: str) -> str:
@@ -446,8 +437,9 @@ async def wait_for_server_ready(host: str, port: int, timeout: float = 10.0) -> 
     Returns:
         True if server is ready, False if timeout reached.
     """
-    start_time = asyncio.get_event_loop().time()
-    while asyncio.get_event_loop().time() - start_time < timeout:
+    loop = asyncio.get_running_loop()
+    start_time = loop.time()
+    while loop.time() - start_time < timeout:
         try:
             # Try to connect to the server
             _, writer = await asyncio.open_connection(host, port)

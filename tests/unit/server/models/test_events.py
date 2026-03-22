@@ -1,7 +1,6 @@
 """Tests for event models."""
 
 from collections.abc import Callable
-from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -18,12 +17,18 @@ from amelia.server.models.events import (
 class TestEventLevel:
     """Tests for EventLevel enum and classification."""
 
-    def test_event_level_values(self) -> None:
-        """EventLevel has info, warning, debug, error values."""
-        assert EventLevel.INFO.value == "info"
-        assert EventLevel.WARNING.value == "warning"
-        assert EventLevel.DEBUG.value == "debug"
-        assert EventLevel.ERROR.value == "error"
+    @pytest.mark.parametrize(
+        "member,expected_value",
+        [
+            (EventLevel.INFO, "info"),
+            (EventLevel.WARNING, "warning"),
+            (EventLevel.DEBUG, "debug"),
+            (EventLevel.ERROR, "error"),
+        ],
+    )
+    def test_event_level_values(self, member: EventLevel, expected_value: str) -> None:
+        """EventLevel members have correct string values."""
+        assert member.value == expected_value
 
     @pytest.mark.parametrize(
         "event_type,expected_level",
@@ -105,26 +110,14 @@ class TestWorkflowEvent:
         assert event.data == {"path": "src/main.py", "lines": 100}
         assert event.correlation_id is not None
 
-    def test_workflow_event_has_level_field(self) -> None:
+    def test_workflow_event_has_level_field(self, event_factory: Callable[..., WorkflowEvent]) -> None:
         """WorkflowEvent includes level field with default."""
-        event = WorkflowEvent(
-            id=uuid4(),
-            workflow_id=uuid4(),
-            sequence=1,
-            timestamp=datetime.now(UTC),
-            agent="architect",
-            event_type=EventType.STAGE_STARTED,
-            message="Test",
-        )
+        event = event_factory(agent="architect", event_type=EventType.STAGE_STARTED)
         assert event.level == EventLevel.INFO
 
-    def test_workflow_event_trace_fields(self) -> None:
+    def test_workflow_event_trace_fields(self, event_factory: Callable[..., WorkflowEvent]) -> None:
         """WorkflowEvent includes trace-specific fields."""
-        event = WorkflowEvent(
-            id=uuid4(),
-            workflow_id=uuid4(),
-            sequence=1,
-            timestamp=datetime.now(UTC),
+        event = event_factory(
             agent="developer",
             event_type=EventType.CLAUDE_TOOL_CALL,
             level=EventLevel.DEBUG,
@@ -138,13 +131,9 @@ class TestWorkflowEvent:
         assert event.tool_input == {"file": "test.py"}
         assert event.is_error is False
 
-    def test_workflow_event_session_id_field(self) -> None:
+    def test_workflow_event_session_id_field(self, event_factory: Callable[..., WorkflowEvent]) -> None:
         """WorkflowEvent includes optional session_id independent from workflow_id."""
-        event = WorkflowEvent(
-            id=uuid4(),
-            workflow_id=uuid4(),
-            sequence=1,
-            timestamp=datetime.now(UTC),
+        event = event_factory(
             agent="oracle",
             event_type=EventType.STAGE_STARTED,
             message="Consultation started",
@@ -153,26 +142,18 @@ class TestWorkflowEvent:
         assert event.session_id is not None
         assert event.workflow_id is not None
 
-    def test_workflow_event_session_id_defaults_to_none(self) -> None:
+    def test_workflow_event_session_id_defaults_to_none(
+        self, event_factory: Callable[..., WorkflowEvent]
+    ) -> None:
         """WorkflowEvent session_id defaults to None when not provided."""
-        event = WorkflowEvent(
-            id=uuid4(),
-            workflow_id=uuid4(),
-            sequence=1,
-            timestamp=datetime.now(UTC),
-            agent="system",
-            event_type=EventType.WORKFLOW_STARTED,
-            message="Started",
-        )
+        event = event_factory(agent="system", event_type=EventType.WORKFLOW_STARTED)
         assert event.session_id is None
 
-    def test_workflow_event_distributed_tracing_fields(self) -> None:
+    def test_workflow_event_distributed_tracing_fields(
+        self, event_factory: Callable[..., WorkflowEvent]
+    ) -> None:
         """WorkflowEvent includes trace_id and parent_id for distributed tracing."""
-        event = WorkflowEvent(
-            id=uuid4(),
-            workflow_id=uuid4(),
-            sequence=1,
-            timestamp=datetime.now(UTC),
+        event = event_factory(
             agent="developer",
             event_type=EventType.CLAUDE_TOOL_RESULT,
             message="Tool result",
@@ -182,43 +163,23 @@ class TestWorkflowEvent:
         assert event.trace_id is not None
         assert event.parent_id is not None
 
-    def test_workflow_event_level_defaults_from_event_type(self) -> None:
+    @pytest.mark.parametrize(
+        "event_type,expected_level",
+        [
+            (EventType.WORKFLOW_STARTED, EventLevel.INFO),
+            (EventType.FILE_MODIFIED, EventLevel.DEBUG),
+            (EventType.WORKFLOW_FAILED, EventLevel.ERROR),
+        ],
+    )
+    def test_workflow_event_level_defaults_from_event_type(
+        self,
+        event_factory: Callable[..., WorkflowEvent],
+        event_type: EventType,
+        expected_level: EventLevel,
+    ) -> None:
         """Level defaults based on event_type when not provided."""
-        # INFO event
-        info_event = WorkflowEvent(
-            id=uuid4(),
-            workflow_id=uuid4(),
-            sequence=1,
-            timestamp=datetime.now(UTC),
-            agent="system",
-            event_type=EventType.WORKFLOW_STARTED,
-            message="Started",
-        )
-        assert info_event.level == EventLevel.INFO
-
-        # DEBUG event
-        debug_event = WorkflowEvent(
-            id=uuid4(),
-            workflow_id=uuid4(),
-            sequence=2,
-            timestamp=datetime.now(UTC),
-            agent="developer",
-            event_type=EventType.FILE_MODIFIED,
-            message="Modified file",
-        )
-        assert debug_event.level == EventLevel.DEBUG
-
-        # ERROR event
-        error_event = WorkflowEvent(
-            id=uuid4(),
-            workflow_id=uuid4(),
-            sequence=3,
-            timestamp=datetime.now(UTC),
-            agent="system",
-            event_type=EventType.WORKFLOW_FAILED,
-            message="Failed",
-        )
-        assert error_event.level == EventLevel.ERROR
+        event = event_factory(event_type=event_type)
+        assert event.level == expected_level
 
 
 class TestPersistedTypes:
@@ -291,6 +252,9 @@ class TestPersistedTypes:
             EventType.STREAM,
             EventType.AGENT_MESSAGE,
             EventType.DOCUMENT_INGESTION_PROGRESS,
+            EventType.PR_POLL_RATE_LIMITED,
+            EventType.PR_COMMENTS_DETECTED,
+            EventType.PR_COMMENTS_RESOLVED,
         }
         classified = PERSISTED_TYPES | stream_only
         unclassified = all_types - classified

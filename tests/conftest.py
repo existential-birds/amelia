@@ -78,7 +78,7 @@ def database_url() -> str:
     """Return the PostgreSQL test database URL."""
     return os.environ.get(
         "DATABASE_URL",
-        "postgresql://amelia:amelia@localhost:5432/amelia_test",
+        "postgresql://amelia:amelia@localhost:5434/amelia_test",
     )
 
 

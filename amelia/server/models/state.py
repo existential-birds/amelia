@@ -29,6 +29,7 @@ class WorkflowType(StrEnum):
 
     FULL = "full"  # Standard full workflow
     REVIEW = "review"  # Review-only workflow
+    PR_AUTO_FIX = "pr_auto_fix"  # PR auto-fix pipeline
 
 
 # State machine validation - prevents invalid transitions
@@ -43,12 +44,7 @@ VALID_TRANSITIONS: dict[WorkflowStatus, set[WorkflowStatus]] = {
 
 
 class InvalidStateTransitionError(ValueError):
-    """Raised when attempting an invalid workflow state transition.
-
-    Attributes:
-        current: The current workflow status.
-        target: The attempted target status.
-    """
+    """Raised when attempting an invalid workflow state transition."""
 
     def __init__(self, current: WorkflowStatus, target: WorkflowStatus):
         """Initialize InvalidStateTransitionError.
@@ -81,13 +77,6 @@ class PlanCache(BaseModel):
 
     This model stores plan-related fields from ImplementationState
     for efficient access without deserializing the full checkpoint.
-
-    Attributes:
-        goal: The high-level goal for the implementation.
-        plan_markdown: The full plan in markdown format.
-        plan_path: Path to the plan file on disk.
-        total_tasks: Total number of tasks in the plan.
-        current_task_index: Index of the current task being executed.
     """
 
     goal: str | None = None
@@ -95,6 +84,7 @@ class PlanCache(BaseModel):
     plan_path: str | None = None
     total_tasks: int | None = None
     current_task_index: int | None = None
+    external_plan: bool = False
 
     @classmethod
     def from_checkpoint_values(cls, values: dict[str, Any]) -> PlanCache:
@@ -145,15 +135,6 @@ class ServerExecutionState(BaseModel):
 
     This model stores workflow metadata for persistence and tracking.
     The actual ImplementationState lives in LangGraph checkpoints.
-
-    Attributes:
-        id: Unique workflow identifier (UUID).
-        issue_id: Issue being worked on.
-        worktree_path: Absolute path to git worktree root.
-        workflow_status: Current workflow status.
-        started_at: When workflow started.
-        completed_at: When workflow ended (success or failure).
-        failure_reason: Error message when status is "failed".
     """
 
     id: uuid.UUID = Field(..., description="Unique workflow identifier")
@@ -194,6 +175,10 @@ class ServerExecutionState(BaseModel):
     failure_reason: str | None = Field(
         default=None,
         description="Error message when failed",
+    )
+    base_commit: str | None = Field(
+        default=None,
+        description="Git commit SHA at workflow start, used as diff base for reviews",
     )
 
     model_config = {

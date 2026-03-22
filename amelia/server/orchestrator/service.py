@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -295,40 +296,135 @@ class OrchestratorService:
         """
         return profile.model_copy(update={"repo_root": worktree_path})
 
-    def _resolve_safe_worktree_path(self, worktree_path: str) -> Path | None:
-        """Resolve and validate a worktree path to prevent path traversal attacks.
-
-        Normalizes the path by expanding ~ and resolving to an absolute path,
-        then validates that the resulting path is a directory.
+    def _make_cleanup_callback(
+        self,
+        worktree_path: str,
+        workflow_id: uuid.UUID,
+    ) -> Callable[[asyncio.Task[None]], None]:
+        """Create a done-callback that cleans up after a workflow task.
 
         Args:
-            worktree_path: Path to the worktree directory.
+            worktree_path: The worktree key in ``_active_tasks``.
+            workflow_id: The workflow whose sequence state should be purged.
 
         Returns:
-            Resolved absolute Path if valid, None if validation fails.
+            A callback suitable for ``Task.add_done_callback``.
         """
-        try:
-            # Normalize path: expand ~ and resolve to absolute canonical path
-            # This prevents path traversal attacks like "../../../etc"
-            resolved = Path(worktree_path).expanduser().resolve()
-
-            # Validate the resolved path is a directory
-            if not resolved.is_dir():
-                logger.warning(
-                    "Worktree path is not a directory",
-                    worktree_path=worktree_path,
-                    resolved_path=str(resolved),
-                )
-                return None
-
-            return resolved
-        except (OSError, ValueError) as e:
-            logger.warning(
-                "Failed to resolve worktree path",
+        def _cleanup(_: asyncio.Task[None]) -> None:
+            self._active_tasks.pop(worktree_path, None)
+            self._sequence_counters.pop(workflow_id, None)
+            self._sequence_locks.pop(workflow_id, None)
+            logger.debug(
+                "Workflow task completed",
+                workflow_id=workflow_id,
                 worktree_path=worktree_path,
-                error=str(e),
             )
+
+        return _cleanup
+
+    async def _create_sandbox_provider(
+        self,
+        profile: Profile,
+        agent_name: str = "developer",
+    ) -> "SandboxProvider | None":
+        """Create and bootstrap a Daytona sandbox provider if configured.
+
+        Returns ``None`` when the profile's sandbox mode is not Daytona.
+
+        Args:
+            profile: The resolved workflow profile.
+            agent_name: Agent whose options are used for LLM provider
+                resolution (default ``"developer"``).
+
+        Returns:
+            A bootstrapped ``SandboxProvider``, or ``None``.
+        """
+        if profile.sandbox.mode != SandboxMode.DAYTONA:
             return None
+
+        from amelia.drivers.factory import create_daytona_provider  # noqa: PLC0415
+
+        agent_options = None
+        try:
+            agent_config = profile.get_agent_config(agent_name)
+            agent_options = agent_config.options
+        except ValueError:
+            pass
+
+        provider, _worker_env = create_daytona_provider(
+            profile.sandbox, options=agent_options, retry_config=profile.retry,
+        )
+        await provider.ensure_running()
+        return provider
+
+    def _build_runnable_config(
+        self,
+        workflow_id: uuid.UUID,
+        profile: Profile,
+        prompts: dict[str, str],
+        sandbox_provider: "SandboxProvider | None" = None,
+        **extra: Any,
+    ) -> RunnableConfig:
+        """Build a ``RunnableConfig`` for LangGraph execution.
+
+        Args:
+            workflow_id: Workflow / LangGraph thread identifier.
+            profile: Resolved profile for the workflow.
+            prompts: Resolved prompt map.
+            sandbox_provider: Optional sandbox provider.
+            **extra: Additional keys merged into ``configurable``.
+
+        Returns:
+            A ``RunnableConfig`` dict ready for ``graph.astream``.
+        """
+        configurable: dict[str, Any] = {
+            "thread_id": str(workflow_id),
+            "execution_mode": "server",
+            "event_bus": self._event_bus,
+            "profile": profile,
+            "repository": self._repository,
+            "prompts": prompts,
+            "sandbox_provider": sandbox_provider,
+            **extra,
+        }
+        return {
+            "recursion_limit": 100,
+            "configurable": configurable,
+        }
+
+    async def _resolve_profile(
+        self,
+        profile_name: str | None,
+        worktree_path: str,
+    ) -> Profile:
+        """Resolve a profile by name (or the active profile) and bind it to a worktree.
+
+        Args:
+            profile_name: Explicit profile name, or ``None`` for the active profile.
+            worktree_path: Worktree path used as ``repo_root``.
+
+        Returns:
+            A ``Profile`` with ``repo_root`` set to *worktree_path*.
+
+        Raises:
+            ValueError: If ``ProfileRepository`` is not configured, the named
+                profile does not exist, or no active profile is set.
+        """
+        if self._profile_repo is None:
+            raise ValueError("ProfileRepository not configured")
+
+        if profile_name:
+            record = await self._profile_repo.get_profile(profile_name)
+            if record is None:
+                raise ValueError(f"Profile '{profile_name}' not found")
+        else:
+            record = await self._profile_repo.get_active_profile()
+            if record is None:
+                raise ValueError(
+                    "No active profile set. Use --profile to specify one or set an active profile."
+                )
+
+        return self._update_profile_repo_root(record, worktree_path)
 
     async def _prepare_workflow_state(
         self,
@@ -365,23 +461,7 @@ class OrchestratorService:
                 tracker, or artifact_path escapes worktree.
             FileNotFoundError: If artifact_path is provided but the file doesn't exist.
         """
-        # Get profile from database
-        if self._profile_repo is None:
-            raise ValueError("ProfileRepository not configured")
-
-        if profile_name:
-            record = await self._profile_repo.get_profile(profile_name)
-            if record is None:
-                raise ValueError(f"Profile '{profile_name}' not found")
-        else:
-            record = await self._profile_repo.get_active_profile()
-            if record is None:
-                raise ValueError(
-                    "No active profile set. Use --profile to specify one or set an active profile."
-                )
-
-        # Convert to Profile with worktree_path as repo_root
-        profile = self._update_profile_repo_root(record, worktree_path)
+        profile = await self._resolve_profile(profile_name, worktree_path)
 
         # Fetch issue from tracker (or construct from task_title)
         if task_title is not None:
@@ -558,6 +638,7 @@ class OrchestratorService:
                 issue_cache=execution_state.issue.model_dump(mode="json"),
                 workflow_status=WorkflowStatus.PENDING,
                 started_at=datetime.now(UTC),
+                base_commit=execution_state.base_commit,
             )
             try:
                 await self._repository.create(state)
@@ -571,23 +652,7 @@ class OrchestratorService:
             task = asyncio.create_task(self._run_workflow_with_retry(workflow_id, state))
             self._active_tasks[resolved_path] = (workflow_id, task)
 
-        # Remove from active tasks on completion
-        def cleanup_task(_: asyncio.Task[None]) -> None:
-            """Clean up resources when workflow task completes.
-
-            Args:
-                _: The completed asyncio Task (unused).
-            """
-            self._active_tasks.pop(resolved_path, None)
-            self._sequence_counters.pop(workflow_id, None)
-            self._sequence_locks.pop(workflow_id, None)
-            logger.debug(
-                "Workflow task completed",
-                workflow_id=workflow_id,
-                worktree_path=resolved_path,
-            )
-
-        task.add_done_callback(cleanup_task)
+        task.add_done_callback(self._make_cleanup_callback(resolved_path, workflow_id))
 
         return workflow_id
 
@@ -671,6 +736,7 @@ class OrchestratorService:
                 plan_markdown=plan_result.plan_markdown,
                 plan_path=str(plan_result.plan_path),
                 total_tasks=plan_result.total_tasks,
+                external_plan=True,
             )
 
         # Create ServerExecutionState in pending status (not started)
@@ -684,6 +750,7 @@ class OrchestratorService:
             issue_cache=execution_state.issue.model_dump(mode="json"),
             plan_cache=plan_cache,
             workflow_status=WorkflowStatus.PENDING,
+            base_commit=execution_state.base_commit,
             # No started_at - workflow hasn't started
         )
 
@@ -748,23 +815,7 @@ class OrchestratorService:
 
             workflow_id = uuid4()
 
-            # Get profile from database
-            if self._profile_repo is None:
-                raise ValueError("ProfileRepository not configured")
-
-            if profile:
-                record = await self._profile_repo.get_profile(profile)
-                if record is None:
-                    raise ValueError(f"Profile '{profile}' not found")
-            else:
-                record = await self._profile_repo.get_active_profile()
-                if record is None:
-                    raise ValueError(
-                        "No active profile set. Use --profile to specify one or set an active profile."
-                    )
-
-            # Convert to Profile with resolved_path as repo_root
-            loaded_profile = self._update_profile_repo_root(record, resolved_path)
+            loaded_profile = await self._resolve_profile(profile, resolved_path)
 
             # Create dummy issue for review context
             dummy_issue = Issue(
@@ -800,6 +851,7 @@ class OrchestratorService:
                 issue_cache=execution_state.issue.model_dump(mode="json"),
                 workflow_status=WorkflowStatus.PENDING,
                 started_at=datetime.now(UTC),
+                base_commit=execution_state.base_commit,
             )
 
             await self._repository.create(state)
@@ -808,23 +860,7 @@ class OrchestratorService:
             task = asyncio.create_task(self._run_review_workflow(workflow_id, state, execution_state))
             self._active_tasks[resolved_path] = (workflow_id, task)
 
-        # Same cleanup callback as start_workflow
-        def cleanup_task(_: asyncio.Task[None]) -> None:
-            """Clean up resources when workflow task completes.
-
-            Args:
-                _: The completed asyncio Task (unused).
-            """
-            self._active_tasks.pop(resolved_path, None)
-            self._sequence_counters.pop(workflow_id, None)
-            self._sequence_locks.pop(workflow_id, None)
-            logger.debug(
-                "Workflow task completed",
-                workflow_id=workflow_id,
-                worktree_path=resolved_path,
-            )
-
-        task.add_done_callback(cleanup_task)
+        task.add_done_callback(self._make_cleanup_callback(resolved_path, workflow_id))
 
         return workflow_id
 
@@ -946,18 +982,7 @@ class OrchestratorService:
             )
             self._active_tasks[workflow.worktree_path] = (workflow_id, task)
 
-        def cleanup_task(_: asyncio.Task[None]) -> None:
-            """Clean up resources when resumed workflow task completes."""
-            self._active_tasks.pop(workflow.worktree_path, None)
-            self._sequence_counters.pop(workflow_id, None)
-            self._sequence_locks.pop(workflow_id, None)
-            logger.debug(
-                "Resumed workflow task completed",
-                workflow_id=workflow_id,
-                worktree_path=workflow.worktree_path,
-            )
-
-        task.add_done_callback(cleanup_task)
+        task.add_done_callback(self._make_cleanup_callback(workflow.worktree_path, workflow_id))
 
         return workflow
 
@@ -1119,21 +1144,7 @@ class OrchestratorService:
         # CRITICAL: Pass interrupt_before to enable server-mode approval
         graph = self._create_server_graph(self._checkpointer)
 
-        # Pass event_bus via config
-        # Recursion limit: 4 base steps + 3 per task + buffer
-        # Default 100 handles up to ~30 tasks
-        config: RunnableConfig = {
-            "recursion_limit": 100,
-            "configurable": {
-                "thread_id": str(workflow_id),
-                "execution_mode": "server",
-                "event_bus": self._event_bus,
-                "profile": profile,
-                "repository": self._repository,
-                "prompts": prompts,
-                "sandbox_provider": sandbox_provider,
-            },
-        }
+        config = self._build_runnable_config(workflow_id, profile, prompts, sandbox_provider)
 
         await self._emit(
             workflow_id,
@@ -1142,87 +1153,78 @@ class OrchestratorService:
             data={"issue_id": state.issue_id},
         )
 
-        try:
-            # Only set status to IN_PROGRESS if not already in that state.
-            # This handles resumed workflows which are already IN_PROGRESS.
-            workflow = await self._repository.get(workflow_id)
-            if workflow and workflow.workflow_status != WorkflowStatus.IN_PROGRESS:
-                await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
+        # Only set status to IN_PROGRESS if not already in that state.
+        # This handles resumed workflows which are already IN_PROGRESS.
+        workflow = await self._repository.get(workflow_id)
+        if workflow and workflow.workflow_status != WorkflowStatus.IN_PROGRESS:
+            await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
 
-            was_interrupted = False
-            # Use astream with stream_mode="updates" to detect interrupts
-            # astream_events does NOT surface __interrupt__ events
+        was_interrupted = False
+        # Use astream with stream_mode="updates" to detect interrupts
+        # astream_events does NOT surface __interrupt__ events
 
-            # BUG FIX (#199): Check if checkpoint exists before starting.
-            # If we have an existing checkpoint, pass None to resume from it.
-            # If no checkpoint, pass initial_state to start fresh.
-            # This prevents the infinite loop bug where retries would restart
-            # the workflow from review_iteration=0 instead of resuming.
-            checkpoint_state = await graph.aget_state(config)
-            if checkpoint_state is not None and checkpoint_state.values:
-                # Checkpoint exists - resume from it
-                logger.debug(
-                    "Resuming workflow from existing checkpoint",
-                    workflow_id=workflow_id,
-                    checkpoint_keys=list(checkpoint_state.values.keys())[:5],
-                )
-                input_state = None
-            else:
-                # No checkpoint - start fresh with initial state
-                # Reconstruct ImplementationState from columns
-                input_state = await self._reconstruct_initial_state(state, profile)
+        # BUG FIX (#199): Check if checkpoint exists before starting.
+        # If we have an existing checkpoint, pass None to resume from it.
+        # If no checkpoint, pass initial_state to start fresh.
+        # This prevents the infinite loop bug where retries would restart
+        # the workflow from review_iteration=0 instead of resuming.
+        checkpoint_state = await graph.aget_state(config)
+        if checkpoint_state is not None and checkpoint_state.values:
+            # Checkpoint exists - resume from it
+            logger.debug(
+                "Resuming workflow from existing checkpoint",
+                workflow_id=workflow_id,
+                checkpoint_keys=list(checkpoint_state.values.keys())[:5],
+            )
+            input_state = None
+        else:
+            # No checkpoint - start fresh with initial state
+            # Reconstruct ImplementationState from columns
+            input_state = await self._reconstruct_initial_state(state, profile)
 
-                logger.debug(
-                    "Starting workflow fresh (no checkpoint)",
-                    workflow_id=workflow_id,
-                )
+            logger.debug(
+                "Starting workflow fresh (no checkpoint)",
+                workflow_id=workflow_id,
+            )
 
-            async for chunk in graph.astream(
-                input_state,
-                config=config,
-                stream_mode=["updates", "tasks"],
-            ):
-                # Combined mode returns (mode, data) tuples
-                # Cast for type checker - astream with list mode returns tuples
-                chunk_tuple = cast(tuple[str, Any], chunk)
-                if self._is_interrupt_chunk(chunk_tuple):
-                    was_interrupted = True
-                    _mode, _data = chunk_tuple
-                    # Sync plan from LangGraph checkpoint to ServerExecutionState
-                    # so it's available via REST API while blocked
-                    await self._sync_plan_from_checkpoint(workflow_id, graph, config)
-                    await self._emit(
-                        workflow_id,
-                        EventType.APPROVAL_REQUIRED,
-                        "Plan ready for review - awaiting human approval",
-                        agent="human_approval",
-                        data={"paused_at": "human_approval_node"},
-                    )
-                    await self._repository.set_status(workflow_id, WorkflowStatus.BLOCKED)
-                    break
-                # Handle combined mode chunk
-                await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
-
-            if not was_interrupted:
-                # Workflow completed without interruption (no human approval needed).
-                # Note: A separate COMPLETED emission exists in approve_workflow() for
-                # workflows that resume after human approval. These are mutually exclusive
-                # code paths - only one COMPLETED event is ever emitted per workflow.
-
-                # Check for task failure before marking complete (multi-task mode)
-                await self._emit_task_failed_if_applicable(workflow_id)
-
+        async for chunk in graph.astream(
+            input_state,
+            config=config,
+            stream_mode=["updates", "tasks"],
+        ):
+            # Combined mode returns (mode, data) tuples
+            # Cast for type checker - astream with list mode returns tuples
+            chunk_tuple = cast(tuple[str, Any], chunk)
+            if self._is_interrupt_chunk(chunk_tuple):
+                was_interrupted = True
+                _mode, _data = chunk_tuple
+                # Sync plan from LangGraph checkpoint to ServerExecutionState
+                # so it's available via REST API while blocked
+                await self._sync_plan_from_checkpoint(workflow_id, graph, config)
                 await self._emit(
                     workflow_id,
-                    EventType.WORKFLOW_COMPLETED,
-                    "Workflow completed successfully",
+                    EventType.APPROVAL_REQUIRED,
+                    "Plan ready for review - awaiting human approval",
+                    agent="human_approval",
+                    data={"paused_at": "human_approval_node"},
                 )
-                await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
+                await self._repository.set_status(workflow_id, WorkflowStatus.BLOCKED)
+                break
+            # Handle combined mode chunk
+            await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
-        except Exception:
-            # Let exceptions propagate to _run_workflow_with_retry for retry logic
-            # and proper failure event emission
-            raise
+        if not was_interrupted:
+            # Workflow completed without interruption (no human approval needed).
+            # Note: A separate COMPLETED emission exists in approve_workflow() for
+            # workflows that resume after human approval. These are mutually exclusive
+            # code paths - only one COMPLETED event is ever emitted per workflow.
+
+            await self._emit(
+                workflow_id,
+                EventType.WORKFLOW_COMPLETED,
+                "Workflow completed successfully",
+            )
+            await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
 
     async def _run_workflow_with_retry(
         self,
@@ -1251,41 +1253,33 @@ class OrchestratorService:
         retry_config = profile.retry
 
         # Create shared sandbox provider if Daytona mode
-        sandbox_provider = None
+        sandbox_provider: SandboxProvider | None = None
         try:
-            if profile.sandbox.mode == SandboxMode.DAYTONA:
-                from amelia.drivers.factory import create_daytona_provider  # noqa: PLC0415
-
-                agent_options = None
-                # Use developer agent options for LLM provider resolution
-                try:
-                    dev_config = profile.get_agent_config("developer")
-                    agent_options = dev_config.options
-                except ValueError:
-                    pass
-                try:
-                    provider, _worker_env = create_daytona_provider(
-                        profile.sandbox, options=agent_options, retry_config=profile.retry,
-                    )
-                    await provider.ensure_running()
-                    sandbox_provider = provider
-                except Exception as e:
-                    logger.exception("Daytona sandbox bootstrap failed", workflow_id=workflow_id)
-                    await self._emit(
-                        workflow_id,
-                        EventType.WORKFLOW_FAILED,
-                        f"Sandbox bootstrap failed: {e!s}",
-                        data={"error": str(e), "error_type": "sandbox_bootstrap"},
-                    )
-                    await self._repository.set_status(
-                        workflow_id, WorkflowStatus.FAILED, failure_reason=f"Sandbox bootstrap failed: {e}"
-                    )
-                    return
-
             attempt = 0
 
             while attempt <= retry_config.max_retries:
                 try:
+                    # Create sandbox inside retry loop so transient Daytona failures are retried
+                    if sandbox_provider is None:
+                        try:
+                            sandbox_provider = await self._create_sandbox_provider(profile)
+                        except ValueError:
+                            raise  # Non-transient config errors fail immediately
+                        except TRANSIENT_EXCEPTIONS:
+                            raise  # Let outer handler apply retry logic
+                        except Exception as e:
+                            logger.exception("Daytona sandbox bootstrap failed", workflow_id=workflow_id)
+                            await self._emit(
+                                workflow_id,
+                                EventType.WORKFLOW_FAILED,
+                                f"Sandbox bootstrap failed: {e!s}",
+                                data={"error": str(e), "error_type": "sandbox_bootstrap"},
+                            )
+                            await self._repository.set_status(
+                                workflow_id, WorkflowStatus.FAILED, failure_reason=f"Sandbox bootstrap failed: {e}"
+                            )
+                            return
+
                     await self._run_workflow(workflow_id, state, sandbox_provider=sandbox_provider)
                     return  # Success
 
@@ -1320,6 +1314,13 @@ class OrchestratorService:
                         delay=delay,
                         error=str(e),
                     )
+                    # Tear down sandbox so it's re-created on next attempt
+                    if sandbox_provider is not None:
+                        try:
+                            await sandbox_provider.teardown()
+                        except Exception:
+                            logger.warning("Sandbox teardown failed during retry", exc_info=True)
+                        sandbox_provider = None
                     await asyncio.sleep(delay)
 
                 except Exception as e:
@@ -1347,6 +1348,8 @@ class OrchestratorService:
         workflow_id: uuid.UUID,
         state: ServerExecutionState,
         execution_state: ImplementationState,
+        review_mode: str = "review_fix",
+        review_types: list[str] | None = None,
     ) -> None:
         """Run the review-fix workflow graph.
 
@@ -1357,6 +1360,8 @@ class OrchestratorService:
             workflow_id: The workflow ID.
             state: Server execution state (for worktree path etc).
             execution_state: The ImplementationState for graph input.
+            review_mode: "review_only" or "review_fix".
+            review_types: Optional list of review types to run.
         """
         # Get profile from settings using profile_id
         if state.profile_id is None:
@@ -1380,38 +1385,27 @@ class OrchestratorService:
             checkpointer=self._checkpointer,
         )
 
-        # Create shared sandbox provider if Daytona mode
-        sandbox_provider = None
+        sandbox_provider: SandboxProvider | None = None
         try:
-            if profile.sandbox.mode == SandboxMode.DAYTONA:
-                from amelia.drivers.factory import create_daytona_provider  # noqa: PLC0415
+            try:
+                sandbox_provider = await self._create_sandbox_provider(profile)
 
-                agent_options = None
-                try:
-                    dev_config = profile.get_agent_config("developer")
-                    agent_options = dev_config.options
-                except ValueError:
-                    pass
-                provider, _worker_env = create_daytona_provider(
-                    profile.sandbox, options=agent_options, retry_config=profile.retry,
+                config = self._build_runnable_config(
+                    workflow_id, profile, prompts, sandbox_provider,
+                    review_mode=review_mode, review_types=review_types,
                 )
-                await provider.ensure_running()
-                sandbox_provider = provider
-
-            # Pass event_bus via config
-            # Step limit: 4 base + 3 per task + buffer (default 100 handles ~30 tasks)
-            config: RunnableConfig = {
-                "recursion_limit": 100,
-                "configurable": {
-                    "thread_id": str(workflow_id),
-                    "execution_mode": "server",
-                    "event_bus": self._event_bus,
-                    "profile": profile,
-                    "repository": self._repository,
-                    "prompts": prompts,
-                    "sandbox_provider": sandbox_provider,
-                },
-            }
+            except Exception as e:
+                logger.exception("Review workflow setup failed", workflow_id=workflow_id)
+                await self._emit(
+                    workflow_id,
+                    EventType.WORKFLOW_FAILED,
+                    f"Review workflow setup failed: {e}",
+                    data={"error": str(e), "error_type": "setup"},
+                )
+                await self._repository.set_status(
+                    workflow_id, WorkflowStatus.FAILED, failure_reason=f"Setup failed: {e}"
+                )
+                return
 
             await self._emit(
                 workflow_id,
@@ -1661,37 +1655,11 @@ class OrchestratorService:
         # Resume LangGraph execution with updated state
         graph = self._create_server_graph(self._checkpointer)
 
-        # Create shared sandbox provider if Daytona mode (same as _run_workflow_with_retry)
         sandbox_provider: SandboxProvider | None = None
         try:
-            if profile.sandbox.mode == SandboxMode.DAYTONA:
-                from amelia.drivers.factory import create_daytona_provider  # noqa: PLC0415
+            sandbox_provider = await self._create_sandbox_provider(profile)
 
-                agent_options = None
-                try:
-                    dev_config = profile.get_agent_config("developer")
-                    agent_options = dev_config.options
-                except ValueError:
-                    pass
-                provider, _worker_env = create_daytona_provider(
-                    profile.sandbox, options=agent_options, retry_config=profile.retry,
-                )
-                await provider.ensure_running()
-                sandbox_provider = provider
-
-            # Pass event_bus via config
-            config: RunnableConfig = {
-                "recursion_limit": 100,
-                "configurable": {
-                    "thread_id": str(workflow_id),
-                    "execution_mode": "server",
-                    "event_bus": self._event_bus,
-                    "profile": profile,
-                    "repository": self._repository,
-                    "prompts": prompts,
-                    "sandbox_provider": sandbox_provider,
-                },
-            }
+            config = self._build_runnable_config(workflow_id, profile, prompts, sandbox_provider)
 
             # Update checkpoint state with approval decision
             await graph.aupdate_state(config, {"human_approved": True})
@@ -1728,9 +1696,6 @@ class OrchestratorService:
                     # Note: A separate COMPLETED emission exists in _run_workflow() for
                     # workflows that complete without interruption. These are mutually exclusive
                     # code paths - only one COMPLETED event is ever emitted per workflow.
-
-                    # Check for task failure before marking complete (multi-task mode)
-                    await self._emit_task_failed_if_applicable(workflow_id)
 
                     await self._emit(
                         workflow_id,
@@ -1851,71 +1816,9 @@ class OrchestratorService:
         # Update LangGraph state to record rejection
         graph = self._create_server_graph(self._checkpointer)
 
-        config: RunnableConfig = {
-            "recursion_limit": 100,
-            "configurable": {
-                "thread_id": str(workflow_id),
-                "execution_mode": "server",
-                "profile": profile,
-                "repository": self._repository,
-            },
-        }
+        config = self._build_runnable_config(workflow_id, profile, prompts={})
 
         await graph.aupdate_state(config, {"human_approved": False})
-
-    async def _handle_graph_event(
-        self,
-        workflow_id: uuid.UUID,
-        event: dict[str, object],
-    ) -> None:
-        """Translate LangGraph events to WorkflowEvents and emit.
-
-        Args:
-            workflow_id: The workflow this event belongs to.
-            event: LangGraph event dictionary.
-        """
-        event_type = event.get("event")
-        node_name = event.get("name")
-
-        if not isinstance(node_name, str):
-            return
-
-        if event_type == "on_chain_start":
-            if node_name in STAGE_NODES:
-                await self._emit(
-                    workflow_id,
-                    EventType.STAGE_STARTED,
-                    f"Starting {node_name}",
-                    agent=node_name.removesuffix("_node"),
-                    data={"stage": node_name},
-                )
-
-        elif event_type == "on_chain_end":
-            if node_name in STAGE_NODES:
-                await self._emit(
-                    workflow_id,
-                    EventType.STAGE_COMPLETED,
-                    f"Completed {node_name}",
-                    agent=node_name.removesuffix("_node"),
-                    data={
-                        "stage": node_name,
-                        "output": _summarize_stage_output(
-                            cast(dict[str, Any] | None, event.get("data"))
-                        ),
-                    },
-                )
-
-        elif event_type == "on_chain_error":
-            error_data = event.get("data", {})
-            error_msg = "Unknown error"
-            if isinstance(error_data, dict):
-                error_msg = str(error_data.get("error", "Unknown error"))
-            await self._emit(
-                workflow_id,
-                EventType.SYSTEM_ERROR,
-                f"Error in {node_name}: {error_msg}",
-                data={"stage": node_name, "error": error_msg},
-            )
 
     async def _handle_stream_chunk(
         self,
@@ -2080,39 +1983,6 @@ class OrchestratorService:
             return False
         # Single mode (dict)
         return "__interrupt__" in chunk
-
-    async def _emit_task_failed_if_applicable(self, workflow_id: uuid.UUID) -> None:
-        """Emit TASK_FAILED if workflow ended due to unapproved task.
-
-        Called when workflow completes to check if the final task was not approved
-        (indicating failure due to max iterations).
-
-        Note: This requires data from LangGraph checkpoint (last_reviews, task_review_iteration)
-        which is not available in plan_cache. For now, this is a best-effort operation
-        that returns early if the data is not available.
-
-        Args:
-            workflow_id: The workflow to check.
-        """
-        state = await self._repository.get(workflow_id)
-        if state is None:
-            return
-
-        # Get task progress from plan_cache
-        if state.plan_cache is None:
-            return
-
-        total_tasks = state.plan_cache.total_tasks
-
-        # Only emit in task mode
-        if total_tasks is None:
-            return
-
-        # Note: last_reviews and task_review_iteration are only in LangGraph checkpoint.
-        # Without access to last_reviews, we can't reliably determine if the task failed.
-        # The TASK_FAILED event will be emitted by the graph nodes if needed.
-        # TODO: Consider fetching from checkpoint if this event is critical.
-        return
 
     async def _emit_agent_messages(
         self,
@@ -2446,36 +2316,11 @@ class OrchestratorService:
 
         graph = self._create_server_graph(self._checkpointer)
 
-        # Create shared sandbox provider if Daytona mode (same as _run_workflow_with_retry)
         sandbox_provider: SandboxProvider | None = None
         try:
-            if profile.sandbox.mode == SandboxMode.DAYTONA:
-                from amelia.drivers.factory import create_daytona_provider  # noqa: PLC0415
+            sandbox_provider = await self._create_sandbox_provider(profile, agent_name="architect")
 
-                agent_options = None
-                try:
-                    arch_config = profile.get_agent_config("architect")
-                    agent_options = arch_config.options
-                except ValueError:
-                    pass
-                provider, _worker_env = create_daytona_provider(
-                    profile.sandbox, options=agent_options, retry_config=profile.retry,
-                )
-                await provider.ensure_running()
-                sandbox_provider = provider
-
-            config: RunnableConfig = {
-                "recursion_limit": 100,
-                "configurable": {
-                    "thread_id": str(workflow_id),
-                    "execution_mode": "server",
-                    "event_bus": self._event_bus,
-                    "profile": profile,
-                    "repository": self._repository,
-                    "prompts": prompts,
-                    "sandbox_provider": sandbox_provider,
-                },
-            }
+            config = self._build_runnable_config(workflow_id, profile, prompts, sandbox_provider)
 
             was_interrupted = False
             # Convert Pydantic model to JSON-serializable dict for checkpointing
@@ -2626,6 +2471,7 @@ class OrchestratorService:
             profile_id=profile.name,
             issue_cache=execution_state.issue.model_dump(mode="json"),
             workflow_status=WorkflowStatus.PENDING,
+            base_commit=execution_state.base_commit,
             # Note: started_at is None - workflow hasn't started yet
         )
 
@@ -2715,23 +2561,7 @@ class OrchestratorService:
             )
             self._active_tasks[workflow.worktree_path] = (workflow_id, task)
 
-        # Remove from active tasks on completion (same pattern as start_workflow)
-        def cleanup_task(_: asyncio.Task[None]) -> None:
-            """Clean up resources when workflow task completes.
-
-            Args:
-                _: The completed asyncio Task (unused).
-            """
-            self._active_tasks.pop(workflow.worktree_path, None)
-            self._sequence_counters.pop(workflow_id, None)
-            self._sequence_locks.pop(workflow_id, None)
-            logger.debug(
-                "Workflow task completed",
-                workflow_id=workflow_id,
-                worktree_path=workflow.worktree_path,
-            )
-
-        task.add_done_callback(cleanup_task)
+        task.add_done_callback(self._make_cleanup_callback(workflow.worktree_path, workflow_id))
 
     async def start_batch_workflows(
         self,
@@ -2911,6 +2741,7 @@ class OrchestratorService:
             plan_markdown=plan_result.plan_markdown,
             plan_path=str(plan_result.plan_path),
             total_tasks=plan_result.total_tasks,
+            external_plan=True,
         )
         await self._repository.update_plan_cache(workflow_id, plan_cache)
 
@@ -3058,7 +2889,7 @@ class OrchestratorService:
         mode: str = "review_only",
         review_types: list[str] | None = None,
         base_commit: str | None = None,
-    ) -> None:
+    ) -> uuid.UUID:
         """Request an on-demand code review for a workflow.
 
         Args:
@@ -3070,8 +2901,13 @@ class OrchestratorService:
             base_commit: Optional base commit for the diff. If None, uses
                 the workflow's stored base commit.
 
+        Returns:
+            The new review workflow ID (UUID).
+
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist.
+            WorkflowConflictError: If worktree already has active workflow.
+            ConcurrencyLimitError: If at max concurrent workflows.
         """
         if review_types is None:
             review_types = ["general"]
@@ -3087,3 +2923,107 @@ class OrchestratorService:
             review_types=review_types,
             base_commit=base_commit,
         )
+
+        # Resolve base commit and diff content.
+        # Use the source workflow's stored base_commit (the HEAD at workflow start)
+        # so the diff captures all changes the workflow made. Falling back to HEAD
+        # would produce an empty diff (HEAD vs HEAD).
+        worktree_path = workflow.worktree_path
+        if base_commit is None:
+            base_commit = workflow.base_commit
+        if base_commit is None:
+            logger.warning(
+                "No base_commit stored for workflow, review diff may be empty",
+                workflow_id=workflow_id,
+            )
+
+        # Get diff content
+        diff_content = ""
+        if base_commit:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "git", "diff", base_commit, "HEAD",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=worktree_path,
+                )
+                stdout, _ = await proc.communicate()
+                if proc.returncode == 0:
+                    diff_content = stdout.decode()
+            except (FileNotFoundError, OSError):
+                logger.warning("Failed to get diff", worktree_path=worktree_path)
+
+        async with self._start_lock:
+            if worktree_path in self._active_tasks:
+                existing_id, _ = self._active_tasks[worktree_path]
+                raise WorkflowConflictError(worktree_path, existing_id)
+
+            if len(self._active_tasks) >= self._max_concurrent:
+                raise ConcurrencyLimitError(self._max_concurrent, len(self._active_tasks))
+
+            new_id = uuid4()
+
+            # Load profile
+            if self._profile_repo is None:
+                raise ValueError("ProfileRepository not configured")
+
+            if workflow.profile_id:
+                record = await self._profile_repo.get_profile(workflow.profile_id)
+                if record is None:
+                    raise ValueError(f"Profile '{workflow.profile_id}' not found")
+            else:
+                record = await self._profile_repo.get_active_profile()
+                if record is None:
+                    raise ValueError("No active profile set")
+
+            loaded_profile = self._update_profile_repo_root(record, worktree_path)
+
+            # Reconstruct issue from cached data
+            issue = None
+            if workflow.issue_cache:
+                issue = Issue(**workflow.issue_cache)
+
+            # Create ImplementationState for the review
+            execution_state = ImplementationState(
+                workflow_id=new_id,
+                profile_id=loaded_profile.name,
+                created_at=datetime.now(UTC),
+                status="pending",
+                issue=issue,
+                code_changes_for_review=diff_content,
+                base_commit=base_commit,
+                review_iteration=0,
+                review_mode=mode,
+            )
+
+            # Create server state
+            state = ServerExecutionState(
+                id=new_id,
+                issue_id=workflow.issue_id,
+                worktree_path=worktree_path,
+                workflow_type=WorkflowType.REVIEW,
+                profile_id=loaded_profile.name,
+                issue_cache=workflow.issue_cache,
+                workflow_status=WorkflowStatus.PENDING,
+                started_at=datetime.now(UTC),
+                base_commit=base_commit,
+            )
+
+            await self._repository.create(state)
+
+            task = asyncio.create_task(
+                self._run_review_workflow(
+                    new_id, state, execution_state,
+                    review_mode=mode, review_types=review_types,
+                )
+            )
+            self._active_tasks[worktree_path] = (new_id, task)
+
+        def cleanup_task(_: asyncio.Task[None]) -> None:
+            self._active_tasks.pop(worktree_path, None)
+            self._sequence_counters.pop(new_id, None)
+            self._sequence_locks.pop(new_id, None)
+
+        task.add_done_callback(cleanup_task)
+
+        return new_id

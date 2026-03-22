@@ -249,33 +249,3 @@ class TestEmissionPathsSummarize:
             # Should NOT call _emit_agent_messages for None output
             mock_agent_msgs.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_handle_graph_event_uses_summary(
-        self: Self, service: "OrchestratorService"
-    ) -> None:
-        """_handle_graph_event should summarize output in STAGE_COMPLETED events."""
-        from amelia.server.models.events import EventType
-
-        with patch.object(service, "_emit", new_callable=AsyncMock) as mock_emit:
-            event: dict[str, object] = {
-                "event": "on_chain_end",
-                "name": "architect_node",
-                "data": {
-                    "tool_calls": [{"id": "1"}, {"id": "2"}],
-                    "raw_architect_output": "plan details",
-                },
-            }
-
-            await service._handle_graph_event("wf-1", event)
-
-            stage_completed_calls = [
-                c
-                for c in mock_emit.call_args_list
-                if c.args[1] == EventType.STAGE_COMPLETED
-            ]
-            assert len(stage_completed_calls) == 1
-
-            data = stage_completed_calls[0].kwargs["data"]
-            assert data["output"]["tool_calls_count"] == 2
-            assert "tool_calls" not in data["output"]
-            assert data["output"]["raw_architect_output"] == "plan details"

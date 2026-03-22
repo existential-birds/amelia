@@ -152,7 +152,7 @@ export const ReasoningContent = memo(
       )}
       {...props}
     >
-      <Streamdown {...props}>{children}</Streamdown>
+      <Streamdown>{children}</Streamdown>
     </CollapsibleContent>
   )
 );

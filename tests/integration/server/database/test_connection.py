@@ -1,5 +1,7 @@
 """Tests for asyncpg database connection management."""
 
+import os
+
 import pytest
 
 from amelia.server.database.connection import Database
@@ -7,7 +9,10 @@ from amelia.server.database.connection import Database
 
 pytestmark = pytest.mark.integration
 
-DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://amelia:amelia@localhost:5434/amelia_test",
+)
 
 
 @pytest.fixture
