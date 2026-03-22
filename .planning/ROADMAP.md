@@ -244,10 +244,10 @@ Plans:
   2. Dashboard profile save with `exemplary` aggressiveness succeeds (no 422)
   3. `PR_POLL_ERROR` event is emitted when poller exception handlers catch errors
   4. Frontend toast dedup correctly handles `PR_POLL_ERROR` events
-**Plans:** 0/0
+**Plans:** 1 plan
 
 Plans:
-(none yet)
+- [ ] 14-01-PLAN.md -- Add EXEMPLARY to AggressivenessLevel enum and emit PR_POLL_ERROR from poller exception handlers
 
 ## Progress
 
@@ -268,5 +268,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7/8 (parallel) ->
 | 10. Metrics & Benchmarking | 3/3 | Complete   | 2026-03-14 |
 | 11. Fix Streaming & Stage Events | 1/1 | Complete    | 2026-03-22 |
 | 12. Wire Missing Events & Data | 1/1 | Complete    | 2026-03-22 |
-| 13. Fix Streaming Workflow ID Routing | 1/1 | Complete   | 2026-03-22 |
-| 14. Fix Aggressiveness Enum & PR_POLL_ERROR | 0/0 | Not started | - |
+| 13. Fix Streaming Workflow ID Routing | 1/1 | Complete    | 2026-03-22 |
+| 14. Fix Aggressiveness Enum & PR_POLL_ERROR | 0/1 | Not started | - |
