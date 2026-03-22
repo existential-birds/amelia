@@ -112,6 +112,7 @@ class PRCommentPoller:
                     error=str(exc),
                     error_type=type(exc).__name__,
                 )
+                self._emit_poll_error_event(exc)
             await asyncio.sleep(self._tick_interval)
 
     async def _poll_all_profiles(self) -> None:
@@ -154,6 +155,7 @@ class PRCommentPoller:
                     error=str(exc),
                     error_type=type(exc).__name__,
                 )
+                self._emit_poll_error_event(exc, profile=profile.name)
 
     async def _poll_profile(self, profile: Profile) -> None:
         """Poll a single profile for PRs with unresolved comments.
@@ -346,5 +348,26 @@ class PRCommentPoller:
             event_type=EventType.PR_POLL_RATE_LIMITED,
             message=f"Rate limit low, backing off for {backoff_seconds:.0f}s",
             data={"backoff_seconds": backoff_seconds},
+        )
+        self._event_bus.emit(event)
+
+    def _emit_poll_error_event(self, exc: Exception, *, profile: str | None = None) -> None:
+        """Emit a PR_POLL_ERROR event."""
+        data: dict[str, object] = {
+            "error": str(exc),
+            "error_type": type(exc).__name__,
+        }
+        if profile is not None:
+            data["profile"] = profile
+        msg = f"Poll error: {exc}" if profile is None else f"Poll error for {profile}: {exc}"
+        event = WorkflowEvent(
+            id=uuid4(),
+            workflow_id=uuid4(),
+            sequence=0,
+            timestamp=datetime.now(UTC),
+            agent="pr_poller",
+            event_type=EventType.PR_POLL_ERROR,
+            message=msg,
+            data=data,
         )
         self._event_bus.emit(event)

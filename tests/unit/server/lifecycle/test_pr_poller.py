@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import time
 from contextlib import contextmanager
@@ -492,6 +493,68 @@ class TestExceptionResilience:
         ):
             # Should not raise
             await poller._poll_all_profiles()
+
+
+class TestPollErrorEvents:
+    """Tests for PR_POLL_ERROR event emission from exception handlers."""
+
+    async def test_poll_profile_error_emits_pr_poll_error(
+        self,
+        poller: PRCommentPoller,
+        mock_profile_repo: MagicMock,
+        mock_event_bus: MagicMock,
+        sample_profile: Profile,
+    ) -> None:
+        """_poll_all_profiles emits PR_POLL_ERROR when _poll_profile raises."""
+        mock_profile_repo.list_profiles.return_value = [sample_profile]
+
+        with (
+            patch.object(poller, "_should_back_off", new_callable=AsyncMock, return_value=None),
+            patch.object(
+                poller, "_poll_profile",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("boom"),
+            ),
+        ):
+            await poller._poll_all_profiles()
+
+        emit_calls = mock_event_bus.emit.call_args_list
+        poll_error_events = [
+            c for c in emit_calls
+            if c[0][0].event_type == EventType.PR_POLL_ERROR
+        ]
+        assert len(poll_error_events) == 1
+        event = poll_error_events[0][0][0]
+        assert event.data["error"] == "boom"
+        assert event.data["error_type"] == "RuntimeError"
+        assert event.data["profile"] == "test-profile"
+
+    async def test_poll_loop_emits_pr_poll_error_on_exception(
+        self,
+        poller: PRCommentPoller,
+        mock_settings_repo: AsyncMock,
+        mock_event_bus: MagicMock,
+    ) -> None:
+        """_poll_loop emits PR_POLL_ERROR when settings_repo raises."""
+        mock_settings_repo.get_server_settings.side_effect = RuntimeError("db down")
+
+        # Run one iteration of the poll loop then cancel
+        task = asyncio.create_task(poller._poll_loop())
+        await asyncio.sleep(0.05)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+        emit_calls = mock_event_bus.emit.call_args_list
+        poll_error_events = [
+            c for c in emit_calls
+            if c[0][0].event_type == EventType.PR_POLL_ERROR
+        ]
+        assert len(poll_error_events) >= 1
+        event = poll_error_events[0][0][0]
+        assert event.data["error"] == "db down"
+        assert event.data["error_type"] == "RuntimeError"
+        assert "profile" not in event.data
 
 
 class TestRuntimeToggle:
