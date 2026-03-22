@@ -22,10 +22,12 @@ class TestAggressivenessLevel:
         assert AggressivenessLevel.CRITICAL == 1
         assert AggressivenessLevel.STANDARD == 2
         assert AggressivenessLevel.THOROUGH == 3
+        assert AggressivenessLevel.EXEMPLARY == 4
 
     def test_ordering(self) -> None:
         assert AggressivenessLevel.CRITICAL < AggressivenessLevel.STANDARD
         assert AggressivenessLevel.STANDARD < AggressivenessLevel.THOROUGH
+        assert AggressivenessLevel.THOROUGH < AggressivenessLevel.EXEMPLARY
         assert AggressivenessLevel.CRITICAL < AggressivenessLevel.THOROUGH
 
     def test_threshold_comparison(self) -> None:
@@ -34,8 +36,14 @@ class TestAggressivenessLevel:
         assert level >= AggressivenessLevel.STANDARD
         assert not (level >= AggressivenessLevel.THOROUGH)
 
-    def test_exactly_three_members(self) -> None:
-        assert len(AggressivenessLevel) == 3
+    def test_exemplary_threshold_comparison(self) -> None:
+        level = AggressivenessLevel.EXEMPLARY
+        assert level >= AggressivenessLevel.THOROUGH
+        assert level >= AggressivenessLevel.STANDARD
+        assert level >= AggressivenessLevel.CRITICAL
+
+    def test_exactly_four_members(self) -> None:
+        assert len(AggressivenessLevel) == 4
 
 
 class TestPRSummary:

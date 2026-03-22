@@ -183,6 +183,15 @@ class TestIsActionable:
         assert is_actionable(category, AggressivenessLevel.STANDARD) is False
         assert is_actionable(category, AggressivenessLevel.THOROUGH) is True
 
+    def test_style_actionable_at_exemplary(self) -> None:
+        assert is_actionable(CommentCategory.STYLE, AggressivenessLevel.EXEMPLARY) is True
+
+    def test_suggestion_actionable_at_exemplary(self) -> None:
+        assert is_actionable(CommentCategory.SUGGESTION, AggressivenessLevel.EXEMPLARY) is True
+
+    def test_praise_not_actionable_at_exemplary(self) -> None:
+        assert is_actionable(CommentCategory.PRAISE, AggressivenessLevel.EXEMPLARY) is False
+
     def test_critical_level_only_bug_and_security(self) -> None:
         """CRITICAL aggressiveness should only pass bug and security."""
         level = AggressivenessLevel.CRITICAL
@@ -198,6 +207,18 @@ class TestIsActionable:
     def test_thorough_level_adds_suggestion_question(self) -> None:
         """THOROUGH adds suggestion + question."""
         level = AggressivenessLevel.THOROUGH
+        actionable = {cat for cat in CommentCategory if is_actionable(cat, level)}
+        assert actionable == {
+            CommentCategory.BUG,
+            CommentCategory.SECURITY,
+            CommentCategory.STYLE,
+            CommentCategory.SUGGESTION,
+            CommentCategory.QUESTION,
+        }
+
+    def test_exemplary_level_same_as_thorough(self) -> None:
+        """EXEMPLARY has same actionable set as THOROUGH (no new categories)."""
+        level = AggressivenessLevel.EXEMPLARY
         actionable = {cat for cat in CommentCategory if is_actionable(cat, level)}
         assert actionable == {
             CommentCategory.BUG,

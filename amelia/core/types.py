@@ -159,11 +159,13 @@ class AggressivenessLevel(IntEnum):
     - CRITICAL (1): Only fix clear bugs, security issues, build failures
     - STANDARD (2): Fix style issues, common patterns, and critical items
     - THOROUGH (3): Fix all actionable comments including suggestions and nitpicks
+    - EXEMPLARY (4): Fix all substantive comments including everything THOROUGH fixes
     """
 
     CRITICAL = 1
     STANDARD = 2
     THOROUGH = 3
+    EXEMPLARY = 4
 
 
 class PRSummary(BaseModel):
