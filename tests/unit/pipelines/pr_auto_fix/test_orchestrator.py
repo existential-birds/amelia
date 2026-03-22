@@ -830,6 +830,99 @@ class TestWorkflowCompletion:
         assert "comment_count" in update_state.issue_cache
 
 
+class TestStageCompletedEventEmission:
+    """Tests for stage_completed event emission after pipeline execution."""
+
+    async def test_emits_stage_completed_events(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        captured_events: list[WorkflowEvent],
+        orch_profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
+    ) -> None:
+        """After pipeline execution, stage_completed events are emitted for each node."""
+        final_state = {
+            "comments": [
+                {"id": 1, "path": "a.py", "line": 1, "body": "Fix", "author": "r1"},
+                {"id": 2, "path": "b.py", "line": 2, "body": "Fix", "author": "r1"},
+                {"id": 3, "path": "c.py", "line": 3, "body": "Fix", "author": "r1"},
+            ],
+            "group_results": [
+                {"file_path": "a.py", "status": "fixed", "comment_ids": [1]},
+                {"file_path": "b.py", "status": "failed", "comment_ids": [2, 3]},
+            ],
+            "commit_sha": "abc123",
+            "resolution_results": [],
+        }
+        async with mock_pipeline_context(ainvoke_return=final_state):
+            await orchestrator._execute_pipeline(
+                pr_number=42,
+                repo="owner/repo",
+                profile=orch_profile,
+                config=pr_autofix_config,
+                head_branch="feat/test",
+            )
+
+        stage_events = [
+            e for e in captured_events if e.event_type == EventType.STAGE_COMPLETED
+        ]
+        # Should have: classify_node + 1 (fixed) + 2 (failed) + commit_push_node + reply_resolve_node = 6
+        assert len(stage_events) >= 5
+        stages = [e.data["stage"] for e in stage_events if e.data]
+        assert "classify_node" in stages
+        assert "develop_node" in stages
+        assert "commit_push_node" in stages
+        assert "reply_resolve_node" in stages
+
+        # commit_push_node should have commit_sha in result
+        commit_events = [
+            e for e in stage_events
+            if e.data and e.data.get("stage") == "commit_push_node"
+        ]
+        assert len(commit_events) == 1
+        assert commit_events[0].data["result"]["commit_sha"] == "abc123"
+
+    async def test_stage_completed_events_include_per_comment_results(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        captured_events: list[WorkflowEvent],
+        orch_profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
+    ) -> None:
+        """develop_node stage events include per-comment result status."""
+        final_state = {
+            "comments": [],
+            "group_results": [
+                {"file_path": "a.py", "status": "fixed", "comment_ids": [1]},
+                {"file_path": "b.py", "status": "no_changes", "comment_ids": [2]},
+                {"file_path": "c.py", "status": "failed", "comment_ids": [3]},
+            ],
+            "commit_sha": None,
+            "resolution_results": [],
+        }
+        async with mock_pipeline_context(ainvoke_return=final_state):
+            await orchestrator._execute_pipeline(
+                pr_number=42,
+                repo="owner/repo",
+                profile=orch_profile,
+                config=pr_autofix_config,
+                head_branch="feat/test",
+            )
+
+        develop_events = [
+            e for e in captured_events
+            if e.event_type == EventType.STAGE_COMPLETED
+            and e.data
+            and e.data.get("stage") == "develop_node"
+        ]
+        assert len(develop_events) == 3
+        statuses = [e.data["result"]["status"] for e in develop_events if e.data]
+        # no_changes should be mapped to "skipped"
+        assert "fixed" in statuses
+        assert "skipped" in statuses
+        assert "failed" in statuses
+
+
 class TestBuildPrCommentsStatusReason:
     """Tests that _build_pr_comments includes status_reason for each status type."""
 

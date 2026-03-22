@@ -372,6 +372,9 @@ class PRAutoFixOrchestrator:
                 },
             )
 
+            # Emit stage_completed events for CLI streaming
+            self._emit_stage_events(pr_number, repo, workflow_id, final_state)
+
             duration_seconds = time.monotonic() - start_time
 
             # Build pr_comments from final state for issue_cache
@@ -710,6 +713,81 @@ class PRAutoFixOrchestrator:
                 pr_number=pr_number,
                 error=str(exc),
             )
+
+    def _emit_stage_events(
+        self,
+        pr_number: int,
+        repo: str,
+        workflow_id: UUID,
+        final_state: dict[str, Any] | Any,
+    ) -> None:
+        """Emit stage_completed events for each pipeline node from final state.
+
+        Since the PR auto-fix pipeline uses graph.ainvoke() (not astream),
+        we reconstruct stage events from the final state so that
+        stream_workflow_events can track progress and build WorkflowSummary.
+        """
+        state = final_state if isinstance(final_state, dict) else {}
+
+        # classify_node completed
+        self._emit_event(
+            EventType.STAGE_COMPLETED,
+            pr_number,
+            "Completed classify_node",
+            data={"stage": "classify_node"},
+            repo=repo,
+            workflow_id=workflow_id,
+        )
+
+        # develop_node completed -- emit per-comment results for WorkflowSummary
+        group_results = state.get("group_results", [])
+        for result in group_results:
+            result_dict = (
+                result if isinstance(result, dict)
+                else result.model_dump() if hasattr(result, "model_dump")
+                else {}
+            )
+            status = result_dict.get("status", "unknown")
+            # Map GroupFixStatus to client-expected values
+            client_status = "skipped" if status == "no_changes" else status
+            comment_ids = result_dict.get("comment_ids", [])
+            # Emit one stage_completed per comment so WorkflowSummary counts correctly
+            for _comment_id in comment_ids:
+                self._emit_event(
+                    EventType.STAGE_COMPLETED,
+                    pr_number,
+                    "Completed develop_node",
+                    data={
+                        "stage": "develop_node",
+                        "result": {"status": client_status},
+                    },
+                    repo=repo,
+                    workflow_id=workflow_id,
+                )
+
+        # commit_push_node completed
+        commit_sha = state.get("commit_sha")
+        self._emit_event(
+            EventType.STAGE_COMPLETED,
+            pr_number,
+            "Completed commit_push_node",
+            data={
+                "stage": "commit_push_node",
+                "result": {"commit_sha": commit_sha},
+            },
+            repo=repo,
+            workflow_id=workflow_id,
+        )
+
+        # reply_resolve_node completed
+        self._emit_event(
+            EventType.STAGE_COMPLETED,
+            pr_number,
+            "Completed reply_resolve_node",
+            data={"stage": "reply_resolve_node"},
+            repo=repo,
+            workflow_id=workflow_id,
+        )
 
     def _emit_event(
         self,
