@@ -107,4 +107,35 @@ describe('GitHubIssueCombobox', () => {
       expect(screen.getByText('bug')).toBeInTheDocument();
     });
   });
+
+  it('displays selected issue in trigger button', () => {
+    render(
+      <GitHubIssueCombobox
+        profile="test"
+        onSelect={onSelect}
+        value={{ number: 42, title: 'Fix login bug' }}
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: /select issue/i });
+    expect(trigger).toHaveTextContent('#42');
+    expect(trigger).toHaveTextContent('Fix login bug');
+    expect(trigger).not.toHaveTextContent('Select GitHub issue...');
+  });
+
+  it('shows clear button when value is set and calls onClear when clicked', async () => {
+    const onClear = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <GitHubIssueCombobox
+        profile="test"
+        onSelect={onSelect}
+        value={{ number: 42, title: 'Fix login bug' }}
+        onClear={onClear}
+      />,
+    );
+
+    const clearBtn = screen.getByTestId('clear-issue-btn');
+    await user.click(clearBtn);
+    expect(onClear).toHaveBeenCalledTimes(1);
+  });
 });
