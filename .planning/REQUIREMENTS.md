@@ -139,7 +139,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-03 | Phase 1 | Complete |
 | DATA-04 | Phase 1 | Complete |
 | CONF-01 | Phase 1 | Complete |
-| CONF-02 | Phase 1 | Complete |
+| CONF-02 | Phase 14 | Pending |
 | CONF-03 | Phase 1 | Complete |
 | CONF-04 | Phase 1 | Complete |
 | GHAPI-01 | Phase 2 | Complete |
@@ -167,8 +167,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ORCH-01 | Phase 6 | Complete |
 | ORCH-02 | Phase 6 | Complete |
 | ORCH-03 | Phase 6 | Complete |
-| TRIG-01 | Phase 11 | Complete |
-| TRIG-02 | Phase 11 | Complete |
+| TRIG-01 | Phase 13 | Complete |
+| TRIG-02 | Phase 13 | Complete |
 | TRIG-03 | Phase 7 | Complete |
 | TRIG-04 | Phase 7 | Complete |
 | TRIG-05 | Phase 7 | Complete |
@@ -177,11 +177,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | POLL-03 | Phase 8 | Complete |
 | POLL-04 | Phase 8 | Complete |
 | POLL-05 | Phase 8 | Complete |
-| DASH-01 | Phase 9 | Complete |
+| DASH-01 | Phase 14 | Pending |
 | DASH-02 | Phase 9 | Complete |
 | DASH-03 | Phase 9 | Complete |
 | DASH-04 | Phase 9 | Complete |
-| DASH-05 | Phase 9 | Complete |
+| DASH-05 | Phase 14 | Pending |
 | METR-01 | Phase 10 | Complete |
 | METR-02 | Phase 10 | Complete |
 | METR-03 | Phase 10 | Complete |
@@ -195,8 +195,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 - v1 requirements: 56 total
 - Mapped to phases: 56
 - Unmapped: 0
-- Complete: 54
-- Pending (gap closure): 2 (TRIG-01, TRIG-02)
+- Complete: 51
+- Pending (gap closure): 5 (TRIG-01, TRIG-02, CONF-02, DASH-01, DASH-05)
 
 ---
 *Requirements defined: 2026-03-13*

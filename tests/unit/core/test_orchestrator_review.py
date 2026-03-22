@@ -12,6 +12,7 @@ import pytest
 from amelia.core.types import ReviewResult
 from amelia.pipelines.nodes import call_reviewer_node
 
+
 _APPROVED_RESULT = ReviewResult(
     reviewer_persona="Agentic",
     approved=True,

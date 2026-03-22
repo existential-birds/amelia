@@ -24,7 +24,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 10: Metrics & Benchmarking** - Track fix latency, success rates, classification accuracy, and expose via API/dashboard (completed 2026-03-14)
 - [x] **Phase 11: Fix Streaming Terminal Events & Pipeline Stage Emission** - Fix CLI hangs by adding PR auto-fix terminal events and emitting stage_completed from pipeline nodes (completed 2026-03-22)
 - [x] **Phase 12: Wire Missing Events & Data Forwarding** - Forward pr_title from API trigger, emit PR_COMMENTS_DETECTED/RESOLVED events, add pr_auto_fix_failed to frontend types (completed 2026-03-22)
-- [ ] **Phase 13: Fix Streaming Workflow ID Routing** - Align workflow ID propagation so CLI streaming receives pipeline events
+- [x] **Phase 13: Fix Streaming Workflow ID Routing** - Align workflow ID propagation so CLI streaming receives pipeline events (completed 2026-03-22)
 - [ ] **Phase 14: Fix Aggressiveness Enum & Emit PR_POLL_ERROR** - Add exemplary level to backend enum and emit PR_POLL_ERROR from poller
 
 ## Phase Details
@@ -229,10 +229,10 @@ Plans:
   2. `ConnectionManager` subscription filter passes pipeline events to CLI streaming clients
   3. `fix-pr` CLI command runs to completion without hanging
   4. `watch-pr` CLI loop advances past each `stream_workflow_events` call without hanging
-**Plans:** 1 plans
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 13-01-PLAN.md -- Unify workflow ID propagation and fix UUID/str type mismatch in subscription filter
+- [x] 13-01-PLAN.md -- Unify workflow ID propagation and fix UUID/str type mismatch in subscription filter
 
 ### Phase 14: Fix Aggressiveness Enum & Emit PR_POLL_ERROR
 **Goal**: Backend aggressiveness enum matches frontend/requirements (4 levels), and PR_POLL_ERROR event is emitted from poller exception handlers
@@ -268,5 +268,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7/8 (parallel) ->
 | 10. Metrics & Benchmarking | 3/3 | Complete   | 2026-03-14 |
 | 11. Fix Streaming & Stage Events | 1/1 | Complete    | 2026-03-22 |
 | 12. Wire Missing Events & Data | 1/1 | Complete    | 2026-03-22 |
-| 13. Fix Streaming Workflow ID Routing | 0/1 | Not started | - |
+| 13. Fix Streaming Workflow ID Routing | 1/1 | Complete   | 2026-03-22 |
 | 14. Fix Aggressiveness Enum & PR_POLL_ERROR | 0/0 | Not started | - |
