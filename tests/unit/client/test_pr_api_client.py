@@ -150,12 +150,12 @@ class TestGetPRComments:
         assert result.comments[0].body == "Fix this"
 
     async def test_get_comments_server_error(self, client: AmeliaClient) -> None:
-        """Non-200 response raises InvalidRequestError."""
+        """5xx response raises HTTPStatusError (not InvalidRequestError)."""
         mock_resp = _make_response(500, {"detail": "Internal error"})
 
         with (
             patch("httpx.AsyncClient.get", return_value=mock_resp),
-            pytest.raises(InvalidRequestError),
+            pytest.raises(httpx.HTTPStatusError),
         ):
             await client.get_pr_comments(42, "prof")
 

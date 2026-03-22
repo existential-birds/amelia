@@ -51,7 +51,7 @@ const mockWorkflowDetail = createMockWorkflowDetail({
   recent_events: [
     createMockEvent({
       id: 'e1',
-      workflow_id: '1',
+      workflow_id: 'wf-001',
       sequence: 1,
       timestamp: '2025-12-07T09:01:00Z',
       event_type: 'stage_started',

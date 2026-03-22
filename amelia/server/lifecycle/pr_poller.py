@@ -272,7 +272,15 @@ class PRCommentPoller:
             stderr=asyncio.subprocess.PIPE,
             cwd=repo_root,
         )
-        stdout_bytes, _ = await proc.communicate()
+        stdout_bytes, stderr_bytes = await proc.communicate()
+        if proc.returncode != 0:
+            logger.warning(
+                "gh repo view failed",
+                returncode=proc.returncode,
+                stderr=stderr_bytes.decode().strip(),
+                repo_root=repo_root,
+            )
+            return ""
         slug = stdout_bytes.decode().strip()
         self._repo_slugs[repo_root] = slug
         return slug

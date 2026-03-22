@@ -587,9 +587,9 @@ class AmeliaClient:
                     f"Failed to get PR comments: {response.json()}"
                 )
             else:
-                raise InvalidRequestError(
-                    f"Failed to get PR comments: {response.status_code}"
-                )
+                response.raise_for_status()
+
+        raise RuntimeError("Unexpected code path in get_pr_comments")
 
     async def get_pr_autofix_status(self, profile: str) -> PRAutoFixStatusResponse:
         """Get PR auto-fix configuration status for a profile.
