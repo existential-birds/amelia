@@ -8,6 +8,7 @@ import time
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 import pytest
 
@@ -39,7 +40,10 @@ def mock_settings_repo() -> AsyncMock:
 @pytest.fixture()
 def mock_orchestrator() -> AsyncMock:
     """Mock PRAutoFixOrchestrator with trigger_fix_cycle."""
-    return AsyncMock()
+    orch = AsyncMock()
+    # get_workflow_id is sync in production — return a real UUID
+    orch.get_workflow_id = MagicMock(return_value=UUID("12345678-1234-5678-1234-567812345678"))
+    return orch
 
 
 @pytest.fixture()

@@ -204,6 +204,23 @@ class PRCommentPoller:
 
             repo_slug = await self._get_repo_slug(profile.repo_root)
 
+            # Emit PR_COMMENTS_DETECTED event
+            detected_event = WorkflowEvent(
+                id=uuid4(),
+                workflow_id=self._orchestrator.get_workflow_id(repo_slug, pr.number),
+                sequence=0,
+                timestamp=datetime.now(UTC),
+                agent="pr_poller",
+                event_type=EventType.PR_COMMENTS_DETECTED,
+                message=f"Detected {len(comments)} unresolved comment(s) on PR #{pr.number}",
+                data={
+                    "pr_number": pr.number,
+                    "comment_count": len(comments),
+                    "pr_title": pr.title,
+                },
+            )
+            self._event_bus.emit(detected_event)
+
             # Fire-and-forget dispatch
             task = asyncio.create_task(
                 self._orchestrator.trigger_fix_cycle(

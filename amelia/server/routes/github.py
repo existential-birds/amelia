@@ -407,6 +407,7 @@ async def trigger_pr_autofix(
             profile=resolved,
             head_branch=pr_summary.head_branch,
             config=effective_config,
+            pr_title=pr_summary.title,
             comments=comments,
         )
     )
