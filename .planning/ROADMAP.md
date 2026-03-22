@@ -23,7 +23,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 9: Events & Dashboard** - Event types for PR auto-fix lifecycle and dashboard UI integration
 - [x] **Phase 10: Metrics & Benchmarking** - Track fix latency, success rates, classification accuracy, and expose via API/dashboard (completed 2026-03-14)
 - [x] **Phase 11: Fix Streaming Terminal Events & Pipeline Stage Emission** - Fix CLI hangs by adding PR auto-fix terminal events and emitting stage_completed from pipeline nodes (completed 2026-03-22)
-- [ ] **Phase 12: Wire Missing Events & Data Forwarding** - Forward pr_title from API trigger, emit PR_COMMENTS_DETECTED/RESOLVED events, add pr_auto_fix_failed to frontend types
+- [x] **Phase 12: Wire Missing Events & Data Forwarding** - Forward pr_title from API trigger, emit PR_COMMENTS_DETECTED/RESOLVED events, add pr_auto_fix_failed to frontend types (completed 2026-03-22)
 
 ## Phase Details
 
@@ -212,10 +212,10 @@ Plans:
   2. `PR_COMMENTS_DETECTED` event is emitted when new comments are discovered
   3. `PR_COMMENTS_RESOLVED` event is emitted when threads are resolved
   4. Frontend `EventType` union includes `pr_auto_fix_failed`
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 12-01-PLAN.md -- Wire pr_title forwarding, emit PR_COMMENTS_DETECTED/RESOLVED events, add pr_auto_fix_failed to frontend types
+- [x] 12-01-PLAN.md -- Wire pr_title forwarding, emit PR_COMMENTS_DETECTED/RESOLVED events, add pr_auto_fix_failed to frontend types
 
 ## Progress
 
@@ -235,4 +235,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7/8 (parallel) ->
 | 9. Events & Dashboard | 0/3 | Not started | - |
 | 10. Metrics & Benchmarking | 3/3 | Complete   | 2026-03-14 |
 | 11. Fix Streaming & Stage Events | 1/1 | Complete    | 2026-03-22 |
-| 12. Wire Missing Events & Data | 0/1 | Not started | - |
+| 12. Wire Missing Events & Data | 1/1 | Complete   | 2026-03-22 |
