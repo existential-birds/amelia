@@ -260,6 +260,7 @@ export type EventType =
   | 'pr_comments_detected'
   | 'pr_auto_fix_started'
   | 'pr_auto_fix_completed'
+  | 'pr_auto_fix_failed'
   | 'pr_comments_resolved'
   | 'pr_poll_error'
   // PR auto-fix orchestration

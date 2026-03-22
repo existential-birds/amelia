@@ -380,8 +380,41 @@ class PRAutoFixOrchestrator:
             # Build pr_comments from final state for issue_cache
             pr_comments = self._build_pr_comments(final_state)
             comments_raw = final_state.get("comments", []) if isinstance(final_state, dict) else []
+            resolution_results_raw = (
+                final_state.get("resolution_results", [])
+                if isinstance(final_state, dict)
+                else []
+            )
             issue_cache["comment_count"] = len(comments_raw)
             issue_cache["pr_comments"] = pr_comments
+
+            # Emit PR_COMMENTS_RESOLVED if any threads were resolved
+            resolved_count = sum(
+                1
+                for r in resolution_results_raw
+                if (
+                    r
+                    if isinstance(r, dict)
+                    else r.model_dump()
+                    if hasattr(r, "model_dump")
+                    else {}
+                ).get("resolved", False)
+            )
+            total_comments = len(comments_raw)
+
+            if resolved_count > 0:
+                self._emit_event(
+                    EventType.PR_COMMENTS_RESOLVED,
+                    pr_number,
+                    f"Resolved {resolved_count}/{total_comments} comment thread(s) on PR #{pr_number}",
+                    data={
+                        "workflow_id": str(workflow_id),
+                        "resolved_count": resolved_count,
+                        "total_count": total_comments,
+                    },
+                    repo=repo,
+                    workflow_id=workflow_id,
+                )
 
             # Update workflow record as completed
             state = state.model_copy(
