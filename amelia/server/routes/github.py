@@ -6,6 +6,7 @@ import asyncio
 import json
 from datetime import datetime
 from typing import Any
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
@@ -21,8 +22,6 @@ from amelia.core.types import (
     PRSummary,
     TrackerType,
 )
-from uuid import uuid4
-
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.server.database import ProfileRepository
 from amelia.server.dependencies import get_profile_repository

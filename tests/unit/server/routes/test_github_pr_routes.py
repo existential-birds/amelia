@@ -238,13 +238,13 @@ class TestTriggerPRAutoFix:
             pr_summary = TestTriggerPRAutoFix._make_pr_summary()
 
         mock_orch = MagicMock()
-        mock_orch.get_workflow_id.return_value = UUID("12345678-1234-5678-1234-567812345678")
         mock_orch.trigger_fix_cycle = AsyncMock()
         app.state.pr_autofix_orchestrator = mock_orch
 
         with (
             patch("amelia.server.routes.github.GitHubPRService") as MockService,
             patch("amelia.server.routes.github._get_repo_name", new_callable=AsyncMock, return_value="owner/repo"),
+            patch("amelia.server.routes.github.uuid4", return_value=UUID("12345678-1234-5678-1234-567812345678")),
         ):
             mock_svc = AsyncMock()
             mock_svc.get_pr_summary.return_value = pr_summary
