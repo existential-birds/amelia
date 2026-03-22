@@ -381,7 +381,7 @@ class GitOperations:
                     f"Aborting push (never rebase)."
                 )
         else:
-            logger.info(
+            logger.debug(
                 "Push pre-check",
                 branch=branch,
                 local_sha=local_sha[:8],
@@ -389,7 +389,7 @@ class GitOperations:
                 status="in-sync" if remote_sha == local_sha else "new-branch",
             )
 
-        logger.info(
+        logger.debug(
             "Pushing to remote",
             branch=branch,
             refspec=f"HEAD:refs/heads/{branch}",
