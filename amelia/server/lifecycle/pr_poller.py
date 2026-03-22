@@ -207,7 +207,7 @@ class PRCommentPoller:
             # Emit PR_COMMENTS_DETECTED event
             detected_event = WorkflowEvent(
                 id=uuid4(),
-                workflow_id=self._orchestrator.get_workflow_id(repo_slug, pr.number),
+                workflow_id=uuid4(),
                 sequence=0,
                 timestamp=datetime.now(UTC),
                 agent="pr_poller",
