@@ -1079,3 +1079,119 @@ class TestBuildPrCommentsStatusReason:
         assert by_id[2]["status_reason"] == "Timeout"
         assert by_id[3]["status_reason"] == "No code changes needed"
         assert by_id[4]["status_reason"] == "Not actionable or filtered"
+
+
+# ---------------------------------------------------------------------------
+# Phase 13-01: Workflow ID threading
+# ---------------------------------------------------------------------------
+
+
+class TestWorkflowIdThreading:
+    """Tests for workflow_id parameter threading through the orchestrator."""
+
+    async def test_trigger_passes_workflow_id_to_execute_pipeline(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        orch_profile: Profile,
+    ) -> None:
+        """trigger_fix_cycle passes workflow_id through to _execute_pipeline."""
+        from uuid import uuid4 as _uuid4
+
+        wf_id = _uuid4()
+        orchestrator._execute_pipeline = AsyncMock()  # type: ignore[method-assign]
+        await orchestrator.trigger_fix_cycle(
+            pr_number=42,
+            repo="owner/repo",
+            profile=orch_profile,
+            workflow_id=wf_id,
+        )
+        call_kwargs = orchestrator._execute_pipeline.call_args.kwargs
+        assert call_kwargs.get("workflow_id") == wf_id
+
+    async def test_execute_pipeline_uses_provided_workflow_id(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        orch_profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
+        captured_events: list[WorkflowEvent],
+    ) -> None:
+        """_execute_pipeline uses the provided workflow_id instead of generating a new one."""
+        from uuid import uuid4 as _uuid4
+
+        wf_id = _uuid4()
+        async with mock_pipeline_context():
+            await orchestrator._execute_pipeline(
+                pr_number=42,
+                repo="owner/repo",
+                profile=orch_profile,
+                config=pr_autofix_config,
+                head_branch="feat/test",
+                workflow_id=wf_id,
+            )
+
+        started_events = [e for e in captured_events if e.event_type == EventType.PR_AUTO_FIX_STARTED]
+        assert len(started_events) == 1
+        assert started_events[0].workflow_id == wf_id
+
+    async def test_execute_pipeline_generates_uuid_when_none(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        orch_profile: Profile,
+        pr_autofix_config: PRAutoFixConfig,
+        captured_events: list[WorkflowEvent],
+    ) -> None:
+        """_execute_pipeline generates its own UUID when workflow_id is None."""
+        from uuid import UUID
+
+        async with mock_pipeline_context():
+            await orchestrator._execute_pipeline(
+                pr_number=42,
+                repo="owner/repo",
+                profile=orch_profile,
+                config=pr_autofix_config,
+                head_branch="feat/test",
+                workflow_id=None,
+            )
+
+        started_events = [e for e in captured_events if e.event_type == EventType.PR_AUTO_FIX_STARTED]
+        assert len(started_events) == 1
+        assert isinstance(started_events[0].workflow_id, UUID)
+
+    async def test_emit_event_without_workflow_id_does_not_crash(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+    ) -> None:
+        """_emit_event with workflow_id=None does not crash (no get_workflow_id fallback)."""
+        # Should not raise AttributeError or KeyError
+        orchestrator._emit_event(
+            EventType.PR_FIX_QUEUED,
+            42,
+            "test message",
+            repo="owner/repo",
+            workflow_id=None,
+        )
+
+    async def test_divergence_retries_reuse_same_workflow_id(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        orch_profile: Profile,
+        captured_events: list[WorkflowEvent],
+    ) -> None:
+        """Divergence retry events use the same workflow_id across all attempts."""
+        from uuid import uuid4 as _uuid4
+
+        wf_id = _uuid4()
+        orchestrator._execute_pipeline = AsyncMock(  # type: ignore[method-assign]
+            side_effect=ValueError("Remote branch has diverged from local")
+        )
+        await orchestrator.trigger_fix_cycle(
+            pr_number=42,
+            repo="owner/repo",
+            profile=orch_profile,
+            workflow_id=wf_id,
+        )
+
+        diverged_events = [e for e in captured_events if e.event_type == EventType.PR_FIX_DIVERGED]
+        assert len(diverged_events) == 2
+        for event in diverged_events:
+            assert event.workflow_id == wf_id
