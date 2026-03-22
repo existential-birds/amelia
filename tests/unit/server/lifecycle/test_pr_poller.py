@@ -384,6 +384,36 @@ class TestPollProfile:
         assert len(info_calls) > 0
 
 
+class TestPRCommentsDetectedEvent:
+    """Tests for PR_COMMENTS_DETECTED event emission."""
+
+    async def test_emits_pr_comments_detected_when_dispatching(
+        self,
+        poller: PRCommentPoller,
+        mock_orchestrator: AsyncMock,
+        mock_event_bus: MagicMock,
+        sample_profile: Profile,
+    ) -> None:
+        """When _poll_profile dispatches a fix cycle, a PR_COMMENTS_DETECTED event is emitted."""
+        pr = _make_pr_summary(number=42)
+        comments = [_make_comment(comment_id=1, pr_number=42), _make_comment(comment_id=2, pr_number=42)]
+
+        with _mock_pr_service(poller, [pr], comments):
+            await poller._poll_profile(sample_profile)
+
+        await asyncio.sleep(0)
+
+        emit_calls = mock_event_bus.emit.call_args_list
+        detected_events = [
+            c for c in emit_calls
+            if c[0][0].event_type == EventType.PR_COMMENTS_DETECTED
+        ]
+        assert len(detected_events) == 1
+        event = detected_events[0][0][0]
+        assert event.data["pr_number"] == 42
+        assert event.data["comment_count"] == 2
+
+
 class TestRateLimit:
     """Tests for rate limit checking and backoff."""
 

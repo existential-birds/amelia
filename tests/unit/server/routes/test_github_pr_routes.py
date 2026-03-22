@@ -310,3 +310,18 @@ class TestTriggerPRAutoFix:
         # Verify head_branch was fetched from PR summary and passed to orchestrator
         call_kwargs = mock_orch.trigger_fix_cycle.call_args.kwargs
         assert call_kwargs["head_branch"] == "feat/my-branch"
+
+    def test_forwards_pr_title_to_orchestrator(
+        self,
+        client: TestClient,
+        app: FastAPI,
+        mock_profile_repo: MagicMock,
+        github_profile: Profile,
+    ) -> None:
+        pr_summary = self._make_pr_summary(title="Fix login bug")
+        _, mock_orch = self._trigger_autofix_with_mocks(
+            client, app, mock_profile_repo, github_profile, pr_summary=pr_summary,
+        )
+
+        call_kwargs = mock_orch.trigger_fix_cycle.call_args.kwargs
+        assert call_kwargs["pr_title"] == "Fix login bug"
