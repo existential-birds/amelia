@@ -112,48 +112,42 @@ export function GitHubIssueCombobox({ id, profile, onSelect, value, onClear }: G
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          id={id}
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          aria-label="Select issue"
-          className="w-full justify-between"
-        >
-          {value ? (
-            <span className="truncate">
-              #{value.number} — {truncateTitle(value.title)}
-            </span>
-          ) : (
-            'Select GitHub issue...'
-          )}
-          <span className="ml-2 flex items-center gap-1 shrink-0">
-            {value && onClear && (
-              <span
-                role="button"
-                aria-label="Clear issue selection"
-                data-testid="clear-issue-btn"
-                className="h-4 w-4 opacity-70 hover:opacity-100 cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClear();
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation();
-                    onClear();
-                  }
-                }}
-                tabIndex={0}
-              >
-                <X className="h-4 w-4" />
+      <div className="relative">
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            aria-label="Select issue"
+            className="w-full justify-between pr-10"
+          >
+            {value ? (
+              <span className="truncate">
+                #{value.number} — {truncateTitle(value.title)}
               </span>
+            ) : (
+              'Select GitHub issue...'
             )}
-            <ChevronsUpDown className="h-4 w-4 opacity-50" />
-          </span>
-        </Button>
-      </PopoverTrigger>
+            <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50 shrink-0" />
+          </Button>
+        </PopoverTrigger>
+        {value && onClear && (
+          <button
+            type="button"
+            aria-label="Clear issue selection"
+            data-testid="clear-issue-btn"
+            className="absolute right-7 top-1/2 -translate-y-1/2 h-4 w-4 opacity-70 hover:opacity-100"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClear();
+            }}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput

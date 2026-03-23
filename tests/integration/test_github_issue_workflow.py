@@ -195,8 +195,8 @@ class TestGitHubIssueWorkflowCreation:
                 },
             )
 
-        assert response.status_code == status.HTTP_201_CREATED
-        tracker.get_issue.assert_called_once_with("99", cwd=github_worktree)
+            assert response.status_code == status.HTTP_201_CREATED
+            tracker.get_issue.assert_called_once_with("99", cwd=github_worktree)
 
     async def test_github_tracker_with_task_title_skips_fetch(
         self,

@@ -37,3 +37,4 @@ None
 |---|-------------|------|--------|-----------|
 | 260320-2hx | PR autofix pipeline should use git worktrees instead of operating on main checkout | 2026-03-20 | 733f2cf2 | [260320-2hx-pr-autofix-pipeline-should-use-git-workt](./quick/260320-2hx-pr-autofix-pipeline-should-use-git-workt/) |
 | 260320-4np | Write missing integration tests for PR auto-fix | 2026-03-20 | a5601961 | [260320-4np-write-missing-integration-tests-for-pr-a](./quick/260320-4np-write-missing-integration-tests-for-pr-a/) |
+| 260322-pgw | Implement 6 GitHub issue selection polish issues | 2026-03-22 | f0eafc0c | [260322-pgw-implement-6-issues-from-github-issue-sel](./quick/260322-pgw-implement-6-issues-from-github-issue-sel/) |
