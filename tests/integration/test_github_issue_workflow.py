@@ -179,24 +179,21 @@ class TestGitHubIssueWorkflowCreation:
         test_repository: WorkflowRepository,
         active_github_profile: Profile,
         github_worktree: str,
-        langgraph_mock_factory: Any,
     ) -> None:
         """Starting a workflow immediately without task_title fetches from tracker."""
-        with (
-            mock_github_tracker(issue_id="99") as tracker,
-            mock_graph(langgraph_mock_factory),
-        ):
+        with mock_github_tracker(issue_id="99") as tracker:
             response = await test_client.post(
                 "/api/workflows",
                 json={
                     "issue_id": "99",
                     "worktree_path": github_worktree,
                     "profile": "github-project",
+                    "start": False,
                 },
             )
 
-            assert response.status_code == status.HTTP_201_CREATED
-            tracker.get_issue.assert_called_once_with("99", cwd=github_worktree)
+        assert response.status_code == status.HTTP_201_CREATED
+        tracker.get_issue.assert_called_once_with("99", cwd=github_worktree)
 
     async def test_github_tracker_with_task_title_skips_fetch(
         self,
