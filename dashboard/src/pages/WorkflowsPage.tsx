@@ -179,7 +179,7 @@ export default function WorkflowsPage() {
 
       {/* Bottom: Queue + Activity (split) - ScrollArea provides overflow handling */}
       {/* Responsive: stacked on mobile/tablet (grid-cols-1), side-by-side on lg+ */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(280px,320px)_1fr] gap-4 p-4 overflow-hidden relative z-10 min-h-[300px]">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(320px,400px)_1fr] gap-4 p-4 overflow-hidden relative z-10 min-h-[300px]">
         <ScrollArea className="h-full lg:max-h-none overflow-hidden">
           <JobQueue
             workflows={filteredWorkflows}
@@ -189,7 +189,7 @@ export default function WorkflowsPage() {
             defaultCollapsed={true}
           />
         </ScrollArea>
-        <ScrollArea className="h-full min-h-[200px] overflow-hidden">
+        <ScrollArea className="h-full min-h-[200px] min-w-0 overflow-hidden">
           {detailError ? (
             <div className="p-4 text-destructive text-sm">
               Failed to load workflow details: {detailError}
