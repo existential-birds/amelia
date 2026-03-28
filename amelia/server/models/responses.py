@@ -20,6 +20,7 @@ class PRCommentResponse(BaseModel):
     author: str | None = Field(default=None, description="Comment author login")
     status: str = Field(default="skipped", description="Fix status: fixed, failed, or skipped")
     status_reason: str | None = Field(default=None, description="Reason for the status")
+    html_url: str | None = Field(default=None, description="URL to the comment on GitHub")
     resolved: bool = Field(default=False, description="Whether the GitHub thread was resolved")
     replied: bool = Field(default=False, description="Whether the bot replied to the thread")
 

@@ -118,6 +118,10 @@ def start_command(
         bool,
         typer.Option("--stream", "-s", help="Stream workflow events to terminal until completion. Press Ctrl+C to disconnect (workflow continues running)."),
     ] = False,
+    branch: Annotated[
+        str | None,
+        typer.Option("--branch", "-b", help="Branch override. Omit to auto-create amelia/<issue-id>. Pass empty string to use current branch as-is."),
+    ] = None,
 ) -> None:
     """Start a new workflow for an issue in the current worktree.
 
@@ -132,6 +136,7 @@ def start_command(
         queue: If True, queue workflow without starting immediately.
         plan: If True, run Architect before queueing (requires --queue).
         stream: If True, stream workflow events to terminal until completion.
+        branch: Branch override. None=auto-create, empty=use current.
     """
     # Validate --description requires --title
     if description and not title:
@@ -156,6 +161,7 @@ def start_command(
             task_description=description,
             start=not queue,
             plan_now=plan,
+            branch=branch,
         )
 
     try:

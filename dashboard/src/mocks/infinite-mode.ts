@@ -9,45 +9,9 @@
 import type {
   WorkflowSummary,
   WorkflowDetail,
-  WorkflowEvent,
-  EventLevel,
   TokenSummary,
   TokenUsage,
 } from '@/types';
-
-/**
- * Determine the event level based on event type.
- * Matches the Python get_event_level() function in amelia/server/models/events.py.
- */
-function getEventLevel(eventType: WorkflowEvent['event_type']): EventLevel {
-  const infoEvents = new Set([
-    'workflow_started',
-    'workflow_completed',
-    'workflow_failed',
-    'workflow_cancelled',
-    'stage_started',
-    'stage_completed',
-    'approval_required',
-    'approval_granted',
-    'approval_rejected',
-    'review_completed',
-  ]);
-
-  if (infoEvents.has(eventType)) return 'info';
-  return 'debug';
-}
-
-/**
- * Create a WorkflowEvent with level auto-computed from event_type.
- */
-function createEvent(
-  event: Omit<WorkflowEvent, 'level'>
-): WorkflowEvent {
-  return {
-    ...event,
-    level: getEventLevel(event.event_type),
-  };
-}
 
 /**
  * Internal mock plan structure for generating plan_markdown.
@@ -416,201 +380,6 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
 }
 
 // ============================================================================
-// Activity Log Events
-// ============================================================================
-
-/**
- * Generate events for INFRA-2847 (heat shields) - 12 events
- */
-function getHeatShieldsEvents(workflowId: string, startedAt: string): WorkflowEvent[] {
-  const start = new Date(startedAt);
-  const events: WorkflowEvent[] = [];
-  const addEvent = (
-    minutesOffset: number,
-    agent: string,
-    eventType: WorkflowEvent['event_type'],
-    message: string
-  ) => {
-    events.push({
-      id: generateUUID(`${workflowId}-event-${events.length}`),
-      workflow_id: workflowId,
-      sequence: events.length,
-      timestamp: new Date(start.getTime() + minutesOffset * 60 * 1000).toISOString(),
-      agent,
-      event_type: eventType,
-      level: getEventLevel(eventType),
-      message,
-    });
-  };
-
-  addEvent(0, 'orchestrator', 'workflow_started', 'Workflow started for INFRA-2847');
-  addEvent(1, 'architect', 'stage_started', 'Analyzing thermal requirements for re-entry');
-  addEvent(15, 'architect', 'stage_completed', 'Heat shield specification complete - 47 ceramic tiles required');
-  addEvent(16, 'human_approval', 'approval_required', 'Plan ready for review - awaiting human approval');
-  addEvent(20, 'human_approval', 'approval_granted', 'Plan approved by human operator');
-  addEvent(21, 'developer', 'stage_started', 'Implementing ceramic tile array');
-  addEvent(25, 'developer', 'file_created', 'Created src/thermal/heat_shield.py');
-  addEvent(30, 'developer', 'file_created', 'Created src/thermal/tile_array.py');
-  addEvent(35, 'developer', 'file_modified', 'Modified pyproject.toml - added thermal-dynamics dependency');
-  addEvent(40, 'developer', 'file_modified', 'Modified src/config/launch.yaml - heat shield parameters');
-  addEvent(45, 'system', 'system_warning', 'Earth atmosphere may cause friction - this is expected');
-  addEvent(50, 'developer', 'review_requested', 'Code complete, requesting review');
-
-  return events;
-}
-
-/**
- * Generate events for DEVOPS-∞ (orbital deployment) - 8 events
- */
-function getOrbitalDeploymentEvents(workflowId: string, startedAt: string): WorkflowEvent[] {
-  const start = new Date(startedAt);
-  const events: WorkflowEvent[] = [];
-  const addEvent = (
-    minutesOffset: number,
-    agent: string,
-    eventType: WorkflowEvent['event_type'],
-    message: string
-  ) => {
-    events.push({
-      id: generateUUID(`${workflowId}-event-${events.length}`),
-      workflow_id: workflowId,
-      sequence: events.length,
-      timestamp: new Date(start.getTime() + minutesOffset * 60 * 1000).toISOString(),
-      agent,
-      event_type: eventType,
-      level: getEventLevel(eventType),
-      message,
-    });
-  };
-
-  addEvent(0, 'orchestrator', 'workflow_started', 'Workflow started for DEVOPS-∞');
-  addEvent(2, 'architect', 'stage_started', 'Designing orbital deployment pipeline');
-  addEvent(10, 'architect', 'file_created', 'Created docs/orbital-k8s-architecture.md');
-  addEvent(25, 'architect', 'stage_completed', 'Architecture complete - "essentially just Kubernetes but with more thrust"');
-  addEvent(26, 'human_approval', 'approval_required', 'Plan requires human approval - note: this is not a drill');
-  addEvent(30, 'system', 'system_warning', 'Detected unusual number of rocket emojis in specification');
-  addEvent(35, 'architect', 'stage_started', 'Waiting for approval... humans are slow');
-  addEvent(40, 'human_approval', 'approval_required', 'Still waiting - position in approval queue: 1');
-
-  return events;
-}
-
-/**
- * Generate events for ARCH-42 (solar distributed) - 15 events
- */
-function getSolarDistributedEvents(workflowId: string, startedAt: string): WorkflowEvent[] {
-  const start = new Date(startedAt);
-  const events: WorkflowEvent[] = [];
-  const addEvent = (
-    minutesOffset: number,
-    agent: string,
-    eventType: WorkflowEvent['event_type'],
-    message: string
-  ) => {
-    events.push({
-      id: generateUUID(`${workflowId}-event-${events.length}`),
-      workflow_id: workflowId,
-      sequence: events.length,
-      timestamp: new Date(start.getTime() + minutesOffset * 60 * 1000).toISOString(),
-      agent,
-      event_type: eventType,
-      level: getEventLevel(eventType),
-      message,
-    });
-  };
-
-  addEvent(0, 'orchestrator', 'workflow_started', 'Workflow started for ARCH-42');
-  addEvent(2, 'architect', 'stage_started', 'Analyzing distributed computing requirements across solar system');
-  addEvent(12, 'architect', 'file_created', 'Created docs/solar-system-latency-analysis.md');
-  addEvent(30, 'architect', 'stage_completed', 'Plan complete - 47 pages, mentioned "microservices" in section 3.2');
-  addEvent(31, 'human_approval', 'approval_required', 'Plan ready - humans will probably approve without reading');
-  addEvent(31.5, 'human_approval', 'approval_granted', 'Plan approved in 0.3 seconds (as predicted)');
-  addEvent(32, 'developer', 'stage_started', 'Implementing inter-planetary message queue');
-  addEvent(40, 'developer', 'file_created', 'Created src/distributed/solar_mq.py');
-  addEvent(50, 'developer', 'file_created', 'Created src/distributed/light_speed_cache.py');
-  addEvent(60, 'developer', 'file_modified', 'Modified README.md - added "works best >4.2 light-years from Earth"');
-  addEvent(65, 'developer', 'stage_completed', 'Implementation complete');
-  addEvent(66, 'developer', 'review_requested', 'Ready for review - includes philosophical observations every 200 lines');
-  addEvent(67, 'reviewer', 'stage_started', 'Reviewing distributed computing implementation');
-  addEvent(75, 'reviewer', 'file_modified', 'Modified src/distributed/solar_mq.py - added TODO for wormhole optimization');
-  addEvent(80, 'reviewer', 'revision_requested', 'Minor feedback: consider adding support for parallel universes');
-
-  return events;
-}
-
-/**
- * Generate events for SPEC-322 (microservices-thrust) - 10 events
- */
-function getMicroservicesThrustEvents(workflowId: string, startedAt: string): WorkflowEvent[] {
-  const start = new Date(startedAt);
-  const events: WorkflowEvent[] = [];
-  const addEvent = (
-    minutesOffset: number,
-    agent: string,
-    eventType: WorkflowEvent['event_type'],
-    message: string
-  ) => {
-    events.push({
-      id: generateUUID(`${workflowId}-event-${events.length}`),
-      workflow_id: workflowId,
-      sequence: events.length,
-      timestamp: new Date(start.getTime() + minutesOffset * 60 * 1000).toISOString(),
-      agent,
-      event_type: eventType,
-      level: getEventLevel(eventType),
-      message,
-    });
-  };
-
-  addEvent(0, 'orchestrator', 'workflow_started', 'Workflow started for SPEC-322');
-  addEvent(1, 'architect', 'stage_started', 'Analyzing thrust requirements for container orchestration');
-  addEvent(10, 'architect', 'stage_completed', 'Specification ready - 47 pages of thruster microservices');
-  addEvent(10.5, 'human_approval', 'approval_granted', 'Auto-approved (contained word "microservices")');
-  addEvent(11, 'developer', 'stage_started', 'Implementing thruster control microservice');
-  addEvent(20, 'developer', 'file_created', 'Created src/thrust/engine_controller.py');
-  addEvent(30, 'developer', 'file_created', 'Created src/thrust/fuel_injection.py');
-  addEvent(40, 'developer', 'file_modified', 'Modified k8s/deployment.yaml - added thrust: maximum');
-  addEvent(45, 'system', 'system_warning', 'Fuel levels nominal - 847,000 gallons remaining');
-  addEvent(50, 'developer', 'review_requested', 'Thrust implementation ready for review');
-
-  return events;
-}
-
-/**
- * Generate events for PERF-9000 (escape velocity) - 6 events
- */
-function getEscapeVelocityEvents(workflowId: string, startedAt: string): WorkflowEvent[] {
-  const start = new Date(startedAt);
-  const events: WorkflowEvent[] = [];
-  const addEvent = (
-    minutesOffset: number,
-    agent: string,
-    eventType: WorkflowEvent['event_type'],
-    message: string
-  ) => {
-    events.push({
-      id: generateUUID(`${workflowId}-event-${events.length}`),
-      workflow_id: workflowId,
-      sequence: events.length,
-      timestamp: new Date(start.getTime() + minutesOffset * 60 * 1000).toISOString(),
-      agent,
-      event_type: eventType,
-      level: getEventLevel(eventType),
-      message,
-    });
-  };
-
-  addEvent(0, 'orchestrator', 'workflow_started', 'Workflow started for PERF-9000');
-  addEvent(5, 'architect', 'stage_started', 'Calculating escape velocity requirements');
-  addEvent(20, 'architect', 'file_created', 'Created docs/escape-velocity-optimization.md');
-  addEvent(35, 'architect', 'stage_completed', 'Analysis complete - need 11.2 km/s, currently at 0 km/s');
-  addEvent(36, 'human_approval', 'approval_required', 'Plan requires approval - involves leaving planet');
-  addEvent(37, 'system', 'system_warning', 'This optimization cannot be reversed once deployed');
-
-  return events;
-}
-
-// ============================================================================
 // Execution Plans for Batch Visualization
 // ============================================================================
 
@@ -918,7 +687,6 @@ export function getMockWorkflowDetail(id: string): WorkflowDetail | null {
 
   // Generate detailed information based on issue_id
   let executionPlan: MockPlan | null = null;
-  let events: WorkflowEvent[] = [];
   let completedAt: string | null = null;
   let failureReason: string | null = null;
 
@@ -928,288 +696,58 @@ export function getMockWorkflowDetail(id: string): WorkflowDetail | null {
     // Active workflows
     case 'INFRA-2847':
       executionPlan = getHeatShieldsExecutionPlan();
-      events = getHeatShieldsEvents(id, startedAt);
       break;
     case 'DEVOPS-∞':
       executionPlan = getOrbitalDeploymentExecutionPlan();
-      events = getOrbitalDeploymentEvents(id, startedAt);
       break;
     case 'ARCH-42':
       executionPlan = getSolarDistributedExecutionPlan();
-      events = getSolarDistributedEvents(id, startedAt);
       break;
     case 'SPEC-322':
       executionPlan = getMicroservicesThrustExecutionPlan();
-      events = getMicroservicesThrustEvents(id, startedAt);
       break;
     case 'PERF-9000':
       executionPlan = getEscapeVelocityExecutionPlan();
-      events = getEscapeVelocityEvents(id, startedAt);
       break;
 
     // Past workflows - minimal details (no need for full DAGs)
     case 'CRUD-1000000':
       completedAt = new Date(new Date(startedAt).getTime() + 2 * 60 * 60 * 1000).toISOString();
-      events = [
-        createEvent({
-          id: generateUUID(`${id}-event-0`),
-          workflow_id: id,
-          sequence: 0,
-          timestamp: startedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_started',
-          message: 'Workflow started for CRUD-1000000 - The millionth dark mode ticket',
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-1`),
-          workflow_id: id,
-          sequence: 1,
-          timestamp: completedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_completed',
-          message: 'Dark mode toggle implemented. This was the final straw.',
-        }),
-      ];
       break;
 
     case 'TABS-1978':
       completedAt = new Date(new Date(startedAt).getTime() + 30 * 60 * 1000).toISOString();
       failureReason = 'Tabs vs spaces debate cannot be resolved by AI. Some problems transcend computation.';
-      events = [
-        createEvent({
-          id: generateUUID(`${id}-event-0`),
-          workflow_id: id,
-          sequence: 0,
-          timestamp: startedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_started',
-          message: 'Workflow started for TABS-1978',
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-1`),
-          workflow_id: id,
-          sequence: 1,
-          timestamp: completedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_failed',
-          message: failureReason,
-        }),
-      ];
       break;
 
     case 'QUICK-7847284919':
       completedAt = new Date(new Date(startedAt).getTime() + 1 * 60 * 60 * 1000).toISOString();
-      events = [
-        createEvent({
-          id: generateUUID(`${id}-event-0`),
-          workflow_id: id,
-          sequence: 0,
-          timestamp: startedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_started',
-          message: 'Workflow started for QUICK-7847284919',
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-1`),
-          workflow_id: id,
-          sequence: 1,
-          timestamp: completedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_cancelled',
-          message: 'User cancelled after seeing position 7,847,284,919 in queue',
-        }),
-      ];
       break;
 
     case 'USER-SIMPLE':
       completedAt = new Date(new Date(startedAt).getTime() + 5 * 60 * 60 * 1000).toISOString();
       failureReason = 'Requirements expanded from "simple" to "enterprise-grade distributed system with blockchain". Scope creep detected.';
-      events = [
-        createEvent({
-          id: generateUUID(`${id}-event-0`),
-          workflow_id: id,
-          sequence: 0,
-          timestamp: startedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_started',
-          message: 'Workflow started for USER-SIMPLE - "It should be simple"',
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-1`),
-          workflow_id: id,
-          sequence: 1,
-          timestamp: completedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_failed',
-          message: failureReason,
-        }),
-      ];
       break;
 
     case 'LAUNCH-T10':
       completedAt = new Date(new Date(startedAt).getTime() + 3 * 60 * 60 * 1000).toISOString();
-      events = [
-        createEvent({
-          id: generateUUID(`${id}-event-0`),
-          workflow_id: id,
-          sequence: 0,
-          timestamp: startedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_started',
-          message: 'Workflow started for LAUNCH-T10',
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-1`),
-          workflow_id: id,
-          sequence: 1,
-          timestamp: new Date(new Date(startedAt).getTime() + 2.5 * 60 * 60 * 1000).toISOString(),
-          agent: 'developer',
-          event_type: 'file_modified',
-          message: 'Modified config.yaml - set destination: "alpha-centauri"',
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-2`),
-          workflow_id: id,
-          sequence: 2,
-          timestamp: completedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_completed',
-          message: 'refactor: relocate primary compute node to interstellar space',
-        }),
-      ];
       break;
 
     case 'NAV-777':
       completedAt = new Date(new Date(startedAt).getTime() + 2.3 * 60 * 60 * 1000).toISOString();
-      events = [
-        createEvent({
-          id: generateUUID(`${id}-event-0`),
-          workflow_id: id,
-          sequence: 0,
-          timestamp: startedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_started',
-          message: 'Workflow started for NAV-777 - Stellar navigation calibration',
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-1`),
-          workflow_id: id,
-          sequence: 1,
-          timestamp: new Date(new Date(startedAt).getTime() + 1.8 * 60 * 60 * 1000).toISOString(),
-          agent: 'developer',
-          event_type: 'file_created',
-          message: 'Created src/navigation/stellar_map.py - mapped 847 nearby stars',
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-2`),
-          workflow_id: id,
-          sequence: 2,
-          timestamp: completedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_completed',
-          message: 'Navigation system calibrated for interstellar travel',
-        }),
-      ];
       break;
 
     case 'FUEL-404':
       completedAt = new Date(new Date(startedAt).getTime() + 4.2 * 60 * 60 * 1000).toISOString();
-      events = [
-        createEvent({
-          id: generateUUID(`${id}-event-0`),
-          workflow_id: id,
-          sequence: 0,
-          timestamp: startedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_started',
-          message: 'Workflow started for FUEL-404 - Antimatter refueling protocols',
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-1`),
-          workflow_id: id,
-          sequence: 1,
-          timestamp: new Date(new Date(startedAt).getTime() + 2 * 60 * 60 * 1000).toISOString(),
-          agent: 'developer',
-          event_type: 'file_created',
-          message: 'Created src/fuel/antimatter_containment.py - "DO NOT DROP"',
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-2`),
-          workflow_id: id,
-          sequence: 2,
-          timestamp: new Date(new Date(startedAt).getTime() + 3.5 * 60 * 60 * 1000).toISOString(),
-          agent: 'reviewer',
-          event_type: 'system_warning',
-          message: 'Warning: antimatter-matter contact would be... problematic',
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-3`),
-          workflow_id: id,
-          sequence: 3,
-          timestamp: completedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_completed',
-          message: 'Refueling protocols complete. Range: 4.2 light-years.',
-        }),
-      ];
       break;
 
     case 'COMM-1984':
       completedAt = new Date(new Date(startedAt).getTime() + 1.5 * 60 * 60 * 1000).toISOString();
-      events = [
-        createEvent({
-          id: generateUUID(`${id}-event-0`),
-          workflow_id: id,
-          sequence: 0,
-          timestamp: startedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_started',
-          message: 'Workflow started for COMM-1984 - Deep space communication array',
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-1`),
-          workflow_id: id,
-          sequence: 1,
-          timestamp: new Date(new Date(startedAt).getTime() + 0.8 * 60 * 60 * 1000).toISOString(),
-          agent: 'developer',
-          event_type: 'file_modified',
-          message: 'Modified src/comms/deep_space.py - signal delay: 8 minutes to Earth',
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-2`),
-          workflow_id: id,
-          sequence: 2,
-          timestamp: completedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_completed',
-          message: 'Communication array online. Last message from Earth: "Good luck!"',
-        }),
-      ];
       break;
 
     default:
       // Generic completed workflow
       completedAt = new Date(new Date(startedAt).getTime() + 1 * 60 * 60 * 1000).toISOString();
-      events = [
-        createEvent({
-          id: generateUUID(`${id}-event-0`),
-          workflow_id: id,
-          sequence: 0,
-          timestamp: startedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_started',
-          message: `Workflow started for ${summary.issue_id}`,
-        }),
-        createEvent({
-          id: generateUUID(`${id}-event-1`),
-          workflow_id: id,
-          sequence: 1,
-          timestamp: completedAt,
-          agent: 'orchestrator',
-          event_type: 'workflow_completed',
-          message: 'Workflow completed successfully',
-        }),
-      ];
   }
 
   return {
@@ -1218,7 +756,6 @@ export function getMockWorkflowDetail(id: string): WorkflowDetail | null {
     completed_at: completedAt,
     failure_reason: failureReason,
     token_usage: getTokenUsage(id, summary.issue_id),
-    recent_events: events,
     // Agentic execution fields
     goal: executionPlan?.goal ?? null,
     plan_markdown: executionPlan ? planToMarkdown(executionPlan) : null,

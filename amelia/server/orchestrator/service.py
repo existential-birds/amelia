@@ -435,12 +435,13 @@ class OrchestratorService:
         task_title: str | None = None,
         task_description: str | None = None,
         artifact_path: str | None = None,
-    ) -> tuple[str, Profile, ImplementationState]:
+        branch: str | None = None,
+    ) -> tuple[str, Profile, ImplementationState, str | None]:
         """Prepare common state needed to create or start a workflow.
 
         Centralizes the common initialization logic for profile resolution,
-        issue fetching, and ImplementationState creation shared across
-        queue_workflow, start_workflow, and queue_and_plan_workflow.
+        issue fetching, branch creation, and ImplementationState creation
+        shared across queue_workflow, start_workflow, and queue_and_plan_workflow.
 
         Args:
             workflow_id: The workflow ID (UUID).
@@ -452,15 +453,25 @@ class OrchestratorService:
             artifact_path: Optional path to design artifact file from brainstorming.
                 Can be worktree-relative (e.g., docs/plans/design.md or /docs/plans/design.md)
                 or an absolute path within the worktree.
+            branch: Branch override. None=auto-create amelia/<issue-id>.
+                Empty string=use current branch as-is. Non-empty=create that branch.
 
         Returns:
-            Tuple of (resolved_path, profile, execution_state).
+            Tuple of (resolved_path, profile, execution_state, branch_name).
 
         Raises:
-            ValueError: If profile not found or artifact_path escapes worktree.
+            ValueError: If profile not found, artifact_path escapes worktree,
+                or branch validation fails.
             FileNotFoundError: If artifact_path is provided but the file doesn't exist.
         """
         profile = await self._resolve_profile(profile_name, worktree_path)
+
+        # Branch creation for local (non-sandbox) workflows
+        created_branch: str | None = None
+        if profile.sandbox.mode not in (SandboxMode.DAYTONA, SandboxMode.CONTAINER):
+            created_branch = await self._setup_workflow_branch(
+                worktree_path, issue_id, branch,
+            )
 
         # Construct issue from provided title or fetch from tracker
         if task_title is not None:
@@ -526,7 +537,75 @@ class OrchestratorService:
             design=design,
         )
 
-        return worktree_path, profile, execution_state
+        return worktree_path, profile, execution_state, created_branch
+
+    @staticmethod
+    async def _setup_workflow_branch(
+        worktree_path: str,
+        issue_id: str,
+        branch: str | None,
+    ) -> str | None:
+        """Create or validate the git branch for a local workflow.
+
+        Args:
+            worktree_path: Path to the git worktree.
+            issue_id: Issue ID used to generate branch name.
+            branch: Branch override from user. None=auto-create,
+                empty string=use current branch, non-empty=create that branch.
+
+        Returns:
+            The branch name being used, or None if branch setup was skipped.
+
+        Raises:
+            ValueError: If on a non-default branch without override,
+                working tree is dirty, or branch creation fails.
+        """
+        from amelia.tools.git_utils import (  # noqa: PLC0415
+            PROTECTED_BRANCHES,
+            checkout_branch as _checkout_branch,
+            create_and_checkout_branch,
+            get_current_branch,
+            has_uncommitted_changes,
+        )
+
+        current_branch = await get_current_branch(worktree_path)
+
+        # Validate we're on a default branch (or detached HEAD is an error)
+        if current_branch is None:
+            raise ValueError(
+                "Currently in detached HEAD state. "
+                "Checkout a default branch (main/master/develop) before starting a workflow, "
+                "or pass --branch to override."
+            )
+
+        if await has_uncommitted_changes(worktree_path):
+            raise ValueError(
+                "Working tree has uncommitted changes. "
+                "Commit or stash them before starting a workflow."
+            )
+
+        # Explicit opt-in: use current branch as-is
+        if branch == "":
+            return current_branch
+
+        if current_branch not in PROTECTED_BRANCHES:
+            raise ValueError(
+                f"Currently on non-default branch '{current_branch}'. "
+                f"Switch to a default branch (main/master/develop) first, "
+                f"or pass --branch to use the current branch as-is."
+            )
+
+        # Determine target branch name
+        target_branch = branch if branch else f"amelia/{issue_id}"
+
+        await create_and_checkout_branch(worktree_path, target_branch)
+        logger.info("Created workflow branch", branch=target_branch, from_branch=current_branch)
+
+        # Restore worktree to the original branch so queued workflows
+        # don't leave the worktree on the issue branch
+        await _checkout_branch(worktree_path, current_branch)
+
+        return target_branch
 
     def _validate_worktree_path(self, worktree_path: str) -> Path:
         """Validate and resolve worktree path securely.
@@ -572,6 +651,7 @@ class OrchestratorService:
         driver: str | None = None,
         task_title: str | None = None,
         task_description: str | None = None,
+        branch: str | None = None,
     ) -> uuid.UUID:
         """Start a new workflow.
 
@@ -582,6 +662,8 @@ class OrchestratorService:
             driver: Optional driver override.
             task_title: Optional task title (skips tracker fetch when provided).
             task_description: Optional task description (defaults to task_title if not provided).
+            branch: Branch override. None=auto-create amelia/<issue-id>.
+                Empty string=use current branch as-is.
 
         Returns:
             The workflow ID (UUID).
@@ -612,13 +694,14 @@ class OrchestratorService:
 
             # Prepare issue and execution state using the helper
             # This also loads the profile from the database
-            _, loaded_profile, execution_state = await self._prepare_workflow_state(
+            _, loaded_profile, execution_state, created_branch = await self._prepare_workflow_state(
                 workflow_id=workflow_id,
                 worktree_path=resolved_path,
                 issue_id=issue_id,
                 profile_name=profile,
                 task_title=task_title,
                 task_description=task_description,
+                branch=branch,
             )
 
             # execution_state.issue is always set by _prepare_workflow_state
@@ -632,6 +715,7 @@ class OrchestratorService:
                 workflow_status=WorkflowStatus.PENDING,
                 started_at=datetime.now(UTC),
                 base_commit=execution_state.base_commit,
+                branch=created_branch,
             )
             try:
                 await self._repository.create(state)
@@ -674,7 +758,7 @@ class OrchestratorService:
         workflow_id = uuid4()
 
         # Prepare common workflow state (settings, profile, issue, execution_state)
-        resolved_path, profile, execution_state = await self._prepare_workflow_state(
+        resolved_path, profile, execution_state, created_branch = await self._prepare_workflow_state(
             workflow_id=workflow_id,
             worktree_path=resolved_path,
             issue_id=request.issue_id,
@@ -682,6 +766,7 @@ class OrchestratorService:
             task_title=request.task_title,
             task_description=request.task_description,
             artifact_path=request.artifact_path,
+            branch=request.branch,
         )
 
         # Handle external plan if provided
@@ -744,6 +829,7 @@ class OrchestratorService:
             plan_cache=plan_cache,
             workflow_status=WorkflowStatus.PENDING,
             base_commit=execution_state.base_commit,
+            branch=created_branch,
             # No started_at - workflow hasn't started
         )
 
@@ -2445,13 +2531,14 @@ class OrchestratorService:
         workflow_id = uuid4()
 
         # Prepare common workflow state (settings, profile, issue, execution_state)
-        resolved_path, profile, execution_state = await self._prepare_workflow_state(
+        resolved_path, profile, execution_state, created_branch = await self._prepare_workflow_state(
             workflow_id=workflow_id,
             worktree_path=resolved_path,
             issue_id=request.issue_id,
             profile_name=request.profile,
             task_title=request.task_title,
             task_description=request.task_description,
+            branch=request.branch,
         )
 
         # Create ServerExecutionState in pending status (architect running)
@@ -2465,6 +2552,7 @@ class OrchestratorService:
             issue_cache=execution_state.issue.model_dump(mode="json"),
             workflow_status=WorkflowStatus.PENDING,
             base_commit=execution_state.base_commit,
+            branch=created_branch,
             # Note: started_at is None - workflow hasn't started yet
         )
 
@@ -2541,6 +2629,19 @@ class OrchestratorService:
             current_count = len(self._active_tasks)
             if current_count >= self._max_concurrent:
                 raise ConcurrencyLimitError(self._max_concurrent, current_count)
+
+            # Checkout the workflow branch if one was persisted
+            if workflow.branch:
+                from amelia.tools.git_utils import checkout_branch  # noqa: PLC0415
+
+                try:
+                    await checkout_branch(workflow.worktree_path, workflow.branch)
+                except ValueError as exc:
+                    raise InvalidStateError(
+                        f"Cannot checkout workflow branch '{workflow.branch}': {exc}",
+                        workflow_id=workflow_id,
+                        current_status=workflow.workflow_status,
+                    ) from exc
 
             # Set started_at timestamp (status transition happens in _run_workflow)
             # NOTE: We don't set workflow_status here - _run_workflow handles

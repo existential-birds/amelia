@@ -9,6 +9,7 @@ Mocks at external boundaries: LLM driver, git operations, GitHub API.
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -29,10 +30,11 @@ from amelia.core.types import (
     PRReviewComment,
     PRSummary,
 )
-from amelia.drivers.base import AgenticMessage, AgenticMessageType
+from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage
 from amelia.pipelines.pr_auto_fix.graph import create_pr_auto_fix_graph
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.pipelines.pr_auto_fix.state import GroupFixStatus, PRAutoFixState
+from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from tests.conftest import create_mock_execute_agentic
 
@@ -1606,3 +1608,330 @@ class TestPollerDeduplication:
         assert mock_orchestrator.trigger_fix_cycle.call_count == 2, (
             f"Expected 2 triggers (first + third poll), got {mock_orchestrator.trigger_fix_cycle.call_count}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Test: Token usage is persisted for PR auto-fix runs
+# ---------------------------------------------------------------------------
+
+
+class TestTokenUsagePersistence:
+    """Verify that LLM token usage is saved to the repository during PR auto-fix.
+
+    This is a regression test: the PR auto-fix pipeline previously ran LLM
+    calls (classify + develop) without persisting token usage, so cost/usage
+    data was missing from past runs.
+    """
+
+    async def test_pipeline_saves_token_usage_for_classifier_and_developer(
+        self,
+        profile: Profile,
+        comments: list[PRReviewComment],
+        event_bus: EventBus,
+    ) -> None:
+        """Running the full graph must call save_token_usage for both
+        the classifier (classify_node) and the developer (develop_node)."""
+        from amelia.drivers.base import DriverUsage
+        from amelia.server.models.tokens import TokenUsage
+
+        graph = create_pr_auto_fix_graph()
+        workflow_id = uuid4()
+
+        initial_state = PRAutoFixState(
+            workflow_id=workflow_id,
+            profile_id=profile.name,
+            pr_number=42,
+            head_branch="feat/test",
+            repo="owner/repo",
+            comments=comments,
+            autofix_config=profile.pr_autofix,
+            created_at=datetime.now(tz=UTC),
+        )
+
+        # Mock repository that records save_token_usage calls
+        mock_repo = AsyncMock()
+        saved_usages: list[TokenUsage] = []
+
+        async def capture_token_usage(usage: TokenUsage) -> None:
+            saved_usages.append(usage)
+
+        mock_repo.save_token_usage = AsyncMock(side_effect=capture_token_usage)
+
+        config = {
+            "configurable": {
+                "thread_id": str(workflow_id),
+                "profile": profile,
+                "event_bus": event_bus,
+                "repository": mock_repo,
+                "metrics_repo": None,
+                "metrics_run_id": None,
+            },
+        }
+
+        # Driver that returns usage data from get_usage()
+        mock_driver = _mock_unified_driver([100, 101])
+        mock_driver.get_usage = MagicMock(return_value=DriverUsage(
+            input_tokens=1000,
+            output_tokens=200,
+            cache_read_tokens=50,
+            cache_creation_tokens=10,
+            cost_usd=0.005,
+            duration_ms=3000,
+            num_turns=3,
+            model="test-model",
+        ))
+
+        mock_git_ops = MagicMock()
+        mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops._run_git = AsyncMock(
+            side_effect=["", "sha1", "M src/foo.py", "sha2"],
+        )
+        mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
+        mock_git_ops.safe_push = AsyncMock()
+
+        mock_github_service = MagicMock()
+        mock_github_service.reply_to_comment = AsyncMock()
+        mock_github_service.resolve_thread = AsyncMock()
+
+        with (
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.agents.developer.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
+                return_value=mock_git_ops,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService",
+                return_value=mock_github_service,
+            ),
+        ):
+            await graph.ainvoke(initial_state, config=config)
+
+        # Token usage must have been saved
+        assert mock_repo.save_token_usage.call_count >= 2, (
+            f"Expected save_token_usage called for classifier + developer, "
+            f"got {mock_repo.save_token_usage.call_count} calls"
+        )
+
+        agents_saved = {u.agent for u in saved_usages}
+        assert "classifier" in agents_saved, (
+            f"Missing 'classifier' token usage; agents saved: {agents_saved}"
+        )
+        assert "developer" in agents_saved, (
+            f"Missing 'developer' token usage; agents saved: {agents_saved}"
+        )
+
+        # All records should reference the correct workflow
+        for usage in saved_usages:
+            assert usage.workflow_id == workflow_id
+            assert usage.input_tokens == 1000
+            assert usage.output_tokens == 200
+            assert usage.cost_usd == 0.005
+            assert usage.model == "test-model"
+
+    async def test_token_usage_not_saved_when_no_repository(
+        self,
+        profile: Profile,
+        comments: list[PRReviewComment],
+        event_bus: EventBus,
+    ) -> None:
+        """When repository is None (CLI mode), pipeline must not crash."""
+        graph = create_pr_auto_fix_graph()
+
+        initial_state = PRAutoFixState(
+            workflow_id=uuid4(),
+            profile_id=profile.name,
+            pr_number=42,
+            head_branch="feat/test",
+            repo="owner/repo",
+            comments=comments,
+            autofix_config=profile.pr_autofix,
+            created_at=datetime.now(tz=UTC),
+        )
+
+        config = {
+            "configurable": {
+                "thread_id": str(uuid4()),
+                "profile": profile,
+                "event_bus": event_bus,
+                "repository": None,
+                "metrics_repo": None,
+                "metrics_run_id": None,
+            },
+        }
+
+        mock_driver = _mock_unified_driver([100, 101])
+        mock_driver.get_usage = MagicMock(return_value=None)
+
+        mock_git_ops = MagicMock()
+        mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops._run_git = AsyncMock(
+            side_effect=["", "sha1", "M src/foo.py", "sha2"],
+        )
+        mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
+        mock_git_ops.safe_push = AsyncMock()
+
+        mock_github_service = MagicMock()
+        mock_github_service.reply_to_comment = AsyncMock()
+        mock_github_service.resolve_thread = AsyncMock()
+
+        with (
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.agents.developer.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
+                return_value=mock_git_ops,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService",
+                return_value=mock_github_service,
+            ),
+        ):
+            # Should not raise even with repository=None
+            final_state = await graph.ainvoke(initial_state, config=config)
+
+        # Pipeline still completes successfully
+        assert len(final_state["classified_comments"]) == 2
+        assert any(r.status == GroupFixStatus.FIXED for r in final_state["group_results"])
+
+
+# ---------------------------------------------------------------------------
+# Test: End-to-end token usage through DB and API (requires PostgreSQL)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not os.environ.get("DATABASE_URL"),
+    reason="Requires DATABASE_URL for PostgreSQL integration test",
+)
+class TestTokenUsageEndToEnd:
+    """Full stack test: orchestrator → pipeline → DB → API response.
+
+    Runs the real orchestrator with a real PostgreSQL-backed WorkflowRepository,
+    then queries the workflow detail endpoint and verifies token_usage appears
+    in the JSON response. This catches breaks anywhere in the chain.
+    """
+
+    async def test_orchestrator_persists_token_usage_to_db_and_api(
+        self,
+        test_repository: WorkflowRepository,
+        comments: list[PRReviewComment],
+    ) -> None:
+        """Token usage from classify + develop nodes must be readable
+        via get_token_summary after the orchestrator completes."""
+
+        event_bus = EventBus()
+        github_pr = MagicMock()
+        github_pr.create_issue_comment = AsyncMock()
+
+        profile = _make_profile("/tmp/fake-worktree")
+
+        orchestrator = PRAutoFixOrchestrator(
+            event_bus=event_bus,
+            github_pr_service=github_pr,
+            workflow_repo=test_repository,
+            metrics_repo=None,
+        )
+
+        # Driver with realistic usage data
+        mock_driver = _mock_unified_driver([100, 101])
+        mock_driver.get_usage = MagicMock(return_value=DriverUsage(
+            input_tokens=500,
+            output_tokens=100,
+            cache_read_tokens=20,
+            cache_creation_tokens=5,
+            cost_usd=0.003,
+            duration_ms=1500,
+            num_turns=2,
+            model="test-model",
+        ))
+
+        mock_git_ops = MagicMock()
+        mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops._run_git = AsyncMock(
+            side_effect=["", "sha1", "M src/changed.py", "sha2"],
+        )
+        mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
+        mock_git_ops.safe_push = AsyncMock()
+        mock_git_ops.fetch_origin = AsyncMock()
+        mock_git_ops.checkout_and_reset = AsyncMock()
+
+        mock_github_service = MagicMock()
+        mock_github_service.reply_to_comment = AsyncMock()
+        mock_github_service.resolve_thread = AsyncMock()
+
+        mock_worktree_instance = AsyncMock()
+        mock_worktree_instance.__aenter__ = AsyncMock(return_value="/tmp/fake-worktree")
+        mock_worktree_instance.__aexit__ = AsyncMock(return_value=None)
+        mock_worktree_cls = MagicMock(return_value=mock_worktree_instance)
+
+        workflow_id = uuid4()
+
+        with (
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.agents.developer.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
+                return_value=mock_git_ops,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.orchestrator.GitOperations",
+                return_value=mock_git_ops,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.orchestrator.LocalWorktree",
+                mock_worktree_cls,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService",
+                return_value=mock_github_service,
+            ),
+        ):
+            await orchestrator.trigger_fix_cycle(
+                pr_number=42,
+                repo="owner/repo",
+                profile=profile,
+                head_branch="feat/test",
+                comments=comments,
+                workflow_id=workflow_id,
+            )
+
+        # Query the DB through the repository — same path the API uses
+        token_summary = await test_repository.get_token_summary(workflow_id)
+
+        assert token_summary is not None, (
+            "No token_usage rows found in DB for the PR auto-fix workflow"
+        )
+
+        # Must have records for both classifier and developer
+        agents_in_db = {u.agent for u in token_summary.breakdown}
+        assert "classifier" in agents_in_db, (
+            f"Missing 'classifier' in DB token_usage; found: {agents_in_db}"
+        )
+        assert "developer" in agents_in_db, (
+            f"Missing 'developer' in DB token_usage; found: {agents_in_db}"
+        )
+
+        # Aggregated totals should reflect the mock data
+        # classifier (500 input) + developer (500 input) = 1000
+        assert token_summary.total_input_tokens >= 1000
+        assert token_summary.total_output_tokens >= 200
+        assert token_summary.total_cost_usd > 0

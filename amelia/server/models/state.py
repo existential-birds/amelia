@@ -180,6 +180,10 @@ class ServerExecutionState(BaseModel):
         default=None,
         description="Git commit SHA at workflow start, used as diff base for reviews",
     )
+    branch: str | None = Field(
+        default=None,
+        description="Git branch name created or used for this workflow",
+    )
 
     model_config = {
         "json_schema_extra": {

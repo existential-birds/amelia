@@ -136,7 +136,7 @@ See the **[Usage Guide](https://existential-birds.github.io/amelia/guide/usage)*
 
 ## Configuration
 
-Configuration is stored in SQLite (`~/.amelia/amelia.db`) and managed via CLI (`amelia config`) or the dashboard at `localhost:8420/settings`.
+Configuration is stored in PostgreSQL and managed via CLI (`amelia config`) or the dashboard at `localhost:8420/settings`.
 
 See [Configuration Reference](https://existential-birds.github.io/amelia/guide/configuration) for profile setup, server settings, and Jira integration.
 

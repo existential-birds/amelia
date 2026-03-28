@@ -122,6 +122,7 @@ async def create_workflow(
                 driver=request.driver,
                 task_title=request.task_title,
                 task_description=request.task_description,
+                branch=request.branch,
             )
     elif request.plan_now:
         # Queue with planning (run Architect, then queue)

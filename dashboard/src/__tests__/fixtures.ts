@@ -140,7 +140,6 @@ export function createMockWorkflowDetail(
     pr_title: null,
     pr_comment_count: null,
     token_usage: null,
-    recent_events: [],
     // Agentic execution fields
     goal: 'Test goal for implementation',
     plan_markdown: null,

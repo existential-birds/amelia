@@ -210,6 +210,7 @@ class PRReviewComment(BaseModel):
         in_reply_to_id: Parent comment ID for threaded replies.
         thread_id: Review thread ID from GraphQL.
         node_id: GraphQL node ID for thread resolution.
+        html_url: URL to the comment on GitHub.
         pr_number: PR number this comment belongs to.
     """
 
@@ -229,6 +230,7 @@ class PRReviewComment(BaseModel):
     diff_hunk: str | None = Field(default=None, description="Diff context for inline comments")
     in_reply_to_id: int | None = Field(default=None, description="Parent comment ID for threaded replies")
     thread_id: str | None = Field(default=None, description="Review thread ID from GraphQL")
+    html_url: str | None = Field(default=None, description="URL to the comment on GitHub")
     node_id: str | None = Field(default=None, description="GraphQL node ID for thread resolution")
     pr_number: int | None = Field(default=None, description="PR number this comment belongs to")
 

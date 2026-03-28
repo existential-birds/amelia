@@ -110,12 +110,12 @@ async def _save_token_usage(
     if repository is None:
         return
 
-    # Get usage via the driver-agnostic get_usage() method
-    driver_usage = driver.get_usage() if hasattr(driver, "get_usage") else None
-    if driver_usage is None:
-        return
-
     try:
+        # Get usage via the driver-agnostic get_usage() method
+        driver_usage = driver.get_usage() if hasattr(driver, "get_usage") else None
+        if driver_usage is None:
+            return
+
         cost = driver_usage.cost_usd or 0.0
 
         # Compute cost from cached pricing if driver didn't provide it

@@ -106,13 +106,16 @@ describe('useElapsedTime', () => {
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(2);
   });
 
-  it('should NOT set up interval for blocked workflows', () => {
+  it('should set up interval for blocked workflows', () => {
     const workflow = createMockWorkflowDetail({
       started_at: '2025-12-06T10:00:00Z',
       status: 'blocked',
     });
 
-    vi.mocked(workflowUtils.formatElapsedTime).mockReturnValue('1h 15m');
+    vi.mocked(workflowUtils.formatElapsedTime)
+      .mockReturnValueOnce('1h 15m')  // Initial state
+      .mockReturnValueOnce('1h 15m')  // useEffect call
+      .mockReturnValueOnce('1h 16m'); // After 60s
 
     const { result } = renderHook(() => useElapsedTime(workflow));
 
@@ -125,9 +128,9 @@ describe('useElapsedTime', () => {
       vi.advanceTimersByTime(60_000);
     });
 
-    // Should still be the same value - no interval updates
-    expect(result.current).toBe('1h 15m');
-    expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(2);
+    // Should update - interval is active for blocked workflows
+    expect(result.current).toBe('1h 16m');
+    expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(3);
   });
 
   it('should NOT set up interval for failed workflows', () => {

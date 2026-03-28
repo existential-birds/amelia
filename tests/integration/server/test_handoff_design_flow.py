@@ -31,11 +31,28 @@ def mock_profile_repo() -> AsyncMock:
     return repo
 
 
+@pytest.fixture
+def mock_git_for_branch():
+    """Mock _setup_workflow_branch to avoid real git operations.
+
+    These tests verify artifact/design handling, not branch logic.
+    Patching the method directly is more robust than mocking individual
+    git utility functions (which depend on deferred-import binding).
+    """
+    with patch.object(
+        OrchestratorService,
+        "_setup_workflow_branch",
+        new_callable=AsyncMock,
+        return_value=None,
+    ):
+        yield
+
+
 class TestHandoffDesignFlow:
     """Test design artifact flows through handoff to implementation."""
 
     async def test_prepare_workflow_state_loads_design_from_artifact_path(
-        self, tmp_path: Path, mock_profile_repo: AsyncMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock, mock_git_for_branch: None
     ) -> None:
         """Design is loaded from artifact_path into ImplementationState."""
         # Create a design artifact file
@@ -54,7 +71,7 @@ class TestHandoffDesignFlow:
             new_callable=AsyncMock,
             return_value="abc123",
         ):
-            _, _, state = await orchestrator._prepare_workflow_state(
+            _, _, state, _ = await orchestrator._prepare_workflow_state(
                 workflow_id=uuid4(),
                 worktree_path=str(tmp_path),
                 issue_id="issue-1",
@@ -69,7 +86,7 @@ class TestHandoffDesignFlow:
         assert state.design.source == "file"
 
     async def test_prepare_workflow_state_without_artifact_path(
-        self, tmp_path: Path, mock_profile_repo: AsyncMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock, mock_git_for_branch: None
     ) -> None:
         """Design is None when no artifact_path provided (backward compatible)."""
         orchestrator = OrchestratorService.__new__(OrchestratorService)
@@ -82,7 +99,7 @@ class TestHandoffDesignFlow:
             new_callable=AsyncMock,
             return_value="abc123",
         ):
-            _, _, state = await orchestrator._prepare_workflow_state(
+            _, _, state, _ = await orchestrator._prepare_workflow_state(
                 workflow_id=uuid4(),
                 worktree_path=str(tmp_path),
                 issue_id="issue-1",
@@ -93,7 +110,7 @@ class TestHandoffDesignFlow:
         assert state.design is None
 
     async def test_prepare_workflow_state_with_missing_artifact_file(
-        self, tmp_path: Path, mock_profile_repo: AsyncMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock, mock_git_for_branch: None
     ) -> None:
         """Raises FileNotFoundError when artifact file doesn't exist."""
         orchestrator = OrchestratorService.__new__(OrchestratorService)
@@ -118,7 +135,7 @@ class TestHandoffDesignFlow:
             )
 
     async def test_prepare_workflow_state_resolves_worktree_relative_artifact_path(
-        self, tmp_path: Path, mock_profile_repo: AsyncMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock, mock_git_for_branch: None
     ) -> None:
         """Artifact path with leading slash is resolved relative to worktree.
 
@@ -142,7 +159,7 @@ class TestHandoffDesignFlow:
             return_value="abc123",
         ):
             # Pass artifact_path with leading slash (worktree-relative)
-            _, _, state = await orchestrator._prepare_workflow_state(
+            _, _, state, _ = await orchestrator._prepare_workflow_state(
                 workflow_id=uuid4(),
                 worktree_path=str(tmp_path),
                 issue_id="issue-1",
@@ -156,7 +173,7 @@ class TestHandoffDesignFlow:
         assert state.design.source == "file"
 
     async def test_queue_workflow_passes_artifact_path(
-        self, tmp_path: Path, mock_profile_repo: AsyncMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock, mock_git_for_branch: None
     ) -> None:
         """queue_workflow passes artifact_path through to _prepare_workflow_state."""
         # Create design file
@@ -199,7 +216,7 @@ class TestHandoffDesignFlow:
         assert state.profile_id == "test"  # Profile ID should be set
 
     async def test_prepare_workflow_state_rejects_path_traversal(
-        self, tmp_path: Path, mock_profile_repo: AsyncMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock, mock_git_for_branch: None
     ) -> None:
         """Rejects artifact_path that escapes worktree via .. sequences."""
         orchestrator = OrchestratorService.__new__(OrchestratorService)
@@ -224,7 +241,7 @@ class TestHandoffDesignFlow:
             )
 
     async def test_prepare_workflow_state_rejects_absolute_path_outside_worktree(
-        self, tmp_path: Path, mock_profile_repo: AsyncMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock, mock_git_for_branch: None
     ) -> None:
         """Rejects absolute paths that would escape worktree.
 
@@ -256,7 +273,7 @@ class TestHandoffDesignFlow:
             )
 
     async def test_prepare_workflow_state_handles_absolute_path_within_worktree(
-        self, tmp_path: Path, mock_profile_repo: AsyncMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock, mock_git_for_branch: None
     ) -> None:
         """Absolute path within worktree is handled correctly without path duplication.
 
@@ -283,7 +300,7 @@ class TestHandoffDesignFlow:
             # Pass artifact_path as absolute path within worktree
             # This is what the LLM actually returns from write_design_doc
             absolute_artifact_path = str(design_file)  # e.g., /tmp/pytest-xxx/docs/plans/design.md
-            _, _, state = await orchestrator._prepare_workflow_state(
+            _, _, state, _ = await orchestrator._prepare_workflow_state(
                 workflow_id=uuid4(),
                 worktree_path=str(tmp_path),
                 issue_id="issue-1",
@@ -297,7 +314,7 @@ class TestHandoffDesignFlow:
         assert state.design.source == "file"
 
     async def test_prepare_workflow_state_rejects_symlink_escape(
-        self, tmp_path: Path, mock_profile_repo: AsyncMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock, mock_git_for_branch: None
     ) -> None:
         """Rejects artifact_path that escapes via symlinks."""
         # Create a symlink that points outside the worktree

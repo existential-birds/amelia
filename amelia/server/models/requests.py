@@ -146,6 +146,17 @@ class CreateWorkflowRequest(BaseModel):
         ),
     ] = None
 
+    branch: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=(
+                "Branch override. None=auto-create amelia/<issue-id>. "
+                "Empty string=use current branch as-is."
+            ),
+        ),
+    ] = None
+
     @model_validator(mode="after")
     def validate_plan_fields(self) -> "CreateWorkflowRequest":
         """Validate plan_file and plan_content constraints.

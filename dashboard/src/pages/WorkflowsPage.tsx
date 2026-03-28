@@ -1,8 +1,7 @@
 /**
  * @fileoverview Main workflows listing page.
  *
- * Displays the active workflow's header with job queue and activity log
- * in a split view below.
+ * Displays the active workflow's header with job queue below.
  */
 import { useCallback, useMemo, useState } from 'react';
 import { useLoaderData, useNavigate, useParams } from 'react-router-dom';
@@ -14,7 +13,6 @@ import { WorkflowEmptyState } from '@/components/WorkflowEmptyState';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
 import { TypeBadge } from '@/components/TypeBadge';
-import { ActivityLog } from '@/components/ActivityLog';
 import { JobQueue } from '@/components/JobQueue';
 import { ApprovalControls } from '@/components/ApprovalControls';
 import { PendingWorkflowControls } from '@/components/PendingWorkflowControls';
@@ -29,11 +27,11 @@ import type { WorkflowSummary } from '@/types';
 import type { workflowsLoader } from '@/loaders/workflows';
 
 /**
- * Displays job queue with activity log.
+ * Displays job queue.
  *
  * Layout:
  * - Top: Workflow header (full width)
- * - Bottom: Job queue (1/3) and activity log (2/3) side by side
+ * - Bottom: Job queue
  *
  * The active workflow is determined by priority:
  * 1. Running workflow (status === 'in_progress')
@@ -85,7 +83,7 @@ export default function WorkflowsPage() {
     }
   }, []);
 
-  if (workflows.length === 0 && !detail) {
+  if (workflows.length === 0 && !detail && !detailError) {
     return <WorkflowEmptyState variant="no-workflows" />;
   }
 
@@ -177,10 +175,16 @@ export default function WorkflowsPage() {
         </div>
       )}
 
-      {/* Bottom: Queue + Activity (split) - ScrollArea provides overflow handling */}
-      {/* Responsive: stacked on mobile/tablet (grid-cols-1), side-by-side on lg+ */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(320px,400px)_1fr] gap-4 p-4 overflow-hidden relative z-10 min-h-[300px]">
-        <ScrollArea className="h-full lg:max-h-none overflow-hidden">
+      {/* Detail error banner */}
+      {detailError && (
+        <div className="px-4 pt-4 text-destructive text-sm">
+          Failed to load workflow details: {detailError}
+        </div>
+      )}
+
+      {/* Bottom: Job Queue */}
+      <div className="flex-1 p-4 overflow-hidden relative z-10 min-h-[300px]">
+        <ScrollArea className="h-full overflow-hidden">
           <JobQueue
             workflows={filteredWorkflows}
             selectedId={displayedId}
@@ -188,15 +192,6 @@ export default function WorkflowsPage() {
             collapsible={isTablet}
             defaultCollapsed={true}
           />
-        </ScrollArea>
-        <ScrollArea className="h-full min-h-[200px] min-w-0 overflow-hidden">
-          {detailError ? (
-            <div className="p-4 text-destructive text-sm">
-              Failed to load workflow details: {detailError}
-            </div>
-          ) : detail ? (
-            <ActivityLog workflowId={detail.id} initialEvents={detail.recent_events} />
-          ) : null}
         </ScrollArea>
       </div>
     </div>

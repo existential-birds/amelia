@@ -3,30 +3,13 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import WorkflowsPage from './WorkflowsPage';
-import { createMockWorkflowSummary, createMockWorkflowDetail, createMockEvent } from '@/__tests__/fixtures';
+import { createMockWorkflowSummary, createMockWorkflowDetail } from '@/__tests__/fixtures';
 import type { WorkflowSummary, WorkflowDetail } from '@/types';
 
 // Mock modules
 vi.mock('@/utils/workflow', () => ({
   getActiveWorkflow: vi.fn(),
   formatElapsedTime: vi.fn(),
-}));
-
-// Mock useVirtualizer to render all items (JSDOM doesn't support scroll dimensions)
-vi.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: (index: number) => number }) => {
-    const items = Array.from({ length: count }, (_, index) => ({
-      index,
-      key: index,
-      size: estimateSize(index),
-      start: Array.from({ length: index }, (_, i) => estimateSize(i)).reduce((a, b) => a + b, 0),
-    }));
-    return {
-      getVirtualItems: () => items,
-      getTotalSize: () => items.reduce((acc, item) => acc + item.size, 0),
-      scrollToIndex: vi.fn(),
-    };
-  },
 }));
 
 import { getActiveWorkflow, formatElapsedTime } from '@/utils/workflow';
@@ -48,17 +31,6 @@ const mockWorkflowDetail = createMockWorkflowDetail({
   status: 'in_progress',
   created_at: '2025-12-07T08:55:00Z',
   started_at: '2025-12-07T09:00:00Z',
-  recent_events: [
-    createMockEvent({
-      id: 'e1',
-      workflow_id: 'wf-001',
-      sequence: 1,
-      timestamp: '2025-12-07T09:01:00Z',
-      event_type: 'stage_started',
-      agent: 'developer',
-      message: 'Started coding',
-    }),
-  ],
   goal: null,
 });
 
@@ -79,17 +51,6 @@ const mockSecondWorkflowDetail = createMockWorkflowDetail({
   status: 'blocked',
   created_at: '2025-12-07T07:55:00Z',
   started_at: '2025-12-07T08:00:00Z',
-  recent_events: [
-    createMockEvent({
-      id: 'e2',
-      workflow_id: 'wf-002',
-      sequence: 1,
-      timestamp: '2025-12-07T08:01:00Z',
-      event_type: 'stage_started',
-      agent: 'reviewer',
-      message: 'Started review',
-    }),
-  ],
   goal: 'Fix the login bug',
   plan_markdown: '## Plan\n\n1. Identify the issue\n2. Fix the bug',
 });
@@ -98,7 +59,7 @@ const mockSecondWorkflowDetail = createMockWorkflowDetail({
  * Helper to render WorkflowsPage with router context and loader data
  */
 function renderPage(
-  loaderData: { workflows: WorkflowSummary[]; detail: WorkflowDetail | null },
+  loaderData: { workflows: WorkflowSummary[]; detail: WorkflowDetail | null; detailError?: string | null },
   initialPath = '/'
 ) {
   const router = createMemoryRouter(
@@ -185,25 +146,23 @@ describe('WorkflowsPage', () => {
     });
   });
 
-  it('should display job queue and activity log side by side', async () => {
+  it('should display job queue', async () => {
     renderPage({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
 
     await waitFor(() => {
-      // JobQueue renders the section title
       expect(screen.getByText('JOB QUEUE')).toBeInTheDocument();
-      // ActivityLog renders stage headers based on events
-      expect(screen.getByText('Implementation (Developer)')).toBeInTheDocument();
     });
   });
 
-  it('should not show loading skeleton when detail is pre-loaded from loader', async () => {
-    renderPage({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
+  it('should show job queue alongside error banner when detailError is set', async () => {
+    renderPage(
+      { workflows: [mockWorkflowSummary], detail: null, detailError: 'Network error' },
+      '/workflows'
+    );
 
     await waitFor(() => {
-      // Should not see loading text when detail is pre-loaded
-      expect(screen.queryByText('Loading activity...')).not.toBeInTheDocument();
-      // Should see actual activity log with stage headers
-      expect(screen.getByText('Implementation (Developer)')).toBeInTheDocument();
+      expect(screen.getByText(/Failed to load workflow details/)).toBeInTheDocument();
+      expect(screen.getByText('JOB QUEUE')).toBeInTheDocument();
     });
   });
 

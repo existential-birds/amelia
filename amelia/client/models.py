@@ -33,6 +33,13 @@ class CreateWorkflowRequest(BaseModel):
         default=None,
         description="Inline plan markdown content",
     )
+    branch: str | None = Field(
+        default=None,
+        description=(
+            "Branch override. None=auto-create amelia/<issue-id>. "
+            "Empty string=use current branch as-is."
+        ),
+    )
 
 
 class CreateReviewWorkflowRequest(BaseModel):

@@ -80,7 +80,7 @@ export interface WorkflowSummary {
 
 /**
  * Complete detailed information about a workflow.
- * Extends WorkflowSummary with additional metadata, token usage, and event history.
+ * Extends WorkflowSummary with additional metadata and token usage.
  */
 export interface WorkflowDetail extends WorkflowSummary {
   /** Absolute filesystem path to the git worktree. */
@@ -95,9 +95,6 @@ export interface WorkflowDetail extends WorkflowSummary {
   /** Token usage summary with breakdown by agent, or null if not available. */
   token_usage: TokenSummary | null;
 
-  /** Recent workflow events for this workflow, ordered by sequence number. */
-  recent_events: WorkflowEvent[];
-
   // Agentic execution fields
   /** High-level goal or task description for the developer. */
   goal: string | null;
@@ -110,6 +107,9 @@ export interface WorkflowDetail extends WorkflowSummary {
 
   /** PR comments with resolution status, only present for pr_auto_fix workflows. */
   pr_comments: PRCommentData[] | null;
+
+  /** Whether this failed workflow can be resumed from its last checkpoint. Derived client-side from the API response. */
+  recoverable?: boolean;
 }
 
 // ============================================================================
