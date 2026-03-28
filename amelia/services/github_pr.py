@@ -251,6 +251,7 @@ class GitHubPRService:
                     subject_type=comment.get("subject_type"),
                     diff_hunk=comment.get("diff_hunk"),
                     in_reply_to_id=comment.get("in_reply_to_id"),
+                    html_url=comment.get("html_url"),
                     thread_id=thread_id,
                     node_id=comment.get("node_id"),
                     pr_number=pr_number,

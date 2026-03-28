@@ -707,6 +707,7 @@ class PRAutoFixOrchestrator:
                     "status_reason": comment_status_reason.get(
                         cid, "Not actionable or filtered"
                     ),
+                    "html_url": comment_dict.get("html_url"),
                     "resolved": resolution.get("resolved", False),
                     "replied": resolution.get("replied", False),
                 }
