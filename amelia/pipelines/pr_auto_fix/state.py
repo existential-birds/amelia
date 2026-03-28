@@ -108,3 +108,6 @@ class PRAutoFixState(BasePipelineState):
     # Configuration
     autofix_config: PRAutoFixConfig = Field(default_factory=PRAutoFixConfig)
     comments: list[PRReviewComment] = Field(default_factory=list)
+
+    # Classification audit data (persisted by orchestrator after run row exists)
+    classification_audit_data: list[dict[str, object]] = Field(default_factory=list)

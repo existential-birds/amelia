@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronsUpDown } from 'lucide-react';
+import { ChevronsUpDown, Check, X } from 'lucide-react';
 
 import { api } from '@/api/client';
 import type { GitHubIssueSummary } from '@/types';
@@ -22,11 +22,14 @@ import {
 } from '@/components/ui/command';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 interface GitHubIssueComboboxProps {
   id?: string;
   profile: string;
   onSelect: (issue: GitHubIssueSummary) => void;
+  value?: { number: number; title: string } | null;
+  onClear?: () => void;
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -42,7 +45,14 @@ function formatRelativeTime(dateStr: string): string {
   return `${Math.floor(diffDays / 365)}y ago`;
 }
 
-export function GitHubIssueCombobox({ id, profile, onSelect }: GitHubIssueComboboxProps) {
+const _MAX_TRIGGER_TITLE_LENGTH = 40;
+
+function truncateTitle(title: string): string {
+  if (title.length <= _MAX_TRIGGER_TITLE_LENGTH) return title;
+  return title.slice(0, _MAX_TRIGGER_TITLE_LENGTH) + '...';
+}
+
+export function GitHubIssueCombobox({ id, profile, onSelect, value, onClear }: GitHubIssueComboboxProps) {
   const [open, setOpen] = useState(false);
   const [issues, setIssues] = useState<GitHubIssueSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -86,11 +96,11 @@ export function GitHubIssueCombobox({ id, profile, onSelect }: GitHubIssueCombob
     };
   }, [fetchIssues]);
 
-  const handleSearchChange = (value: string) => {
-    setSearch(value);
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      fetchIssues(value);
+      fetchIssues(val);
     }, 300);
   };
 
@@ -102,19 +112,42 @@ export function GitHubIssueCombobox({ id, profile, onSelect }: GitHubIssueCombob
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          id={id}
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          aria-label="Select issue"
-          className="w-full justify-between"
-        >
-          Select GitHub issue...
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
+      <div className="relative">
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            aria-label="Select issue"
+            className="w-full justify-between pr-10"
+          >
+            {value ? (
+              <span className="truncate">
+                #{value.number} — {truncateTitle(value.title)}
+              </span>
+            ) : (
+              'Select GitHub issue...'
+            )}
+            <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50 shrink-0" />
+          </Button>
+        </PopoverTrigger>
+        {value && onClear && (
+          <button
+            type="button"
+            aria-label="Clear issue selection"
+            data-testid="clear-issue-btn"
+            className="absolute right-7 top-1/2 -translate-y-1/2 h-4 w-4 opacity-70 hover:opacity-100"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClear();
+            }}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
@@ -140,6 +173,12 @@ export function GitHubIssueCombobox({ id, profile, onSelect }: GitHubIssueCombob
                       onSelect={() => handleSelect(issue)}
                       className="flex items-center gap-2"
                     >
+                      <Check
+                        className={cn(
+                          'h-4 w-4 shrink-0',
+                          issue.number === value?.number ? 'opacity-100' : 'opacity-0',
+                        )}
+                      />
                       <span className="text-muted-foreground text-xs font-mono shrink-0">
                         #{issue.number}
                       </span>

@@ -25,6 +25,18 @@ from amelia.drivers.base import (
 from amelia.drivers.cli.utils import strip_markdown_fences
 
 
+# Codex CLI lifecycle event types that carry only metadata (usage, timing)
+# and never contain the actual model output.  Used by _parse_json_response
+# to skip these when scanning NDJSON for content-bearing lines.
+_LIFECYCLE_EVENT_TYPES: frozenset[str] = frozenset({
+    "turn.completed",
+    "turn.started",
+    "response.completed",
+    "thread.started",
+    "thread.completed",
+})
+
+
 class CodexApprovalMode(StrEnum):
     """Codex CLI sandbox mode controlling what the agent can do autonomously."""
 
@@ -266,6 +278,10 @@ class CodexCliDriver(DriverInterface):
     def _parse_json_response(self, raw_output: str) -> Any:
         """Parse JSON from codex CLI output, handling common issues.
 
+        The Codex CLI may emit NDJSON (one JSON object per line).  When that
+        happens, we prefer content-bearing lines over lifecycle events like
+        ``turn.completed`` which carry only usage metadata.
+
         Args:
             raw_output: Raw output from codex CLI.
 
@@ -282,6 +298,18 @@ class CodexCliDriver(DriverInterface):
         except json.JSONDecodeError as e:
             lines = [line for line in text.splitlines() if line.strip()]
             if len(lines) > 1:
+                # NDJSON: scan in reverse for a content-bearing line,
+                # skipping lifecycle event envelopes.
+                for line in reversed(lines):
+                    try:
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(obj, dict) and obj.get("type") in _LIFECYCLE_EVENT_TYPES:
+                        continue  # skip turn.completed, etc.
+                    return obj
+                # All parseable lines were lifecycle events — return the last one
+                # and let the caller deal with validation.
                 try:
                     return json.loads(lines[-1])
                 except json.JSONDecodeError:
@@ -337,7 +365,13 @@ class CodexCliDriver(DriverInterface):
         # Extract data from response - keep as dict when possible to avoid
         # unnecessary JSON serialization/deserialization
         if isinstance(parsed, dict):
-            if "result" in parsed:
+            # Unwrap item.completed event envelopes (Codex CLI may emit these
+            # even in non-streaming mode).  The actual payload lives in
+            # item.text for agent_message items.
+            if parsed.get("type") == "item.completed" and isinstance(parsed.get("item"), dict):
+                item = parsed["item"]
+                data = item.get("text") or item.get("content") or item
+            elif "result" in parsed:
                 data = parsed["result"]
             elif "text" in parsed:
                 data = parsed["text"]
@@ -354,9 +388,33 @@ class CodexCliDriver(DriverInterface):
                 # If data is a string, parse it as JSON first
                 if isinstance(data, str):
                     data = json.loads(data)
+
+                # Codex models sometimes return a bare list instead of the
+                # wrapper object the schema expects (e.g. [{...}, ...] instead
+                # of {"classifications": [{...}, ...]}).  Detect this and wrap
+                # when the schema has exactly one list-typed field at root.
+                if isinstance(data, list):
+                    list_fields = [
+                        name for name, info in schema.model_fields.items()
+                        if info.annotation is not None
+                        and hasattr(info.annotation, "__origin__")
+                        and info.annotation.__origin__ is list
+                    ]
+                    if len(list_fields) == 1:
+                        data = {list_fields[0]: data}
+
                 result = schema.model_validate(data)
                 return (result, None)
             except (ValidationError, json.JSONDecodeError) as e:
+                logger.error(
+                    "Codex generate() schema validation failed",
+                    schema=schema.__name__,
+                    data_type=type(data).__name__,
+                    data_preview=str(data)[:500],
+                    raw_output_preview=raw_output[:2000],
+                    parsed_type=type(parsed).__name__,
+                    parsed_keys=list(parsed.keys()) if isinstance(parsed, dict) else None,
+                )
                 raise SchemaValidationError(
                     f"Schema validation failed: {e}",
                     provider_name=self.PROVIDER_NAME,

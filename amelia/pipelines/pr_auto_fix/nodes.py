@@ -8,6 +8,7 @@ resolve threads).
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
@@ -85,34 +86,23 @@ async def classify_node(
         filtered, driver, state.autofix_config,
     )
 
-    # Persist classification audit log if metrics_repo available
-    configurable = config.get("configurable", {})
-    metrics_repo = configurable.get("metrics_repo")
-    run_id = configurable.get("metrics_run_id")
-    if metrics_repo is not None and run_id is not None:
-        try:
-            prompt_hash = get_prompt_hash(state.autofix_config.aggressiveness.name)
-            classifications_data = []
-            for comment in filtered:
-                cls = classifications.get(comment.id)
-                if cls is not None:
-                    classifications_data.append({
-                        "comment_id": comment.id,
-                        "body_snippet": comment.body[:200],
-                        "category": str(cls.category),
-                        "confidence": cls.confidence,
-                        "actionable": cls.actionable,
-                        "aggressiveness_level": state.autofix_config.aggressiveness.name,
-                        "prompt_hash": prompt_hash,
-                    })
-            if classifications_data:
-                await metrics_repo.save_classifications(run_id, classifications_data)
-        except Exception as exc:
-            logger.warning(
-                "Failed to persist classification audit log (non-fatal)",
-                error=str(exc),
-                error_type=type(exc).__name__,
-            )
+    # Build classification audit data for deferred persistence.
+    # Stored in state and persisted by the orchestrator after the
+    # pr_autofix_runs row exists (avoids FK violation).
+    prompt_hash = get_prompt_hash(state.autofix_config.aggressiveness.name)
+    classifications_data: list[dict[str, object]] = []
+    for comment in filtered:
+        cls = classifications.get(comment.id)
+        if cls is not None:
+            classifications_data.append({
+                "comment_id": comment.id,
+                "body_snippet": comment.body[:200],
+                "category": str(cls.category),
+                "confidence": cls.confidence,
+                "actionable": cls.actionable,
+                "aggressiveness_level": state.autofix_config.aggressiveness.name,
+                "prompt_hash": prompt_hash,
+            })
 
     # Group by file path
     file_group_comments = group_comments_by_file(state.comments, classifications)
@@ -126,6 +116,7 @@ async def classify_node(
     return {
         "classified_comments": list(classifications.values()),
         "file_groups": file_groups,
+        "classification_audit_data": classifications_data,
     }
 
 
@@ -135,6 +126,8 @@ def _build_developer_goal(
     classifications: dict[int, CommentClassification],
     pr_number: int,
     head_branch: str,
+    *,
+    cwd: str | None = None,
 ) -> str:
     """Build a Developer goal string with full context for a file group.
 
@@ -144,6 +137,9 @@ def _build_developer_goal(
         classifications: Classification results for looking up category/reason.
         pr_number: PR number for context.
         head_branch: PR head branch name.
+        cwd: Working directory the agent will run in. When provided, anchors
+            all file paths relative to this directory so the agent doesn't
+            resolve them against some other location on disk.
 
     Returns:
         Goal string with comment body, file path, line, diff hunk,
@@ -151,6 +147,18 @@ def _build_developer_goal(
     """
     parts: list[str] = []
     parts.append(f"Fix code based on PR #{pr_number} review comments (branch: {head_branch}).")
+
+    # Anchor the agent to its working directory so it doesn't resolve
+    # file paths against a different checkout or the original repo.
+    if cwd:
+        parts.append("")
+        parts.append("## Working Directory")
+        parts.append(f"You are working in: `{cwd}`")
+        parts.append(
+            "All file paths in the comments below are **relative to this directory**. "
+            "Open files using these relative paths — do NOT construct absolute paths "
+            "to other directories on disk."
+        )
     parts.append("")
 
     for comment in comments:
@@ -229,11 +237,25 @@ async def develop_node(
     for file_path, comment_ids in state.file_groups.items():
         comments = [comments_by_id[cid] for cid in comment_ids if cid in comments_by_id]
 
-        # Build goal with full context
+        # Build goal with full context, anchoring paths to the worktree CWD
         goal_text = _build_developer_goal(
             file_path, comments, classifications,
             state.pr_number, state.head_branch,
+            cwd=profile.repo_root,
         )
+
+        # Pre-flight: warn if referenced files don't exist in the worktree.
+        # This catches misconfigured repo_root early (e.g. worktree created
+        # from the wrong repo) instead of letting the agent stumble.
+        repo_root = Path(profile.repo_root)
+        if file_path:
+            target = repo_root / file_path
+            if not target.exists():
+                logger.warning(
+                    "Referenced file not found in worktree — agent may fail",
+                    file_path=file_path,
+                    repo_root=str(repo_root),
+                )
 
         try:
             # Snapshot changed files before this group runs so we can detect
@@ -406,7 +428,7 @@ async def commit_push_node(
 
     # Push separately so commit_sha is always returned on commit success
     try:
-        await git_ops.safe_push(state.head_branch)
+        await git_ops.safe_push(state.head_branch, skip_hooks=True)
         logger.info(
             "Committed and pushed fixes",
             sha=sha[:8],
@@ -415,7 +437,13 @@ async def commit_push_node(
         return {"status": "completed", "commit_sha": sha}
 
     except ValueError as e:
-        logger.error("Git push failed", error=str(e), sha=sha[:8])
+        logger.error(
+            "Git push failed",
+            error=str(e),
+            sha=sha[:8],
+            branch=state.head_branch,
+            repo_root=str(profile.repo_root),
+        )
         return {"status": "failed", "commit_sha": sha, "error": str(e)}
 
 

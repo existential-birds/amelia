@@ -262,7 +262,7 @@ Classify every comment provided. Do not skip any.""",
 ## Process
 
 1. Read the review comments carefully to understand the reviewer's intent.
-2. Examine the referenced files and lines to understand the current code.
+2. Open the referenced files using the **relative paths** from the comments.
 3. When a comment references a data contract (API response, schema, model), check both the producer and consumer to confirm the mismatch is real. Do not fix only one side.
 4. Identify the root cause of each issue.
 5. Apply the fix with the smallest possible diff.

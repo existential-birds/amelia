@@ -20,6 +20,7 @@ const mockIssues: GitHubIssueSummary[] = [
   {
     number: 42,
     title: 'Fix login bug',
+    body: 'The login page crashes when clicking submit',
     labels: [{ name: 'bug', color: 'd73a4a' }],
     assignee: 'alice',
     created_at: '2026-03-01T10:00:00Z',
@@ -28,6 +29,7 @@ const mockIssues: GitHubIssueSummary[] = [
   {
     number: 17,
     title: 'Add dark mode',
+    body: '',
     labels: [],
     assignee: null,
     created_at: '2026-02-15T08:00:00Z',
@@ -104,5 +106,36 @@ describe('GitHubIssueCombobox', () => {
     await waitFor(() => {
       expect(screen.getByText('bug')).toBeInTheDocument();
     });
+  });
+
+  it('displays selected issue in trigger button', () => {
+    render(
+      <GitHubIssueCombobox
+        profile="test"
+        onSelect={onSelect}
+        value={{ number: 42, title: 'Fix login bug' }}
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: /select issue/i });
+    expect(trigger).toHaveTextContent('#42');
+    expect(trigger).toHaveTextContent('Fix login bug');
+    expect(trigger).not.toHaveTextContent('Select GitHub issue...');
+  });
+
+  it('shows clear button when value is set and calls onClear when clicked', async () => {
+    const onClear = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <GitHubIssueCombobox
+        profile="test"
+        onSelect={onSelect}
+        value={{ number: 42, title: 'Fix login bug' }}
+        onClear={onClear}
+      />,
+    );
+
+    const clearBtn = screen.getByTestId('clear-issue-btn');
+    await user.click(clearBtn);
+    expect(onClear).toHaveBeenCalledTimes(1);
   });
 });

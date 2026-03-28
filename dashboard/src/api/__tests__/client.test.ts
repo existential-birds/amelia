@@ -373,6 +373,7 @@ describe('API Client', () => {
           {
             number: 42,
             title: 'Fix login bug',
+            body: 'The login page crashes when clicking submit',
             labels: [{ name: 'bug', color: 'd73a4a' }],
             assignee: 'alice',
             created_at: '2026-03-01T10:00:00Z',

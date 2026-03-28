@@ -399,6 +399,10 @@ class PRAutoFixOrchestrator:
             # Run the pipeline with timing
             start_time = time.monotonic()
 
+            # Generate metrics run_id upfront so classify_node and
+            # save_run_metrics use the same FK-consistent value.
+            metrics_run_id = uuid4()
+
             pipeline = PRAutoFixPipeline()
             graph = pipeline.create_graph()
             initial_state = pipeline.get_initial_state(
@@ -418,7 +422,7 @@ class PRAutoFixOrchestrator:
                         "profile": profile,
                         "event_bus": self._event_bus,
                         "metrics_repo": self._metrics_repo,
-                        "metrics_run_id": str(workflow_id),
+                        "metrics_run_id": str(metrics_run_id),
                     },
                 },
             )
@@ -534,11 +538,10 @@ class PRAutoFixOrchestrator:
                         ).get("resolved", False)
                     )
 
-                    run_id = uuid4()
                     prompt_hash = get_prompt_hash(config.aggressiveness.name)
 
                     await self._metrics_repo.save_run_metrics(
-                        run_id=run_id,
+                        run_id=metrics_run_id,
                         workflow_id=workflow_id,
                         profile_id=profile.name,
                         pr_number=pr_number,
@@ -552,6 +555,17 @@ class PRAutoFixOrchestrator:
                         duration_seconds=duration_seconds,
                         prompt_hash=prompt_hash,
                     )
+
+                    # Persist deferred classification audit data (now FK-safe)
+                    audit_data = (
+                        final_state.get("classification_audit_data", [])
+                        if isinstance(final_state, dict)
+                        else []
+                    )
+                    if audit_data:
+                        await self._metrics_repo.save_classifications(
+                            metrics_run_id, audit_data,
+                        )
                 except Exception as metrics_exc:
                     logger.warning(
                         "Failed to persist run metrics (non-fatal)",

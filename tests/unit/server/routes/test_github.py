@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from amelia.core.types import Profile, TrackerType
 from amelia.server.database import ProfileRepository
 from amelia.server.dependencies import get_profile_repository
-from amelia.server.routes.github import router
+from amelia.server.routes.github import _parse_issue, router
 
 
 @pytest.fixture
@@ -49,6 +49,7 @@ def mock_gh_output() -> str:
         {
             "number": 42,
             "title": "Fix login bug",
+            "body": "The login page crashes when clicking submit",
             "labels": [{"name": "bug", "color": "d73a4a"}],
             "assignees": [{"login": "alice"}],
             "createdAt": "2026-03-01T10:00:00Z",
@@ -57,6 +58,7 @@ def mock_gh_output() -> str:
         {
             "number": 17,
             "title": "Add dark mode",
+            "body": "",
             "labels": [],
             "assignees": [],
             "createdAt": "2026-02-15T08:00:00Z",
@@ -93,6 +95,7 @@ class TestListGitHubIssues:
         assert len(data["issues"]) == 2
         assert data["issues"][0]["number"] == 42
         assert data["issues"][0]["title"] == "Fix login bug"
+        assert data["issues"][0]["body"] == "The login page crashes when clicking submit"
         assert data["issues"][0]["labels"] == [{"name": "bug", "color": "d73a4a"}]
         assert data["issues"][0]["assignee"] == "alice"
         assert data["issues"][1]["assignee"] is None
@@ -143,3 +146,27 @@ class TestListGitHubIssues:
     def test_profile_param_required(self, client: TestClient) -> None:
         response = client.get("/api/github/issues")
         assert response.status_code == 422
+
+
+class TestParseIssue:
+    def _make_item(self, body: str) -> dict:
+        return {
+            "number": 1,
+            "title": "Test issue",
+            "body": body,
+            "labels": [],
+            "assignees": [],
+            "createdAt": "2026-03-01T10:00:00Z",
+            "state": "OPEN",
+        }
+
+    def test_parse_issue_truncates_long_body(self) -> None:
+        long_body = "x" * 6000
+        result = _parse_issue(self._make_item(long_body))
+        assert result.body.endswith("... [truncated]")
+        assert len(result.body) <= 5000 + len("... [truncated]")
+
+    def test_parse_issue_preserves_short_body(self) -> None:
+        short_body = "x" * 100
+        result = _parse_issue(self._make_item(short_body))
+        assert result.body == short_body

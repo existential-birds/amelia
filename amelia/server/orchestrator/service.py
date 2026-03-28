@@ -447,7 +447,7 @@ class OrchestratorService:
             worktree_path: Resolved worktree path (already validated).
             issue_id: The issue ID to work on.
             profile_name: Optional profile name (defaults to active profile).
-            task_title: Optional task title for noop tracker.
+            task_title: Optional task title (skips tracker fetch when provided).
             task_description: Optional task description (defaults to task_title).
             artifact_path: Optional path to design artifact file from brainstorming.
                 Can be worktree-relative (e.g., docs/plans/design.md or /docs/plans/design.md)
@@ -457,20 +457,13 @@ class OrchestratorService:
             Tuple of (resolved_path, profile, execution_state).
 
         Raises:
-            ValueError: If profile not found, task_title used with non-none
-                tracker, or artifact_path escapes worktree.
+            ValueError: If profile not found or artifact_path escapes worktree.
             FileNotFoundError: If artifact_path is provided but the file doesn't exist.
         """
         profile = await self._resolve_profile(profile_name, worktree_path)
 
-        # Fetch issue from tracker (or construct from task_title)
+        # Construct issue from provided title or fetch from tracker
         if task_title is not None:
-            # Validate that tracker is noop when using task_title
-            if profile.tracker != "noop":
-                raise ValueError(
-                    f"task_title can only be used with noop tracker, "
-                    f"but profile '{profile.name}' uses tracker '{profile.tracker}'"
-                )
             issue = Issue(
                 id=issue_id,
                 title=task_title,
@@ -587,7 +580,7 @@ class OrchestratorService:
             worktree_path: Absolute path to the worktree.
             profile: Optional profile name.
             driver: Optional driver override.
-            task_title: Optional task title for direct Issue construction (noop tracker only).
+            task_title: Optional task title (skips tracker fetch when provided).
             task_description: Optional task description (defaults to task_title if not provided).
 
         Returns:
@@ -597,7 +590,7 @@ class OrchestratorService:
             InvalidWorktreeError: If worktree path doesn't exist or is not a git repo.
             WorkflowConflictError: If worktree already has active workflow.
             ConcurrencyLimitError: If at max concurrent workflows.
-            ValueError: If task_title is provided but tracker is not noop.
+            ValueError: If profile not found.
         """
         # Validate and resolve worktree before acquiring lock (fast-fail)
         worktree = self._validate_worktree_path(worktree_path)

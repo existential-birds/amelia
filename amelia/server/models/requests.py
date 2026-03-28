@@ -105,7 +105,7 @@ class CreateWorkflowRequest(BaseModel):
         Field(
             default=None,
             max_length=500,
-            description="Task title for none tracker (bypasses issue lookup)",
+            description="Task title (bypasses tracker issue lookup when provided)",
         ),
     ] = None
     task_description: Annotated[
@@ -113,7 +113,7 @@ class CreateWorkflowRequest(BaseModel):
         Field(
             default=None,
             max_length=5000,
-            description="Task description for none tracker (requires task_title)",
+            description="Task description (requires task_title)",
         ),
     ] = None
     start: bool = True

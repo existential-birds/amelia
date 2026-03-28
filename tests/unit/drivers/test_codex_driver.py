@@ -16,6 +16,10 @@ class _Schema(BaseModel):
     answer: str
 
 
+class _ListWrapperSchema(BaseModel):
+    classifications: list[dict]
+
+
 @pytest.mark.asyncio
 async def test_generate_returns_text() -> None:
     driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
@@ -48,6 +52,102 @@ async def test_generate_parses_jsonl_output() -> None:
         text, session_id = await driver.generate("ping")
     assert text == "ok"
     assert session_id is None
+
+
+@pytest.mark.asyncio
+async def test_generate_ndjson_skips_turn_completed_for_schema() -> None:
+    """When codex returns NDJSON with turn.completed as last line, schema
+    validation should use the content-bearing line, not the lifecycle event."""
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+    # Simulate NDJSON where the real content is an item.completed with text,
+    # followed by turn.completed (lifecycle event with only usage metadata).
+    payload = "\n".join([
+        json.dumps({"answer": "42"}),
+        json.dumps({
+            "type": "turn.completed",
+            "usage": {"input_tokens": 100, "output_tokens": 50},
+        }),
+    ])
+    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+        result, _ = await driver.generate("question", schema=_Schema)
+    assert isinstance(result, _Schema)
+    assert result.answer == "42"
+
+
+@pytest.mark.asyncio
+async def test_generate_ndjson_skips_multiple_lifecycle_events() -> None:
+    """Content-bearing line should be found even with multiple lifecycle events."""
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+    payload = "\n".join([
+        json.dumps({"type": "turn.started"}),
+        json.dumps({"answer": "hello"}),
+        json.dumps({"type": "turn.completed", "usage": {"output_tokens": 10}}),
+        json.dumps({"type": "thread.completed"}),
+    ])
+    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+        result, _ = await driver.generate("q", schema=_Schema)
+    assert isinstance(result, _Schema)
+    assert result.answer == "hello"
+
+
+@pytest.mark.asyncio
+async def test_generate_unwraps_item_completed_envelope() -> None:
+    """When codex returns a single item.completed event, generate() should
+    unwrap the nested item text and validate it against the schema."""
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+    payload = json.dumps({
+        "type": "item.completed",
+        "item": {
+            "type": "agent_message",
+            "text": json.dumps({"answer": "unwrapped"}),
+        },
+    })
+    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+        result, _ = await driver.generate("q", schema=_Schema)
+    assert isinstance(result, _Schema)
+    assert result.answer == "unwrapped"
+
+
+@pytest.mark.asyncio
+async def test_generate_unwraps_item_completed_in_ndjson() -> None:
+    """When all NDJSON lines are lifecycle events including item.completed,
+    the item.completed payload should still be unwrapped and validated."""
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+    payload = "\n".join([
+        json.dumps({
+            "type": "item.completed",
+            "item": {
+                "type": "agent_message",
+                "text": json.dumps({"answer": "from-ndjson"}),
+            },
+        }),
+        json.dumps({"type": "turn.completed", "usage": {"output_tokens": 10}}),
+    ])
+    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+        result, _ = await driver.generate("q", schema=_Schema)
+    assert isinstance(result, _Schema)
+    assert result.answer == "from-ndjson"
+
+
+@pytest.mark.asyncio
+async def test_generate_wraps_bare_list_for_schema() -> None:
+    """When the model returns a bare JSON array instead of the wrapper object,
+    generate() should auto-wrap it into the schema's single list field."""
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+    # Model returns bare array instead of {"classifications": [...]}
+    bare_list = [{"id": 1, "category": "BUG"}, {"id": 2, "category": "STYLE"}]
+    payload = json.dumps({
+        "type": "item.completed",
+        "item": {
+            "type": "agent_message",
+            "text": json.dumps(bare_list),
+        },
+    })
+    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+        result, _ = await driver.generate("classify", schema=_ListWrapperSchema)
+    assert isinstance(result, _ListWrapperSchema)
+    assert len(result.classifications) == 2
+    assert result.classifications[0]["id"] == 1
 
 
 @pytest.mark.asyncio

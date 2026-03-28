@@ -30,8 +30,9 @@ from amelia.services.github_pr import GitHubPRService
 
 router = APIRouter(prefix="/github", tags=["github"])
 
-_GH_ISSUE_FIELDS = "number,title,labels,assignees,createdAt,state"
+_GH_ISSUE_FIELDS = "number,title,body,labels,assignees,createdAt,state"
 _GH_ISSUE_LIMIT = "50"
+_MAX_BODY_LENGTH = 5000
 
 
 # ---------------------------------------------------------------------------
@@ -51,6 +52,7 @@ class GitHubIssueSummary(BaseModel):
 
     number: int
     title: str
+    body: str
     labels: list[GitHubIssueLabel]
     assignee: str | None
     created_at: datetime
@@ -67,9 +69,12 @@ def _parse_issue(item: dict[str, Any]) -> GitHubIssueSummary:
     """Parse a single raw gh JSON issue into a GitHubIssueSummary."""
     assignees = item.get("assignees") or []
     raw_labels = item.get("labels") or []
+    raw_body = item.get("body") or ""
+    body = raw_body[:_MAX_BODY_LENGTH] + "... [truncated]" if len(raw_body) > _MAX_BODY_LENGTH else raw_body
     return GitHubIssueSummary(
         number=item["number"],
         title=item["title"],
+        body=body,
         labels=[
             GitHubIssueLabel(name=label["name"], color=label.get("color", ""))
             for label in raw_labels

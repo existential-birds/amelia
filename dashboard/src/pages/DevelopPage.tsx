@@ -9,7 +9,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Zap, Upload } from 'lucide-react';
+import { Zap, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { api, ApiError } from '@/api/client';
@@ -74,6 +74,8 @@ export default function DevelopPage() {
   const [planData, setPlanData] = useState<PlanData>({});
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [trackerType, setTrackerType] = useState<string>('');
+  const [hasSelectedIssue, setHasSelectedIssue] = useState(false);
+  const [selectedIssue, setSelectedIssue] = useState<GitHubIssueSummary | null>(null);
 
   const hasExternalPlan = !!(planData.plan_file || planData.plan_content);
   const hasDesignDoc = !!importPath;
@@ -171,10 +173,27 @@ export default function DevelopPage() {
     [getValues, setValue],
   );
 
+  const clearIssueSelection = useCallback(() => {
+    setHasSelectedIssue(false);
+    setSelectedIssue(null);
+    setValue('issue_id', '', { shouldValidate: true });
+    setValue('task_title', '', { shouldValidate: true });
+    setValue('task_description', '', { shouldValidate: true });
+  }, [setValue]);
+
   const handleIssueSelect = useCallback(
     (issue: GitHubIssueSummary | { number: number; title: string }) => {
       setValue('issue_id', String(issue.number), { shouldValidate: true });
       setValue('task_title', issue.title, { shouldValidate: true });
+      const body = 'body' in issue ? issue.body : '';
+      setValue('task_description', body || '', { shouldValidate: true });
+      setHasSelectedIssue(true);
+      if ('body' in issue) {
+        setSelectedIssue(issue as GitHubIssueSummary);
+      }
+      if (body && body.length > 4900) {
+        toast.info('Issue description was truncated to fit the 5000 character limit');
+      }
     },
     [setValue],
   );
@@ -260,6 +279,10 @@ export default function DevelopPage() {
     fileInputRef.current?.click();
   }, []);
 
+  const clearDesignDoc = useCallback(() => {
+    setImportPath('');
+  }, []);
+
   /**
    * Submits the workflow with the specified action type.
    */
@@ -301,6 +324,8 @@ export default function DevelopPage() {
         reset();
         setPlanData({});
         setImportPath('');
+        setHasSelectedIssue(false);
+        setSelectedIssue(null);
       } catch (error) {
         if (error instanceof ApiError) {
           toast.error(error.message);
@@ -360,7 +385,21 @@ export default function DevelopPage() {
             <div className="flex items-center justify-center gap-2">
               <Upload className="h-4 w-4 text-muted-foreground" />
               {importPath ? (
-                <span className="text-sm font-mono text-foreground">{importPath}</span>
+                <>
+                  <span className="text-sm font-mono text-foreground">{importPath}</span>
+                  <button
+                    type="button"
+                    aria-label="Clear design doc"
+                    data-testid="clear-design-doc-btn"
+                    className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearDesignDoc();
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </>
               ) : (
                 <span className="text-sm text-muted-foreground">
                   Drop or click to import design doc
@@ -398,6 +437,8 @@ export default function DevelopPage() {
                 id="github-issue"
                 profile={profileValue}
                 onSelect={handleIssueSelect}
+                value={selectedIssue}
+                onClear={clearIssueSelection}
               />
             </div>
           )}
@@ -416,10 +457,12 @@ export default function DevelopPage() {
               aria-invalid={!!errors.issue_id}
               aria-required
               aria-describedby={errors.issue_id ? 'issue_id-error' : undefined}
+              readOnly={hasSelectedIssue || hasDesignDoc}
               className={cn(
                 'mt-1 font-mono text-sm bg-background border-input',
                 'focus:border-primary focus:ring-primary/15 focus:ring-[3px]',
                 errors.issue_id && 'border-destructive',
+                (hasSelectedIssue || hasDesignDoc) && 'opacity-60 cursor-not-allowed',
               )}
               {...register('issue_id')}
             />
@@ -444,10 +487,12 @@ export default function DevelopPage() {
               aria-invalid={!!errors.task_title}
               aria-required
               aria-describedby={errors.task_title ? 'task_title-error' : undefined}
+              readOnly={hasSelectedIssue || hasDesignDoc}
               className={cn(
                 'mt-1 font-mono text-sm bg-background border-input',
                 'focus:border-primary focus:ring-primary/15 focus:ring-[3px]',
                 errors.task_title && 'border-destructive',
+                (hasSelectedIssue || hasDesignDoc) && 'opacity-60 cursor-not-allowed',
               )}
               {...register('task_title')}
             />
@@ -471,10 +516,12 @@ export default function DevelopPage() {
               placeholder="Add a logout button to the top navigation bar..."
               aria-invalid={!!errors.task_description}
               aria-describedby={errors.task_description ? 'task_description-error' : undefined}
+              readOnly={hasSelectedIssue || hasDesignDoc}
               className={cn(
                 'mt-1 font-mono text-sm bg-background border-input',
                 'focus:border-primary focus:ring-primary/15 focus:ring-[3px]',
                 errors.task_description && 'border-destructive',
+                (hasSelectedIssue || hasDesignDoc) && 'opacity-60 cursor-not-allowed',
               )}
               rows={3}
               {...register('task_description')}

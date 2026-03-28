@@ -1192,19 +1192,20 @@ class TestStartWorkflowWithTaskFields:
             assert issue.title == "Add logout button"
             assert issue.description == "Add to navbar with confirmation"
 
-    async def test_task_title_with_non_none_tracker_errors(
+    async def test_task_title_with_non_noop_tracker_skips_fetch(
         self,
         orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
         mock_profile_repo: AsyncMock,
         tmp_path: Path,
     ) -> None:
-        """start_workflow with task_title and non-none tracker should error."""
-        # Create valid worktree
+        """start_workflow with task_title and non-noop tracker uses provided title."""
+        from amelia.core.types import Issue
+
         worktree = tmp_path / "worktree"
         worktree.mkdir()
         (worktree / ".git").touch()
 
-        # Override the mock profile to use github tracker
         agent_config = AgentConfig(driver=DriverType.CLAUDE, model="sonnet")
         mock_profile_repo.get_profile.return_value = Profile(
             name="github",
@@ -1217,16 +1218,29 @@ class TestStartWorkflowWithTaskFields:
             },
         )
 
-        with pytest.raises(ValueError) as exc_info:
+        with (
+            patch(
+                "amelia.server.orchestrator.service.create_tracker"
+            ) as mock_create_tracker,
+            patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()),
+        ):
             await orchestrator.start_workflow(
                 issue_id="TASK-1",
                 worktree_path=str(worktree),
                 profile="github",
                 task_title="Add logout button",
+                task_description="Users need a logout option",
             )
 
-        assert "noop" in str(exc_info.value).lower()
-        assert "tracker" in str(exc_info.value).lower()
+        # Tracker should not be called when task_title is provided
+        mock_create_tracker.assert_not_called()
+
+        # Verify the issue was constructed from the provided fields
+        call_args = mock_repository.create.call_args
+        state = call_args[0][0]
+        issue = Issue.model_validate(state.issue_cache)
+        assert issue.title == "Add logout button"
+        assert issue.description == "Users need a logout option"
 
     async def test_task_title_defaults_description_to_title(
         self,

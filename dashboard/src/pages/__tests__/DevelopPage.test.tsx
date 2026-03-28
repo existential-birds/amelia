@@ -49,16 +49,27 @@ vi.mock('@/components/PlanImportSection', () => ({
 vi.mock('@/components/GitHubIssueCombobox', () => ({
   GitHubIssueCombobox: ({
     onSelect,
+    onClear,
+    value,
   }: {
     profile: string;
-    onSelect: (issue: { number: number; title: string }) => void;
+    onSelect: (issue: { number: number; title: string; body: string }) => void;
+    onClear?: () => void;
+    value?: { number: number; title: string } | null;
   }) => (
-    <button
-      data-testid="issue-combobox"
-      onClick={() => onSelect({ number: 42, title: 'Fix login bug' })}
-    >
-      mock combobox
-    </button>
+    <div>
+      <button
+        data-testid="issue-combobox"
+        onClick={() => onSelect({ number: 42, title: 'Fix login bug', body: 'Login crashes on submit' })}
+      >
+        {value ? `#${value.number} — ${value.title}` : 'mock combobox'}
+      </button>
+      {value && onClear && (
+        <button data-testid="clear-issue-btn" onClick={onClear}>
+          Clear
+        </button>
+      )}
+    </div>
   ),
 }));
 
@@ -127,7 +138,7 @@ describe('DevelopPage', () => {
     });
   });
 
-  it('pre-fills form when issue selected', async () => {
+  it('pre-fills form and makes fields read-only when issue selected', async () => {
     const user = userEvent.setup();
     renderPage();
 
@@ -139,12 +150,42 @@ describe('DevelopPage', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(/task id/i)).toHaveValue('42');
       expect(screen.getByLabelText(/task title/i)).toHaveValue('Fix login bug');
+      expect(screen.getByLabelText(/description/i)).toHaveValue('Login crashes on submit');
     });
+
+    // Fields should be read-only after issue selection
+    expect(screen.getByLabelText(/task id/i)).toHaveAttribute('readonly');
+    expect(screen.getByLabelText(/task title/i)).toHaveAttribute('readonly');
+    expect(screen.getByLabelText(/description/i)).toHaveAttribute('readonly');
   });
 
   it('renders Start and Queue buttons', () => {
     renderPage();
     expect(screen.getByRole('button', { name: /start/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /queue/i })).toBeInTheDocument();
+  });
+
+  it('clears issue selection when clear button clicked', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.selectOptions(screen.getByTestId('profile-select'), 'test');
+    await waitFor(() => expect(screen.getByTestId('issue-combobox')).toBeInTheDocument());
+
+    // Select an issue
+    await user.click(screen.getByTestId('issue-combobox'));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/task id/i)).toHaveValue('42');
+      expect(screen.getByLabelText(/task id/i)).toHaveAttribute('readonly');
+    });
+
+    // Click the clear button exposed by mock
+    await user.click(screen.getByTestId('clear-issue-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/task id/i)).toHaveValue('');
+      expect(screen.getByLabelText(/task id/i)).not.toHaveAttribute('readonly');
+    });
   });
 });
