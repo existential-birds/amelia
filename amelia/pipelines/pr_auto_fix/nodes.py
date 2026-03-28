@@ -85,34 +85,23 @@ async def classify_node(
         filtered, driver, state.autofix_config,
     )
 
-    # Persist classification audit log if metrics_repo available
-    configurable = config.get("configurable", {})
-    metrics_repo = configurable.get("metrics_repo")
-    run_id = configurable.get("metrics_run_id")
-    if metrics_repo is not None and run_id is not None:
-        try:
-            prompt_hash = get_prompt_hash(state.autofix_config.aggressiveness.name)
-            classifications_data = []
-            for comment in filtered:
-                cls = classifications.get(comment.id)
-                if cls is not None:
-                    classifications_data.append({
-                        "comment_id": comment.id,
-                        "body_snippet": comment.body[:200],
-                        "category": str(cls.category),
-                        "confidence": cls.confidence,
-                        "actionable": cls.actionable,
-                        "aggressiveness_level": state.autofix_config.aggressiveness.name,
-                        "prompt_hash": prompt_hash,
-                    })
-            if classifications_data:
-                await metrics_repo.save_classifications(run_id, classifications_data)
-        except Exception as exc:
-            logger.warning(
-                "Failed to persist classification audit log (non-fatal)",
-                error=str(exc),
-                error_type=type(exc).__name__,
-            )
+    # Build classification audit data for deferred persistence.
+    # Stored in state and persisted by the orchestrator after the
+    # pr_autofix_runs row exists (avoids FK violation).
+    prompt_hash = get_prompt_hash(state.autofix_config.aggressiveness.name)
+    classifications_data: list[dict[str, object]] = []
+    for comment in filtered:
+        cls = classifications.get(comment.id)
+        if cls is not None:
+            classifications_data.append({
+                "comment_id": comment.id,
+                "body_snippet": comment.body[:200],
+                "category": str(cls.category),
+                "confidence": cls.confidence,
+                "actionable": cls.actionable,
+                "aggressiveness_level": state.autofix_config.aggressiveness.name,
+                "prompt_hash": prompt_hash,
+            })
 
     # Group by file path
     file_group_comments = group_comments_by_file(state.comments, classifications)
@@ -126,6 +115,7 @@ async def classify_node(
     return {
         "classified_comments": list(classifications.values()),
         "file_groups": file_groups,
+        "classification_audit_data": classifications_data,
     }
 
 
