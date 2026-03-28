@@ -152,7 +152,7 @@ def _build_developer_goal(
     # file paths against a different checkout or the original repo.
     if cwd:
         parts.append("")
-        parts.append(f"## Working Directory")
+        parts.append("## Working Directory")
         parts.append(f"You are working in: `{cwd}`")
         parts.append(
             "All file paths in the comments below are **relative to this directory**. "
