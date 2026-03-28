@@ -16,6 +16,10 @@ class _Schema(BaseModel):
     answer: str
 
 
+class _ListWrapperSchema(BaseModel):
+    classifications: list[dict]
+
+
 @pytest.mark.asyncio
 async def test_generate_returns_text() -> None:
     driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
@@ -123,6 +127,27 @@ async def test_generate_unwraps_item_completed_in_ndjson() -> None:
         result, _ = await driver.generate("q", schema=_Schema)
     assert isinstance(result, _Schema)
     assert result.answer == "from-ndjson"
+
+
+@pytest.mark.asyncio
+async def test_generate_wraps_bare_list_for_schema() -> None:
+    """When the model returns a bare JSON array instead of the wrapper object,
+    generate() should auto-wrap it into the schema's single list field."""
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+    # Model returns bare array instead of {"classifications": [...]}
+    bare_list = [{"id": 1, "category": "BUG"}, {"id": 2, "category": "STYLE"}]
+    payload = json.dumps({
+        "type": "item.completed",
+        "item": {
+            "type": "agent_message",
+            "text": json.dumps(bare_list),
+        },
+    })
+    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+        result, _ = await driver.generate("classify", schema=_ListWrapperSchema)
+    assert isinstance(result, _ListWrapperSchema)
+    assert len(result.classifications) == 2
+    assert result.classifications[0]["id"] == 1
 
 
 @pytest.mark.asyncio

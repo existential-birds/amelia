@@ -388,6 +388,21 @@ class CodexCliDriver(DriverInterface):
                 # If data is a string, parse it as JSON first
                 if isinstance(data, str):
                     data = json.loads(data)
+
+                # Codex models sometimes return a bare list instead of the
+                # wrapper object the schema expects (e.g. [{...}, ...] instead
+                # of {"classifications": [{...}, ...]}).  Detect this and wrap
+                # when the schema has exactly one list-typed field at root.
+                if isinstance(data, list):
+                    list_fields = [
+                        name for name, info in schema.model_fields.items()
+                        if info.annotation is not None
+                        and hasattr(info.annotation, "__origin__")
+                        and info.annotation.__origin__ is list
+                    ]
+                    if len(list_fields) == 1:
+                        data = {list_fields[0]: data}
+
                 result = schema.model_validate(data)
                 return (result, None)
             except (ValidationError, json.JSONDecodeError) as e:
