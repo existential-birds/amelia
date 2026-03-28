@@ -46,6 +46,15 @@ from amelia.logging import log_claude_result
 # os.environ — omitting a key doesn't remove it.
 _NESTED_SESSION_OVERRIDES = {"CLAUDECODE": "", "CLAUDE_CODE_ENTRYPOINT": ""}
 
+# API event envelope types that may leak into structured_output.
+# When structured_output is a dict whose "type" matches one of these,
+# it's a raw event wrapper — not the actual schema payload.
+_RAW_EVENT_TYPES: frozenset[str] = frozenset({
+    "turn.completed",
+    "response.completed",
+    "message_stop",
+})
+
 
 def _build_sanitized_env() -> dict[str, str]:
     """Return env overrides that neutralise nested-session guard vars.
@@ -438,10 +447,21 @@ class ClaudeCliDriver(DriverInterface):
 
             # Handle structured output
             if schema:
-                # Try structured_output first (preferred for schema requests)
-                if result_message.structured_output is not None:
-                    data = result_message.structured_output
+                # Try structured_output first (preferred for schema requests).
+                # Some SDK/CLI versions populate structured_output with the raw
+                # API event envelope (e.g. {'type': 'turn.completed', ...})
+                # instead of the unwrapped schema data.  Detect and skip these.
+                raw_so = result_message.structured_output
+                is_raw_event = isinstance(raw_so, dict) and raw_so.get("type") in _RAW_EVENT_TYPES
+
+                if raw_so is not None and not is_raw_event:
+                    data = raw_so
                 elif result_message.result:
+                    if is_raw_event:
+                        logger.warning(
+                            "structured_output contains raw API event, falling back to result",
+                            event_type=raw_so.get("type"),
+                        )
                     # Fallback: try to parse result as JSON
                     # Strip markdown code fences if present (Claude sometimes wraps JSON in ```)
                     try:

@@ -293,6 +293,59 @@ class TestClaudeCliDriverGenerate:
             assert result.tasks == ["task1", "task2", "task3"]
             assert session_id == "sess_list"
 
+    async def test_generate_schema_skips_raw_event_envelope(self, driver: ClaudeCliDriver) -> None:
+        """Test that raw API event envelope in structured_output is skipped.
+
+        When the SDK puts a turn.completed event into structured_output,
+        the driver should fall back to parsing the result field as JSON.
+        """
+        messages = [
+            MockResultMessage(
+                result='{"reasoning": "fallback", "answer": "works"}',
+                session_id="sess_event",
+                structured_output={
+                    "type": "turn.completed",
+                    "turn": {"output": []},
+                    "usage": {"input_tokens": 100, "output_tokens": 50},
+                },
+            ),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+        ):
+            result, session_id = await driver.generate("Answer", schema=_TestModel)
+
+            assert isinstance(result, _TestModel)
+            assert result.reasoning == "fallback"
+            assert result.answer == "works"
+            assert session_id == "sess_event"
+
+    async def test_generate_schema_skips_response_completed_envelope(self, driver: ClaudeCliDriver) -> None:
+        """Test that response.completed event in structured_output is skipped."""
+        messages = [
+            MockResultMessage(
+                result='{"reasoning": "ok", "answer": "yes"}',
+                session_id="sess_resp",
+                structured_output={
+                    "type": "response.completed",
+                    "response": {},
+                    "usage": {"input_tokens": 200, "output_tokens": 100},
+                },
+            ),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+        ):
+            result, session_id = await driver.generate("Answer", schema=_TestModel)
+
+            assert isinstance(result, _TestModel)
+            assert result.reasoning == "ok"
+            assert result.answer == "yes"
+
     async def test_generate_error_no_result_message(self, driver: ClaudeCliDriver) -> None:
         """Test error when SDK returns no ResultMessage."""
         messages = [
