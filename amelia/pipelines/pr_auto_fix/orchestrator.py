@@ -421,6 +421,7 @@ class PRAutoFixOrchestrator:
                         "thread_id": str(workflow_id),
                         "profile": profile,
                         "event_bus": self._event_bus,
+                        "repository": self._workflow_repo,
                         "metrics_repo": self._metrics_repo,
                         "metrics_run_id": str(metrics_run_id),
                     },

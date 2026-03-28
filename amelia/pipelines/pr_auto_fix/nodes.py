@@ -21,6 +21,7 @@ from amelia.core.agentic_state import AgenticStatus
 from amelia.core.types import PRReviewComment
 from amelia.drivers.factory import get_driver
 from amelia.pipelines.implementation.state import ImplementationState
+from amelia.pipelines.nodes import _save_token_usage
 from amelia.pipelines.pr_auto_fix.state import (
     GroupFixResult,
     GroupFixStatus,
@@ -54,7 +55,9 @@ async def classify_node(
     if not state.comments:
         return {"classified_comments": [], "file_groups": {}}
 
-    _event_bus, _workflow_id, profile = extract_config_params(config)
+    _event_bus, workflow_id, profile = extract_config_params(config)
+    configurable = config.get("configurable", {})
+    repository = configurable.get("repository")
 
     # Create driver for classification using full developer agent config
     agent_config = profile.get_agent_config("developer")
@@ -85,6 +88,9 @@ async def classify_node(
     classifications = await classify_comments(
         filtered, driver, state.autofix_config,
     )
+
+    # Save token usage from the classification driver
+    await _save_token_usage(driver, workflow_id, "classifier", repository)
 
     # Build classification audit data for deferred persistence.
     # Stored in state and persisted by the orchestrator after the
@@ -219,6 +225,8 @@ async def develop_node(
         }
 
     _event_bus, workflow_id, profile = extract_config_params(config)
+    configurable = config.get("configurable", {})
+    repository = configurable.get("repository")
 
     # Build classification lookup from state
     classifications: dict[int, CommentClassification] = {
@@ -292,6 +300,9 @@ async def develop_node(
                 final_state, profile=profile, workflow_id=workflow_id,
             ):
                 final_state = updated_state
+
+            # Save token usage from the developer driver
+            await _save_token_usage(dev.driver, workflow_id, "developer", repository)
 
             # Check if THIS group introduced new file changes by comparing
             # the current porcelain status against the pre-group baseline.
