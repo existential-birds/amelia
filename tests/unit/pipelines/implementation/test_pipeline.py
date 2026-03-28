@@ -1,7 +1,16 @@
 """Unit tests for ImplementationPipeline."""
 
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import pytest
+
 from uuid import uuid4
 
+from amelia.core.agentic_state import ToolCall
+from amelia.core.constants import ToolName
 from amelia.pipelines.base import PipelineMetadata
 from amelia.pipelines.implementation.pipeline import ImplementationPipeline
 from amelia.pipelines.implementation.state import (
@@ -148,3 +157,138 @@ class TestImplementationPipelineInitialState:
             profile_id="default",
         )
         assert state.history == []
+
+
+class TestArchitectNodeWritePlan:
+    """Tests for write_plan tool call handling in architect node fallback."""
+
+    def test_write_plan_tool_call_recognized(self) -> None:
+        """ToolCall with WRITE_PLAN should be recognized by tool_name."""
+        tool_call = ToolCall(
+            id="call-1",
+            tool_name=ToolName.WRITE_PLAN,
+            tool_input={
+                "goal": "Build auth",
+                "architecture_summary": "JWT approach",
+                "tasks": [{"number": "1", "title": "Setup", "steps": ["Do it"]}],
+                "file_path": "/docs/plans/test.md",
+            },
+        )
+        assert tool_call.tool_name == "write_plan"
+        assert tool_call.tool_name == ToolName.WRITE_PLAN
+
+    @pytest.mark.asyncio
+    async def test_execute_write_plan_from_tool_input(self, tmp_path: Path) -> None:
+        """execute_write_plan should write plan file from structured input."""
+        from amelia.tools.write_plan import execute_write_plan
+
+        tool_input = {
+            "goal": "Build auth system",
+            "architecture_summary": "JWT-based authentication",
+            "tasks": [
+                {
+                    "number": "1",
+                    "title": "Setup JWT",
+                    "steps": ["Install deps", "Create middleware"],
+                }
+            ],
+            "file_path": "/docs/plans/auth.md",
+        }
+        result = await execute_write_plan(tool_input, root_dir=str(tmp_path))
+        assert result.startswith("Successfully")
+        assert (tmp_path / "docs" / "plans" / "auth.md").exists()
+
+    @pytest.mark.asyncio
+    async def test_resolve_plan_overrides_llm_file_path(self, tmp_path: Path) -> None:
+        """_resolve_plan_from_tool_calls should write to authoritative plan_path, not LLM path."""
+        from amelia.pipelines.implementation.nodes import _resolve_plan_from_tool_calls
+
+        tool_call = ToolCall(
+            id="call-1",
+            tool_name=ToolName.WRITE_PLAN,
+            tool_input={
+                "goal": "Build auth",
+                "architecture_summary": "JWT approach",
+                "tasks": [{"number": "1", "title": "Setup", "steps": ["Do it"]}],
+                "file_path": "/wrong/llm/provided/path.md",  # LLM's path — should be ignored
+            },
+        )
+        authoritative_path = tmp_path / "correct" / "plan.md"
+
+        plan_written = await _resolve_plan_from_tool_calls(
+            tool_calls=[tool_call],
+            plan_path=authoritative_path,
+            working_dir=tmp_path,
+        )
+
+        assert plan_written, "write_plan should succeed"
+        assert authoritative_path.exists(), "Plan should be at authoritative path"
+        assert not (tmp_path / "wrong" / "llm" / "provided" / "path.md").exists(), (
+            "LLM-provided path should NOT be used"
+        )
+
+    @pytest.mark.asyncio
+    async def test_write_plan_fallback_continues_on_failure(self, tmp_path: Path) -> None:
+        """If write_plan fails, _resolve_plan_from_tool_calls should fall through to write_file."""
+        from amelia.pipelines.implementation.nodes import _resolve_plan_from_tool_calls
+
+        bad_input: dict[str, Any] = {
+            "goal": "",  # empty goal triggers validation error
+            "tasks": [],
+            "file_path": "/docs/plans/test.md",
+        }
+        write_plan_call = ToolCall(
+            id="call-1",
+            tool_name=ToolName.WRITE_PLAN,
+            tool_input=bad_input,
+        )
+        write_file_call = ToolCall(
+            id="call-2",
+            tool_name=ToolName.WRITE_FILE,
+            tool_input={
+                "file_path": "/docs/plans/test.md",
+                "content": "# Plan\n## Task 1\nDo stuff",
+            },
+        )
+        plan_path = tmp_path / "docs" / "plans" / "test.md"
+
+        plan_written = await _resolve_plan_from_tool_calls(
+            tool_calls=[write_plan_call, write_file_call],
+            plan_path=plan_path,
+            working_dir=tmp_path,
+        )
+
+        assert plan_written, "write_file fallback should succeed after write_plan failure"
+        assert plan_path.exists()
+        assert "Task 1" in plan_path.read_text()
+
+    @pytest.mark.asyncio
+    async def test_raw_output_fallback_creates_parent_directory(self, tmp_path: Path) -> None:
+        """Raw-output fallback should create parent dirs before writing."""
+        from amelia.pipelines.implementation.nodes import _resolve_plan_from_tool_calls
+
+        # Plan path in a non-existent subdirectory
+        plan_path = tmp_path / "deep" / "nested" / "dir" / "plan.md"
+        assert not plan_path.parent.exists()
+
+        raw_output = (
+            "# Implementation Plan\n\n"
+            "**Goal:** Build a feature\n\n"
+            "**Architecture:** Simple design\n\n"
+            "## Phase 1\n\n"
+            "### Task 1: Do the thing\n\n"
+            "```python\nprint('hello')\n```\n\n"
+            "Some steps here with enough content to pass the length check.\n"
+            "Additional detail to ensure we exceed the minimum character threshold.\n"
+        )
+
+        plan_written = await _resolve_plan_from_tool_calls(
+            tool_calls=[],  # No tool calls — forces raw-output fallback
+            plan_path=plan_path,
+            working_dir=tmp_path,
+            raw_output=raw_output,
+        )
+
+        assert plan_written, "Raw-output fallback should succeed"
+        assert plan_path.exists()
+        assert "Task 1" in plan_path.read_text()

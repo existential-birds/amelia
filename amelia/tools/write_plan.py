@@ -6,6 +6,7 @@ validates it, renders consistent markdown, and writes to the filesystem.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -62,10 +63,10 @@ async def execute_write_plan(
         resolved = root / file_path
 
     # Ensure parent directory exists
-    resolved.parent.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(resolved.parent.mkdir, parents=True, exist_ok=True)
 
     # Write markdown file
-    resolved.write_text(markdown, encoding="utf-8")
+    await asyncio.to_thread(resolved.write_text, markdown, encoding="utf-8")
     logger.info(
         "write_plan: wrote plan file",
         path=str(resolved),
@@ -75,7 +76,9 @@ async def execute_write_plan(
 
     # Write structured JSON sidecar for downstream consumers
     json_path = resolved.with_suffix(".json")
-    json_path.write_text(json.dumps(plan.model_dump(), indent=2), encoding="utf-8")
+    await asyncio.to_thread(
+        json_path.write_text, json.dumps(plan.model_dump(), indent=2), encoding="utf-8"
+    )
     logger.debug("write_plan: wrote JSON sidecar", path=str(json_path))
 
     return (
