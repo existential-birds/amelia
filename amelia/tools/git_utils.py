@@ -267,7 +267,12 @@ async def get_current_branch(cwd: str | None = None) -> str | None:
         if not result or result == "HEAD":
             return None
         return result
-    except (TimeoutError, RuntimeError, OSError):
+    except TimeoutError:
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+            await proc.wait()
+        return None
+    except (RuntimeError, OSError):
         return None
 
 
@@ -326,7 +331,17 @@ async def checkout_branch(cwd: str | None, branch_name: str) -> None:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+    try:
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+    except TimeoutError as e:
+        try:
+            proc.kill()
+            await proc.wait()
+        except ProcessLookupError:
+            pass
+        raise ValueError(
+            f"Git checkout timed out after 60s for branch '{branch_name}'"
+        ) from e
     if proc.returncode != 0:
         stderr_text = stderr.decode().strip()
         raise ValueError(f"Failed to checkout branch '{branch_name}': {stderr_text}")
@@ -340,6 +355,9 @@ async def has_uncommitted_changes(cwd: str | None = None) -> bool:
 
     Returns:
         True if there are staged or unstaged changes.
+
+    Raises:
+        ValueError: If git status cannot be determined (fail closed).
     """
     try:
         repo_path = Path(cwd) if cwd else Path.cwd()
@@ -349,12 +367,17 @@ async def has_uncommitted_changes(cwd: str | None = None) -> bool:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
         if proc.returncode != 0:
-            return False
+            raise ValueError(f"git status --porcelain failed: {stderr.decode().strip()}")
         return bool(stdout.decode().strip())
-    except (TimeoutError, RuntimeError, OSError):
-        return False
+    except TimeoutError as e:
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+            await proc.wait()
+        raise ValueError("git status --porcelain timed out after 60s") from e
+    except (RuntimeError, OSError) as e:
+        raise ValueError(f"Failed to inspect working tree: {e}") from e
 
 
 class GitOperations:

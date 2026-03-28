@@ -112,7 +112,7 @@ class TestHasUncommittedChanges:
         result = await has_uncommitted_changes(git_repo)
         assert result is True
 
-    async def test_returns_false_for_non_git_dir(self, tmp_path: Path) -> None:
-        """Should return False for a non-git directory."""
-        result = await has_uncommitted_changes(str(tmp_path))
-        assert result is False
+    async def test_raises_for_non_git_dir(self, tmp_path: Path) -> None:
+        """Should raise ValueError for a non-git directory."""
+        with pytest.raises(ValueError, match="git status --porcelain failed"):
+            await has_uncommitted_changes(str(tmp_path))
