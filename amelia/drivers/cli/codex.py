@@ -365,7 +365,13 @@ class CodexCliDriver(DriverInterface):
         # Extract data from response - keep as dict when possible to avoid
         # unnecessary JSON serialization/deserialization
         if isinstance(parsed, dict):
-            if "result" in parsed:
+            # Unwrap item.completed event envelopes (Codex CLI may emit these
+            # even in non-streaming mode).  The actual payload lives in
+            # item.text for agent_message items.
+            if parsed.get("type") == "item.completed" and isinstance(parsed.get("item"), dict):
+                item = parsed["item"]
+                data = item.get("text") or item.get("content") or item
+            elif "result" in parsed:
                 data = parsed["result"]
             elif "text" in parsed:
                 data = parsed["text"]

@@ -87,6 +87,45 @@ async def test_generate_ndjson_skips_multiple_lifecycle_events() -> None:
 
 
 @pytest.mark.asyncio
+async def test_generate_unwraps_item_completed_envelope() -> None:
+    """When codex returns a single item.completed event, generate() should
+    unwrap the nested item text and validate it against the schema."""
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+    payload = json.dumps({
+        "type": "item.completed",
+        "item": {
+            "type": "agent_message",
+            "text": json.dumps({"answer": "unwrapped"}),
+        },
+    })
+    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+        result, _ = await driver.generate("q", schema=_Schema)
+    assert isinstance(result, _Schema)
+    assert result.answer == "unwrapped"
+
+
+@pytest.mark.asyncio
+async def test_generate_unwraps_item_completed_in_ndjson() -> None:
+    """When all NDJSON lines are lifecycle events including item.completed,
+    the item.completed payload should still be unwrapped and validated."""
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+    payload = "\n".join([
+        json.dumps({
+            "type": "item.completed",
+            "item": {
+                "type": "agent_message",
+                "text": json.dumps({"answer": "from-ndjson"}),
+            },
+        }),
+        json.dumps({"type": "turn.completed", "usage": {"output_tokens": 10}}),
+    ])
+    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+        result, _ = await driver.generate("q", schema=_Schema)
+    assert isinstance(result, _Schema)
+    assert result.answer == "from-ndjson"
+
+
+@pytest.mark.asyncio
 async def test_execute_agentic_maps_stream_events() -> None:
     driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
 
