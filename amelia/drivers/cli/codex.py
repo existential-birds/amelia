@@ -25,6 +25,18 @@ from amelia.drivers.base import (
 from amelia.drivers.cli.utils import strip_markdown_fences
 
 
+# Codex CLI lifecycle event types that carry only metadata (usage, timing)
+# and never contain the actual model output.  Used by _parse_json_response
+# to skip these when scanning NDJSON for content-bearing lines.
+_LIFECYCLE_EVENT_TYPES: frozenset[str] = frozenset({
+    "turn.completed",
+    "turn.started",
+    "response.completed",
+    "thread.started",
+    "thread.completed",
+})
+
+
 class CodexApprovalMode(StrEnum):
     """Codex CLI sandbox mode controlling what the agent can do autonomously."""
 
@@ -266,6 +278,10 @@ class CodexCliDriver(DriverInterface):
     def _parse_json_response(self, raw_output: str) -> Any:
         """Parse JSON from codex CLI output, handling common issues.
 
+        The Codex CLI may emit NDJSON (one JSON object per line).  When that
+        happens, we prefer content-bearing lines over lifecycle events like
+        ``turn.completed`` which carry only usage metadata.
+
         Args:
             raw_output: Raw output from codex CLI.
 
@@ -282,6 +298,18 @@ class CodexCliDriver(DriverInterface):
         except json.JSONDecodeError as e:
             lines = [line for line in text.splitlines() if line.strip()]
             if len(lines) > 1:
+                # NDJSON: scan in reverse for a content-bearing line,
+                # skipping lifecycle event envelopes.
+                for line in reversed(lines):
+                    try:
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(obj, dict) and obj.get("type") in _LIFECYCLE_EVENT_TYPES:
+                        continue  # skip turn.completed, etc.
+                    return obj
+                # All parseable lines were lifecycle events — return the last one
+                # and let the caller deal with validation.
                 try:
                     return json.loads(lines[-1])
                 except json.JSONDecodeError:

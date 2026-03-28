@@ -51,6 +51,42 @@ async def test_generate_parses_jsonl_output() -> None:
 
 
 @pytest.mark.asyncio
+async def test_generate_ndjson_skips_turn_completed_for_schema() -> None:
+    """When codex returns NDJSON with turn.completed as last line, schema
+    validation should use the content-bearing line, not the lifecycle event."""
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+    # Simulate NDJSON where the real content is an item.completed with text,
+    # followed by turn.completed (lifecycle event with only usage metadata).
+    payload = "\n".join([
+        json.dumps({"answer": "42"}),
+        json.dumps({
+            "type": "turn.completed",
+            "usage": {"input_tokens": 100, "output_tokens": 50},
+        }),
+    ])
+    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+        result, _ = await driver.generate("question", schema=_Schema)
+    assert isinstance(result, _Schema)
+    assert result.answer == "42"
+
+
+@pytest.mark.asyncio
+async def test_generate_ndjson_skips_multiple_lifecycle_events() -> None:
+    """Content-bearing line should be found even with multiple lifecycle events."""
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+    payload = "\n".join([
+        json.dumps({"type": "turn.started"}),
+        json.dumps({"answer": "hello"}),
+        json.dumps({"type": "turn.completed", "usage": {"output_tokens": 10}}),
+        json.dumps({"type": "thread.completed"}),
+    ])
+    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+        result, _ = await driver.generate("q", schema=_Schema)
+    assert isinstance(result, _Schema)
+    assert result.answer == "hello"
+
+
+@pytest.mark.asyncio
 async def test_execute_agentic_maps_stream_events() -> None:
     driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
 
