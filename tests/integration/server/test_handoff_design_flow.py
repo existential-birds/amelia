@@ -33,22 +33,17 @@ def mock_profile_repo() -> AsyncMock:
 
 @pytest.fixture
 def mock_git_for_branch():
-    """Mock git functions used by _setup_workflow_branch."""
-    with (
-        patch(
-            "amelia.tools.git_utils.get_current_branch",
-            new_callable=AsyncMock,
-            return_value="main",
-        ),
-        patch(
-            "amelia.tools.git_utils.create_and_checkout_branch",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "amelia.tools.git_utils.has_uncommitted_changes",
-            new_callable=AsyncMock,
-            return_value=False,
-        ),
+    """Mock _setup_workflow_branch to avoid real git operations.
+
+    These tests verify artifact/design handling, not branch logic.
+    Patching the method directly is more robust than mocking individual
+    git utility functions (which depend on deferred-import binding).
+    """
+    with patch.object(
+        OrchestratorService,
+        "_setup_workflow_branch",
+        new_callable=AsyncMock,
+        return_value=None,
     ):
         yield
 
