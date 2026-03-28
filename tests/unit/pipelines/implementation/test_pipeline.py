@@ -382,8 +382,8 @@ class TestPlanValidatorStructuredData:
 
         result = await plan_validator_node(state, config)
 
-        # Empty dict sidecar is parsed but has no tasks → regex path used
-        assert result["plan_structured"] == {}
+        # Empty dict sidecar is normalised to None → regex path used
+        assert result["plan_structured"] is None
         assert result["goal"] is not None  # From regex
         assert result["total_tasks"] >= 1  # From regex extraction
 

@@ -113,6 +113,13 @@ def test_normalize_write_plan() -> None:
     assert normalize_tool_name("write_plan") == "write_plan"
 
 
+def test_write_plan_normalization_chain() -> None:
+    """Full normalization: WritePlan → write_plan → ToolName.WRITE_PLAN."""
+    normalized = normalize_tool_name("WritePlan")
+    assert normalized == ToolName.WRITE_PLAN
+    assert normalized == "write_plan"
+
+
 def test_readonly_tools_excludes_write_and_exec() -> None:
     """READONLY_TOOLS must not include any write or execution tools."""
     from amelia.core.constants import READONLY_TOOLS

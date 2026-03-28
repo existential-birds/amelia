@@ -188,12 +188,18 @@ async def plan_validator_node(
                     actual_type=type(parsed).__name__,
                 )
             else:
-                plan_structured = parsed
-                logger.info(
-                    "Found structured plan data from write_plan tool",
-                    json_path=str(json_sidecar),
-                    task_count=len(plan_structured.get("tasks", [])),
-                )
+                plan_structured = parsed or None
+                if plan_structured is not None:
+                    logger.info(
+                        "Found structured plan data from write_plan tool",
+                        json_path=str(json_sidecar),
+                        task_count=len(plan_structured.get("tasks", [])),
+                    )
+                else:
+                    logger.warning(
+                        "Plan JSON sidecar is empty dict, ignoring",
+                        json_path=str(json_sidecar),
+                    )
         except (_json.JSONDecodeError, OSError) as exc:
             logger.warning("Failed to read/parse plan JSON sidecar", error=str(exc))
 
@@ -203,10 +209,13 @@ async def plan_validator_node(
         goal = plan_structured.get("goal") or _extract_goal_from_plan(plan_content)
         structured_tasks = plan_structured["tasks"]
         total_tasks = len(structured_tasks)
+        seen: set[str] = set()
         key_files_from_structured: list[str] = []
         for task in structured_tasks:
-            key_files_from_structured.extend(task.get("files_to_create", []))
-            key_files_from_structured.extend(task.get("files_to_modify", []))
+            for f in (*task.get("files_to_create", []), *task.get("files_to_modify", [])):
+                if f not in seen:
+                    seen.add(f)
+                    key_files_from_structured.append(f)
         key_files = key_files_from_structured if key_files_from_structured else _extract_key_files_from_plan(plan_content)
     else:
         goal = _extract_goal_from_plan(plan_content)
