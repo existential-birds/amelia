@@ -8,6 +8,7 @@ resolve threads).
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
@@ -125,6 +126,8 @@ def _build_developer_goal(
     classifications: dict[int, CommentClassification],
     pr_number: int,
     head_branch: str,
+    *,
+    cwd: str | None = None,
 ) -> str:
     """Build a Developer goal string with full context for a file group.
 
@@ -134,6 +137,9 @@ def _build_developer_goal(
         classifications: Classification results for looking up category/reason.
         pr_number: PR number for context.
         head_branch: PR head branch name.
+        cwd: Working directory the agent will run in. When provided, anchors
+            all file paths relative to this directory so the agent doesn't
+            resolve them against some other location on disk.
 
     Returns:
         Goal string with comment body, file path, line, diff hunk,
@@ -141,6 +147,18 @@ def _build_developer_goal(
     """
     parts: list[str] = []
     parts.append(f"Fix code based on PR #{pr_number} review comments (branch: {head_branch}).")
+
+    # Anchor the agent to its working directory so it doesn't resolve
+    # file paths against a different checkout or the original repo.
+    if cwd:
+        parts.append("")
+        parts.append(f"## Working Directory")
+        parts.append(f"You are working in: `{cwd}`")
+        parts.append(
+            "All file paths in the comments below are **relative to this directory**. "
+            "Open files using these relative paths — do NOT construct absolute paths "
+            "to other directories on disk."
+        )
     parts.append("")
 
     for comment in comments:
@@ -219,11 +237,25 @@ async def develop_node(
     for file_path, comment_ids in state.file_groups.items():
         comments = [comments_by_id[cid] for cid in comment_ids if cid in comments_by_id]
 
-        # Build goal with full context
+        # Build goal with full context, anchoring paths to the worktree CWD
         goal_text = _build_developer_goal(
             file_path, comments, classifications,
             state.pr_number, state.head_branch,
+            cwd=profile.repo_root,
         )
+
+        # Pre-flight: warn if referenced files don't exist in the worktree.
+        # This catches misconfigured repo_root early (e.g. worktree created
+        # from the wrong repo) instead of letting the agent stumble.
+        repo_root = Path(profile.repo_root)
+        if file_path:
+            target = repo_root / file_path
+            if not target.exists():
+                logger.warning(
+                    "Referenced file not found in worktree — agent may fail",
+                    file_path=file_path,
+                    repo_root=str(repo_root),
+                )
 
         try:
             # Snapshot changed files before this group runs so we can detect

@@ -150,6 +150,23 @@ class TestBuildDeveloperGoal:
         goal = _build_developer_goal("src/app.py", [c], {}, pr_number=1, head_branch="main")
         assert "file-level comment" not in goal
 
+    def test_cwd_anchoring_included_when_provided(self) -> None:
+        """When cwd is passed, the goal anchors file paths to the working directory."""
+        c = make_comment(id=1, path="src/app.py")
+        goal = _build_developer_goal(
+            "src/app.py", [c], {}, pr_number=1, head_branch="main",
+            cwd="/tmp/worktree/pr-42",
+        )
+        assert "/tmp/worktree/pr-42" in goal
+        assert "relative to this directory" in goal
+        assert "do NOT construct absolute paths" in goal
+
+    def test_cwd_anchoring_omitted_when_none(self) -> None:
+        """Without cwd, no working directory section is emitted."""
+        c = make_comment(id=1, path="src/app.py")
+        goal = _build_developer_goal("src/app.py", [c], {}, pr_number=1, head_branch="main")
+        assert "Working Directory" not in goal
+
 
 # ---------------------------------------------------------------------------
 # develop_node tests

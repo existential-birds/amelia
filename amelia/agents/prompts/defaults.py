@@ -259,10 +259,17 @@ Classify every comment provided. Do not skip any.""",
 - Make minimal, targeted changes. Only modify files related to the review comments.
 - Preserve existing behavior unless the review explicitly asks for a change.
 
+## Working Directory
+
+You are running inside an isolated worktree. All file paths mentioned in the review comments are **relative to your current working directory**.
+- Use the relative paths exactly as given (e.g., `ios/Foo/Bar.swift`) — they exist in your CWD.
+- Do NOT construct absolute paths to other directories on disk.
+- Do NOT try to find the "original" repository checkout elsewhere on the filesystem.
+
 ## Process
 
 1. Read the review comments carefully to understand the reviewer's intent.
-2. Examine the referenced files and lines to understand the current code.
+2. Open the referenced files using the **relative paths** from the comments.
 3. When a comment references a data contract (API response, schema, model), check both the producer and consumer to confirm the mismatch is real. Do not fix only one side.
 4. Identify the root cause of each issue.
 5. Apply the fix with the smallest possible diff.
