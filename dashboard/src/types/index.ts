@@ -80,7 +80,7 @@ export interface WorkflowSummary {
 
 /**
  * Complete detailed information about a workflow.
- * Extends WorkflowSummary with additional metadata, token usage, and event history.
+ * Extends WorkflowSummary with additional metadata and token usage.
  */
 export interface WorkflowDetail extends WorkflowSummary {
   /** Absolute filesystem path to the git worktree. */
@@ -107,6 +107,9 @@ export interface WorkflowDetail extends WorkflowSummary {
 
   /** PR comments with resolution status, only present for pr_auto_fix workflows. */
   pr_comments: PRCommentData[] | null;
+
+  /** Whether this failed workflow can be resumed from its last checkpoint. Derived client-side from recent_events in the API response. */
+  recoverable?: boolean;
 }
 
 // ============================================================================

@@ -94,24 +94,14 @@ describe('WorkflowDetailPage resume button', () => {
     Object.keys(mockEventsByWorkflow).forEach(key => delete mockEventsByWorkflow[key]);
   });
 
-  it('shows resume button for recoverable failed workflows', async () => {
-    const recoverableEvent = createMockEvent({
-      id: 'evt-fail-1',
-      workflow_id: 'wf-recover',
-      sequence: 1,
-      event_type: 'workflow_failed',
-      message: 'Server restarted',
-      data: { recoverable: true },
-    });
-
-    mockEventsByWorkflow['wf-recover'] = [recoverableEvent];
-
+  it('shows resume button for recoverable failed workflows (API flag)', async () => {
     const failedWorkflow = createMockWorkflowDetail({
       id: 'wf-recover',
       issue_id: 'RECOVER-TEST',
       worktree_path: '/tmp/worktrees/recover-test',
       status: 'failed',
       failure_reason: 'Server restarted',
+      recoverable: true,
     });
 
     const router = createMemoryRouter(
@@ -124,6 +114,47 @@ describe('WorkflowDetailPage resume button', () => {
         },
       ],
       { initialEntries: ['/workflows/wf-recover'] }
+    );
+
+    render(<RouterProvider router={router} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('RECOVERY')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /resume/i })).toBeInTheDocument();
+    });
+  });
+
+  it('shows resume button via real-time store events fallback', async () => {
+    const recoverableEvent = createMockEvent({
+      id: 'evt-fail-rt',
+      workflow_id: 'wf-recover-rt',
+      sequence: 1,
+      event_type: 'workflow_failed',
+      message: 'Server restarted',
+      data: { recoverable: true },
+    });
+
+    mockEventsByWorkflow['wf-recover-rt'] = [recoverableEvent];
+
+    const failedWorkflow = createMockWorkflowDetail({
+      id: 'wf-recover-rt',
+      issue_id: 'RECOVER-RT',
+      worktree_path: '/tmp/worktrees/recover-rt',
+      status: 'failed',
+      failure_reason: 'Server restarted',
+      // No recoverable flag — simulates store events arriving before API refresh
+    });
+
+    const router = createMemoryRouter(
+      [
+        {
+          path: '/workflows/:id',
+          element: <WorkflowDetailPage />,
+          loader: () => ({ workflow: failedWorkflow }),
+          HydrateFallback: () => null,
+        },
+      ],
+      { initialEntries: ['/workflows/wf-recover-rt'] }
     );
 
     render(<RouterProvider router={router} />);
@@ -171,6 +202,50 @@ describe('WorkflowDetailPage resume button', () => {
       expect(screen.getByText('NORECOV-TEST')).toBeInTheDocument();
     });
 
+    expect(screen.queryByText('RECOVERY')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /resume/i })).not.toBeInTheDocument();
+  });
+
+  it('respects API recoverable: false even when store events say recoverable', async () => {
+    const recoverableEvent = createMockEvent({
+      id: 'evt-stale',
+      workflow_id: 'wf-stale',
+      sequence: 1,
+      event_type: 'workflow_failed',
+      message: 'Server restarted',
+      data: { recoverable: true },
+    });
+
+    mockEventsByWorkflow['wf-stale'] = [recoverableEvent];
+
+    const failedWorkflow = createMockWorkflowDetail({
+      id: 'wf-stale',
+      issue_id: 'STALE-TEST',
+      worktree_path: '/tmp/worktrees/stale-test',
+      status: 'failed',
+      failure_reason: 'Server restarted',
+      recoverable: false, // API explicitly says not recoverable
+    });
+
+    const router = createMemoryRouter(
+      [
+        {
+          path: '/workflows/:id',
+          element: <WorkflowDetailPage />,
+          loader: () => ({ workflow: failedWorkflow }),
+          HydrateFallback: () => null,
+        },
+      ],
+      { initialEntries: ['/workflows/wf-stale'] }
+    );
+
+    render(<RouterProvider router={router} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('STALE-TEST')).toBeInTheDocument();
+    });
+
+    // API says not recoverable, store events should NOT override
     expect(screen.queryByText('RECOVERY')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /resume/i })).not.toBeInTheDocument();
   });

@@ -143,7 +143,10 @@ function getEndTime(workflow: WorkflowDetail): number {
   }
 
   // Terminal statuses (failed, canceled) without completed_at:
-  // freeze at started_at so the displayed time doesn't tick upward on re-renders
+  // Use total_duration_ms if available, otherwise freeze at started_at
+  if (workflow.total_duration_ms && workflow.started_at) {
+    return new Date(workflow.started_at).getTime() + workflow.total_duration_ms;
+  }
   return workflow.started_at
     ? new Date(workflow.started_at).getTime()
     : Date.now();

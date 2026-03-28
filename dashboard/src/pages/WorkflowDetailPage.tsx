@@ -40,16 +40,21 @@ export default function WorkflowDetailPage() {
   // Auto-revalidate when this workflow's status changes (approval events, completion, etc.)
   useAutoRevalidation(workflow?.id);
 
-  // Determine if this failed workflow can be resumed from checkpoint
+  // Determine if this failed workflow can be resumed from checkpoint.
+  // Primary: workflow.recoverable (set by API client from recent_events, survives refresh).
+  // Fallback: real-time store events (only when API hasn't set recoverable yet).
   const isRecoverable = useMemo(() => {
     if (workflow?.status !== 'failed') return false;
+    // If API has explicitly set recoverable, trust it (survives page refresh)
+    if (workflow.recoverable !== undefined) return workflow.recoverable;
+    // Fallback to real-time store events only when API hasn't determined recoverability
     const events = storeEvents ?? [];
     const failedEvents = events
       .filter((e: WorkflowEvent) => e.event_type === 'workflow_failed')
       .sort((a: WorkflowEvent, b: WorkflowEvent) => b.sequence - a.sequence);
     const latest = failedEvents[0];
     return latest !== undefined && latest.data?.recoverable === true;
-  }, [workflow?.status, storeEvents]);
+  }, [workflow?.status, workflow?.recoverable, storeEvents]);
 
   const { resumeWorkflow, isActionPending } = useWorkflowActions();
 
