@@ -830,10 +830,11 @@ class ApiDriver(DriverInterface):
                     model=self.model,
                 )
 
-            # Warn if no write_file call was made (common failure mode)
-            if "write_file" not in all_tool_names:
+            # Warn if no file-writing call was made (common failure mode)
+            write_tools = {"write_file", "write_plan"}
+            if not write_tools.intersection(all_tool_names):
                 logger.warning(
-                    "Agent completed without calling write_file - plan may not have been saved",
+                    "Agent completed without calling write_file/write_plan - plan may not have been saved",
                     tool_sequence=", ".join(all_tool_names),
                     model=self.model,
                 )
