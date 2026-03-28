@@ -7,15 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-03-27
+
+### Added
+
+- **pr-auto-fix:** Add automated PR comment fix pipeline that monitors review comments and generates fixes ([#539](https://github.com/existential-birds/amelia/pull/539))
+- **dashboard:** Add Develop page for GitHub issue-driven workflow creation, replacing QuickShotModal ([#528](https://github.com/existential-birds/amelia/pull/528))
+- **reviewer:** Internalize review skills with stack-based injection for language-aware code reviews ([#532](https://github.com/existential-birds/amelia/pull/532))
+- **pricing:** Replace static model pricing with live OpenRouter pricing API ([#536](https://github.com/existential-birds/amelia/pull/536))
+
+### Fixed
+
+- **dashboard:** Resolve `task_title` error when selecting GitHub issues in Develop page ([#549](https://github.com/existential-birds/amelia/pull/549))
+- **dashboard:** Replace overly-specific conditionals in profile settings with generic handling ([#526](https://github.com/existential-birds/amelia/pull/526))
+
+### Removed
+
+- **dashboard:** Remove workflow canvas visualization ([#525](https://github.com/existential-birds/amelia/pull/525))
+
 ### Security
 
-- **proxy:** Add per-container token authentication via `X-Amelia-Proxy-Token` header ([#537](https://github.com/existential-birds/amelia/pull/537))
-- **proxy:** Sanitize upstream error messages to prevent information leakage ([#537](https://github.com/existential-birds/amelia/pull/537))
-- **proxy:** Redact profile name from 404 error responses ([#537](https://github.com/existential-birds/amelia/pull/537))
-- **proxy:** Add 10 MB request body size limit ([#537](https://github.com/existential-birds/amelia/pull/537))
-- **sandbox:** Default `network_allowlist_enabled` to `true` for Docker sandboxes ([#537](https://github.com/existential-birds/amelia/pull/537))
-- **network:** Restrict DNS to Docker's internal resolver (127.0.0.11) ([#537](https://github.com/existential-birds/amelia/pull/537))
-- **docker:** Only grant `NET_ADMIN`/`NET_RAW` capabilities when network allowlist is enabled ([#537](https://github.com/existential-birds/amelia/pull/537))
+- **proxy:** Add per-container token authentication via `X-Amelia-Proxy-Token` header ([#538](https://github.com/existential-birds/amelia/pull/538))
+- **proxy:** Sanitize upstream error messages to prevent information leakage ([#538](https://github.com/existential-birds/amelia/pull/538))
+- **proxy:** Redact profile name from 404 error responses ([#538](https://github.com/existential-birds/amelia/pull/538))
+- **proxy:** Add 10 MB request body size limit ([#538](https://github.com/existential-birds/amelia/pull/538))
+- **sandbox:** Default `network_allowlist_enabled` to `true` for Docker sandboxes ([#538](https://github.com/existential-birds/amelia/pull/538))
+- **network:** Restrict DNS to Docker's internal resolver (127.0.0.11) ([#538](https://github.com/existential-birds/amelia/pull/538))
+- **docker:** Only grant `NET_ADMIN`/`NET_RAW` capabilities when network allowlist is enabled ([#538](https://github.com/existential-birds/amelia/pull/538))
 
 ## [0.18.0] - 2026-03-07
 
