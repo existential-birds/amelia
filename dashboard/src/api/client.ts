@@ -199,7 +199,7 @@ export const api = {
    */
   async getWorkflow(id: string): Promise<WorkflowDetailResponse> {
     const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}`);
-    const data = await handleResponse<WorkflowDetailResponse & { recent_events?: Array<{ event_type?: string; data?: Record<string, unknown> }> }>(response);
+    const data = await handleResponse<WorkflowDetailResponse & { recent_events?: Array<Record<string, unknown>> }>(response);
 
     // Extract recoverable flag from recent_events in the raw API response
     // so recovery detection survives page refresh without ephemeral store events.
@@ -210,14 +210,14 @@ export const api = {
         .filter(e => e.event_type === 'workflow_failed')
         .sort((a, b) => {
           // Sort by sequence if available, fall back to array order
-          const seqA = (a as Record<string, unknown>).sequence;
-          const seqB = (b as Record<string, unknown>).sequence;
+          const seqA = a.sequence;
+          const seqB = b.sequence;
           if (typeof seqA === 'number' && typeof seqB === 'number') return seqB - seqA;
           return 0;
         });
       const latest = failedEvents[0];
       if (latest) {
-        data.recoverable = latest.data?.recoverable === true;
+        data.recoverable = (latest.data as Record<string, unknown>)?.recoverable === true;
       }
     }
     // Strip recent_events from the response — they are not part of the frontend type
