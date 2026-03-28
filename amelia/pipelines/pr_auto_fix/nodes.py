@@ -85,12 +85,18 @@ async def classify_node(
         return {"classified_comments": [], "file_groups": {}}
 
     # LLM classification
-    classifications = await classify_comments(
-        filtered, driver, state.autofix_config,
-    )
-
-    # Save token usage from the classification driver
-    await _save_token_usage(driver, workflow_id, "classifier", repository)
+    try:
+        classifications = await classify_comments(
+            filtered, driver, state.autofix_config,
+        )
+    finally:
+        try:
+            await _save_token_usage(driver, workflow_id, "classifier", repository)
+        except Exception:
+            logger.exception(
+                "Failed to persist classifier token usage",
+                workflow_id=workflow_id,
+            )
 
     # Build classification audit data for deferred persistence.
     # Stored in state and persisted by the orchestrator after the
@@ -296,13 +302,19 @@ async def develop_node(
 
             # Run Developer and iterate to completion
             final_state = impl_state
-            async for updated_state, _event in dev.run(
-                final_state, profile=profile, workflow_id=workflow_id,
-            ):
-                final_state = updated_state
-
-            # Save token usage from the developer driver
-            await _save_token_usage(dev.driver, workflow_id, "developer", repository)
+            try:
+                async for updated_state, _event in dev.run(
+                    final_state, profile=profile, workflow_id=workflow_id,
+                ):
+                    final_state = updated_state
+            finally:
+                try:
+                    await _save_token_usage(dev.driver, workflow_id, "developer", repository)
+                except Exception:
+                    logger.exception(
+                        "Failed to persist developer token usage",
+                        workflow_id=workflow_id,
+                    )
 
             # Check if THIS group introduced new file changes by comparing
             # the current porcelain status against the pre-group baseline.

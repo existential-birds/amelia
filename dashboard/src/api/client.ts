@@ -211,7 +211,10 @@ export const api = {
         .sort((a, b) => b.sequence - a.sequence);
       const latest = failedEvents[0];
       if (latest) {
-        data.recoverable = latest.data?.recoverable === true;
+        const recoverable = latest.data?.recoverable;
+        if (typeof recoverable === 'boolean') {
+          data.recoverable = recoverable;
+        }
       }
     }
     // Strip recent_events from the response — they are not part of the frontend type

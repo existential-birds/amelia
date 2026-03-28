@@ -83,7 +83,7 @@ export default function WorkflowsPage() {
     }
   }, []);
 
-  if (workflows.length === 0 && !detail) {
+  if (workflows.length === 0 && !detail && !detailError) {
     return <WorkflowEmptyState variant="no-workflows" />;
   }
 
