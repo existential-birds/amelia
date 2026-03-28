@@ -391,6 +391,15 @@ class CodexCliDriver(DriverInterface):
                 result = schema.model_validate(data)
                 return (result, None)
             except (ValidationError, json.JSONDecodeError) as e:
+                logger.error(
+                    "Codex generate() schema validation failed",
+                    schema=schema.__name__,
+                    data_type=type(data).__name__,
+                    data_preview=str(data)[:500],
+                    raw_output_preview=raw_output[:2000],
+                    parsed_type=type(parsed).__name__,
+                    parsed_keys=list(parsed.keys()) if isinstance(parsed, dict) else None,
+                )
                 raise SchemaValidationError(
                     f"Schema validation failed: {e}",
                     provider_name=self.PROVIDER_NAME,
