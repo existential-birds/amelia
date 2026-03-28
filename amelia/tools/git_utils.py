@@ -239,6 +239,89 @@ async def get_current_commit(cwd: str | None = None) -> str | None:
 
 
 PROTECTED_BRANCHES: frozenset[str] = frozenset({"main", "master", "develop", "release"})
+"""Branches that Amelia will not push to and considers 'default' for branch creation."""
+
+
+async def get_current_branch(cwd: str | None = None) -> str | None:
+    """Get the current branch name.
+
+    Args:
+        cwd: Working directory for git command.
+
+    Returns:
+        The current branch name, or None if in detached HEAD state or not a git repo.
+    """
+    try:
+        repo_path = Path(cwd) if cwd else Path.cwd()
+        proc = await asyncio.create_subprocess_exec(
+            "git", "rev-parse", "--abbrev-ref", "HEAD",
+            cwd=repo_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+        if proc.returncode != 0:
+            return None
+        result = stdout.decode().strip()
+        # git returns "HEAD" when in detached HEAD state
+        if not result or result == "HEAD":
+            return None
+        return result
+    except (TimeoutError, RuntimeError, OSError):
+        return None
+
+
+async def create_and_checkout_branch(cwd: str | None, branch_name: str) -> None:
+    """Create and checkout a new git branch.
+
+    Args:
+        cwd: Working directory for git command.
+        branch_name: Name of the branch to create.
+
+    Raises:
+        ValueError: If the branch already exists or checkout fails.
+    """
+    repo_path = Path(cwd) if cwd else Path.cwd()
+    proc = await asyncio.create_subprocess_exec(
+        "git", "checkout", "-b", branch_name,
+        cwd=repo_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+    if proc.returncode != 0:
+        stderr_text = stderr.decode().strip()
+        if "already exists" in stderr_text:
+            raise ValueError(
+                f"Branch '{branch_name}' already exists. "
+                f"Delete it first or pass --branch to specify a different name."
+            )
+        raise ValueError(f"Failed to create branch '{branch_name}': {stderr_text}")
+
+
+async def has_uncommitted_changes(cwd: str | None = None) -> bool:
+    """Check if the working tree has uncommitted changes.
+
+    Args:
+        cwd: Working directory for git command.
+
+    Returns:
+        True if there are staged or unstaged changes.
+    """
+    try:
+        repo_path = Path(cwd) if cwd else Path.cwd()
+        proc = await asyncio.create_subprocess_exec(
+            "git", "status", "--porcelain",
+            cwd=repo_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+        if proc.returncode != 0:
+            return False
+        return bool(stdout.decode().strip())
+    except (TimeoutError, RuntimeError, OSError):
+        return False
 
 
 class GitOperations:

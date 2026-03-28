@@ -73,6 +73,7 @@ class WorkflowRepository:
             completed_at=row["completed_at"],
             failure_reason=row["failure_reason"],
             base_commit=row["base_commit"],
+            branch=row["branch"],
         )
 
     async def create(self, state: ServerExecutionState) -> None:
@@ -89,8 +90,9 @@ class WorkflowRepository:
             INSERT INTO workflows (
                 id, issue_id, worktree_path,
                 status, created_at, started_at, completed_at, failure_reason,
-                workflow_type, profile_id, plan_cache, issue_cache, base_commit
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                workflow_type, profile_id, plan_cache, issue_cache, base_commit,
+                branch
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             """,
             state.id,
             state.issue_id,
@@ -105,6 +107,7 @@ class WorkflowRepository:
             plan_cache_data,
             state.issue_cache,  # dict|None - asyncpg handles JSONB encoding
             state.base_commit,
+            state.branch,
         )
 
     async def get(self, workflow_id: uuid.UUID) -> ServerExecutionState | None:
@@ -122,7 +125,7 @@ class WorkflowRepository:
                 id, issue_id, worktree_path, status,
                 created_at, started_at, completed_at, failure_reason,
                 workflow_type, profile_id, plan_cache, issue_cache,
-                base_commit
+                base_commit, branch
             FROM workflows WHERE id = $1
             """,
             workflow_id,
@@ -157,7 +160,7 @@ class WorkflowRepository:
                 id, issue_id, worktree_path, status,
                 created_at, started_at, completed_at, failure_reason,
                 workflow_type, profile_id, plan_cache, issue_cache,
-                base_commit
+                base_commit, branch
             FROM workflows
             WHERE worktree_path = $1
             AND status IN ({placeholders})
@@ -189,8 +192,9 @@ class WorkflowRepository:
                 profile_id = $6,
                 plan_cache = $7,
                 issue_cache = $8,
-                base_commit = $9
-            WHERE id = $10
+                base_commit = $9,
+                branch = $10
+            WHERE id = $11
             """,
             state.workflow_status,
             state.started_at,
@@ -201,6 +205,7 @@ class WorkflowRepository:
             plan_cache_data,
             state.issue_cache,  # dict|None - asyncpg handles JSONB encoding
             state.base_commit,
+            state.branch,
             state.id,
         )
 
@@ -351,7 +356,7 @@ class WorkflowRepository:
                 id, issue_id, worktree_path, status,
                 created_at, started_at, completed_at, failure_reason,
                 workflow_type, profile_id, plan_cache, issue_cache,
-                base_commit
+                base_commit, branch
             FROM workflows
             WHERE status IN ({placeholders})
             """,
@@ -408,7 +413,7 @@ class WorkflowRepository:
                 id, issue_id, worktree_path, status,
                 created_at, started_at, completed_at, failure_reason,
                 workflow_type, profile_id, plan_cache, issue_cache,
-                base_commit
+                base_commit, branch
             FROM workflows
             WHERE {where_clause}
             ORDER BY started_at DESC NULLS LAST, id DESC

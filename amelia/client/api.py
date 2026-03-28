@@ -194,6 +194,7 @@ class AmeliaClient:
         task_description: str | None = None,
         start: bool = True,
         plan_now: bool = False,
+        branch: str | None = None,
     ) -> CreateWorkflowResponse:
         """Create a new workflow.
 
@@ -205,6 +206,8 @@ class AmeliaClient:
             task_description: Optional task description (requires task_title)
             start: Whether to start workflow immediately (default True)
             plan_now: Whether to run Architect before queueing (requires start=False)
+            branch: Branch override. None=auto-create amelia/<issue-id>.
+                Empty string=use current branch as-is.
 
         Returns:
             CreateWorkflowResponse with workflow id and initial status
@@ -223,6 +226,7 @@ class AmeliaClient:
             task_description=task_description,
             start=start,
             plan_now=plan_now,
+            branch=branch,
         )
 
         async with self._http_client() as client:
