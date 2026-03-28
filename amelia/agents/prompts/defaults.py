@@ -259,13 +259,6 @@ Classify every comment provided. Do not skip any.""",
 - Make minimal, targeted changes. Only modify files related to the review comments.
 - Preserve existing behavior unless the review explicitly asks for a change.
 
-## Working Directory
-
-You are running inside an isolated worktree. All file paths mentioned in the review comments are **relative to your current working directory**.
-- Use the relative paths exactly as given (e.g., `ios/Foo/Bar.swift`) — they exist in your CWD.
-- Do NOT construct absolute paths to other directories on disk.
-- Do NOT try to find the "original" repository checkout elsewhere on the filesystem.
-
 ## Process
 
 1. Read the review comments carefully to understand the reviewer's intent.
