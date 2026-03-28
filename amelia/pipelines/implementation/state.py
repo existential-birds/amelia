@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import operator
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import Field
 
@@ -90,6 +90,9 @@ class ImplementationState(BasePipelineState):
     review_pass: int = 0
     review_mode: str | None = None
     max_review_passes: int = 3
+
+    # Structured plan data (from write_plan JSON sidecar)
+    plan_structured: dict[str, Any] | None = None
 
     # External plan tracking
     external_plan: bool = False

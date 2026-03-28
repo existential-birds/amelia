@@ -8,6 +8,7 @@ This module contains node functions specific to the implementation pipeline:
 """
 
 import asyncio
+import json as _json
 from pathlib import Path
 from typing import Any
 
@@ -173,10 +174,44 @@ async def plan_validator_node(
     if not plan_content.strip():
         raise ValueError(f"Plan file is empty at {plan_path}")
 
-    # Extract fields using regex
-    goal = _extract_goal_from_plan(plan_content)
-    key_files = _extract_key_files_from_plan(plan_content)
-    total_tasks = extract_task_count(plan_content)
+    # Check for structured plan data (JSON sidecar from write_plan tool)
+    json_sidecar = plan_path.with_suffix(".json")
+    plan_structured: dict[str, Any] | None = None
+    if json_sidecar.exists():
+        try:
+            raw_json = await asyncio.to_thread(json_sidecar.read_text)
+            parsed = _json.loads(raw_json)
+            if not isinstance(parsed, dict):
+                logger.warning(
+                    "Plan JSON sidecar is not a dict, ignoring",
+                    json_path=str(json_sidecar),
+                    actual_type=type(parsed).__name__,
+                )
+            else:
+                plan_structured = parsed
+                logger.info(
+                    "Found structured plan data from write_plan tool",
+                    json_path=str(json_sidecar),
+                    task_count=len(plan_structured.get("tasks", [])),
+                )
+        except (_json.JSONDecodeError, OSError) as exc:
+            logger.warning("Failed to read/parse plan JSON sidecar", error=str(exc))
+
+    # Extract fields — prefer structured data, fall back to regex
+    # Guard: only use structured data if it has meaningful content (non-empty dict with tasks)
+    if plan_structured and plan_structured.get("tasks"):
+        goal = plan_structured.get("goal") or _extract_goal_from_plan(plan_content)
+        structured_tasks = plan_structured["tasks"]
+        total_tasks = len(structured_tasks)
+        key_files_from_structured: list[str] = []
+        for task in structured_tasks:
+            key_files_from_structured.extend(task.get("files_to_create", []))
+            key_files_from_structured.extend(task.get("files_to_modify", []))
+        key_files = key_files_from_structured if key_files_from_structured else _extract_key_files_from_plan(plan_content)
+    else:
+        goal = _extract_goal_from_plan(plan_content)
+        key_files = _extract_key_files_from_plan(plan_content)
+        total_tasks = extract_task_count(plan_content)
 
     # Run structural validation
     validation_result = validate_plan_structure(goal, plan_content)
@@ -208,6 +243,7 @@ async def plan_validator_node(
         "total_tasks": total_tasks,
         "plan_validation_result": validation_result,
         "plan_revision_count": revision_count,
+        "plan_structured": plan_structured,
     }
 
 

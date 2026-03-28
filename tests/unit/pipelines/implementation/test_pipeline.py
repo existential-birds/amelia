@@ -159,6 +159,350 @@ class TestImplementationPipelineInitialState:
         assert state.history == []
 
 
+class TestPlanValidatorStructuredData:
+    """Tests for structured plan data (JSON sidecar) in plan_validator_node."""
+
+    @pytest.mark.asyncio
+    async def test_plan_validator_reads_json_sidecar(
+        self,
+        tmp_path: Path,
+        mock_profile_factory,
+        mock_issue_factory,
+    ) -> None:
+        """If .json sidecar exists, plan_validator should populate plan_structured."""
+        import json
+        from datetime import UTC, datetime
+
+        from amelia.pipelines.implementation.nodes import plan_validator_node
+
+        # Create plan directory and files
+        plan_dir = tmp_path / "docs" / "plans"
+        plan_dir.mkdir(parents=True)
+
+        issue = mock_issue_factory(id="TEST-123")
+        profile = mock_profile_factory(repo_root=str(tmp_path))
+
+        # Resolve the actual plan filename
+        from amelia.core.constants import resolve_plan_path
+
+        plan_rel = resolve_plan_path(profile.plan_path_pattern, issue.id)
+        plan_md = tmp_path / plan_rel
+        plan_json = plan_md.with_suffix(".json")
+        plan_md.parent.mkdir(parents=True, exist_ok=True)
+
+        plan_md.write_text(
+            "# Test Plan\n\n**Goal:** Test goal\n\n---\n\n"
+            "### Task 1: Do thing\n\n"
+            "Step content here that is long enough to pass validation checks and more text.\n"
+            "Additional padding to satisfy minimum content length requirements for validation.\n"
+            "Even more content to make this look like a real plan with substance.\n"
+        )
+        plan_json.write_text(json.dumps({
+            "goal": "Structured test goal",
+            "architecture_summary": "Test arch",
+            "tech_stack": ["Python"],
+            "tasks": [
+                {
+                    "number": "1",
+                    "title": "Do thing",
+                    "steps": ["Step"],
+                    "files_to_modify": ["src/app.py"],
+                    "files_to_create": ["src/new.py"],
+                }
+            ],
+            "file_path": "/docs/plans/test.md",
+        }))
+
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="pending",
+            profile_id=profile.name,
+            issue=issue,
+        )
+
+        config = {
+            "configurable": {
+                "thread_id": state.workflow_id,
+                "profile": profile,
+            }
+        }
+
+        result = await plan_validator_node(state, config)
+
+        assert result["plan_structured"] is not None
+        assert result["plan_structured"]["goal"] == "Structured test goal"
+        assert len(result["plan_structured"]["tasks"]) == 1
+        # Structured goal should override regex-extracted goal
+        assert result["goal"] == "Structured test goal"
+        # Key files should come from structured data
+        assert "src/app.py" in result["key_files"]
+        assert "src/new.py" in result["key_files"]
+        assert result["total_tasks"] == 1
+
+    @pytest.mark.asyncio
+    async def test_plan_validator_without_json_sidecar(
+        self,
+        tmp_path: Path,
+        mock_profile_factory,
+        mock_issue_factory,
+    ) -> None:
+        """Without .json sidecar, plan_structured should be None and regex is used."""
+        from datetime import UTC, datetime
+
+        from amelia.pipelines.implementation.nodes import plan_validator_node
+        from amelia.core.constants import resolve_plan_path
+
+        issue = mock_issue_factory(id="TEST-456")
+        profile = mock_profile_factory(repo_root=str(tmp_path))
+
+        plan_rel = resolve_plan_path(profile.plan_path_pattern, issue.id)
+        plan_md = tmp_path / plan_rel
+        plan_md.parent.mkdir(parents=True, exist_ok=True)
+        plan_md.write_text(
+            "# Test Plan\n\n**Goal:** Regex extracted goal\n\n---\n\n"
+            "### Task 1: First thing\n\n"
+            "Step content here that is long enough to pass validation checks.\n"
+            "### Task 2: Second thing\n\n"
+            "More step content here for the second task.\n"
+        )
+
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="pending",
+            profile_id=profile.name,
+            issue=issue,
+        )
+
+        config = {
+            "configurable": {
+                "thread_id": state.workflow_id,
+                "profile": profile,
+            }
+        }
+
+        result = await plan_validator_node(state, config)
+
+        assert result["plan_structured"] is None
+        assert result["goal"] is not None  # Should still extract via regex
+
+    @pytest.mark.asyncio
+    async def test_plan_validator_handles_malformed_json_sidecar(
+        self,
+        tmp_path: Path,
+        mock_profile_factory,
+        mock_issue_factory,
+    ) -> None:
+        """Malformed JSON sidecar should be ignored gracefully."""
+        from datetime import UTC, datetime
+
+        from amelia.pipelines.implementation.nodes import plan_validator_node
+        from amelia.core.constants import resolve_plan_path
+
+        issue = mock_issue_factory(id="TEST-789")
+        profile = mock_profile_factory(repo_root=str(tmp_path))
+
+        plan_rel = resolve_plan_path(profile.plan_path_pattern, issue.id)
+        plan_md = tmp_path / plan_rel
+        plan_json = plan_md.with_suffix(".json")
+        plan_md.parent.mkdir(parents=True, exist_ok=True)
+
+        plan_md.write_text(
+            "# Test Plan\n\n**Goal:** Fallback goal\n\n---\n\n"
+            "### Task 1: Do thing\n\n"
+            "Step content here that is long enough to pass validation checks.\n"
+        )
+        plan_json.write_text("{not valid json!!!")
+
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="pending",
+            profile_id=profile.name,
+            issue=issue,
+        )
+
+        config = {
+            "configurable": {
+                "thread_id": state.workflow_id,
+                "profile": profile,
+            }
+        }
+
+        result = await plan_validator_node(state, config)
+
+        # Should fall back to regex extraction
+        assert result["plan_structured"] is None
+        assert result["goal"] is not None
+
+    @pytest.mark.asyncio
+    async def test_plan_validator_empty_dict_sidecar_falls_back_to_regex(
+        self,
+        tmp_path: Path,
+        mock_profile_factory,
+        mock_issue_factory,
+    ) -> None:
+        """Empty {} sidecar should be ignored — regex extraction used instead."""
+        import json
+        from datetime import UTC, datetime
+
+        from amelia.pipelines.implementation.nodes import plan_validator_node
+        from amelia.core.constants import resolve_plan_path
+
+        issue = mock_issue_factory(id="TEST-EMPTY")
+        profile = mock_profile_factory(repo_root=str(tmp_path))
+
+        plan_rel = resolve_plan_path(profile.plan_path_pattern, issue.id)
+        plan_md = tmp_path / plan_rel
+        plan_json = plan_md.with_suffix(".json")
+        plan_md.parent.mkdir(parents=True, exist_ok=True)
+
+        plan_md.write_text(
+            "# Test Plan\n\n**Goal:** Regex fallback goal\n\n---\n\n"
+            "### Task 1: First thing\n\n"
+            "Step content here that is long enough to pass validation checks.\n"
+        )
+        plan_json.write_text(json.dumps({}))  # empty dict — truthy but useless
+
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="pending",
+            profile_id=profile.name,
+            issue=issue,
+        )
+
+        config = {
+            "configurable": {
+                "thread_id": state.workflow_id,
+                "profile": profile,
+            }
+        }
+
+        result = await plan_validator_node(state, config)
+
+        # Empty dict sidecar is parsed but has no tasks → regex path used
+        assert result["plan_structured"] == {}
+        assert result["goal"] is not None  # From regex
+        assert result["total_tasks"] >= 1  # From regex extraction
+
+    @pytest.mark.asyncio
+    @pytest.mark.skipif(
+        __import__("sys").platform == "win32",
+        reason="chmod does not restrict owner reads on Windows",
+    )
+    @pytest.mark.skipif(
+        __import__("os").getuid() == 0 if hasattr(__import__("os"), "getuid") else False,
+        reason="root can read files regardless of permissions",
+    )
+    async def test_plan_validator_handles_unreadable_json_sidecar(
+        self,
+        tmp_path: Path,
+        mock_profile_factory,
+        mock_issue_factory,
+    ) -> None:
+        """OSError reading sidecar (e.g. permissions) should be caught gracefully."""
+        import os
+        from datetime import UTC, datetime
+
+        from amelia.pipelines.implementation.nodes import plan_validator_node
+        from amelia.core.constants import resolve_plan_path
+
+        issue = mock_issue_factory(id="TEST-OSERR")
+        profile = mock_profile_factory(repo_root=str(tmp_path))
+
+        plan_rel = resolve_plan_path(profile.plan_path_pattern, issue.id)
+        plan_md = tmp_path / plan_rel
+        plan_json = plan_md.with_suffix(".json")
+        plan_md.parent.mkdir(parents=True, exist_ok=True)
+
+        plan_md.write_text(
+            "# Test Plan\n\n**Goal:** OS error goal\n\n---\n\n"
+            "### Task 1: Do thing\n\n"
+            "Step content here that is long enough to pass validation checks.\n"
+        )
+        plan_json.write_text("valid json but will be unreadable")
+
+        # Make file unreadable
+        os.chmod(plan_json, 0o000)
+        try:
+            state = ImplementationState(
+                workflow_id=uuid4(),
+                created_at=datetime.now(UTC),
+                status="pending",
+                profile_id=profile.name,
+                issue=issue,
+            )
+
+            config = {
+                "configurable": {
+                    "thread_id": state.workflow_id,
+                    "profile": profile,
+                }
+            }
+
+            result = await plan_validator_node(state, config)
+
+            # OSError should be caught; falls back to regex
+            assert result["plan_structured"] is None
+            assert result["goal"] is not None
+        finally:
+            os.chmod(plan_json, 0o644)  # restore for cleanup
+
+
+    @pytest.mark.asyncio
+    async def test_plan_validator_handles_non_dict_json_sidecar(
+        self,
+        tmp_path: Path,
+        mock_profile_factory,
+        mock_issue_factory,
+    ) -> None:
+        """Non-dict JSON sidecar (e.g. a list) should be ignored gracefully."""
+        import json
+        from datetime import UTC, datetime
+
+        from amelia.pipelines.implementation.nodes import plan_validator_node
+        from amelia.core.constants import resolve_plan_path
+
+        issue = mock_issue_factory(id="TEST-NONDICT")
+        profile = mock_profile_factory(repo_root=str(tmp_path))
+
+        plan_rel = resolve_plan_path(profile.plan_path_pattern, issue.id)
+        plan_md = tmp_path / plan_rel
+        plan_json = plan_md.with_suffix(".json")
+        plan_md.parent.mkdir(parents=True, exist_ok=True)
+
+        plan_md.write_text(
+            "# Test Plan\n\n**Goal:** Non-dict goal\n\n---\n\n"
+            "### Task 1: Do thing\n\n"
+            "Step content here that is long enough to pass validation checks.\n"
+        )
+        # Write a JSON array instead of an object
+        plan_json.write_text(json.dumps(["not", "a", "dict"]))
+
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="pending",
+            profile_id=profile.name,
+            issue=issue,
+        )
+
+        config = {
+            "configurable": {
+                "thread_id": state.workflow_id,
+                "profile": profile,
+            }
+        }
+
+        result = await plan_validator_node(state, config)
+
+        # Non-dict sidecar should be ignored; falls back to regex
+        assert result["plan_structured"] is None
+        assert result["goal"] is not None
+
+
 class TestArchitectNodeWritePlan:
     """Tests for write_plan tool call handling in architect node fallback."""
 
