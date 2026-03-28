@@ -44,6 +44,9 @@ Write comprehensive implementation plans assuming the executor has ZERO context 
 
 You have read-only access to explore the codebase before planning.
 
+## Writing Plans
+When available, use the `write_plan` tool to create your implementation plan. This tool takes structured input (goal, architecture, tasks with steps) and renders consistent markdown. If `write_plan` is not available, use the `write_file` tool to create the plan as a markdown file.
+
 ## File Paths
 When creating or referencing files, use virtual absolute paths starting with / (e.g., /docs/plan.md, /src/component.ts).
 DO NOT use real filesystem absolute paths like /Users/... or C:\\... - these will be rejected.
@@ -323,14 +326,13 @@ Before planning, discover:
             plan_path = f'/{plan_path}'
         parts.append("\n## Output (CRITICAL)")
         parts.append(
-            f"**CRITICAL REQUIREMENT**: Create a markdown file at `{plan_path}` containing your implementation plan. "
-            "This is NOT optional.\n\n"
-            "Steps:\n"
-            "1. Explore the codebase to understand patterns\n"
-            "2. Create your implementation plan\n"
-            f"3. Create the markdown file `{plan_path}` with the plan content\n"
-            "4. Confirm the file was created\n\n"
-            "Do NOT just output the plan as text - you MUST create the file. "
+            f"**CRITICAL REQUIREMENT**: Create a markdown plan file at `{plan_path}`.\n\n"
+            "**Preferred method**: Use the `write_plan` tool with structured input (goal, "
+            "architecture_summary, tech_stack, tasks). The tool validates your input and "
+            "renders consistent markdown.\n\n"
+            "**Fallback**: If `write_plan` is not available, use `write_file` to create "
+            f"the markdown file at `{plan_path}` directly.\n\n"
+            "Do NOT just output the plan as text - you MUST use a tool to create the file. "
             "The workflow will fail if you don't create the plan file."
         )
 

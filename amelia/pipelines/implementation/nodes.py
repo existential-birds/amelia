@@ -66,17 +66,24 @@ async def _resolve_plan_from_tool_calls(
                 plan_path=str(plan_path),
                 original_file_path=tc.tool_input.get("file_path"),
             )
-            result = await execute_write_plan(
-                overridden_input,
-                root_dir=str(working_dir),
-            )
+            try:
+                result = await execute_write_plan(
+                    overridden_input,
+                    root_dir=str(working_dir),
+                )
+            except Exception:
+                logger.exception(
+                    "write_plan execution raised, falling through to write_file fallback",
+                    plan_path=str(plan_path),
+                )
+                continue
             if plan_path.exists():
                 return True
             logger.warning(
-                "write_plan execution failed in fallback, trying next tool call",
+                "write_plan did not produce a file, trying next tool call",
                 result=result,
             )
-            continue  # Skip write_file check for this tool call
+            continue
 
         # Handle legacy write_file tool calls
         is_write = (
@@ -95,7 +102,7 @@ async def _resolve_plan_from_tool_calls(
                     content_length=len(plan_content),
                 )
                 return True
-    else:  # no matching write_plan or write_file tool call found - try salvaging from raw output
+    else:  # for-loop completed without returning — no tool call succeeded; try salvaging from raw output
         # Some models output the plan as text instead of using the write tool
         raw = raw_output or ""
         if raw and _looks_like_plan(raw):
