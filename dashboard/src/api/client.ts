@@ -215,7 +215,7 @@ export const api = {
       }
     }
     // Strip recent_events from the response — they are not part of the frontend type
-    delete (data as Record<string, unknown>).recent_events;
+    delete (data as unknown as Record<string, unknown>).recent_events;
 
     return data;
   },
