@@ -41,7 +41,7 @@ export default function WorkflowDetailPage() {
   useAutoRevalidation(workflow?.id);
 
   // Determine if this failed workflow can be resumed from checkpoint.
-  // Primary: workflow.recoverable (set by API client from recent_events, survives refresh).
+  // Primary: workflow.recoverable (set by API client, survives refresh).
   // Fallback: real-time store events (only when API hasn't set recoverable yet).
   const isRecoverable = useMemo(() => {
     if (workflow?.status !== 'failed') return false;

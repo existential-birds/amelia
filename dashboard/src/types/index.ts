@@ -108,7 +108,7 @@ export interface WorkflowDetail extends WorkflowSummary {
   /** PR comments with resolution status, only present for pr_auto_fix workflows. */
   pr_comments: PRCommentData[] | null;
 
-  /** Whether this failed workflow can be resumed from its last checkpoint. Derived client-side from recent_events in the API response. */
+  /** Whether this failed workflow can be resumed from its last checkpoint. Derived client-side from the API response. */
   recoverable?: boolean;
 }
 

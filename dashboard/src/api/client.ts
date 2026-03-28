@@ -201,7 +201,7 @@ export const api = {
     const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}`);
     const data = await handleResponse<WorkflowDetailResponse & { recent_events?: Array<{ event_type?: string; data?: Record<string, unknown> }> }>(response);
 
-    // Extract recoverable flag from recent_events (backend still sends them)
+    // Extract recoverable flag from recent_events in the raw API response
     // so recovery detection survives page refresh without ephemeral store events.
     // Only set recoverable when we find a workflow_failed event — an empty array
     // must leave recoverable undefined so the store-events fallback still works.
