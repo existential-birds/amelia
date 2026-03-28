@@ -27,7 +27,7 @@ import type { WorkflowSummary } from '@/types';
 import type { workflowsLoader } from '@/loaders/workflows';
 
 /**
- * Displays job queue for active workflows.
+ * Displays job queue.
  *
  * Layout:
  * - Top: Workflow header (full width)
@@ -175,14 +175,16 @@ export default function WorkflowsPage() {
         </div>
       )}
 
-      {/* Bottom: Job queue */}
+      {/* Detail error banner */}
+      {detailError && (
+        <div className="px-4 pt-4 text-destructive text-sm">
+          Failed to load workflow details: {detailError}
+        </div>
+      )}
+
+      {/* Bottom: Job Queue */}
       <div className="flex-1 p-4 overflow-hidden relative z-10 min-h-[300px]">
         <ScrollArea className="h-full overflow-hidden">
-          {detailError && (
-            <div className="p-4 text-destructive text-sm">
-              Failed to load workflow details: {detailError}
-            </div>
-          )}
           <JobQueue
             workflows={filteredWorkflows}
             selectedId={displayedId}

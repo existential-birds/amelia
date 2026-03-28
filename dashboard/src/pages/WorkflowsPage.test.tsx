@@ -59,7 +59,7 @@ const mockSecondWorkflowDetail = createMockWorkflowDetail({
  * Helper to render WorkflowsPage with router context and loader data
  */
 function renderPage(
-  loaderData: { workflows: WorkflowSummary[]; detail: WorkflowDetail | null },
+  loaderData: { workflows: WorkflowSummary[]; detail: WorkflowDetail | null; detailError?: string | null },
   initialPath = '/'
 ) {
   const router = createMemoryRouter(
@@ -150,7 +150,18 @@ describe('WorkflowsPage', () => {
     renderPage({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
 
     await waitFor(() => {
-      // JobQueue renders the section title
+      expect(screen.getByText('JOB QUEUE')).toBeInTheDocument();
+    });
+  });
+
+  it('should show job queue alongside error banner when detailError is set', async () => {
+    renderPage(
+      { workflows: [mockWorkflowSummary], detail: null, detailError: 'Network error' },
+      '/workflows'
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to load workflow details/)).toBeInTheDocument();
       expect(screen.getByText('JOB QUEUE')).toBeInTheDocument();
     });
   });
