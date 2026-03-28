@@ -9,7 +9,6 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { TypeBadge } from '@/components/TypeBadge';
 import { RequestReviewDialog } from '@/components/RequestReviewDialog';
 import { PRCommentSection } from '@/components/PRCommentSection';
-import { ActivityLog } from '@/components/ActivityLog';
 import { ApprovalControls } from '@/components/ApprovalControls';
 import { UsageCard } from '@/components/UsageCard';
 import { Button } from '@/components/ui/button';
@@ -17,15 +16,14 @@ import { useElapsedTime, useAutoRevalidation } from '@/hooks';
 import { useWorkflowActions } from '@/hooks/useWorkflowActions';
 import { truncateWorkflowId } from '@/utils';
 import { workflowDetailLoader } from '@/loaders';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useWorkflowStore } from '@/store/workflowStore';
 import type { WorkflowEvent } from '@/types';
 
 /**
- * Displays comprehensive workflow details with progress and activity.
+ * Displays comprehensive workflow details with progress.
  *
- * Shows header with status, progress bar, approval controls (when blocked),
- * usage stats, and real-time activity log.
+ * Shows header with status, approval controls (when blocked),
+ * recovery controls (when recoverable), and usage stats.
  *
  * @returns The workflow detail page UI
  */
@@ -33,9 +31,8 @@ export default function WorkflowDetailPage() {
   const { workflow } = useLoaderData<typeof workflowDetailLoader>();
   const elapsedTime = useElapsedTime(workflow);
 
-  // Use targeted selector to only subscribe to this workflow's events
+  // Use targeted selector to only subscribe to this workflow's events (for recovery detection)
   const workflowId = workflow?.id ?? '';
-  // Selector returns undefined when no events exist - fallback applied inside useMemo
   const storeEvents = useWorkflowStore(
     useCallback((state) => state.eventsByWorkflow[workflowId], [workflowId])
   );
@@ -43,33 +40,16 @@ export default function WorkflowDetailPage() {
   // Auto-revalidate when this workflow's status changes (approval events, completion, etc.)
   useAutoRevalidation(workflow?.id);
 
-  // Merge loader events with real-time WebSocket events
-  const allEvents = useMemo(() => {
-    const loaderEvents = workflow?.recent_events ?? [];
-    const realtime = storeEvents ?? [];
-
-    // Deduplicate by event id using a Map
-    const eventMap = new Map<string, WorkflowEvent>();
-    for (const event of loaderEvents) {
-      eventMap.set(event.id, event);
-    }
-    for (const event of realtime) {
-      eventMap.set(event.id, event);
-    }
-
-    // Sort by sequence number for correct ordering
-    return Array.from(eventMap.values()).sort((a, b) => a.sequence - b.sequence);
-  }, [workflow?.recent_events, storeEvents]);
-
   // Determine if this failed workflow can be resumed from checkpoint
   const isRecoverable = useMemo(() => {
     if (workflow?.status !== 'failed') return false;
-    const failedEvents = allEvents
+    const events = storeEvents ?? [];
+    const failedEvents = events
       .filter((e: WorkflowEvent) => e.event_type === 'workflow_failed')
       .sort((a: WorkflowEvent, b: WorkflowEvent) => b.sequence - a.sequence);
     const latest = failedEvents[0];
     return latest !== undefined && latest.data?.recoverable === true;
-  }, [workflow?.status, allEvents]);
+  }, [workflow?.status, storeEvents]);
 
   const { resumeWorkflow, isActionPending } = useWorkflowActions();
 
@@ -120,8 +100,7 @@ export default function WorkflowDetailPage() {
         </PageHeader.Right>
       </PageHeader>
 
-      <div className="flex-1 overflow-hidden grid grid-cols-2 gap-4 p-6 min-h-0">
-        {/* Left column: Plan Review (when blocked) or Pipeline Canvas */}
+      <div className="flex-1 overflow-hidden p-6 min-h-0">
         <div className="flex flex-col gap-4 overflow-y-auto min-h-0">
           {/* Plan Review - shown when workflow needs approval */}
           {needsApproval && (
@@ -173,21 +152,6 @@ export default function WorkflowDetailPage() {
 
           {/* Usage card - shows token usage breakdown by agent */}
           <UsageCard tokenUsage={workflow.token_usage} className="border-l-2 border-l-primary" />
-        </div>
-
-        {/* Right column: Activity Log */}
-        <div className="border border-border rounded-lg bg-card/50 overflow-hidden flex flex-col">
-          <h3 className="font-heading text-xs font-semibold tracking-widest text-muted-foreground p-4 border-b border-border bg-muted/20">
-            ACTIVITY LOG
-          </h3>
-          <ScrollArea className="flex-1">
-            <div className="p-4">
-              <ActivityLog
-                workflowId={workflow.id}
-                initialEvents={allEvents}
-              />
-            </div>
-          </ScrollArea>
         </div>
       </div>
     </div>

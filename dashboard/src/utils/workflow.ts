@@ -127,9 +127,10 @@ export function getMostRecentCompleted(workflows: WorkflowSummary[]): WorkflowSu
 
 /**
  * Determines the end time for elapsed time calculation.
- * Uses completed_at if available, otherwise uses current time for in-progress workflows,
- * or the last event timestamp for blocked/failed/canceled workflows.
- * @param workflow - The workflow detail object containing timing and event information
+ * Uses completed_at if available, otherwise uses current time for in-progress
+ * and blocked workflows. Terminal statuses (failed, canceled) without
+ * completed_at fall back to started_at so the timer does not drift.
+ * @param workflow - The workflow detail object containing timing information
  * @returns End time in milliseconds since epoch
  */
 function getEndTime(workflow: WorkflowDetail): number {
@@ -137,13 +138,14 @@ function getEndTime(workflow: WorkflowDetail): number {
     return new Date(workflow.completed_at).getTime();
   }
 
-  if (workflow.status === 'in_progress') {
-    return Date.now();  // Still running, show live elapsed time
+  if (workflow.status === 'in_progress' || workflow.status === 'blocked') {
+    return Date.now();  // Still active, show live elapsed time
   }
 
-  // Blocked, failed, canceled - use last event time
-  return workflow.recent_events?.at(-1)?.timestamp
-    ? new Date(workflow.recent_events.at(-1)!.timestamp).getTime()
+  // Terminal statuses (failed, canceled) without completed_at:
+  // freeze at started_at so the displayed time doesn't tick upward on re-renders
+  return workflow.started_at
+    ? new Date(workflow.started_at).getTime()
     : Date.now();
 }
 
