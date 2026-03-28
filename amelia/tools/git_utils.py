@@ -288,7 +288,17 @@ async def create_and_checkout_branch(cwd: str | None, branch_name: str) -> None:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+    except TimeoutError as e:
+        try:
+            proc.kill()
+            await proc.wait()
+        except ProcessLookupError:
+            pass
+        raise ValueError(
+            f"Git checkout timed out after 60s for branch '{branch_name}'"
+        ) from e
     if proc.returncode != 0:
         stderr_text = stderr.decode().strip()
         if "already exists" in stderr_text:
@@ -297,6 +307,29 @@ async def create_and_checkout_branch(cwd: str | None, branch_name: str) -> None:
                 f"Delete it first or pass --branch to specify a different name."
             )
         raise ValueError(f"Failed to create branch '{branch_name}': {stderr_text}")
+
+
+async def checkout_branch(cwd: str | None, branch_name: str) -> None:
+    """Checkout an existing git branch.
+
+    Args:
+        cwd: Working directory for git command.
+        branch_name: Name of the branch to checkout.
+
+    Raises:
+        ValueError: If checkout fails.
+    """
+    repo_path = Path(cwd) if cwd else Path.cwd()
+    proc = await asyncio.create_subprocess_exec(
+        "git", "checkout", branch_name,
+        cwd=repo_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+    if proc.returncode != 0:
+        stderr_text = stderr.decode().strip()
+        raise ValueError(f"Failed to checkout branch '{branch_name}': {stderr_text}")
 
 
 async def has_uncommitted_changes(cwd: str | None = None) -> bool:

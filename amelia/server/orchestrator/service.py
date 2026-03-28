@@ -562,16 +562,13 @@ class OrchestratorService:
         """
         from amelia.tools.git_utils import (  # noqa: PLC0415
             PROTECTED_BRANCHES,
+            checkout_branch as _checkout_branch,
             create_and_checkout_branch,
             get_current_branch,
             has_uncommitted_changes,
         )
 
         current_branch = await get_current_branch(worktree_path)
-
-        # Explicit opt-in: use current branch as-is
-        if branch == "":
-            return current_branch
 
         # Validate we're on a default branch (or detached HEAD is an error)
         if current_branch is None:
@@ -581,6 +578,16 @@ class OrchestratorService:
                 "or pass --branch to override."
             )
 
+        if await has_uncommitted_changes(worktree_path):
+            raise ValueError(
+                "Working tree has uncommitted changes. "
+                "Commit or stash them before starting a workflow."
+            )
+
+        # Explicit opt-in: use current branch as-is
+        if branch == "":
+            return current_branch
+
         if current_branch not in PROTECTED_BRANCHES:
             raise ValueError(
                 f"Currently on non-default branch '{current_branch}'. "
@@ -588,18 +595,15 @@ class OrchestratorService:
                 f"or pass --branch to use the current branch as-is."
             )
 
-        # Check for uncommitted changes before creating branch
-        if await has_uncommitted_changes(worktree_path):
-            raise ValueError(
-                "Working tree has uncommitted changes. "
-                "Commit or stash them before starting a workflow."
-            )
-
         # Determine target branch name
         target_branch = branch if branch else f"amelia/{issue_id}"
 
         await create_and_checkout_branch(worktree_path, target_branch)
         logger.info("Created workflow branch", branch=target_branch, from_branch=current_branch)
+
+        # Restore worktree to the original branch so queued workflows
+        # don't leave the worktree on the issue branch
+        await _checkout_branch(worktree_path, current_branch)
 
         return target_branch
 
@@ -2625,6 +2629,19 @@ class OrchestratorService:
             current_count = len(self._active_tasks)
             if current_count >= self._max_concurrent:
                 raise ConcurrencyLimitError(self._max_concurrent, current_count)
+
+            # Checkout the workflow branch if one was persisted
+            if workflow.branch:
+                from amelia.tools.git_utils import checkout_branch  # noqa: PLC0415
+
+                try:
+                    await checkout_branch(workflow.worktree_path, workflow.branch)
+                except ValueError as exc:
+                    raise InvalidStateError(
+                        f"Cannot checkout workflow branch '{workflow.branch}': {exc}",
+                        workflow_id=workflow_id,
+                        current_status=workflow.workflow_status,
+                    ) from exc
 
             # Set started_at timestamp (status transition happens in _run_workflow)
             # NOTE: We don't set workflow_status here - _run_workflow handles
