@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
-
-from uuid import uuid4
 
 from amelia.core.agentic_state import ToolCall
 from amelia.core.constants import ToolName
@@ -250,8 +249,8 @@ class TestPlanValidatorStructuredData:
         """Without .json sidecar, plan_structured should be None and regex is used."""
         from datetime import UTC, datetime
 
-        from amelia.pipelines.implementation.nodes import plan_validator_node
         from amelia.core.constants import resolve_plan_path
+        from amelia.pipelines.implementation.nodes import plan_validator_node
 
         issue = mock_issue_factory(id="TEST-456")
         profile = mock_profile_factory(repo_root=str(tmp_path))
@@ -297,8 +296,8 @@ class TestPlanValidatorStructuredData:
         """Malformed JSON sidecar should be ignored gracefully."""
         from datetime import UTC, datetime
 
-        from amelia.pipelines.implementation.nodes import plan_validator_node
         from amelia.core.constants import resolve_plan_path
+        from amelia.pipelines.implementation.nodes import plan_validator_node
 
         issue = mock_issue_factory(id="TEST-789")
         profile = mock_profile_factory(repo_root=str(tmp_path))
@@ -347,8 +346,8 @@ class TestPlanValidatorStructuredData:
         import json
         from datetime import UTC, datetime
 
-        from amelia.pipelines.implementation.nodes import plan_validator_node
         from amelia.core.constants import resolve_plan_path
+        from amelia.pipelines.implementation.nodes import plan_validator_node
 
         issue = mock_issue_factory(id="TEST-EMPTY")
         profile = mock_profile_factory(repo_root=str(tmp_path))
@@ -406,8 +405,8 @@ class TestPlanValidatorStructuredData:
         import os
         from datetime import UTC, datetime
 
-        from amelia.pipelines.implementation.nodes import plan_validator_node
         from amelia.core.constants import resolve_plan_path
+        from amelia.pipelines.implementation.nodes import plan_validator_node
 
         issue = mock_issue_factory(id="TEST-OSERR")
         profile = mock_profile_factory(repo_root=str(tmp_path))
@@ -462,8 +461,8 @@ class TestPlanValidatorStructuredData:
         import json
         from datetime import UTC, datetime
 
-        from amelia.pipelines.implementation.nodes import plan_validator_node
         from amelia.core.constants import resolve_plan_path
+        from amelia.pipelines.implementation.nodes import plan_validator_node
 
         issue = mock_issue_factory(id="TEST-NONDICT")
         profile = mock_profile_factory(repo_root=str(tmp_path))
