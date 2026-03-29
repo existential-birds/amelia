@@ -512,6 +512,18 @@ class ClaudeCliDriver(DriverInterface):
         except Exception as e:
             if isinstance(e, (RuntimeError, SchemaValidationError)):
                 raise
+            # The SDK raises bare Exception for CLI process failures (e.g.
+            # "Command failed with exit code 1").  Surface captured stderr so
+            # the operator can diagnose the root cause instead of seeing only
+            # "Check stderr output for details".
+            captured_stderr = "\n".join(stderr_lines) if stderr_lines else ""
+            safe_stderr = _sanitize_stderr(captured_stderr)
+            if safe_stderr:
+                raise ModelProviderError(
+                    f"Claude CLI error: {e}\nCaptured stderr:\n{safe_stderr}",
+                    provider_name="claude-cli",
+                    original_message=str(e),
+                ) from e
             raise RuntimeError(f"Error executing Claude SDK: {e}") from e
 
     async def execute_agentic(
@@ -666,8 +678,19 @@ class ClaudeCliDriver(DriverInterface):
                 provider_name="claude-cli",
                 original_message=str(e),
             ) from e
-        except Exception:
-            logger.exception("Error in agentic execution")
+        except Exception as e:
+            captured_stderr = "\n".join(stderr_lines) if stderr_lines else ""
+            safe_stderr = _sanitize_stderr(captured_stderr)
+            logger.exception(
+                "Error in agentic execution",
+                stderr=safe_stderr or "(empty)",
+            )
+            if safe_stderr and not isinstance(e, (RuntimeError, SchemaValidationError)):
+                raise ModelProviderError(
+                    f"Claude CLI error: {e}\nCaptured stderr:\n{safe_stderr}",
+                    provider_name="claude-cli",
+                    original_message=str(e),
+                ) from e
             raise
 
     def clear_tool_history(self) -> None:
