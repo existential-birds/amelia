@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from loguru import logger
 
-from amelia.agents.schemas.reviewer import ReviewSeverity, SubmitReviewInput
+from amelia.agents.schemas.reviewer import SubmitReviewInput
 from amelia.core.types import AgentConfig, Profile, ReviewResult, Severity
 from amelia.drivers.base import AgenticMessageType, SubmitToolDef
 from amelia.drivers.factory import get_driver
