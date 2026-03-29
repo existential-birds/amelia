@@ -87,10 +87,9 @@ class Reviewer:
 
 ## Process
 
-1. **Identify Changed Files**: Run `git diff --name-only {{base_commit}}` to see what files changed
-2. **Get the Diff**: Run `git diff {{base_commit}}` to get the full diff
-3. **Review**: Evaluate the code against the review guidelines above
-4. **Output**: Provide your review in the following markdown format:
+1. **Read the Diff**: Read the pre-fetched diff from `{{diff_path}}` — do NOT run `git diff` yourself
+2. **Review**: Evaluate the code against the review guidelines above
+3. **Output**: Provide your review in the following markdown format:
 
 ```markdown
 {REVIEW_OUTPUT_FORMAT}
@@ -236,16 +235,19 @@ class Reviewer:
         profile: Profile,
         *,
         workflow_id: uuid.UUID,
+        diff_path: str | None = None,
     ) -> tuple[ReviewResult, str | None]:
-        """Perform agentic code review that fetches diff using git tools.
+        """Perform agentic code review that reads the diff from a pre-fetched file.
 
         The reviewer uses pre-loaded review guidelines (injected at construction
         via ``review_guidelines``) as its system prompt.  Stack detection and
         skill loading happen upstream in ``call_reviewer_node``; this method
         focuses on executing the review and parsing results.
 
-        This approach avoids passing large diffs via command line arguments,
-        which can fail with "Argument list too long" errors.
+        When ``diff_path`` is provided, the reviewer reads the diff from that
+        pre-fetched file (written by ``call_reviewer_node``) instead of running
+        git diff itself.  This eliminates redundant git diff calls across
+        multiple review passes and avoids "Argument list too long" errors.
 
         Uses the unified AgenticMessage stream from the driver, independent
         of the specific driver implementation (CLI or API).
@@ -255,6 +257,8 @@ class Reviewer:
             base_commit: Git commit hash to diff against.
             profile: The profile containing working directory settings.
             workflow_id: Workflow ID for stream events (required).
+            diff_path: Optional path to pre-fetched diff file. When provided,
+                the reviewer reads from this file instead of running git diff.
 
         Returns:
             Tuple of (ReviewResult, session_id from driver).
@@ -265,16 +269,27 @@ class Reviewer:
         # Build the task prompt using shared helper
         task_context = self._extract_task_context(state) or "Review the code changes."
 
-        prompt = f"""Review the code changes for this task:
+        if diff_path:
+            prompt = f"""Review the code changes for this task:
+
+{task_context}
+
+The diff is pre-fetched at: {diff_path}
+Read it from that file rather than running git diff.
+
+The changes are against commit: {base_commit}"""
+        else:
+            prompt = f"""Review the code changes for this task:
 
 {task_context}
 
 The changes are in git - diff against commit: {base_commit}"""
 
-        # Build system prompt with base_commit and review_guidelines
+        # Build system prompt with base_commit, review_guidelines, and diff_path
         system_prompt = self.agentic_prompt.format(
             base_commit=base_commit,
             review_guidelines=self._review_guidelines,
+            diff_path=diff_path or "(not provided — use git diff)",
         )
 
         cwd = profile.repo_root

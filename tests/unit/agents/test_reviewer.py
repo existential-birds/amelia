@@ -966,6 +966,77 @@ There are problems to address.
         assert result_empty.severity == Severity.NONE
 
 
+class TestAgenticReviewDiffPath:
+    """Tests for agentic_review with diff_path parameter."""
+
+    async def test_agentic_review_with_diff_path(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """When diff_path is provided, the user prompt must reference it.
+
+        The prompt should tell the reviewer to read the pre-fetched diff from the
+        given path instead of running git diff.
+        """
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="""## Review Summary\nLooks good.\n## Issues\n### Critical (Blocking)\n### Major (Should Fix)\n### Minor (Nice to Have)\n## Good Patterns\n## Verdict\nReady: Yes\nRationale: All good.""",
+                session_id="session-diff",
+            ),
+        ]
+        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
+
+        reviewer = create_reviewer()
+        await reviewer.agentic_review(
+            state,
+            base_commit="abc123",
+            profile=profile,
+            workflow_id=uuid4(),
+            diff_path="/tmp/test/diff.patch",
+        )
+
+        # Verify the prompt passed to execute_agentic contains the diff path reference
+        mock_driver.execute_agentic.assert_called_once()
+        call_kwargs = mock_driver.execute_agentic.call_args
+        prompt = call_kwargs[1].get("prompt") or call_kwargs[0][0]
+        assert "pre-fetched at: /tmp/test/diff.patch" in prompt, (
+            "User prompt must reference pre-fetched diff path when diff_path is provided"
+        )
+
+    async def test_agentic_review_without_diff_path_uses_git_prompt(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """Without diff_path, user prompt should still work (backward compat)."""
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="## Verdict\nReady: Yes\nRationale: Good.",
+                session_id="session-no-diff",
+            ),
+        ]
+        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
+
+        reviewer = create_reviewer()
+        # Should not raise
+        result, session_id = await reviewer.agentic_review(
+            state,
+            base_commit="abc123",
+            profile=profile,
+            workflow_id=uuid4(),
+        )
+        assert session_id == "session-no-diff"
+
+
 class TestExtractTaskContext:
     """Tests for Reviewer._extract_task_context task extraction."""
 

@@ -179,10 +179,9 @@ DO NOT create TASK_*_SUMMARY.md, IMPLEMENTATION_*.md, CODE_REVIEW*.md, or other 
 
 ## Process
 
-1. **Identify Changed Files**: Run `git diff --name-only {{base_commit}}` to see what files changed
-2. **Get the Diff**: Run `git diff {{base_commit}}` to get the full diff
-3. **Review**: Evaluate the code against the review guidelines above
-4. **Output**: Provide your review in the following markdown format:
+1. **Read the Diff**: Read the pre-fetched diff from `{{diff_path}}` — do NOT run `git diff` yourself
+2. **Review**: Evaluate the code against the review guidelines above
+3. **Output**: Provide your review in the following markdown format:
 
 ```markdown
 {REVIEW_OUTPUT_FORMAT}
