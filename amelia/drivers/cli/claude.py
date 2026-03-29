@@ -295,7 +295,8 @@ class ClaudeCliDriver(DriverInterface):
             schema: Optional Pydantic model for structured output.
             bypass_permissions: Whether to bypass permission prompts for this call.
             allowed_tools: Optional list of canonical tool names. Mapped to CLI SDK
-                names via CANONICAL_TO_CLI. Unknown names raise ValueError.
+                names via CANONICAL_TO_CLI. Unknown names are passed through as-is
+                for custom/MCP tools.
 
         Returns:
             Configured ClaudeAgentOptions instance.
@@ -329,14 +330,8 @@ class ClaudeCliDriver(DriverInterface):
         if allowed_tools is not None:
             cli_allowed_tools = []
             for name in allowed_tools:
-                cli_name = CANONICAL_TO_CLI.get(name)
-                if cli_name:
-                    cli_allowed_tools.append(cli_name)
-                else:
-                    raise ValueError(
-                        f"Unknown canonical tool name: {name!r}. "
-                        f"Valid names: {sorted(CANONICAL_TO_CLI)}"
-                    )
+                cli_name = CANONICAL_TO_CLI.get(name, name)  # Unknown names pass through as-is
+                cli_allowed_tools.append(cli_name)
 
         # Build options kwargs. The SDK defaults allowed_tools to [] (no restriction),
         # so we only include it when the caller explicitly provided a list.
