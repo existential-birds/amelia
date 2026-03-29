@@ -4,15 +4,17 @@ Tests the LangGraph orchestrator graph structure, ImplementationState fields,
 and workflow invocation with real components (mocking only at HTTP/LLM boundary).
 """
 
+import shutil
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
 from amelia.core.constants import ToolName
+from amelia.core.types import Severity
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.nodes import (
@@ -29,6 +31,37 @@ from tests.integration.conftest import (
     make_profile,
     make_reviewer_agentic_messages,
 )
+
+
+def _mock_git_subprocess_for_reviewer(
+    *,
+    name_only_stdout: str = "test.py\n",
+    raw_diff_stdout: str = "diff --git a/test.py b/test.py\n+hello\n",
+    stat_stdout: str = " test.py | 1 +\n 1 file changed, 1 insertion(+)\n",
+) -> Any:
+    """Return async mock for asyncio.create_subprocess_exec for reviewer git diffs.
+
+    Expects ``base_commit`` in state so ``git rev-parse`` is not invoked.
+    Dispatches stdout by ``--name-only`` vs ``--stat`` vs plain ``git diff``.
+    """
+
+    async def _mock_create_subprocess_exec(
+        *cmd_args: str,
+        **kwargs: Any,
+    ) -> Any:
+        cmd = list(cmd_args)
+        proc = AsyncMock()
+        proc.returncode = 0
+        if "--name-only" in cmd:
+            out = name_only_stdout.encode()
+        elif "--stat" in cmd:
+            out = stat_stdout.encode()
+        else:
+            out = raw_diff_stdout.encode()
+        proc.communicate = AsyncMock(return_value=(out, b""))
+        return proc
+
+    return _mock_create_subprocess_exec
 
 
 @pytest.fixture(autouse=True)
@@ -481,3 +514,261 @@ Add comprehensive tests for the authentication flow.
 
         with pytest.raises(ValueError, match="Plan file is empty"):
             await plan_validator_node(state, cast(RunnableConfig, config))
+
+
+@pytest.mark.integration
+class TestReviewerSubmitReviewToolCapture:
+    """Reviewer submit_review tool capture vs markdown fallback."""
+
+    async def test_reviewer_node_captures_submit_review_tool(self, tmp_path: Path) -> None:
+        """submit_review TOOL_CALL drives ReviewResult; RESULT markdown must not override."""
+        profile = make_profile(repo_root=str(tmp_path))
+        wf_id = uuid4()
+        state = make_execution_state(
+            profile=profile,
+            goal="Add logging",
+            code_changes_for_review="(unused when diff file used)",
+            base_commit="deadbeef",
+            workflow_id=wf_id,
+        )
+        config = make_config(thread_id=str(wf_id), profile=profile)
+
+        misleading_markdown = """## Review Summary\nok\n## Verdict\n\n**Ready:** Yes\n**Rationale:** Would approve if parsed\n"""
+
+        mock_messages = [
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="submit_review",
+                tool_input={
+                    "approved": False,
+                    "severity": "major",
+                    "comments": ["[major] [test.py:10] Issue"],
+                },
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content=misleading_markdown,
+                session_id="session-tool",
+            ),
+        ]
+
+        git_mock = _mock_git_subprocess_for_reviewer()
+        with (
+            patch("amelia.pipelines.nodes.asyncio.create_subprocess_exec", git_mock),
+            patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)),
+        ):
+            result = await call_reviewer_node(state, cast(RunnableConfig, config))
+
+        rr = result["last_reviews"][0]
+        assert rr.approved is False
+        assert rr.severity == Severity.MAJOR
+        assert rr.comments == ["[major] [test.py:10] Issue"]
+
+    async def test_reviewer_node_submit_review_first_call_wins(self, tmp_path: Path) -> None:
+        """Only the first submit_review tool call is applied."""
+        profile = make_profile(repo_root=str(tmp_path))
+        wf_id = uuid4()
+        state = make_execution_state(
+            profile=profile,
+            goal="Fix bug",
+            code_changes_for_review="diff",
+            base_commit="abc",
+            workflow_id=wf_id,
+        )
+        config = make_config(thread_id=str(wf_id), profile=profile)
+
+        mock_messages = [
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="submit_review",
+                tool_input={
+                    "approved": False,
+                    "severity": "major",
+                    "comments": ["first"],
+                },
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="submit_review",
+                tool_input={
+                    "approved": True,
+                    "severity": "none",
+                    "comments": ["second"],
+                },
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="done",
+                session_id="s",
+            ),
+        ]
+
+        git_mock = _mock_git_subprocess_for_reviewer()
+        with (
+            patch("amelia.pipelines.nodes.asyncio.create_subprocess_exec", git_mock),
+            patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)),
+        ):
+            result = await call_reviewer_node(state, cast(RunnableConfig, config))
+
+        rr = result["last_reviews"][0]
+        assert rr.approved is False
+        assert rr.comments == ["first"]
+
+    async def test_reviewer_node_fallback_to_markdown_when_no_submit_review(
+        self, tmp_path: Path
+    ) -> None:
+        """Without submit_review, RESULT markdown is parsed into ReviewResult."""
+        profile = make_profile(repo_root=str(tmp_path))
+        wf_id = uuid4()
+        state = make_execution_state(
+            profile=profile,
+            goal="Fix bug",
+            code_changes_for_review="diff",
+            base_commit="abc",
+            workflow_id=wf_id,
+        )
+        config = make_config(thread_id=str(wf_id), profile=profile)
+
+        mock_messages = make_reviewer_agentic_messages(
+            approved=False,
+            comments=["Missing error handling", "No tests"],
+            severity="major",
+        )
+
+        git_mock = _mock_git_subprocess_for_reviewer()
+        with (
+            patch("amelia.pipelines.nodes.asyncio.create_subprocess_exec", git_mock),
+            patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)),
+        ):
+            result = await call_reviewer_node(state, cast(RunnableConfig, config))
+
+        rr = result["last_reviews"][0]
+        assert rr.approved is False
+        assert rr.severity == Severity.MAJOR
+        assert "Missing error handling" in rr.comments[0]
+        assert "No tests" in rr.comments[1]
+
+
+@pytest.mark.integration
+class TestDiffPreComputation:
+    """Diff file pre-computation in call_reviewer_node."""
+
+    async def test_reviewer_node_writes_diff_file_and_passes_diff_path(
+        self, tmp_path: Path
+    ) -> None:
+        """Writes diff.patch, passes path into reviewer prompt, then cleans up."""
+        profile = make_profile(repo_root=str(tmp_path))
+        wf_id = uuid4()
+        expected_diff_path = Path(f"/tmp/amelia-review-{wf_id}/diff.patch")
+
+        state = make_execution_state(
+            profile=profile,
+            goal="Task",
+            code_changes_for_review="x",
+            base_commit="base123",
+            workflow_id=wf_id,
+        )
+        config = make_config(thread_id=str(wf_id), profile=profile)
+
+        captured: list[dict[str, Any]] = []
+        mock_messages = make_reviewer_agentic_messages(approved=True)
+        git_mock = _mock_git_subprocess_for_reviewer(
+            name_only_stdout="src/a.py\n",
+            raw_diff_stdout="+added\n",
+            stat_stdout=" src/a.py | 1 +\n",
+        )
+
+        with (
+            patch("amelia.pipelines.nodes.asyncio.create_subprocess_exec", git_mock),
+            patch.object(
+                ApiDriver,
+                "execute_agentic",
+                create_mock_execute_agentic(mock_messages, captured),
+            ),
+        ):
+            await call_reviewer_node(state, cast(RunnableConfig, config))
+
+        assert not expected_diff_path.parent.exists()
+        assert len(captured) >= 1
+        prompt = captured[0]["prompt"]
+        assert str(expected_diff_path) in prompt
+
+    async def test_reviewer_node_diff_cleanup_on_error(self, tmp_path: Path) -> None:
+        """Diff directory is removed when agentic review raises mid-stream."""
+        profile = make_profile(repo_root=str(tmp_path))
+        wf_id = uuid4()
+        diff_parent = Path(f"/tmp/amelia-review-{wf_id}")
+
+        state = make_execution_state(
+            profile=profile,
+            goal="Task",
+            code_changes_for_review="x",
+            base_commit="base123",
+            workflow_id=wf_id,
+        )
+        config = make_config(thread_id=str(wf_id), profile=profile)
+
+        async def mock_execute_agentic(
+            *args: Any, **kwargs: Any,
+        ) -> Any:
+            yield AgenticMessage(
+                type=AgenticMessageType.THINKING,
+                content="start",
+            )
+            raise RuntimeError("boom mid-stream")
+
+        git_mock = _mock_git_subprocess_for_reviewer()
+        with (
+            patch("amelia.pipelines.nodes.asyncio.create_subprocess_exec", git_mock),
+            patch.object(ApiDriver, "execute_agentic", mock_execute_agentic),
+            pytest.raises(RuntimeError, match="boom mid-stream"),
+        ):
+            await call_reviewer_node(state, cast(RunnableConfig, config))
+
+        assert not diff_parent.exists()
+
+    async def test_reviewer_node_diff_file_contains_stat_and_content(self, tmp_path: Path) -> None:
+        """diff.patch contains stat header, changed files list, and raw diff."""
+        profile = make_profile(repo_root=str(tmp_path))
+        wf_id = uuid4()
+        diff_parent = Path(f"/tmp/amelia-review-{wf_id}")
+        diff_path = diff_parent / "diff.patch"
+
+        stat_out = " foo.py | 1 +\n 1 file changed, 1 insertion(+)"
+        name_only = "foo.py\n"
+        raw = "diff --git a/foo.py b/foo.py\n+ok\n"
+
+        state = make_execution_state(
+            profile=profile,
+            goal="Task",
+            code_changes_for_review="x",
+            base_commit="base123",
+            workflow_id=wf_id,
+        )
+        config = make_config(thread_id=str(wf_id), profile=profile)
+
+        mock_messages = make_reviewer_agentic_messages(approved=True)
+        git_mock = _mock_git_subprocess_for_reviewer(
+            name_only_stdout=name_only,
+            raw_diff_stdout=raw,
+            stat_stdout=stat_out,
+        )
+
+        def rmtree_noop(path: str | Path, ignore_errors: bool = False) -> None:
+            return None
+
+        with (
+            patch("amelia.pipelines.nodes.asyncio.create_subprocess_exec", git_mock),
+            patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)),
+            patch("amelia.pipelines.nodes.shutil.rmtree", side_effect=rmtree_noop),
+        ):
+            await call_reviewer_node(state, cast(RunnableConfig, config))
+
+        assert diff_path.exists()
+        text = diff_path.read_text()
+        assert stat_out.strip() in text
+        assert "Changed files:" in text
+        assert "foo.py" in text
+        assert raw in text
+
+        shutil.rmtree(diff_parent, ignore_errors=True)
