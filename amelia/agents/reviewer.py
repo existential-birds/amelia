@@ -435,8 +435,9 @@ The changes are in git - diff against commit: {base_commit}"""
         issues: list[tuple[str, str]] = []  # (severity, issue_text)
 
         # Match numbered issues: "1. [FILE:LINE] TITLE" or just "1. TITLE"
+        # Also handles bold-wrapped variants like "**1. [FILE:LINE] TITLE**"
         issue_pattern = re.compile(
-            r"^\s*(\d+)\.\s*(?:\[([^\]]+)\])?\s*(.+?)$",
+            r"^\s*\*{0,3}(\d+)\.\s*(?:\[([^\]]+)\])?\s*(.+?)\*{0,3}$",
             re.MULTILINE,
         )
 

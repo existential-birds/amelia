@@ -812,6 +812,63 @@ Rationale: The code is ready because:
         )
 
 
+    def test_bold_wrapped_issues_are_parsed(
+        self,
+        create_reviewer: Callable[..., Reviewer],
+    ) -> None:
+        """Issues wrapped in markdown bold (e.g. **1. [FILE:LINE] TITLE**) should be parsed.
+
+        Regression test: agentic reviewers often bold-wrap numbered issues,
+        causing the parser to miss them entirely and fall back to the
+        uninformative "See review output for details" placeholder.
+        """
+        beagle_output = """## Review Summary
+
+39 files changed, removing offset pagination in favor of keyset cursor pagination.
+
+## Issues
+
+### Critical (Blocking)
+
+### Major (Should Fix)
+
+**1. [book-service/internal/handler/books.go:~470] `ListBooks` omits `total` from response**
+   - Issue: Both paths build PaginatedResponse without total
+   - Why: The task spec explicitly lists total under "Keep"
+   - Fix: Restore a CountWorks call for ListBooks
+
+**2. [book-service/internal/handler/shelves.go:~1644] `GetPublicShelves` not converted to cursor pagination**
+   - Issue: Still issues a query with LIMIT but no cursor
+   - Why: The spec lists this endpoint in the table to convert
+   - Fix: Add a keyset cursor to GetPublicShelvesForUser
+
+### Minor (Nice to Have)
+
+**3. [book-service/internal/handler/response.go:~55] `pageSize` still serialised in every paginated response**
+   - Issue: PaginatedResponse still carries PageSize
+   - Why: Acceptance criterion says remove page/pageSize from non-admin endpoints
+   - Fix: Remove PageSize from PaginatedResponse
+
+## Good Patterns
+
+- [book-service/internal/store/queries/book_search.sql] IS NULL gate pattern
+- [book-service/internal/handler/books.go] N+1 trick for hasMore
+
+## Verdict
+
+**Ready: With fixes 1-2**
+"""
+        reviewer = create_reviewer()
+        result = reviewer._parse_review_result(beagle_output, workflow_id=uuid4())
+
+        assert result.approved is False
+        assert len(result.comments) == 3
+        assert "[major]" in result.comments[0].lower()
+        assert "book-service/internal/handler/books.go:~470" in result.comments[0]
+        assert "[major]" in result.comments[1].lower()
+        assert "[minor]" in result.comments[2].lower()
+        assert result.severity == Severity.MAJOR
+
     def test_no_ready_pattern_without_issues_defaults_to_approved(self, create_reviewer: Callable[..., Reviewer]) -> None:
         """When Ready: pattern is missing and no structured issues found, default to approved=True."""
         reviewer = create_reviewer()
