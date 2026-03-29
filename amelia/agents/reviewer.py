@@ -5,7 +5,7 @@ import asyncio
 import re
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from loguru import logger
@@ -95,14 +95,20 @@ class Reviewer:
 {REVIEW_OUTPUT_FORMAT}
 ```
 
-## Rules
+4. **Rules**:
+   - Number every issue sequentially (1, 2, 3...)
+   - Include FILE:LINE for each issue
+   - Separate Issue/Why/Fix clearly
+   - Categorize by actual severity (Critical/Major/Minor)
+   - Only flag real issues - check linters first before flagging style issues
+   - "Ready: Yes" means approved to merge as-is
 
-- Number every issue sequentially (1, 2, 3...)
-- Include FILE:LINE for each issue
-- Separate Issue/Why/Fix clearly
-- Categorize by actual severity (Critical/Major/Minor)
-- Only flag real issues - check linters first before flagging style issues
-- "Ready: Yes" means approved to merge as-is"""
+5. **Submit**: When your review is complete, call the `submit_review` tool with your findings:
+   - `approved`: boolean — true if code is ready to merge as-is
+   - `severity`: string — "critical", "major", "minor", or "none"
+   - `comments`: list of strings — each in format "[severity] [FILE:LINE] Description"
+
+   You MUST call `submit_review` exactly once after completing your review."""
 
     def __init__(
         self,
@@ -307,6 +313,10 @@ The changes are in git - diff against commit: {base_commit}"""
             workflow_id=workflow_id,
         )
 
+        # Track submit_review tool call (per D-08, D-09, D-10)
+        submit_review_data: dict[str, Any] | None = None
+        submit_already_called = False
+
         # Execute agentic review with retry on empty output (e.g. rate-limit silencing the stream)
         for attempt in range(_MAX_REVIEW_ATTEMPTS):
             attempt_result: str | None = None
@@ -323,6 +333,24 @@ The changes are in git - diff against commit: {base_commit}"""
                 if self._event_bus is not None and msg.type != AgenticMessageType.RESULT:
                     event = msg.to_workflow_event(workflow_id=workflow_id, agent=self._agent_name)
                     self._event_bus.emit(event)
+
+                # Capture submit_review tool call (per D-08, D-09, D-10)
+                if msg.type == AgenticMessageType.TOOL_CALL and msg.tool_name == "submit_review":
+                    if not submit_already_called:
+                        submit_already_called = True
+                        submit_review_data = msg.tool_input
+                        logger.info(
+                            "Captured submit_review tool call",
+                            agent=self._agent_name,
+                            approved=msg.tool_input.get("approved") if msg.tool_input else None,
+                            workflow_id=workflow_id,
+                        )
+                    else:
+                        logger.warning(
+                            "submit_review called more than once; ignoring duplicate",
+                            agent=self._agent_name,
+                            workflow_id=workflow_id,
+                        )
 
                 # Capture final result from RESULT message
                 if msg.type == AgenticMessageType.RESULT:
@@ -354,8 +382,43 @@ The changes are in git - diff against commit: {base_commit}"""
                 )
                 await asyncio.sleep(_REVIEW_RETRY_DELAY)
 
-        # Parse the result to extract review
-        result = self._parse_review_result(final_result, workflow_id)
+        # Prefer submit_review tool data over markdown parsing
+        if submit_review_data is not None:
+            approved = submit_review_data.get("approved", True)
+            severity_str = submit_review_data.get("severity", "none")
+            comments_raw = submit_review_data.get("comments", [])
+
+            # Validate severity
+            try:
+                severity = Severity(severity_str)
+            except ValueError:
+                logger.warning(
+                    "Invalid severity from submit_review, defaulting to MINOR",
+                    raw_severity=severity_str,
+                    agent=self._agent_name,
+                    workflow_id=workflow_id,
+                )
+                severity = Severity.MINOR
+
+            comments = [str(c) for c in comments_raw][:MAX_REVIEW_COMMENTS]
+
+            result = ReviewResult(
+                reviewer_persona="Agentic",
+                approved=approved,
+                comments=comments,
+                severity=severity,
+            )
+            logger.info(
+                "Review result from submit_review tool",
+                agent=self._agent_name,
+                approved=approved,
+                severity=severity,
+                comments_count=len(comments),
+                workflow_id=workflow_id,
+            )
+        else:
+            # Fallback to markdown parsing (transition safety)
+            result = self._parse_review_result(final_result, workflow_id)
 
         logger.debug(
             "After _parse_review_result",
