@@ -32,6 +32,7 @@ from amelia.drivers.base import (
     DriverInterface,
     DriverUsage,
     GenerateResult,
+    SubmitToolDef,
 )
 from amelia.drivers.cli.utils import strip_markdown_fences
 from amelia.logging import log_claude_result
@@ -285,6 +286,7 @@ class ClaudeCliDriver(DriverInterface):
         schema: type[BaseModel] | None = None,
         bypass_permissions: bool = False,
         allowed_tools: list[str] | None = None,
+        mcp_servers: dict[str, Any] | None = None,
     ) -> ClaudeAgentOptions:
         """Build ClaudeAgentOptions from driver configuration.
 
@@ -297,6 +299,8 @@ class ClaudeCliDriver(DriverInterface):
             allowed_tools: Optional list of canonical tool names. Mapped to CLI SDK
                 names via CANONICAL_TO_CLI. Unknown names are passed through as-is
                 for custom/MCP tools.
+            mcp_servers: Optional dict of MCP server configurations to inject.
+                Passed directly to ClaudeAgentOptions.mcp_servers.
 
         Returns:
             Configured ClaudeAgentOptions instance.
@@ -348,6 +352,9 @@ class ClaudeCliDriver(DriverInterface):
             if len(cli_allowed_tools) == 0:
                 logger.warning("allowed_tools resolved to empty list — agent will have no tools")
             kwargs["allowed_tools"] = cli_allowed_tools
+
+        if mcp_servers is not None:
+            kwargs["mcp_servers"] = mcp_servers
 
         return ClaudeAgentOptions(**kwargs)
 
@@ -549,13 +556,48 @@ class ClaudeCliDriver(DriverInterface):
         Yields:
             AgenticMessage for each event (thinking, tool_call, tool_result, result).
         """
+        # Build MCP servers from submit_tools definitions (driver-agnostic portable API).
+        # Each SubmitToolDef becomes an in-process MCP tool whose on_call() is invoked
+        # when Claude calls the tool, capturing structured output via closure.
+        submit_tools: list[SubmitToolDef] | None = kwargs.get("submit_tools")
+        mcp_servers: dict[str, Any] | None = kwargs.get("mcp_servers")
+        effective_allowed_tools = allowed_tools
+
+        if submit_tools:
+            from claude_agent_sdk import create_sdk_mcp_server  # noqa: PLC0415
+            from claude_agent_sdk import tool as sdk_tool  # noqa: PLC0415
+
+            sdk_tools = []
+            for tool_def in submit_tools:
+                # Capture tool_def in closure so each tool keeps its own on_call
+                def _make_handler(td: SubmitToolDef) -> Any:
+                    @sdk_tool(td.name, td.description, td.schema.model_json_schema())
+                    async def _handler(args: Any) -> dict[str, Any]:
+                        try:
+                            await td.on_call(args)
+                        except Exception as exc:
+                            return {
+                                "content": [{"type": "text", "text": f"Error: {exc}"}],
+                                "is_error": True,
+                            }
+                        return {"content": [{"type": "text", "text": "Submitted successfully."}]}
+                    return _handler
+
+                sdk_tools.append(_make_handler(tool_def))
+
+            submit_mcp = create_sdk_mcp_server("amelia-submit", tools=sdk_tools)
+            mcp_servers = {**(mcp_servers or {}), "amelia-submit": submit_mcp}
+            # Restrict agent to only the submit tools so it must call them
+            effective_allowed_tools = [td.name for td in submit_tools]
+
         options = self._build_options(
             cwd=cwd,
             session_id=session_id,
             system_prompt=instructions,
             schema=schema,
             bypass_permissions=True,  # Agentic execution always bypasses permissions
-            allowed_tools=allowed_tools,
+            allowed_tools=effective_allowed_tools,
+            mcp_servers=mcp_servers,
         )
 
         # Capture stderr lines from the CLI subprocess for diagnostics.

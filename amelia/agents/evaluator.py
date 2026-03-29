@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from loguru import logger
@@ -20,7 +20,7 @@ from amelia.agents.schemas.evaluator import (
     EvaluationResult,
 )
 from amelia.core.types import AgentConfig, Profile, collect_all_comments
-from amelia.drivers.base import AgenticMessageType
+from amelia.drivers.base import AgenticMessageType, SubmitToolDef
 from amelia.drivers.factory import get_driver
 from amelia.server.models.events import (
     EPHEMERAL_SEQUENCE,
@@ -244,32 +244,50 @@ You MUST call `submit_evaluation` exactly once with all items.""")
             comments_count=len(all_comments),
         )
 
+        # Build driver-agnostic submit tool.  The on_call callback captures the
+        # result directly; stream interception is kept as a fallback for drivers
+        # that surface tool calls in the message stream (e.g. mocked in tests).
+        captured: list[EvaluationOutput] = []
+
+        async def _on_submit(args: Any) -> None:
+            if not captured:
+                captured.append(EvaluationOutput.model_validate(args))
+            else:
+                logger.warning(
+                    "submit_evaluation called more than once; ignoring duplicate",
+                    agent="evaluator",
+                    workflow_id=workflow_id,
+                )
+
+        submit_tool = SubmitToolDef(
+            name="submit_evaluation",
+            description="Submit the evaluation results for all review items. Call this exactly once.",
+            schema=EvaluationOutput,
+            on_call=_on_submit,
+        )
+
         # Execute agentic evaluation with submit_evaluation tool (per D-05, D-06)
-        result_data: EvaluationOutput | None = None
-        already_submitted = False
         new_session_id: str | None = None
+        stream_result: EvaluationOutput | None = None  # fallback: captured from stream
 
         async for msg in self.driver.execute_agentic(
             prompt=prompt,
             cwd=profile.repo_root,
             session_id=None,  # Fresh session to avoid bias from prior agent context
             instructions=self.system_prompt,
-            allowed_tools=["submit_evaluation"],
+            submit_tools=[submit_tool],
         ):
             if msg.type == AgenticMessageType.RESULT:
                 new_session_id = msg.session_id
+            elif (
+                msg.type == AgenticMessageType.TOOL_CALL
+                and msg.tool_name == "submit_evaluation"
+                and stream_result is None
+            ):
+                stream_result = EvaluationOutput.model_validate(msg.tool_input)
 
-            if msg.type == AgenticMessageType.TOOL_CALL and msg.tool_name == "submit_evaluation":
-                if already_submitted:
-                    # First call wins (per D-07)
-                    logger.warning(
-                        "submit_evaluation called more than once; ignoring duplicate",
-                        agent="evaluator",
-                        workflow_id=workflow_id,
-                    )
-                    continue
-                already_submitted = True
-                result_data = EvaluationOutput.model_validate(msg.tool_input)
+        # on_call callback captures result directly (primary); stream interception is fallback
+        result_data = captured[0] if captured else stream_result
 
         if result_data is None:
             raise RuntimeError("Evaluator did not call submit_evaluation")

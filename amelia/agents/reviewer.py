@@ -10,7 +10,9 @@ from uuid import uuid4
 
 from loguru import logger
 
+from amelia.agents.schemas.reviewer import ReviewSeverity, SubmitReviewInput
 from amelia.core.types import AgentConfig, Profile, ReviewResult, Severity
+from amelia.drivers.base import AgenticMessageType, SubmitToolDef
 from amelia.drivers.factory import get_driver
 from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
 
@@ -270,8 +272,6 @@ class Reviewer:
             Tuple of (ReviewResult, session_id from driver).
 
         """
-        from amelia.drivers.base import AgenticMessageType  # noqa: PLC0415
-
         # Build the task prompt using shared helper
         task_context = self._extract_task_context(state) or "Review the code changes."
 
@@ -313,11 +313,34 @@ The changes are in git - diff against commit: {base_commit}"""
             workflow_id=workflow_id,
         )
 
-        # Track submit_review tool call (per D-08, D-09, D-10)
-        submit_review_data: dict[str, Any] | None = None
-        submit_already_called = False
+        # Build driver-agnostic submit tool. The on_call callback captures the result;
+        # stream interception is kept as a fallback.
+        captured_review: list[SubmitReviewInput] = []
+
+        async def _on_submit_review(args: Any) -> None:
+            if not captured_review:
+                captured_review.append(SubmitReviewInput.model_validate(args))
+            else:
+                logger.warning(
+                    "submit_review called more than once; ignoring duplicate",
+                    agent=self._agent_name,
+                    workflow_id=workflow_id,
+                )
+
+        submit_tool = SubmitToolDef(
+            name="submit_review",
+            description=(
+                "Submit the completed code review. Call this exactly once "
+                "after finishing the review."
+            ),
+            schema=SubmitReviewInput,
+            on_call=_on_submit_review,
+        )
 
         # Execute agentic review with retry on empty output (e.g. rate-limit silencing the stream)
+        stream_review_data: dict[str, Any] | None = None  # fallback: captured from stream
+        stream_already_called = False
+
         for attempt in range(_MAX_REVIEW_ATTEMPTS):
             attempt_result: str | None = None
             attempt_session_id: str | None = None
@@ -328,17 +351,18 @@ The changes are in git - diff against commit: {base_commit}"""
                 cwd=cwd,
                 session_id=session_id,
                 instructions=system_prompt,
+                submit_tools=[submit_tool],
             ):
                 # Emit stream events for visibility using to_workflow_event()
                 if self._event_bus is not None and msg.type != AgenticMessageType.RESULT:
                     event = msg.to_workflow_event(workflow_id=workflow_id, agent=self._agent_name)
                     self._event_bus.emit(event)
 
-                # Capture submit_review tool call (per D-08, D-09, D-10)
+                # Fallback: capture submit_review from stream (used when driver mocked in tests)
                 if msg.type == AgenticMessageType.TOOL_CALL and msg.tool_name == "submit_review":
-                    if not submit_already_called:
-                        submit_already_called = True
-                        submit_review_data = msg.tool_input
+                    if not stream_already_called:
+                        stream_already_called = True
+                        stream_review_data = msg.tool_input
                         logger.info(
                             "Captured submit_review tool call",
                             agent=self._agent_name,
@@ -382,12 +406,25 @@ The changes are in git - diff against commit: {base_commit}"""
                 )
                 await asyncio.sleep(_REVIEW_RETRY_DELAY)
 
-        # Prefer submit_review tool data over markdown parsing
-        if submit_review_data is not None:
-            approved = submit_review_data.get("approved", True)
-            severity_str = submit_review_data.get("severity", "none")
-            comments_raw = submit_review_data.get("comments", [])
+        # on_call callback captures result (primary); fall back to stream interception
+        submit_review_captured = captured_review[0] if captured_review else None
 
+        # Prefer submit_review tool data over markdown parsing
+        if submit_review_captured is not None:
+            approved = submit_review_captured.approved
+            severity_str = submit_review_captured.severity.value
+            comments_raw: list[Any] = list(submit_review_captured.comments)
+        elif stream_review_data is not None:
+            approved = stream_review_data.get("approved", True)
+            severity_str = stream_review_data.get("severity", "none")
+            comments_raw = stream_review_data.get("comments", [])
+        else:
+            # Fallback to markdown parsing (transition safety)
+            result = self._parse_review_result(final_result, workflow_id)
+            approved = result.approved
+            severity_str = None
+
+        if severity_str is not None:
             # Validate severity
             try:
                 severity = Severity(severity_str)
@@ -416,9 +453,6 @@ The changes are in git - diff against commit: {base_commit}"""
                 comments_count=len(comments),
                 workflow_id=workflow_id,
             )
-        else:
-            # Fallback to markdown parsing (transition safety)
-            result = self._parse_review_result(final_result, workflow_id)
 
         logger.debug(
             "After _parse_review_result",

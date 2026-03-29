@@ -241,7 +241,9 @@ class TestEvaluator:
         # Verify driver was called with execute_agentic (not generate)
         mock_driver.execute_agentic.assert_called_once()
         call_kwargs = mock_driver.execute_agentic.call_args.kwargs
-        assert call_kwargs["allowed_tools"] == ["submit_evaluation"]
+        submit_tools = call_kwargs["submit_tools"]
+        assert len(submit_tools) == 1
+        assert submit_tools[0].name == "submit_evaluation"
 
     async def test_evaluate_empty_comments(
         self,
@@ -553,10 +555,12 @@ class TestEvaluator:
             evaluator = Evaluator(config)
         await evaluator.evaluate(state, profile, workflow_id=uuid4())
 
-        # execute_agentic should be called with allowed_tools=["submit_evaluation"]
+        # execute_agentic should be called with submit_tools containing submit_evaluation
         mock_driver.execute_agentic.assert_called_once()
         call_kwargs = mock_driver.execute_agentic.call_args.kwargs
-        assert call_kwargs["allowed_tools"] == ["submit_evaluation"]
+        submit_tools = call_kwargs["submit_tools"]
+        assert len(submit_tools) == 1
+        assert submit_tools[0].name == "submit_evaluation"
 
         # generate should NOT have been called
         mock_driver.generate.assert_not_called()
