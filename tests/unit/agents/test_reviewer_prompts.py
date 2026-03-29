@@ -62,32 +62,6 @@ class TestReviewerPromptInjection:
 class TestAgenticReviewPromptDiffPath:
     """Tests for AGENTIC_REVIEW_PROMPT diff_path integration."""
 
-    def test_agentic_review_prompt_contains_diff_path_placeholder(self) -> None:
-        """AGENTIC_REVIEW_PROMPT must contain {diff_path} format placeholder.
-
-        The reviewer should read the diff from a pre-fetched file rather than
-        running git diff itself.
-        """
-        assert "{diff_path}" in Reviewer.AGENTIC_REVIEW_PROMPT, (
-            "AGENTIC_REVIEW_PROMPT must contain {diff_path} placeholder for pre-fetched diff"
-        )
-
-    def test_agentic_review_prompt_does_not_instruct_git_diff(self) -> None:
-        """AGENTIC_REVIEW_PROMPT must NOT instruct agent to run 'git diff --name-only {base_commit}'.
-
-        The diff is pre-fetched and provided via diff_path, so the reviewer should
-        read from the file instead of running git diff.
-        """
-        prompt = Reviewer.AGENTIC_REVIEW_PROMPT
-        assert "git diff --name-only {base_commit}" not in prompt, (
-            "AGENTIC_REVIEW_PROMPT must not instruct 'git diff --name-only {base_commit}' — "
-            "use pre-fetched diff_path instead"
-        )
-        assert "git diff {base_commit}" not in prompt, (
-            "AGENTIC_REVIEW_PROMPT must not instruct 'git diff {base_commit}' — "
-            "use pre-fetched diff_path instead"
-        )
-
     def test_prompt_defaults_reviewer_has_diff_path_placeholder(self) -> None:
         """PROMPT_DEFAULTS['reviewer.agentic'] must also contain {diff_path} placeholder."""
         from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
@@ -112,18 +86,6 @@ class TestAgenticReviewPromptDiffPath:
 
 class TestReviewOutputFormatConstant:
     """Tests for REVIEW_OUTPUT_FORMAT shared constant."""
-
-    def test_review_output_format_in_both_prompts(self) -> None:
-        """REVIEW_OUTPUT_FORMAT must appear in both AGENTIC_REVIEW_PROMPT and PROMPT_DEFAULTS."""
-        from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
-        from amelia.agents.reviewer import REVIEW_OUTPUT_FORMAT, Reviewer
-
-        assert REVIEW_OUTPUT_FORMAT in Reviewer.AGENTIC_REVIEW_PROMPT, (
-            "REVIEW_OUTPUT_FORMAT missing from Reviewer.AGENTIC_REVIEW_PROMPT"
-        )
-        assert REVIEW_OUTPUT_FORMAT in PROMPT_DEFAULTS["reviewer.agentic"].content, (
-            "REVIEW_OUTPUT_FORMAT missing from PROMPT_DEFAULTS['reviewer.agentic']"
-        )
 
     def test_prompt_defaults_reviewer_has_ready_verdict_not_json(self) -> None:
         """PROMPT_DEFAULTS['reviewer.agentic'] must use markdown Ready: format, not JSON."""

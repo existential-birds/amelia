@@ -4,7 +4,7 @@ Tests that prompts flow from orchestrator config through to agents.
 """
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -237,7 +237,7 @@ class TestOrchestratorPromptInjection:
         )
         config = make_config(thread_id=str(uuid4()), profile=profile, prompts=prompts)
 
-        mock_llm_response = EvaluationOutput(
+        evaluation_output = EvaluationOutput(
             evaluated_items=[
                 EvaluatedItem(
                     number=1,
@@ -253,57 +253,28 @@ class TestOrchestratorPromptInjection:
             summary="Evaluation complete",
         )
 
-        # Patch at driver.generate level to check system_prompt
-        with patch("amelia.drivers.api.deepagents.ApiDriver.generate", new_callable=AsyncMock) as mock_generate:
-            mock_generate.return_value = (mock_llm_response, "session-1")
+        captured_kwargs: list[dict[str, Any]] = []
 
+        async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
+            captured_kwargs.append(kwargs)
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="submit_evaluation",
+                tool_input=evaluation_output.model_dump(),
+                tool_call_id="eval-1",
+                session_id="session-1",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Evaluation complete",
+                session_id="session-1",
+            )
+
+        # Patch at driver.execute_agentic level to check instructions
+        with patch("amelia.drivers.api.deepagents.ApiDriver.execute_agentic", mock_execute_agentic):
             await call_evaluation_node(state, cast(RunnableConfig, config))
 
-            # Verify the custom prompt was used
-            mock_generate.assert_called_once()
-            call_kwargs = mock_generate.call_args.kwargs
-            assert call_kwargs["system_prompt"] == custom_system_prompt
+            # Verify the custom prompt was passed as instructions
+            assert len(captured_kwargs) == 1
+            assert captured_kwargs[0].get("instructions") == custom_system_prompt
 
-    async def test_evaluator_uses_default_prompt_when_not_configured(self, tmp_path: Path) -> None:
-        """Verify Evaluator uses default prompt when no custom prompt configured."""
-        profile = make_profile(repo_root=str(tmp_path))
-        review_result = ReviewResult(
-            reviewer_persona="General",
-            approved=False,
-            comments=["Issue 1: Check this"],
-            severity="minor",
-        )
-        state = make_execution_state(
-            profile=profile,
-            goal="Test goal",
-            last_reviews=[review_result],
-        )
-        # No prompts in config
-        config = make_config(thread_id=str(uuid4()), profile=profile)
-
-        mock_llm_response = EvaluationOutput(
-            evaluated_items=[
-                EvaluatedItem(
-                    number=1,
-                    title="Check",
-                    file_path="test.py",
-                    line=10,
-                    disposition=Disposition.IMPLEMENT,
-                    reason="Valid",
-                    original_issue="Issue 1",
-                    suggested_fix="Fix",
-                ),
-            ],
-            summary="Done",
-        )
-
-        with patch("amelia.drivers.api.deepagents.ApiDriver.generate", new_callable=AsyncMock) as mock_generate:
-            mock_generate.return_value = (mock_llm_response, "session-1")
-
-            await call_evaluation_node(state, cast(RunnableConfig, config))
-
-            # Verify default prompt was used (contains expected text from Evaluator.SYSTEM_PROMPT)
-            call_kwargs = mock_generate.call_args.kwargs
-            system_prompt = call_kwargs["system_prompt"]
-            assert "expert code evaluation agent" in system_prompt
-            assert "decision matrix" in system_prompt

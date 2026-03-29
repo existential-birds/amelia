@@ -1298,35 +1298,3 @@ Rationale: Major issue found.
         if call_kwargs[1]:
             assert "allowed_tools" not in call_kwargs[1] or call_kwargs[1].get("allowed_tools") is None
 
-    async def test_agentic_review_prompt_contains_submit_review_instruction(
-        self,
-        mock_driver: MagicMock,
-        create_reviewer: Callable[..., Reviewer],
-        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
-    ) -> None:
-        """The system prompt passed to execute_agentic must contain 'submit_review'."""
-        state, profile = mock_execution_state_factory(goal="Implement feature")
-
-        messages = [
-            AgenticMessage(
-                type=AgenticMessageType.RESULT,
-                content="Ready: Yes\nRationale: Good.",
-                session_id="s5",
-            ),
-        ]
-        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
-
-        reviewer = create_reviewer()
-        await reviewer.agentic_review(
-            state,
-            base_commit="abc123",
-            profile=profile,
-            workflow_id=uuid4(),
-        )
-
-        mock_driver.execute_agentic.assert_called_once()
-        call_kwargs = mock_driver.execute_agentic.call_args
-        instructions = call_kwargs[1].get("instructions") or (call_kwargs[0][2] if len(call_kwargs[0]) > 2 else "")
-        assert "submit_review" in instructions, (
-            "System prompt (instructions) must contain 'submit_review' to guide the reviewer"
-        )

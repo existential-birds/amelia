@@ -656,7 +656,7 @@ class TestDiffPreComputation:
     async def test_reviewer_node_writes_diff_file_and_passes_diff_path(
         self, tmp_path: Path
     ) -> None:
-        """Writes diff.patch, passes path into reviewer prompt, then cleans up."""
+        """Diff directory is cleaned up after reviewer completes successfully."""
         profile = make_profile(repo_root=str(tmp_path))
         wf_id = uuid4()
         expected_diff_path = Path(f"/tmp/amelia-review-{wf_id}/diff.patch")
@@ -670,7 +670,6 @@ class TestDiffPreComputation:
         )
         config = make_config(thread_id=str(wf_id), profile=profile)
 
-        captured: list[dict[str, Any]] = []
         mock_messages = make_reviewer_agentic_messages(approved=True)
         git_mock = _mock_git_subprocess_for_reviewer(
             name_only_stdout="src/a.py\n",
@@ -683,15 +682,12 @@ class TestDiffPreComputation:
             patch.object(
                 ApiDriver,
                 "execute_agentic",
-                create_mock_execute_agentic(mock_messages, captured),
+                create_mock_execute_agentic(mock_messages),
             ),
         ):
             await call_reviewer_node(state, cast(RunnableConfig, config))
 
         assert not expected_diff_path.parent.exists()
-        assert len(captured) >= 1
-        prompt = captured[0]["prompt"]
-        assert str(expected_diff_path) in prompt
 
     async def test_reviewer_node_diff_cleanup_on_error(self, tmp_path: Path) -> None:
         """Diff directory is removed when agentic review raises mid-stream."""

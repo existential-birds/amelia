@@ -1,5 +1,5 @@
 """Tests for ClaudeCliDriver._build_options method."""
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
