@@ -1,4 +1,3 @@
-import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -170,9 +169,11 @@ async def test_call_reviewer_node_diff_file_content(profile_with_agents, mock_st
                 "1 file changed, 1 insertion(+)",  # --stat
             ]
 
-            with patch.object(Path, "write_text", capturing_write_text):
-                with patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock):
-                    await call_reviewer_node(mock_state, config)
+            with (
+                patch.object(Path, "write_text", capturing_write_text),
+                patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
+            ):
+                await call_reviewer_node(mock_state, config)
 
     assert len(written_content) == 1, "Expected exactly one diff.patch write"
     content = written_content[0]
@@ -212,9 +213,11 @@ async def test_call_reviewer_node_cleans_up_diff_on_error(profile_with_agents, m
                 "1 file changed",  # --stat
             ]
 
-            with patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock):
-                with pytest.raises(RuntimeError, match="Review failed"):
-                    await call_reviewer_node(mock_state, config)
+            with (
+                patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
+                pytest.raises(RuntimeError, match="Review failed"),
+            ):
+                await call_reviewer_node(mock_state, config)
 
     # The diff directory must be cleaned up even after an exception
     assert not expected_dir.exists(), "diff directory must be cleaned up even on error"
