@@ -1,35 +1,47 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: PR Auto-Fix
-status: archived
-last_updated: "2026-03-22"
-last_activity: 2026-03-22
+milestone_name: milestone
+status: Executing Phase 01
+last_updated: "2026-03-29T14:17:00.000Z"
+last_activity: 2026-03-29
 progress:
-  total_phases: 14
-  completed_phases: 14
-  total_plans: 28
-  completed_plans: 28
+  total_phases: 1
+  completed_phases: 0
+  total_plans: 3
+  completed_plans: 1
 ---
 
 # Project State
 
-Last activity: 2026-03-22
+Last activity: 2026-03-29
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Autonomous review comment detection, fix, and resolution
-**Current focus:** v1.0 archived — ready for `/gsd:new-milestone`
+**Current focus:** Phase 01 — review-pipeline-efficiency
 
 ### Decisions
 
-Archived to PROJECT.md Key Decisions table.
+- Custom tool names in `_build_options` pass through as-is via `CANONICAL_TO_CLI.get(name, name)` — unblocks Plans 02 and 03
+- Diff written once to `/tmp/amelia-review-{workflow_id}/diff.patch` before the review loop; shared across all passes; cleaned up in `finally`
+- `AGENTIC_REVIEW_PROMPT` now uses `{diff_path}` placeholder — reviewer reads pre-fetched file instead of running git diff
+
+### Roadmap Evolution
+
+- Phase 1 added: Review pipeline efficiency — eliminate redundant diff fetching, switch evaluator to submit_evaluation tool
 
 ### Blockers/Concerns
 
 None
+
+### Performance Metrics
+
+| Phase | Plan | Duration (s) | Tasks | Files |
+|-------|------|-------------|-------|-------|
+| 01 | 01 | 323 | 2/2 | 8 |
 
 ### Quick Tasks Completed
 

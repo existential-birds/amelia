@@ -9,9 +9,9 @@
 **Goal:** Eliminate redundant diff fetching and unreliable structured output in the review pipeline — reduce reviewer token cost by ~50% and prevent evaluator crashes from schema validation failures
 **Requirements**: See docs/specs/2025-03-29-review-pipeline-efficiency.md
 **Depends on:** —
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
-- [ ] 01-01-PLAN.md — Driver fix for custom tool names + diff pre-computation and reviewer prompt update
+- [x] 01-01-PLAN.md — Driver fix for custom tool names + diff pre-computation and reviewer prompt update
 - [ ] 01-02-PLAN.md — Evaluator tool-based submission (submit_evaluation)
 - [ ] 01-03-PLAN.md — Reviewer submit tool (submit_review)
