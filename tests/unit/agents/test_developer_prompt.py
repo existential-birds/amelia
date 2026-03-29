@@ -243,14 +243,14 @@ class TestDeveloperSystemPrompt:
         assert captured_kwargs[0]["instructions"] == developer.system_prompt
 
     @pytest.mark.asyncio
-    async def test_run_with_prompt_builder_skips_plan_markdown(
+    async def test_run_with_prompt_builder_skips_build_prompt(
         self,
         mock_profile_factory: Callable[..., Profile],
     ) -> None:
-        """When prompt_builder is set, run() must not call _build_prompt (no plan)."""
+        """When prompt_builder is set, run() uses it instead of _build_prompt."""
         config = AgentConfig(driver=DriverType.API, model="test-model")
         profile: Profile = mock_profile_factory()
-        captured_prompts: list[str] = []
+        captured_kwargs: list[dict[str, object]] = []
 
         def _fake_builder(_state: ImplementationState) -> str:
             return "review-fix user prompt body"
@@ -265,7 +265,7 @@ class TestDeveloperSystemPrompt:
                         session_id="session-rf",
                     )
                 ],
-                capture_kwargs=captured_prompts,
+                capture_kwargs=captured_kwargs,
             )
             mock_get_driver.return_value = mock_driver
             developer = Developer(config)
@@ -280,8 +280,8 @@ class TestDeveloperSystemPrompt:
             plan_markdown=None,
         )
 
-        with patch.object(developer, "_build_prompt", side_effect=AssertionError("_build_prompt must not run")):
-            custom_instructions = "Review-fix system instructions"
+        custom_instructions = "Review-fix system instructions"
+        with patch.object(developer, "_build_prompt", side_effect=AssertionError("must not be called")):
             async for _state_update, _event in developer.run(
                 state,
                 profile,
@@ -291,6 +291,6 @@ class TestDeveloperSystemPrompt:
             ):
                 pass
 
-        assert len(captured_prompts) == 1
-        assert captured_prompts[0]["prompt"] == "review-fix user prompt body"
-        assert captured_prompts[0]["instructions"] == custom_instructions
+        assert len(captured_kwargs) == 1
+        assert captured_kwargs[0]["prompt"] == "review-fix user prompt body"
+        assert captured_kwargs[0]["instructions"] == custom_instructions

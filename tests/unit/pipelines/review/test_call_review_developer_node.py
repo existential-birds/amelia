@@ -17,198 +17,175 @@ from amelia.pipelines.review.nodes import call_review_developer_node
 from tests.conftest import AsyncIteratorMock
 
 
-@pytest.mark.asyncio
-async def test_call_review_developer_node_uses_review_fix_prompt_builder_and_instructions(
-    mock_execution_state_factory: Any,
-    mock_profile_factory: Any,
-) -> None:
-    """Developer.run receives build_review_fix_prompt and developer.review_fix instructions."""
-    profile = mock_profile_factory(
-        preset="cli_single",
-        agents={"developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet")},
-    )
-    item = EvaluatedItem(
-        number=1,
-        title="T",
-        file_path="f.py",
-        line=1,
-        disposition=Disposition.IMPLEMENT,
-        reason="r",
-        original_issue="i",
-        suggested_fix="s",
-    )
-    evaluation = EvaluationResult(summary="s", items_to_implement=[item])
-    goal = "Fix the following review items:\n\n- line"
-    state, _ = mock_execution_state_factory(
-        profile=profile,
-        goal=goal,
-        evaluation_result=evaluation,
-        review_pass=0,
-        status="running",
-    )
-    custom_review_fix = "CUSTOM_REVIEW_FIX_SYSTEM"
-    workflow_uuid = uuid4()
-    config: dict[str, Any] = {
-        "configurable": {
-            "profile": profile,
-            "thread_id": workflow_uuid,
-            "prompts": {"developer.review_fix": custom_review_fix},
-        }
-    }
+def _make_evaluation(*, count: int = 1) -> EvaluationResult:
+    items = [
+        EvaluatedItem(
+            number=i,
+            title=f"Item {i}",
+            file_path="f.py",
+            line=i * 10,
+            disposition=Disposition.IMPLEMENT,
+            reason="verified",
+            original_issue=f"issue {i}",
+            suggested_fix=f"fix {i}",
+        )
+        for i in range(1, count + 1)
+    ]
+    return EvaluationResult(summary="s", items_to_implement=items)
 
-    MockDeveloperCls = MagicMock()
-    mock_developer = MagicMock()
+
+def _setup_mocks(
+    state: Any,
+    workflow_id: Any,
+) -> tuple[MagicMock, MagicMock]:
+    """Create Developer class mock and instance mock.
+
+    Returns (MockDeveloperCls, mock_developer).
+    """
+    cls = MagicMock()
+    dev = MagicMock()
     event = AgenticMessage(
-        type=AgenticMessageType.RESULT,
-        content="Done",
-    ).to_workflow_event(workflow_id=workflow_uuid, agent="developer")
-    mock_developer.run = MagicMock(
+        type=AgenticMessageType.RESULT, content="Done"
+    ).to_workflow_event(workflow_id=workflow_id, agent="developer")
+    dev.run = MagicMock(
         return_value=AsyncIteratorMock([
             (
-                state.model_copy(
-                    update={
-                        "agentic_status": "completed",
-                        "tool_calls": [],
-                        "tool_results": [],
-                    }
-                ),
+                state.model_copy(update={
+                    "agentic_status": "completed",
+                    "tool_calls": [],
+                    "tool_results": [],
+                }),
                 event,
             )
         ])
     )
-    mock_developer.driver = MagicMock()
-    MockDeveloperCls.return_value = mock_developer
+    dev.driver = MagicMock()
+    cls.return_value = dev
+    return cls, dev
 
+
+async def _run_node(
+    state: Any,
+    config: dict[str, Any],
+    workflow_id: Any,
+    *,
+    resolve_commit: str | None = "abc123",
+) -> tuple[dict[str, Any], MagicMock]:
+    """Run call_review_developer_node with standard mocks.
+
+    Returns (result_dict, mock_developer_instance).
+    """
+    cls, dev = _setup_mocks(state, workflow_id)
     with ExitStack() as stack:
-        stack.enter_context(patch("amelia.pipelines.review.nodes.Developer", MockDeveloperCls))
+        stack.enter_context(patch("amelia.pipelines.review.nodes.Developer", cls))
         stack.enter_context(patch("amelia.pipelines.review.nodes._save_token_usage", new_callable=AsyncMock))
-        stack.enter_context(
-            patch(
-                "amelia.pipelines.review.nodes._resolve_commit",
-                new_callable=AsyncMock,
-                return_value="abc123",
-            )
-        )
+        stack.enter_context(patch(
+            "amelia.pipelines.review.nodes._resolve_commit",
+            new_callable=AsyncMock,
+            return_value=resolve_commit,
+        ))
         result = await call_review_developer_node(state, cast(RunnableConfig, config))
-
-    mock_developer.run.assert_called_once()
-    pos, kwargs = mock_developer.run.call_args
-    assert pos[2] == workflow_uuid
-    assert kwargs["prompt_builder"] is build_review_fix_prompt
-    assert kwargs["instructions"] == custom_review_fix
-
-    assert result["base_commit"] == "abc123"
-    assert result["review_pass"] == 1
-    assert result["agentic_status"] == "completed"
+    return result, dev
 
 
-@pytest.mark.asyncio
-async def test_call_review_developer_node_default_review_fix_instructions(
-    mock_execution_state_factory: Any,
-    mock_profile_factory: Any,
-) -> None:
-    """When developer.review_fix is not in config, use PROMPT_DEFAULTS content."""
-    profile = mock_profile_factory(
-        preset="cli_single",
-        agents={"developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet")},
-    )
-    evaluation = EvaluationResult(
-        summary="s",
-        items_to_implement=[
-            EvaluatedItem(
-                number=1,
-                title="T",
-                file_path="f.py",
-                line=1,
-                disposition=Disposition.IMPLEMENT,
-                reason="r",
-                original_issue="i",
-                suggested_fix="s",
-            )
-        ],
-    )
-    state, _ = mock_execution_state_factory(
-        profile=profile,
-        goal="g",
-        evaluation_result=evaluation,
-        status="running",
-    )
-    workflow_uuid = uuid4()
-    config: dict[str, Any] = {
-        "configurable": {
-            "profile": profile,
-            "thread_id": workflow_uuid,
-            "prompts": {},
-        }
-    }
+class TestCallReviewDeveloperNode:
+    """Tests for the review-fix developer node."""
 
-    MockDeveloperCls = MagicMock()
-    mock_developer = MagicMock()
-    event = AgenticMessage(
-        type=AgenticMessageType.RESULT,
-        content="x",
-    ).to_workflow_event(workflow_id=workflow_uuid, agent="developer")
-    mock_developer.run = MagicMock(
-        return_value=AsyncIteratorMock([
-            (state.model_copy(update={"agentic_status": "completed"}), event),
-        ])
-    )
-    mock_developer.driver = MagicMock()
-    MockDeveloperCls.return_value = mock_developer
-
-    with ExitStack() as stack:
-        stack.enter_context(patch("amelia.pipelines.review.nodes.Developer", MockDeveloperCls))
-        stack.enter_context(patch("amelia.pipelines.review.nodes._save_token_usage", new_callable=AsyncMock))
-        stack.enter_context(
-            patch(
-                "amelia.pipelines.review.nodes._resolve_commit",
-                new_callable=AsyncMock,
-                return_value=None,
-            )
+    @pytest.fixture
+    def profile(self, mock_profile_factory: Any) -> Any:
+        return mock_profile_factory(
+            preset="cli_single",
+            agents={"developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet")},
         )
-        await call_review_developer_node(state, cast(RunnableConfig, config))
 
-    expected = PROMPT_DEFAULTS["developer.review_fix"].content
-    assert mock_developer.run.call_args.kwargs["instructions"] == expected
-
-
-@pytest.mark.asyncio
-async def test_call_review_developer_node_requires_goal(
-    mock_execution_state_factory: Any,
-    mock_profile_factory: Any,
-) -> None:
-    """Node raises when goal is missing."""
-    profile = mock_profile_factory(
-        preset="cli_single",
-        agents={"developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet")},
-    )
-    evaluation = EvaluationResult(
-        summary="s",
-        items_to_implement=[
-            EvaluatedItem(
-                number=1,
-                title="T",
-                file_path="f.py",
-                line=1,
-                disposition=Disposition.IMPLEMENT,
-                reason="r",
-                original_issue="i",
-                suggested_fix="s",
-            )
-        ],
-    )
-    state, _ = mock_execution_state_factory(
-        profile=profile,
-        goal=None,
-        evaluation_result=evaluation,
-        status="running",
-    )
-    config: dict[str, Any] = {
-        "configurable": {
-            "profile": profile,
-            "thread_id": uuid4(),
+    @pytest.fixture
+    def state_and_config(
+        self,
+        profile: Any,
+        mock_execution_state_factory: Any,
+    ) -> tuple[Any, dict[str, Any], Any]:
+        """Return (state, config_dict, workflow_id) with sensible defaults."""
+        evaluation = _make_evaluation()
+        goal = "Fix the following review items:\n\n- [f.py:10] Item 1"
+        state, _ = mock_execution_state_factory(
+            profile=profile,
+            goal=goal,
+            evaluation_result=evaluation,
+            review_pass=0,
+            status="running",
+        )
+        wf = uuid4()
+        config: dict[str, Any] = {
+            "configurable": {
+                "profile": profile,
+                "thread_id": wf,
+                "prompts": {},
+            }
         }
-    }
+        return state, config, wf
 
-    with pytest.raises(ValueError, match="goal"):
-        await call_review_developer_node(state, cast(RunnableConfig, config))
+    async def test_passes_review_fix_prompt_builder_and_instructions(
+        self,
+        state_and_config: tuple[Any, dict[str, Any], Any],
+    ) -> None:
+        """Developer.run receives build_review_fix_prompt and developer.review_fix instructions."""
+        state, config, wf = state_and_config
+        custom = "CUSTOM_REVIEW_FIX_SYSTEM"
+        config["configurable"]["prompts"] = {"developer.review_fix": custom}
+
+        result, dev = await _run_node(state, config, wf)
+
+        dev.run.assert_called_once()
+        _, kwargs = dev.run.call_args
+        assert kwargs["prompt_builder"] is build_review_fix_prompt
+        assert kwargs["instructions"] == custom
+
+    async def test_uses_default_instructions_when_not_configured(
+        self,
+        state_and_config: tuple[Any, dict[str, Any], Any],
+    ) -> None:
+        """Falls back to PROMPT_DEFAULTS when developer.review_fix not in prompts."""
+        state, config, wf = state_and_config
+
+        _, dev = await _run_node(state, config, wf)
+
+        expected = PROMPT_DEFAULTS["developer.review_fix"].content
+        assert dev.run.call_args.kwargs["instructions"] == expected
+
+    async def test_returns_correct_state_keys(
+        self,
+        state_and_config: tuple[Any, dict[str, Any], Any],
+    ) -> None:
+        """Result dict has expected keys and increments review_pass."""
+        state, config, wf = state_and_config
+
+        result, _ = await _run_node(state, config, wf)
+
+        assert result["base_commit"] == "abc123"
+        assert result["review_pass"] == 1
+        assert result["agentic_status"] == "completed"
+        assert "tool_calls" in result
+        assert "tool_results" in result
+
+    async def test_requires_goal(
+        self,
+        mock_execution_state_factory: Any,
+        profile: Any,
+    ) -> None:
+        """Node raises when goal is missing."""
+        evaluation = _make_evaluation()
+        state, _ = mock_execution_state_factory(
+            profile=profile,
+            goal=None,
+            evaluation_result=evaluation,
+            status="running",
+        )
+        config: dict[str, Any] = {
+            "configurable": {
+                "profile": profile,
+                "thread_id": uuid4(),
+            }
+        }
+
+        with pytest.raises(ValueError, match="goal"):
+            await call_review_developer_node(state, cast(RunnableConfig, config))

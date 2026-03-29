@@ -93,13 +93,6 @@ async def call_review_developer_node(
         plus ``review_pass`` incremented by one.
 
     """
-    logger.info("Orchestrator: Calling Developer for review-fix execution.")
-    logger.debug(
-        "Review developer node state",
-        base_commit=state.base_commit,
-        goal_length=len(state.goal) if state.goal else 0,
-    )
-
     if not state.goal:
         raise ValueError(
             "Review developer node has no goal. The evaluation node should set goal from items to implement."
@@ -107,15 +100,12 @@ async def call_review_developer_node(
 
     nc = extract_node_config(config)
 
-    pre_dev_commit = await _resolve_commit(nc.profile.repo_root, nc.sandbox_provider)
-
-    task_number = state.current_task_index + 1
     logger.info(
         "Starting review-fix developer execution",
-        task=task_number,
-        total_tasks=state.total_tasks,
-        fresh_session=True,
+        review_pass=state.review_pass,
     )
+
+    pre_dev_commit = await _resolve_commit(nc.profile.repo_root, nc.sandbox_provider)
     state = state.model_copy(update={"driver_session_id": None})
 
     agent_config = nc.profile.get_agent_config("developer")
@@ -141,8 +131,6 @@ async def call_review_developer_node(
     except Exception:
         logger.exception(
             "Review-fix developer execution failed",
-            task=task_number,
-            total_tasks=state.total_tasks,
             workflow_id=str(nc.workflow_id),
         )
         raise
