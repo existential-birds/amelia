@@ -31,18 +31,7 @@ from amelia.pipelines.implementation.utils import (
 from amelia.pipelines.nodes import _save_token_usage
 from amelia.pipelines.utils import extract_node_config
 from amelia.tools.write_plan import execute_write_plan
-from amelia.tools.write_plan_schema import PlanTask
-
-
-class PlanSidecar(BaseModel):
-    """Validated view of the JSON sidecar written by the write_plan tool.
-
-    Only the fields consumed by plan_validator_node are required here;
-    extra keys (architecture_summary, tech_stack, file_path) are ignored.
-    """
-
-    goal: str | None = None
-    tasks: list[PlanTask]
+from amelia.tools.write_plan_schema import WritePlanInput
 
 
 async def _resolve_plan_from_tool_calls(
@@ -70,6 +59,10 @@ async def _resolve_plan_from_tool_calls(
         "Looking for write_plan/write_file in tool calls",
         tool_names=tool_names,
     )
+    # Track the last successful write so we replay the final version, not the first draft.
+    last_successful_tc: Any | None = None
+    last_successful_kind: str | None = None  # "write_plan" or "write_file"
+
     for tc in tool_calls:
         # Handle write_plan tool calls (structured format — preferred)
         if tc.tool_name == ToolName.WRITE_PLAN and tc.tool_input:
@@ -87,16 +80,18 @@ async def _resolve_plan_from_tool_calls(
                 )
             except Exception:
                 logger.exception(
-                    "write_plan execution raised, falling through to write_file fallback",
+                    "write_plan execution raised, skipping this tool call",
                     plan_path=str(plan_path),
                 )
                 continue
             if plan_path.exists():
-                return True
-            logger.warning(
-                "write_plan did not produce a file, trying next tool call",
-                result=result,
-            )
+                last_successful_tc = tc
+                last_successful_kind = "write_plan"
+            else:
+                logger.warning(
+                    "write_plan did not produce a file, trying next tool call",
+                    result=result,
+                )
             continue
 
         # Handle legacy write_file tool calls
@@ -115,28 +110,46 @@ async def _resolve_plan_from_tool_calls(
                     plan_path=str(plan_path),
                     content_length=len(plan_content),
                 )
-                return True
-    else:  # for-loop completed without returning — no tool call succeeded; try salvaging from raw output
-        # Some models output the plan as text instead of using the write tool
-        raw = raw_output or ""
-        if raw and _looks_like_plan(raw):
-            await asyncio.to_thread(plan_path.parent.mkdir, parents=True, exist_ok=True)
-            await asyncio.to_thread(plan_path.write_text, raw, encoding="utf-8")
-            logger.warning(
-                "FALLBACK: Wrote plan from raw output - may be incomplete or malformed (model didn't use write tool)",
-                plan_path=str(plan_path),
-                content_length=len(raw),
-                tool_sequence=tool_names[-5:],
-            )
+                last_successful_tc = tc
+                last_successful_kind = "write_file"
+
+    if last_successful_tc is not None:
+        # Re-apply the *last* successful write so the final version wins.
+        if last_successful_kind == "write_plan":
+            overridden_input = {**last_successful_tc.tool_input, "file_path": str(plan_path)}
+            try:
+                await execute_write_plan(overridden_input, root_dir=str(working_dir))
+            except Exception:
+                logger.exception("Failed to re-apply final write_plan call")
+        elif last_successful_kind == "write_file":
+            content = last_successful_tc.tool_input.get("content", "")
+            if content:
+                await asyncio.to_thread(plan_path.parent.mkdir, parents=True, exist_ok=True)
+                await asyncio.to_thread(plan_path.write_text, content, encoding="utf-8")
+        if plan_path.exists():
             return True
-        logger.error(
-            "No Write tool call found and raw output doesn't look like a plan",
+
+    # No tool call succeeded; try salvaging from raw output
+    # Some models output the plan as text instead of using the write tool
+    raw = raw_output or ""
+    if raw and _looks_like_plan(raw):
+        await asyncio.to_thread(plan_path.parent.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(plan_path.write_text, raw, encoding="utf-8")
+        logger.warning(
+            "FALLBACK: Wrote plan from raw output - may be incomplete or malformed (model didn't use write tool)",
             plan_path=str(plan_path),
-            tool_calls=[tc.tool_name for tc in tool_calls],
-            tool_calls_count=len(tool_calls),
-            raw_output_length=len(raw),
+            content_length=len(raw),
+            tool_sequence=tool_names[-5:],
         )
-        return False
+        return True
+    logger.error(
+        "No Write tool call found and raw output doesn't look like a plan",
+        plan_path=str(plan_path),
+        tool_calls=[tc.tool_name for tc in tool_calls],
+        tool_calls_count=len(tool_calls),
+        raw_output_length=len(raw),
+    )
+    return False
 
 
 async def plan_validator_node(
@@ -189,11 +202,11 @@ async def plan_validator_node(
 
     # Check for structured plan data (JSON sidecar from write_plan tool)
     json_sidecar = plan_path.with_suffix(".json")
-    parsed_sidecar: PlanSidecar | None = None
+    parsed_sidecar: WritePlanInput | None = None
     if json_sidecar.exists():
         try:
             raw_json = await asyncio.to_thread(json_sidecar.read_text)
-            parsed_sidecar = PlanSidecar.model_validate_json(raw_json)
+            parsed_sidecar = WritePlanInput.model_validate_json(raw_json)
             logger.info(
                 "Found structured plan data from write_plan tool",
                 json_path=str(json_sidecar),

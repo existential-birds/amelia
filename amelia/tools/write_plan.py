@@ -62,6 +62,15 @@ async def execute_write_plan(
     else:
         resolved = root / file_path
 
+    # Guard: resolved path must stay under root_dir
+    resolved = resolved.resolve()
+    root_resolved = root.resolve()
+    if not resolved.is_relative_to(root_resolved):
+        raise ValueError(
+            f"file_path {plan.file_path!r} resolves to {resolved}, "
+            f"which is outside root_dir {root_resolved}"
+        )
+
     # Ensure parent directory exists
     await asyncio.to_thread(resolved.parent.mkdir, parents=True, exist_ok=True)
 

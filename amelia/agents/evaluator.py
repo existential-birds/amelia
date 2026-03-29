@@ -268,7 +268,7 @@ You MUST call `submit_evaluation` exactly once with all items.""")
 
         # Execute agentic evaluation with submit_evaluation tool (per D-05, D-06)
         new_session_id: str | None = None
-        stream_result: EvaluationOutput | None = None  # fallback: captured from stream
+        stream_result_input: Any | None = None  # fallback for drivers/tests that don't invoke on_call
 
         async for msg in self.driver.execute_agentic(
             prompt=prompt,
@@ -282,12 +282,16 @@ You MUST call `submit_evaluation` exactly once with all items.""")
             elif (
                 msg.type == AgenticMessageType.TOOL_CALL
                 and msg.tool_name == "submit_evaluation"
-                and stream_result is None
+                and stream_result_input is None
             ):
-                stream_result = EvaluationOutput.model_validate(msg.tool_input)
+                stream_result_input = msg.tool_input
 
         # on_call callback captures result directly (primary); stream interception is fallback
-        result_data = captured[0] if captured else stream_result
+        result_data = captured[0] if captured else (
+            EvaluationOutput.model_validate(stream_result_input)
+            if stream_result_input is not None
+            else None
+        )
 
         if result_data is None:
             raise RuntimeError("Evaluator did not call submit_evaluation")

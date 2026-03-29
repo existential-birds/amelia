@@ -98,3 +98,22 @@ class WritePlanInput(BaseModel):
         ...,
         description="Path where the rendered plan markdown will be written",
     )
+
+    @field_validator("file_path")
+    @classmethod
+    def validate_file_path(cls, v: str) -> str:
+        """Reject directory traversal in file_path.
+
+        Absolute-looking paths (e.g. ``/docs/plans/test.md``) are allowed
+        because ``execute_write_plan`` treats them as virtual paths resolved
+        relative to *root_dir*.  The runtime resolved-path guard ensures the
+        final write target stays inside *root_dir*.
+        """
+        from pathlib import PurePosixPath
+
+        parts = PurePosixPath(v).parts
+        if ".." in parts:
+            raise ValueError(
+                f"file_path must not contain '..' segments (directory traversal), got: {v!r}"
+            )
+        return v
