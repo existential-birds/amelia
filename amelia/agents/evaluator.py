@@ -20,6 +20,7 @@ from amelia.agents.schemas.evaluator import (
     EvaluationResult,
 )
 from amelia.core.types import AgentConfig, Profile, collect_all_comments
+from amelia.drivers.base import AgenticMessageType
 from amelia.drivers.factory import get_driver
 from amelia.server.models.events import (
     EPHEMERAL_SEQUENCE,
@@ -166,13 +167,13 @@ Provide clear evidence for each disposition decision."""
         parts.append("""
 ---
 
-For each review item above, evaluate it against the codebase and assign a disposition:
-- IMPLEMENT: The issue is valid and in scope for the current task
-- REJECT: The issue is technically incorrect (provide evidence)
-- DEFER: The issue is valid but out of scope for this task
-- CLARIFY: The issue is ambiguous and needs clarification
+For each review item above, evaluate it against the codebase and assign a disposition.
 
-Return your evaluation as an EvaluationOutput with all items and a summary.""")
+When you have completed your evaluation, call the `submit_evaluation` tool with your results. The tool expects:
+- `evaluated_items`: list of objects, each with: number (int), title (str), file_path (str), line (int), disposition ("implement"|"reject"|"defer"|"clarify"), reason (str), original_issue (str), suggested_fix (str)
+- `summary`: a brief summary string of your evaluation decisions
+
+You MUST call `submit_evaluation` exactly once with all items.""")
 
         return "\n\n".join(parts)
 
@@ -243,13 +244,35 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
             comments_count=len(all_comments),
         )
 
-        response, new_session_id = await self.driver.generate(
+        # Execute agentic evaluation with submit_evaluation tool (per D-05, D-06)
+        result_data: EvaluationOutput | None = None
+        already_submitted = False
+        new_session_id: str | None = None
+
+        async for msg in self.driver.execute_agentic(
             prompt=prompt,
-            system_prompt=self.system_prompt,
-            schema=EvaluationOutput,
             cwd=profile.repo_root,
             session_id=None,  # Fresh session to avoid bias from prior agent context
-        )
+            instructions=self.system_prompt,
+            allowed_tools=["submit_evaluation"],
+        ):
+            if msg.type == AgenticMessageType.RESULT:
+                new_session_id = msg.session_id
+
+            if msg.type == AgenticMessageType.TOOL_CALL and msg.tool_name == "submit_evaluation":
+                if already_submitted:
+                    # First call wins (per D-07)
+                    logger.warning(
+                        "submit_evaluation called more than once; ignoring duplicate",
+                        agent="evaluator",
+                        workflow_id=workflow_id,
+                    )
+                    continue
+                already_submitted = True
+                result_data = EvaluationOutput.model_validate(msg.tool_input)
+
+        if result_data is None:
+            raise RuntimeError("Evaluator did not call submit_evaluation")
 
         # Partition items by disposition
         items_to_implement: list[EvaluatedItem] = []
@@ -264,7 +287,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
             Disposition.CLARIFY: items_needing_clarification,
         }
 
-        for item in response.evaluated_items:
+        for item in result_data.evaluated_items:
             disposition_map[item.disposition].append(item)
 
         logger.info(
@@ -307,7 +330,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
             items_rejected=items_rejected,
             items_deferred=items_deferred,
             items_needing_clarification=items_needing_clarification,
-            summary=response.summary,
+            summary=result_data.summary,
         )
 
         return result, new_session_id
