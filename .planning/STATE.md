@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Executing Phase 01
-last_updated: "2026-03-29T14:17:00.000Z"
+last_updated: "2026-03-29T14:04:09.302Z"
 last_activity: 2026-03-29
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 3
 ---
 
 # Project State
@@ -28,6 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 - Custom tool names in `_build_options` pass through as-is via `CANONICAL_TO_CLI.get(name, name)` — unblocks Plans 02 and 03
 - Diff written once to `/tmp/amelia-review-{workflow_id}/diff.patch` before the review loop; shared across all passes; cleaned up in `finally`
 - `AGENTIC_REVIEW_PROMPT` now uses `{diff_path}` placeholder — reviewer reads pre-fetched file instead of running git diff
+- [Phase 01-review-pipeline-efficiency]: submit_review tool capture uses first-call-wins semantics; markdown parsing retained as fallback
 
 ### Roadmap Evolution
 
@@ -42,6 +43,8 @@ None
 | Phase | Plan | Duration (s) | Tasks | Files |
 |-------|------|-------------|-------|-------|
 | 01 | 01 | 323 | 2/2 | 8 |
+| Phase 01 P03 | 136 | 1 tasks | 2 files |
+| Phase 01 P02 | 186 | 1 tasks | 2 files |
 
 ### Quick Tasks Completed
 
