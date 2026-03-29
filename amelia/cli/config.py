@@ -98,7 +98,7 @@ VALID_DRIVERS: set[DriverType] = {
 
 DEFAULT_MODELS: dict[str, str] = {
     "claude": "sonnet",
-    "codex": "gpt-5.3-codex",
+    "codex": "gpt-5.4",
     "api": "",
 }
 

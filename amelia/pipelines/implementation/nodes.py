@@ -18,7 +18,6 @@ from loguru import logger
 
 from amelia.agents.architect import Architect
 from amelia.core.constants import ToolName, resolve_plan_path
-from amelia.tools.write_plan import execute_write_plan
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.implementation.utils import (
     _extract_goal_from_plan,
@@ -30,6 +29,7 @@ from amelia.pipelines.implementation.utils import (
 )
 from amelia.pipelines.nodes import _save_token_usage
 from amelia.pipelines.utils import extract_node_config
+from amelia.tools.write_plan import execute_write_plan
 
 
 async def _resolve_plan_from_tool_calls(

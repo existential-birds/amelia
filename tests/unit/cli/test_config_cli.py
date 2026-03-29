@@ -314,13 +314,13 @@ class TestProfileCreateDriverAwareDefaults:
     def test_profile_create_interactive_codex_default_model(
         self, runner: CliRunner, mock_db: MagicMock
     ) -> None:
-        """Interactive profile create defaults model to 'gpt-5.3-codex' for codex driver."""
+        """Interactive profile create defaults model to 'gpt-5.4' for codex driver."""
         created_profile = Profile(
             name="interactive-codex",
             tracker="noop",
             repo_root="/tmp",
             agents={
-                "architect": AgentConfig(driver="codex", model="gpt-5.3-codex"),
+                "architect": AgentConfig(driver="codex", model="gpt-5.4"),
             },
         )
 
@@ -341,7 +341,7 @@ class TestProfileCreateDriverAwareDefaults:
         assert "created successfully" in result.stdout
         call_args = mock_repo.create_profile.call_args[0][0]
         first_agent = next(iter(call_args.agents.values()))
-        assert first_agent.model == "gpt-5.3-codex"
+        assert first_agent.model == "gpt-5.4"
 
 
 class TestProfileDelete:
