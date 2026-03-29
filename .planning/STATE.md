@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Executing Phase 01
-last_updated: "2026-03-29T14:04:09.302Z"
+last_updated: "2026-03-29T14:04:13.999Z"
 last_activity: 2026-03-29
 progress:
   total_phases: 1
@@ -29,6 +29,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 - Diff written once to `/tmp/amelia-review-{workflow_id}/diff.patch` before the review loop; shared across all passes; cleaned up in `finally`
 - `AGENTIC_REVIEW_PROMPT` now uses `{diff_path}` placeholder — reviewer reads pre-fetched file instead of running git diff
 - [Phase 01-review-pipeline-efficiency]: submit_review tool capture uses first-call-wins semantics; markdown parsing retained as fallback
+- [Phase 01]: Evaluator uses execute_agentic with allowed_tools=['submit_evaluation']; first-call-wins enforced; RuntimeError on missing submission
 
 ### Roadmap Evolution
 
