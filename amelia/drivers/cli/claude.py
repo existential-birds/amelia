@@ -7,7 +7,14 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
-from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ProcessError, query
+from claude_agent_sdk import (
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
+    ProcessError,
+    create_sdk_mcp_server,
+    query,
+    tool as sdk_tool,
+)
 from claude_agent_sdk._errors import MessageParseError  # private API, pinned to >=0.1.38
 from claude_agent_sdk._internal.message_parser import parse_message as _sdk_parse_message
 from claude_agent_sdk.types import (
@@ -564,9 +571,6 @@ class ClaudeCliDriver(DriverInterface):
         effective_allowed_tools = allowed_tools
 
         if submit_tools:
-            from claude_agent_sdk import create_sdk_mcp_server  # noqa: PLC0415
-            from claude_agent_sdk import tool as sdk_tool  # noqa: PLC0415
-
             sdk_tools = []
             for tool_def in submit_tools:
                 # Capture tool_def in closure so each tool keeps its own on_call

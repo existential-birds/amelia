@@ -538,23 +538,19 @@ class ApiDriver(DriverInterface):
         if submit_tools:
             from langchain_core.tools import StructuredTool  # noqa: PLC0415
 
-            lc_submit_tools: list[Any] = []
-            for tool_def in submit_tools:
-                td = tool_def  # capture in closure
-
+            def _make_lc_tool(td: SubmitToolDef) -> Any:
                 async def _invoke(**tool_kwargs: Any) -> str:
                     await td.on_call(tool_kwargs)
                     return "Submitted successfully."
 
-                lc_submit_tools.append(
-                    StructuredTool.from_function(
-                        coroutine=_invoke,
-                        name=td.name,
-                        description=td.description,
-                        args_schema=td.schema,
-                    )
+                return StructuredTool.from_function(
+                    coroutine=_invoke,
+                    name=td.name,
+                    description=td.description,
+                    args_schema=td.schema,
                 )
 
+            lc_submit_tools: list[Any] = [_make_lc_tool(td) for td in submit_tools]
             tools = lc_submit_tools + (tools or [])
             if required_tool is None and lc_submit_tools:
                 required_tool = submit_tools[0].name
