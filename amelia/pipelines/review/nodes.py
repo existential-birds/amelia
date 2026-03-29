@@ -53,7 +53,20 @@ async def call_evaluation_node(
         },
     )
 
+    # Build a goal for the developer node from the items to implement.
+    # Without this, the shared developer_node raises because goal is required.
+    goal: str | None = None
+    if evaluation_result.items_to_implement:
+        lines = [f"Fix the following review items:\n"]
+        for item in evaluation_result.items_to_implement:
+            lines.append(
+                f"- [{item.file_path}:{item.line}] {item.title}: "
+                f"{item.original_issue} — suggested fix: {item.suggested_fix}"
+            )
+        goal = "\n".join(lines)
+
     return {
         "evaluation_result": evaluation_result,
         "driver_session_id": new_session_id,
+        "goal": goal,
     }
