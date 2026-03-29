@@ -57,7 +57,7 @@ async def call_evaluation_node(
     # Without this, the shared developer_node raises because goal is required.
     goal: str | None = None
     if evaluation_result.items_to_implement:
-        lines = [f"Fix the following review items:\n"]
+        lines = ["Fix the following review items:\n"]
         for item in evaluation_result.items_to_implement:
             lines.append(
                 f"- [{item.file_path}:{item.line}] {item.title}: "
