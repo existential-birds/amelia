@@ -1123,3 +1123,210 @@ Third task content.
 
         assert context is not None
         assert "Just do the thing" in context
+
+
+class TestSubmitReviewTool:
+    """Tests for submit_review tool capture in agentic_review loop."""
+
+    async def test_agentic_review_captures_submit_review_tool(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """When agentic stream yields submit_review TOOL_CALL, result is built from it."""
+        from amelia.core.types import ReviewResult  # noqa: PLC0415
+
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        messages = [
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="submit_review",
+                tool_input={
+                    "approved": False,
+                    "severity": "major",
+                    "comments": ["[major] [app.py:5] Missing null check"],
+                },
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Review complete",
+                session_id="s1",
+            ),
+        ]
+        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
+
+        reviewer = create_reviewer()
+        result, session_id = await reviewer.agentic_review(
+            state,
+            base_commit="abc123",
+            profile=profile,
+            workflow_id=uuid4(),
+        )
+
+        assert isinstance(result, ReviewResult)
+        assert result.approved is False
+        assert result.severity == Severity.MAJOR
+        assert result.comments == ["[major] [app.py:5] Missing null check"]
+
+    async def test_agentic_review_submit_review_first_call_wins(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """When submit_review is called twice, only the first call's data is used."""
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        messages = [
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="submit_review",
+                tool_input={"approved": False, "severity": "critical", "comments": ["First call"]},
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="submit_review",
+                tool_input={"approved": True, "severity": "none", "comments": []},
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Review complete",
+                session_id="s2",
+            ),
+        ]
+        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
+
+        reviewer = create_reviewer()
+        result, _ = await reviewer.agentic_review(
+            state,
+            base_commit="abc123",
+            profile=profile,
+            workflow_id=uuid4(),
+        )
+
+        # First call wins — approved=False, severity=CRITICAL
+        assert result.approved is False
+        assert result.severity == Severity.CRITICAL
+        assert result.comments == ["First call"]
+
+    async def test_agentic_review_fallback_to_markdown_when_no_submit_review(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """When submit_review is never called, _parse_review_result fallback is used."""
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        markdown_content = """## Review Summary
+
+Found issues.
+
+## Issues
+
+### Critical (Blocking)
+
+### Major (Should Fix)
+
+1. [file.py:10] A major issue
+   - Issue: Something wrong
+   - Why: It breaks things
+   - Fix: Fix it
+
+### Minor (Nice to Have)
+
+## Good Patterns
+
+## Verdict
+
+Ready: No
+Rationale: Major issue found.
+"""
+        messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content=markdown_content,
+                session_id="s3",
+            ),
+        ]
+        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
+
+        reviewer = create_reviewer()
+        result, _ = await reviewer.agentic_review(
+            state,
+            base_commit="abc123",
+            profile=profile,
+            workflow_id=uuid4(),
+        )
+
+        # Fallback markdown parsing should pick up the major issue
+        assert result.approved is False
+        assert result.severity == Severity.MAJOR
+        assert len(result.comments) >= 1
+
+    async def test_agentic_review_does_not_restrict_allowed_tools(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """execute_agentic should NOT be called with allowed_tools parameter."""
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Ready: Yes\nRationale: Good.",
+                session_id="s4",
+            ),
+        ]
+        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
+
+        reviewer = create_reviewer()
+        await reviewer.agentic_review(
+            state,
+            base_commit="abc123",
+            profile=profile,
+            workflow_id=uuid4(),
+        )
+
+        mock_driver.execute_agentic.assert_called_once()
+        call_kwargs = mock_driver.execute_agentic.call_args
+        # allowed_tools should not be passed (or should be None if passed)
+        if call_kwargs[1]:
+            assert "allowed_tools" not in call_kwargs[1] or call_kwargs[1].get("allowed_tools") is None
+
+    async def test_agentic_review_prompt_contains_submit_review_instruction(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """The system prompt passed to execute_agentic must contain 'submit_review'."""
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Ready: Yes\nRationale: Good.",
+                session_id="s5",
+            ),
+        ]
+        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
+
+        reviewer = create_reviewer()
+        await reviewer.agentic_review(
+            state,
+            base_commit="abc123",
+            profile=profile,
+            workflow_id=uuid4(),
+        )
+
+        mock_driver.execute_agentic.assert_called_once()
+        call_kwargs = mock_driver.execute_agentic.call_args
+        instructions = call_kwargs[1].get("instructions") or (call_kwargs[0][2] if len(call_kwargs[0]) > 2 else "")
+        assert "submit_review" in instructions, (
+            "System prompt (instructions) must contain 'submit_review' to guide the reviewer"
+        )
