@@ -15,6 +15,7 @@ from typing import Any
 import typer
 from langchain_core.runnables.config import RunnableConfig
 from loguru import logger
+from pydantic import BaseModel, ValidationError
 
 from amelia.agents.architect import Architect
 from amelia.core.constants import ToolName, resolve_plan_path
@@ -30,6 +31,18 @@ from amelia.pipelines.implementation.utils import (
 from amelia.pipelines.nodes import _save_token_usage
 from amelia.pipelines.utils import extract_node_config
 from amelia.tools.write_plan import execute_write_plan
+from amelia.tools.write_plan_schema import PlanTask
+
+
+class PlanSidecar(BaseModel):
+    """Validated view of the JSON sidecar written by the write_plan tool.
+
+    Only the fields consumed by plan_validator_node are required here;
+    extra keys (architecture_summary, tech_stack, file_path) are ignored.
+    """
+
+    goal: str | None = None
+    tasks: list[PlanTask]
 
 
 async def _resolve_plan_from_tool_calls(
@@ -176,43 +189,33 @@ async def plan_validator_node(
 
     # Check for structured plan data (JSON sidecar from write_plan tool)
     json_sidecar = plan_path.with_suffix(".json")
-    plan_structured: dict[str, Any] | None = None
+    parsed_sidecar: PlanSidecar | None = None
     if json_sidecar.exists():
         try:
             raw_json = await asyncio.to_thread(json_sidecar.read_text)
-            parsed = _json.loads(raw_json)
-            if not isinstance(parsed, dict):
-                logger.warning(
-                    "Plan JSON sidecar is not a dict, ignoring",
-                    json_path=str(json_sidecar),
-                    actual_type=type(parsed).__name__,
-                )
-            else:
-                plan_structured = parsed or None
-                if plan_structured is not None:
-                    logger.info(
-                        "Found structured plan data from write_plan tool",
-                        json_path=str(json_sidecar),
-                        task_count=len(plan_structured.get("tasks", [])),
-                    )
-                else:
-                    logger.warning(
-                        "Plan JSON sidecar is empty dict, ignoring",
-                        json_path=str(json_sidecar),
-                    )
+            parsed_sidecar = PlanSidecar.model_validate_json(raw_json)
+            logger.info(
+                "Found structured plan data from write_plan tool",
+                json_path=str(json_sidecar),
+                task_count=len(parsed_sidecar.tasks),
+            )
+        except ValidationError as exc:
+            logger.warning(
+                "Plan JSON sidecar failed schema validation, falling back to regex",
+                json_path=str(json_sidecar),
+                error=str(exc),
+            )
         except (_json.JSONDecodeError, OSError) as exc:
             logger.warning("Failed to read/parse plan JSON sidecar", error=str(exc))
 
-    # Extract fields — prefer structured data, fall back to regex
-    # Guard: only use structured data if it has meaningful content (non-empty dict with tasks)
-    if plan_structured and plan_structured.get("tasks"):
-        goal = plan_structured.get("goal") or _extract_goal_from_plan(plan_content)
-        structured_tasks = plan_structured["tasks"]
-        total_tasks = len(structured_tasks)
+    # Extract fields — prefer validated structured data, fall back to regex
+    if parsed_sidecar is not None and parsed_sidecar.tasks:
+        goal = parsed_sidecar.goal or _extract_goal_from_plan(plan_content)
+        total_tasks = len(parsed_sidecar.tasks)
         seen: set[str] = set()
         key_files_from_structured: list[str] = []
-        for task in structured_tasks:
-            for f in (*task.get("files_to_create", []), *task.get("files_to_modify", [])):
+        for task in parsed_sidecar.tasks:
+            for f in (*task.files_to_create, *task.files_to_modify):
                 if f not in seen:
                     seen.add(f)
                     key_files_from_structured.append(f)
@@ -252,7 +255,7 @@ async def plan_validator_node(
         "total_tasks": total_tasks,
         "plan_validation_result": validation_result,
         "plan_revision_count": revision_count,
-        "plan_structured": plan_structured,
+        "plan_structured": parsed_sidecar,
     }
 
 

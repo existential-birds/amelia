@@ -230,8 +230,8 @@ class TestPlanValidatorStructuredData:
         result = await plan_validator_node(state, config)
 
         assert result["plan_structured"] is not None
-        assert result["plan_structured"]["goal"] == "Structured test goal"
-        assert len(result["plan_structured"]["tasks"]) == 1
+        assert result["plan_structured"].goal == "Structured test goal"
+        assert len(result["plan_structured"].tasks) == 1
         # Structured goal should override regex-extracted goal
         assert result["goal"] == "Structured test goal"
         # Key files should come from structured data
@@ -421,7 +421,7 @@ class TestPlanValidatorStructuredData:
             "### Task 1: Do thing\n\n"
             "Step content here that is long enough to pass validation checks.\n"
         )
-        plan_json.write_text("valid json but will be unreadable")
+        plan_json.write_text('{"goal": "still unreadable"}')
 
         # Make file unreadable
         os.chmod(plan_json, 0o000)

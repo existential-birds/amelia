@@ -4,6 +4,7 @@ This driver wraps the Claude CLI via the official claude-agent-sdk package,
 providing both single-turn generation and agentic execution capabilities.
 """
 import json
+import re
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
@@ -64,11 +65,40 @@ def _build_sanitized_env() -> dict[str, str]:
     return dict(_NESTED_SESSION_OVERRIDES)
 
 
+# Patterns that match common secret formats in CLI stderr output.
+_SECRET_PATTERNS: list[re.Pattern[str]] = [
+    # API keys: sk-ant-*, sk-*, key-*, etc.
+    re.compile(r"\b(sk-ant-[A-Za-z0-9_-]{10,})", re.IGNORECASE),
+    re.compile(r"\b(sk-[A-Za-z0-9_-]{20,})", re.IGNORECASE),
+    re.compile(r"\b(key-[A-Za-z0-9_-]{20,})", re.IGNORECASE),
+    # Bearer / token headers
+    re.compile(r"(Bearer\s+[A-Za-z0-9_.~+/=-]{10,})", re.IGNORECASE),
+    re.compile(r"(token[=: ]+[A-Za-z0-9_.~+/=-]{10,})", re.IGNORECASE),
+    # Session IDs (hex or UUID-like)
+    re.compile(r"(session[_-]?id[=: ]+[A-Za-z0-9_-]{8,})", re.IGNORECASE),
+    # Generic long hex strings (40+ chars, e.g. SHA tokens)
+    re.compile(r"\b([0-9a-f]{40,})\b", re.IGNORECASE),
+    # x-api-key header values
+    re.compile(r"(x-api-key[=: ]+[A-Za-z0-9_.~+/=-]{10,})", re.IGNORECASE),
+]
+
+
 def _sanitize_stderr(stderr: str, max_len: int = 1000) -> str:
-    """Return a redacted, size-limited stderr snippet safe for logs."""
+    """Return a redacted, size-limited stderr snippet safe for logs.
+
+    Redacts API keys, tokens, session IDs, and other secret-like patterns
+    before truncating, so credentials are never exposed in logs or exceptions.
+    """
     snippet = stderr.replace("\n", " ").strip()
+    redacted = False
+    for pattern in _SECRET_PATTERNS:
+        snippet, count = pattern.subn("[REDACTED]", snippet)
+        if count:
+            redacted = True
     if len(snippet) > max_len:
-        snippet = f"{snippet[:max_len]}…"
+        snippet = f"{snippet[:max_len]}…[truncated]"
+    elif redacted:
+        snippet = f"{snippet} [redacted]"
     return snippet
 
 
@@ -591,8 +621,11 @@ class ClaudeCliDriver(DriverInterface):
 
             submit_mcp = create_sdk_mcp_server("amelia-submit", tools=sdk_tools)
             mcp_servers = {**(mcp_servers or {}), "amelia-submit": submit_mcp}
-            # Restrict agent to only the submit tools so it must call them
-            effective_allowed_tools = [td.name for td in submit_tools]
+            # Keep normal workspace tools available and add the submit tools.
+            if allowed_tools is None:
+                effective_allowed_tools = None
+            else:
+                effective_allowed_tools = [*allowed_tools, *(td.name for td in submit_tools)]
 
         options = self._build_options(
             cwd=cwd,

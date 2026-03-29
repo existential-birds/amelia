@@ -540,7 +540,7 @@ class TestEvaluator:
         review_result = ReviewResult(
             reviewer_persona="General",
             approved=False,
-            comments=["Issue 1"],
+            comments=["Issue 1", "Issue 2", "Issue 3", "Issue 4"],
             severity=Severity.MINOR,
         )
         state, profile = mock_execution_state_factory(

@@ -22,13 +22,14 @@ from __future__ import annotations
 
 import operator
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import Field
 
 from amelia.core.agentic_state import AgenticStatus, ToolCall, ToolResult
 from amelia.core.types import Design, Issue, PlanValidationResult, ReviewResult
 from amelia.pipelines.base import BasePipelineState
+from amelia.tools.write_plan_schema import WritePlanInput
 
 
 if TYPE_CHECKING:
@@ -92,7 +93,7 @@ class ImplementationState(BasePipelineState):
     max_review_passes: int = 3
 
     # Structured plan data (from write_plan JSON sidecar)
-    plan_structured: dict[str, Any] | None = None
+    plan_structured: WritePlanInput | None = None
 
     # External plan tracking
     external_plan: bool = False

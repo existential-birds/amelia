@@ -68,11 +68,13 @@ async def call_evaluation_node(
             )
         goal = "\n".join(lines)
 
-    return {
+    result: dict[str, Any] = {
         "evaluation_result": evaluation_result,
         "driver_session_id": new_session_id,
-        "goal": goal,
     }
+    if goal is not None:
+        result["goal"] = goal
+    return result
 
 
 async def call_review_developer_node(

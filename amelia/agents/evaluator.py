@@ -291,6 +291,12 @@ You MUST call `submit_evaluation` exactly once with all items.""")
 
         if result_data is None:
             raise RuntimeError("Evaluator did not call submit_evaluation")
+        expected_numbers = set(range(1, len(all_comments) + 1))
+        actual_numbers = {item.number for item in result_data.evaluated_items}
+        if actual_numbers != expected_numbers:
+            raise RuntimeError(
+                "submit_evaluation must cover every review item exactly once"
+            )
 
         # Partition items by disposition
         items_to_implement: list[EvaluatedItem] = []
