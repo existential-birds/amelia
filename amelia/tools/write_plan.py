@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -19,22 +20,44 @@ from amelia.tools.write_plan_renderer import render_plan_markdown
 from amelia.tools.write_plan_schema import WritePlanInput
 
 
+class WritePlanValidationError(Exception):
+    """Raised when write_plan input fails schema validation."""
+
+    def __init__(self, errors: str, original: ValidationError) -> None:
+        self.errors = errors
+        self.original = original
+        super().__init__(errors)
+
+
+@dataclass(frozen=True)
+class WritePlanResult:
+    """Typed success result from execute_write_plan."""
+
+    path: Path
+    task_count: int
+    goal: str
+
+
 async def execute_write_plan(
     tool_input: dict[str, Any],
     *,
     root_dir: str,
-) -> str:
+) -> WritePlanResult:
     """Execute the write_plan tool: validate, render, write.
 
     This is the core implementation used by both the LangChain tool wrapper
-    and direct invocation from CLI drivers.
+    and direct invocation from pipeline/CLI drivers.
 
     Args:
         tool_input: Raw dict from LLM tool call (matches WritePlanInput schema).
         root_dir: Root directory for resolving relative file paths.
 
     Returns:
-        Success message with details, or validation error message.
+        WritePlanResult on success.
+
+    Raises:
+        WritePlanValidationError: If tool_input fails schema validation.
+        ValueError: If the resolved path escapes root_dir.
     """
     # Validate structured input
     try:
@@ -45,7 +68,7 @@ async def execute_write_plan(
             for e in exc.errors()
         )
         logger.warning("write_plan validation failed", errors=errors)
-        return f"Validation error in write_plan input: {errors}. Please fix and retry."
+        raise WritePlanValidationError(errors, exc) from exc
 
     # Render to markdown
     markdown = render_plan_markdown(plan)
@@ -90,9 +113,10 @@ async def execute_write_plan(
     )
     logger.debug("write_plan: wrote JSON sidecar", path=str(json_path))
 
-    return (
-        f"Successfully wrote plan with {len(plan.tasks)} task(s) to {plan.file_path}. "
-        f"Goal: {plan.goal}"
+    return WritePlanResult(
+        path=resolved,
+        task_count=len(plan.tasks),
+        goal=plan.goal,
     )
 
 
@@ -123,7 +147,14 @@ def create_write_plan_tool(root_dir: str) -> StructuredTool:
             "tasks": tasks,
             "file_path": file_path,
         }
-        return await execute_write_plan(tool_input, root_dir=root_dir)
+        try:
+            result = await execute_write_plan(tool_input, root_dir=root_dir)
+        except WritePlanValidationError as exc:
+            return f"Validation error in write_plan input: {exc.errors}. Please fix and retry."
+        return (
+            f"Successfully wrote plan with {result.task_count} task(s) to {file_path}. "
+            f"Goal: {result.goal}"
+        )
 
     return StructuredTool.from_function(
         coroutine=_invoke,

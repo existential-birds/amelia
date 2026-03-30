@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from amelia.tools.write_plan import (
+    WritePlanValidationError,
     create_write_plan_tool,
     execute_write_plan,
 )
@@ -34,12 +35,13 @@ class TestExecuteWritePlan:
         }
 
     @pytest.mark.asyncio
-    async def test_returns_success_message(self, valid_input: dict, tmp_path: Path):
-        """Should return success message with task count and file path."""
+    async def test_returns_typed_result(self, valid_input: dict, tmp_path: Path):
+        """Should return WritePlanResult with task count and goal."""
         valid_input["file_path"] = str(tmp_path / "plan.md")
         result = await execute_write_plan(valid_input, root_dir=str(tmp_path))
-        assert "Successfully wrote plan" in result
-        assert "1 task(s)" in result
+        assert result.task_count == 1
+        assert result.goal == "Build user auth"
+        assert result.path.exists()
 
     @pytest.mark.asyncio
     async def test_writes_file_to_disk(self, valid_input: dict, tmp_path: Path):
@@ -61,16 +63,18 @@ class TestExecuteWritePlan:
         assert plan_file.exists()
 
     @pytest.mark.asyncio
-    async def test_validation_error_returns_message(self, tmp_path: Path):
-        """Invalid input should return descriptive error, not raise."""
+    async def test_validation_error_raises(self, tmp_path: Path):
+        """Invalid input should raise WritePlanValidationError."""
         bad_input: dict[str, Any] = {
             "goal": "",
             "architecture_summary": "arch",
             "tasks": [],
             "file_path": "/plan.md",
         }
-        result = await execute_write_plan(bad_input, root_dir=str(tmp_path))
-        assert "Validation error" in result
+        with pytest.raises(WritePlanValidationError) as exc_info:
+            await execute_write_plan(bad_input, root_dir=str(tmp_path))
+        assert exc_info.value.errors  # has error details
+        assert exc_info.value.original is not None  # preserves original ValidationError
 
     @pytest.mark.asyncio
     async def test_stores_structured_data(self, valid_input: dict, tmp_path: Path):

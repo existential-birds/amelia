@@ -538,7 +538,8 @@ class TestArchitectNodeWritePlan:
             "file_path": "/docs/plans/auth.md",
         }
         result = await execute_write_plan(tool_input, root_dir=str(tmp_path))
-        assert result.startswith("Successfully")
+        assert result.task_count == 1
+        assert result.goal == "Build auth system"
         assert (tmp_path / "docs" / "plans" / "auth.md").exists()
 
     @pytest.mark.asyncio
