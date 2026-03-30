@@ -1,6 +1,7 @@
 """Tests for Architect agent agentic execution."""
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -402,3 +403,217 @@ class TestArchitectPlanNoDoubleCount:
             "(pre-existing tool results should not be copied)"
         )
         assert final_state.tool_results[0].tool_name == "list_dir"
+
+
+class TestArchitectWritePlanTool:
+    """Tests for write_plan tool injection into Architect.plan()."""
+
+    async def test_architect_passes_write_plan_tool_to_api_driver(
+        self,
+        mock_issue_factory,
+        mock_profile_factory,
+    ) -> None:
+        """Architect should pass write_plan tool via kwargs for API driver."""
+        config = AgentConfig(driver="api", model="test-model")
+
+        captured_kwargs: dict[str, Any] = {}
+
+        async def capture_execute(*args: Any, **kwargs: Any):
+            captured_kwargs.update(kwargs)
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="done",
+            )
+
+        mock_drv = MagicMock()
+        mock_drv.execute_agentic = capture_execute
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_drv):
+            architect = Architect(config)
+
+            issue = mock_issue_factory()
+            profile = mock_profile_factory()
+            state = ImplementationState(
+                workflow_id=uuid4(),
+                created_at=datetime.now(UTC),
+                status="running",
+                profile_id="test",
+                issue=issue,
+            )
+
+            async for _ in architect.plan(state, profile, workflow_id=uuid4()):
+                pass
+
+        # write_plan tool should be in kwargs["tools"]
+        assert "tools" in captured_kwargs
+        tool_names = [t.name for t in captured_kwargs["tools"]]
+        assert "write_plan" in tool_names
+
+    async def test_architect_uses_write_plan_as_required_tool_for_api(
+        self,
+        mock_issue_factory,
+        mock_profile_factory,
+    ) -> None:
+        """Architect should set required_tool to write_plan for API driver."""
+        config = AgentConfig(driver="api", model="test-model")
+
+        captured_kwargs: dict[str, Any] = {}
+
+        async def capture_execute(*args: Any, **kwargs: Any):
+            captured_kwargs.update(kwargs)
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="done",
+            )
+
+        mock_drv = MagicMock()
+        mock_drv.execute_agentic = capture_execute
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_drv):
+            architect = Architect(config)
+
+            issue = mock_issue_factory()
+            profile = mock_profile_factory()
+            state = ImplementationState(
+                workflow_id=uuid4(),
+                created_at=datetime.now(UTC),
+                status="running",
+                profile_id="test",
+                issue=issue,
+            )
+
+            async for _ in architect.plan(state, profile, workflow_id=uuid4()):
+                pass
+
+        assert captured_kwargs.get("required_tool") == "write_plan"
+
+    async def test_architect_uses_write_file_as_required_tool_for_cli(
+        self,
+        mock_issue_factory,
+        mock_profile_factory,
+    ) -> None:
+        """Architect should keep required_tool as write_file for CLI drivers."""
+        config = AgentConfig(driver="claude", model="sonnet")
+
+        captured_kwargs: dict[str, Any] = {}
+
+        async def capture_execute(*args: Any, **kwargs: Any):
+            captured_kwargs.update(kwargs)
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="done",
+            )
+
+        mock_drv = MagicMock()
+        mock_drv.execute_agentic = capture_execute
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_drv):
+            architect = Architect(config)
+
+            issue = mock_issue_factory()
+            profile = mock_profile_factory()
+            state = ImplementationState(
+                workflow_id=uuid4(),
+                created_at=datetime.now(UTC),
+                status="running",
+                profile_id="test",
+                issue=issue,
+            )
+
+            async for _ in architect.plan(state, profile, workflow_id=uuid4()):
+                pass
+
+        assert captured_kwargs.get("required_tool") == "write_file"
+        assert "tools" not in captured_kwargs
+
+    async def test_architect_extracts_plan_path_from_write_plan_tool_call(
+        self,
+        mock_issue_factory,
+        mock_profile_factory,
+    ) -> None:
+        """Architect should extract plan_path from write_plan tool calls."""
+        config = AgentConfig(driver="api", model="test-model")
+
+        async def mock_stream(*args: Any, **kwargs: Any):
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="write_plan",
+                tool_input={"file_path": "/docs/plans/test.md", "goal": "Test"},
+                tool_call_id="call-1",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="write_plan",
+                tool_output="Success",
+                tool_call_id="call-1",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Done",
+            )
+
+        mock_drv = MagicMock()
+        mock_drv.execute_agentic = mock_stream
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_drv):
+            architect = Architect(config)
+
+            issue = mock_issue_factory()
+            profile = mock_profile_factory()
+            state = ImplementationState(
+                workflow_id=uuid4(),
+                created_at=datetime.now(UTC),
+                status="running",
+                profile_id="test",
+                issue=issue,
+            )
+
+            final_state = None
+            async for new_state, _ in architect.plan(state, profile, workflow_id=uuid4()):
+                final_state = new_state
+
+        assert final_state is not None
+        assert final_state.plan_path == Path("/docs/plans/test.md")
+
+    async def test_architect_caches_write_plan_tool_across_calls(
+        self,
+        mock_issue_factory,
+        mock_profile_factory,
+    ) -> None:
+        """write_plan tool should be cached per root_dir, not recreated each call."""
+        config = AgentConfig(driver="api", model="test-model")
+
+        tools_seen: list[list[Any]] = []
+
+        async def capture_execute(*args: Any, **kwargs: Any):
+            tools_seen.append(kwargs.get("tools", []))
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="done",
+            )
+
+        mock_drv = MagicMock()
+        mock_drv.execute_agentic = capture_execute
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_drv):
+            architect = Architect(config)
+
+            issue = mock_issue_factory()
+            profile = mock_profile_factory()
+            state = ImplementationState(
+                workflow_id=uuid4(),
+                created_at=datetime.now(UTC),
+                status="running",
+                profile_id="test",
+                issue=issue,
+            )
+
+            # Call plan() twice with same profile (same root_dir)
+            async for _ in architect.plan(state, profile, workflow_id=uuid4()):
+                pass
+            async for _ in architect.plan(state, profile, workflow_id=uuid4()):
+                pass
+
+        # Both calls should receive the same tool instance (cached)
+        assert len(tools_seen) == 2
+        assert tools_seen[0][0] is tools_seen[1][0]

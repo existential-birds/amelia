@@ -112,9 +112,9 @@ const CLAUDE_MODELS = ['opus', 'sonnet', 'haiku'] as const;
 
 /** Default models (Codex CLI) */
 const CODEX_MODELS = [
-  'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2', 'gpt-5.1-codex-max',
-  'gpt-5.1-codex', 'gpt-5.1-codex-mini', 'gpt-5.1',
-  'gpt-5-codex', 'gpt-5-codex-mini', 'gpt-5',
+  'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2',
+  'gpt-5.1-codex-max', 'gpt-5.1-codex-mini',
+  'gpt-5.1-codex', 'gpt-5.1', 'gpt-5-codex', 'gpt-5-codex-mini', 'gpt-5',
 ] as const;
 
 /** Model options by driver - API models fetched dynamically via ApiModelSelect */

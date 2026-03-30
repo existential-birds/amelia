@@ -6,8 +6,10 @@ operations like developer execution and code review.
 """
 
 import asyncio
+import shutil
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.runnables.config import RunnableConfig
@@ -325,7 +327,7 @@ async def call_reviewer_node(
             agent=agent_name,
         )
 
-    changed_files_raw, diff_content = await asyncio.gather(
+    changed_files_raw, diff_content, diff_stat = await asyncio.gather(
         _run_git_command(
             ["git", "diff", "--name-only", base_commit, "HEAD"],
             nc.profile.repo_root,
@@ -336,9 +338,28 @@ async def call_reviewer_node(
             nc.profile.repo_root,
             nc.sandbox_provider,
         ),
+        _run_git_command(
+            ["git", "diff", "--stat", base_commit, "HEAD"],
+            nc.profile.repo_root,
+            nc.sandbox_provider,
+        ),
     )
     changed_files = [f for f in changed_files_raw.splitlines() if f.strip()]
     tags = detect_stack(changed_files, diff_content)
+
+    # Write diff to a shared temp file (written once, read by all review passes)
+    diff_dir = Path(f"/tmp/amelia-review-{nc.workflow_id}")
+    diff_dir.mkdir(parents=True, exist_ok=True)
+    diff_path = diff_dir / "diff.patch"
+
+    file_list_str = "\n".join(f"  {f}" for f in changed_files)
+    diff_file_content = (
+        f"{diff_stat.strip()}\n\n"
+        f"Changed files:\n{file_list_str}\n\n"
+        f"{diff_content}"
+    )
+    diff_path.write_text(diff_file_content)
+    logger.info("Wrote diff file for review", diff_path=str(diff_path), size=len(diff_file_content))
 
     logger.info(
         "Detected stack for review",
@@ -347,68 +368,74 @@ async def call_reviewer_node(
         review_types=review_types,
     )
 
-    # Run a separate reviewer for each review type
+    # Run a separate reviewer for each review type — wrap in try/finally for diff cleanup
     reviews: list[ReviewResult] = []
     new_session_id: str | None = None
 
-    for review_type in review_types:
-        guidelines = load_skills(tags, [review_type])
-        logger.info(
-            "Running review pass",
-            agent=agent_name,
-            review_type=review_type,
-            guidelines_length=len(guidelines),
+    try:
+        for review_type in review_types:
+            guidelines = load_skills(tags, [review_type])
+            logger.info(
+                "Running review pass",
+                agent=agent_name,
+                review_type=review_type,
+                guidelines_length=len(guidelines),
+            )
+
+            reviewer = Reviewer(
+                agent_config,
+                event_bus=nc.event_bus,
+                prompts=nc.prompts,
+                agent_name=agent_name,
+                sandbox_provider=nc.sandbox_provider,
+                review_guidelines=guidelines,
+            )
+
+            review_result, session_id = await reviewer.agentic_review(
+                state, base_commit, nc.profile,
+                workflow_id=nc.workflow_id,
+                diff_path=str(diff_path),
+            )
+
+            await _save_token_usage(reviewer.driver, nc.workflow_id, agent_name, nc.repository)
+
+            # Tag result with the review type as reviewer_persona
+            review_result = review_result.model_copy(update={"reviewer_persona": review_type})
+            reviews.append(review_result)
+            new_session_id = session_id
+
+            logger.info(
+                "Review pass completed",
+                agent=agent_name,
+                review_type=review_type,
+                severity=str(review_result.severity),
+                approved=review_result.approved,
+                issue_count=len(review_result.comments),
+            )
+
+        next_iteration = state.review_iteration + 1
+
+        # Build return dict with all review results
+        result_dict: dict[str, Any] = {
+            "last_reviews": reviews,
+            "driver_session_id": new_session_id,
+            "review_iteration": next_iteration,
+            "task_review_iteration": state.task_review_iteration + 1,
+        }
+
+        # Debug: Log the full state update being returned
+        logger.debug(
+            "call_reviewer_node returning state update",
+            review_count=len(reviews),
+            all_approved=all(r.approved for r in reviews),
+            review_types=[r.reviewer_persona for r in reviews],
+            review_iteration=next_iteration,
+            task_review_iteration=result_dict["task_review_iteration"],
+            total_tasks=state.total_tasks,
+            current_task_index=state.current_task_index,
         )
 
-        reviewer = Reviewer(
-            agent_config,
-            event_bus=nc.event_bus,
-            prompts=nc.prompts,
-            agent_name=agent_name,
-            sandbox_provider=nc.sandbox_provider,
-            review_guidelines=guidelines,
-        )
-
-        review_result, session_id = await reviewer.agentic_review(
-            state, base_commit, nc.profile, workflow_id=nc.workflow_id
-        )
-
-        await _save_token_usage(reviewer.driver, nc.workflow_id, agent_name, nc.repository)
-
-        # Tag result with the review type as reviewer_persona
-        review_result = review_result.model_copy(update={"reviewer_persona": review_type})
-        reviews.append(review_result)
-        new_session_id = session_id
-
-        logger.info(
-            "Review pass completed",
-            agent=agent_name,
-            review_type=review_type,
-            severity=str(review_result.severity),
-            approved=review_result.approved,
-            issue_count=len(review_result.comments),
-        )
-
-    next_iteration = state.review_iteration + 1
-
-    # Build return dict with all review results
-    result_dict: dict[str, Any] = {
-        "last_reviews": reviews,
-        "driver_session_id": new_session_id,
-        "review_iteration": next_iteration,
-        "task_review_iteration": state.task_review_iteration + 1,
-    }
-
-    # Debug: Log the full state update being returned
-    logger.debug(
-        "call_reviewer_node returning state update",
-        review_count=len(reviews),
-        all_approved=all(r.approved for r in reviews),
-        review_types=[r.reviewer_persona for r in reviews],
-        review_iteration=next_iteration,
-        task_review_iteration=result_dict["task_review_iteration"],
-        total_tasks=state.total_tasks,
-        current_task_index=state.current_task_index,
-    )
-
-    return result_dict
+        return result_dict
+    finally:
+        shutil.rmtree(diff_dir, ignore_errors=True)
+        logger.debug("Cleaned up diff directory", diff_dir=str(diff_dir))

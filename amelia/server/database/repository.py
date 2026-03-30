@@ -299,7 +299,7 @@ class WorkflowRepository:
                     id, issue_id, worktree_path, status,
                     created_at, started_at, completed_at, failure_reason,
                     workflow_type, profile_id, plan_cache, issue_cache,
-                    base_commit
+                    base_commit, branch
                 FROM workflows
                 WHERE status IN ('pending', 'in_progress', 'blocked')
                 AND worktree_path = $1
@@ -314,7 +314,7 @@ class WorkflowRepository:
                     id, issue_id, worktree_path, status,
                     created_at, started_at, completed_at, failure_reason,
                     workflow_type, profile_id, plan_cache, issue_cache,
-                    base_commit
+                    base_commit, branch
                 FROM workflows
                 WHERE status IN ('pending', 'in_progress', 'blocked')
                 ORDER BY started_at DESC

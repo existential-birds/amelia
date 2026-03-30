@@ -812,6 +812,63 @@ Rationale: The code is ready because:
         )
 
 
+    def test_bold_wrapped_issues_are_parsed(
+        self,
+        create_reviewer: Callable[..., Reviewer],
+    ) -> None:
+        """Issues wrapped in markdown bold (e.g. **1. [FILE:LINE] TITLE**) should be parsed.
+
+        Regression test: agentic reviewers often bold-wrap numbered issues,
+        causing the parser to miss them entirely and fall back to the
+        uninformative "See review output for details" placeholder.
+        """
+        beagle_output = """## Review Summary
+
+39 files changed, removing offset pagination in favor of keyset cursor pagination.
+
+## Issues
+
+### Critical (Blocking)
+
+### Major (Should Fix)
+
+**1. [book-service/internal/handler/books.go:~470] `ListBooks` omits `total` from response**
+   - Issue: Both paths build PaginatedResponse without total
+   - Why: The task spec explicitly lists total under "Keep"
+   - Fix: Restore a CountWorks call for ListBooks
+
+**2. [book-service/internal/handler/shelves.go:~1644] `GetPublicShelves` not converted to cursor pagination**
+   - Issue: Still issues a query with LIMIT but no cursor
+   - Why: The spec lists this endpoint in the table to convert
+   - Fix: Add a keyset cursor to GetPublicShelvesForUser
+
+### Minor (Nice to Have)
+
+**3. [book-service/internal/handler/response.go:~55] `pageSize` still serialised in every paginated response**
+   - Issue: PaginatedResponse still carries PageSize
+   - Why: Acceptance criterion says remove page/pageSize from non-admin endpoints
+   - Fix: Remove PageSize from PaginatedResponse
+
+## Good Patterns
+
+- [book-service/internal/store/queries/book_search.sql] IS NULL gate pattern
+- [book-service/internal/handler/books.go] N+1 trick for hasMore
+
+## Verdict
+
+**Ready: With fixes 1-2**
+"""
+        reviewer = create_reviewer()
+        result = reviewer._parse_review_result(beagle_output, workflow_id=uuid4())
+
+        assert result.approved is False
+        assert len(result.comments) == 3
+        assert "[major]" in result.comments[0].lower()
+        assert "book-service/internal/handler/books.go:~470" in result.comments[0]
+        assert "[major]" in result.comments[1].lower()
+        assert "[minor]" in result.comments[2].lower()
+        assert result.severity == Severity.MAJOR
+
     def test_no_ready_pattern_without_issues_defaults_to_approved(self, create_reviewer: Callable[..., Reviewer]) -> None:
         """When Ready: pattern is missing and no structured issues found, default to approved=True."""
         reviewer = create_reviewer()
@@ -909,6 +966,77 @@ There are problems to address.
         assert result_empty.severity == Severity.NONE
 
 
+class TestAgenticReviewDiffPath:
+    """Tests for agentic_review with diff_path parameter."""
+
+    async def test_agentic_review_with_diff_path(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """When diff_path is provided, the user prompt must reference it.
+
+        The prompt should tell the reviewer to read the pre-fetched diff from the
+        given path instead of running git diff.
+        """
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="""## Review Summary\nLooks good.\n## Issues\n### Critical (Blocking)\n### Major (Should Fix)\n### Minor (Nice to Have)\n## Good Patterns\n## Verdict\nReady: Yes\nRationale: All good.""",
+                session_id="session-diff",
+            ),
+        ]
+        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
+
+        reviewer = create_reviewer()
+        await reviewer.agentic_review(
+            state,
+            base_commit="abc123",
+            profile=profile,
+            workflow_id=uuid4(),
+            diff_path="/tmp/test/diff.patch",
+        )
+
+        # Verify the prompt passed to execute_agentic contains the diff path reference
+        mock_driver.execute_agentic.assert_called_once()
+        call_kwargs = mock_driver.execute_agentic.call_args
+        prompt = call_kwargs[1].get("prompt") or call_kwargs[0][0]
+        assert "pre-fetched at: /tmp/test/diff.patch" in prompt, (
+            "User prompt must reference pre-fetched diff path when diff_path is provided"
+        )
+
+    async def test_agentic_review_without_diff_path_uses_git_prompt(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """Without diff_path, user prompt should still work (backward compat)."""
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="## Verdict\nReady: Yes\nRationale: Good.",
+                session_id="session-no-diff",
+            ),
+        ]
+        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
+
+        reviewer = create_reviewer()
+        # Should not raise
+        result, session_id = await reviewer.agentic_review(
+            state,
+            base_commit="abc123",
+            profile=profile,
+            workflow_id=uuid4(),
+        )
+        assert session_id == "session-no-diff"
+
+
 class TestExtractTaskContext:
     """Tests for Reviewer._extract_task_context task extraction."""
 
@@ -995,3 +1123,178 @@ Third task content.
 
         assert context is not None
         assert "Just do the thing" in context
+
+
+class TestSubmitReviewTool:
+    """Tests for submit_review tool capture in agentic_review loop."""
+
+    async def test_agentic_review_captures_submit_review_tool(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """When agentic stream yields submit_review TOOL_CALL, result is built from it."""
+        from amelia.core.types import ReviewResult  # noqa: PLC0415
+
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        messages = [
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="submit_review",
+                tool_input={
+                    "approved": False,
+                    "severity": "major",
+                    "comments": ["[major] [app.py:5] Missing null check"],
+                },
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Review complete",
+                session_id="s1",
+            ),
+        ]
+        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
+
+        reviewer = create_reviewer()
+        result, session_id = await reviewer.agentic_review(
+            state,
+            base_commit="abc123",
+            profile=profile,
+            workflow_id=uuid4(),
+        )
+
+        assert isinstance(result, ReviewResult)
+        assert result.approved is False
+        assert result.severity == Severity.MAJOR
+        assert result.comments == ["[major] [app.py:5] Missing null check"]
+
+    async def test_agentic_review_submit_review_first_call_wins(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """When submit_review is called twice, only the first call's data is used."""
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        messages = [
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="submit_review",
+                tool_input={"approved": False, "severity": "critical", "comments": ["First call"]},
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="submit_review",
+                tool_input={"approved": True, "severity": "none", "comments": []},
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Review complete",
+                session_id="s2",
+            ),
+        ]
+        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
+
+        reviewer = create_reviewer()
+        result, _ = await reviewer.agentic_review(
+            state,
+            base_commit="abc123",
+            profile=profile,
+            workflow_id=uuid4(),
+        )
+
+        # First call wins — approved=False, severity=CRITICAL
+        assert result.approved is False
+        assert result.severity == Severity.CRITICAL
+        assert result.comments == ["First call"]
+
+    async def test_agentic_review_fallback_to_markdown_when_no_submit_review(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """When submit_review is never called, _parse_review_result fallback is used."""
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        markdown_content = """## Review Summary
+
+Found issues.
+
+## Issues
+
+### Critical (Blocking)
+
+### Major (Should Fix)
+
+1. [file.py:10] A major issue
+   - Issue: Something wrong
+   - Why: It breaks things
+   - Fix: Fix it
+
+### Minor (Nice to Have)
+
+## Good Patterns
+
+## Verdict
+
+Ready: No
+Rationale: Major issue found.
+"""
+        messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content=markdown_content,
+                session_id="s3",
+            ),
+        ]
+        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
+
+        reviewer = create_reviewer()
+        result, _ = await reviewer.agentic_review(
+            state,
+            base_commit="abc123",
+            profile=profile,
+            workflow_id=uuid4(),
+        )
+
+        # Fallback markdown parsing should pick up the major issue
+        assert result.approved is False
+        assert result.severity == Severity.MAJOR
+        assert len(result.comments) >= 1
+
+    async def test_agentic_review_does_not_restrict_allowed_tools(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """execute_agentic should NOT be called with allowed_tools parameter."""
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Ready: Yes\nRationale: Good.",
+                session_id="s4",
+            ),
+        ]
+        mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
+
+        reviewer = create_reviewer()
+        await reviewer.agentic_review(
+            state,
+            base_commit="abc123",
+            profile=profile,
+            workflow_id=uuid4(),
+        )
+
+        mock_driver.execute_agentic.assert_called_once()
+        call_kwargs = mock_driver.execute_agentic.call_args
+        # allowed_tools should not be passed (or should be None if passed)
+        if call_kwargs[1]:
+            assert "allowed_tools" not in call_kwargs[1] or call_kwargs[1].get("allowed_tools") is None
+

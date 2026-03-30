@@ -236,6 +236,7 @@ Deliverable: Working auth module
             "total_tasks",
             "plan_validation_result",
             "plan_revision_count",
+            "plan_structured",
         }
         assert set(result.keys()) == expected_keys
 

@@ -6,7 +6,7 @@ autonomous tool-calling LLM execution rather than structured step-by-step plans.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -74,6 +74,9 @@ class Developer:
         state: ImplementationState,
         profile: Profile,
         workflow_id: uuid.UUID,
+        *,
+        prompt_builder: Callable[[ImplementationState], str] | None = None,
+        instructions: str | None = None,
     ) -> AsyncIterator[tuple[ImplementationState, WorkflowEvent]]:
         """Execute development task agentically.
 
@@ -88,6 +91,10 @@ class Developer:
             state: Current execution state with goal.
             profile: Execution profile with settings.
             workflow_id: Unique workflow identifier for streaming events.
+            prompt_builder: Optional callable that builds the user prompt instead
+                of :meth:`_build_prompt` (e.g. review-fix flows without a plan).
+            instructions: Optional system instructions override for the driver;
+                defaults to :attr:`system_prompt`.
 
         Yields:
             Tuples of (updated_state, event) as execution progresses.
@@ -100,7 +107,10 @@ class Developer:
             raise ValueError("ImplementationState must have a goal set")
 
         cwd = profile.repo_root
-        prompt = self._build_prompt(state)
+        prompt = (
+            prompt_builder(state) if prompt_builder is not None else self._build_prompt(state)
+        )
+        agent_instructions = instructions if instructions is not None else self.system_prompt
 
         tool_calls: list[ToolCall] = []
         tool_results: list[ToolResult] = []
@@ -111,7 +121,7 @@ class Developer:
             prompt=prompt,
             cwd=cwd,
             session_id=session_id,
-            instructions=self.system_prompt,
+            instructions=agent_instructions,
         ):
             event: WorkflowEvent | None = None
 

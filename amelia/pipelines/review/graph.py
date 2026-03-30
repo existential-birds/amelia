@@ -10,8 +10,8 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.pipelines.nodes import call_developer_node, call_reviewer_node
-from amelia.pipelines.review.nodes import call_evaluation_node
+from amelia.pipelines.nodes import call_reviewer_node
+from amelia.pipelines.review.nodes import call_evaluation_node, call_review_developer_node
 from amelia.pipelines.review.routing import (
     route_after_evaluation,
     route_after_fixes,
@@ -45,7 +45,7 @@ def create_review_graph(
 
     workflow.add_node("reviewer_node", call_reviewer_node)
     workflow.add_node("evaluation_node", call_evaluation_node)
-    workflow.add_node("developer_node", call_developer_node)
+    workflow.add_node("developer_node", call_review_developer_node)
 
     workflow.set_entry_point("reviewer_node")
 

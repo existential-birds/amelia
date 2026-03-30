@@ -36,6 +36,7 @@ from amelia.drivers.base import (
     DriverInterface,
     DriverUsage,
     GenerateResult,
+    SubmitToolDef,
 )
 from amelia.logging import log_claude_result, log_todos
 
@@ -531,6 +532,29 @@ class ApiDriver(DriverInterface):
         required_file_path: str | None = kwargs.get("required_file_path")
         max_continuations: int = kwargs.get("max_continuations", 10)
 
+        # Convert SubmitToolDef instances to LangChain StructuredTools and
+        # set required_tool so the agent is prompted to call at least one.
+        submit_tools: list[SubmitToolDef] | None = kwargs.get("submit_tools")
+        if submit_tools:
+            from langchain_core.tools import StructuredTool  # noqa: PLC0415
+
+            def _make_lc_tool(td: SubmitToolDef) -> Any:
+                async def _invoke(**tool_kwargs: Any) -> str:
+                    await td.on_call(tool_kwargs)
+                    return "Submitted successfully."
+
+                return StructuredTool.from_function(
+                    coroutine=_invoke,
+                    name=td.name,
+                    description=td.description,
+                    args_schema=td.schema,
+                )
+
+            lc_submit_tools: list[Any] = [_make_lc_tool(td) for td in submit_tools]
+            tools = lc_submit_tools + (tools or [])
+            if required_tool is None and lc_submit_tools:
+                required_tool = submit_tools[0].name
+
         # Initialize usage tracking
         start_time = time.perf_counter()
         total_input = 0
@@ -830,10 +854,11 @@ class ApiDriver(DriverInterface):
                     model=self.model,
                 )
 
-            # Warn if no write_file call was made (common failure mode)
-            if "write_file" not in all_tool_names:
+            # Warn if no file-writing call was made (common failure mode)
+            write_tools = {"write_file", "write_plan"}
+            if not write_tools.intersection(all_tool_names):
                 logger.warning(
-                    "Agent completed without calling write_file - plan may not have been saved",
+                    "Agent completed without calling write_file/write_plan - plan may not have been saved",
                     tool_sequence=", ".join(all_tool_names),
                     model=self.model,
                 )

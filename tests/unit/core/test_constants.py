@@ -45,7 +45,7 @@ def test_tool_name_enum_has_all_canonical_names() -> None:
     invertible) are verified by other tests. This test catches unintentional
     enum changes — update the count when adding a new tool deliberately.
     """
-    assert len(ToolName) == 21
+    assert len(ToolName) == 22
 
 
 def test_tool_name_aliases_covers_all_cli_sdk_names() -> None:
@@ -54,8 +54,8 @@ def test_tool_name_aliases_covers_all_cli_sdk_names() -> None:
     expected_cli_names = {
         "Read", "Write", "Edit", "NotebookEdit", "Glob", "Grep", "Bash",
         "Task", "TaskOutput", "TaskStop", "EnterPlanMode", "ExitPlanMode",
-        "AskUserQuestion", "Skill", "TaskCreate", "TaskGet", "TaskUpdate",
-        "TaskList", "WebFetch", "WebSearch", "KnowledgeSearch",
+        "WritePlan", "AskUserQuestion", "Skill", "TaskCreate", "TaskGet",
+        "TaskUpdate", "TaskList", "WebFetch", "WebSearch", "KnowledgeSearch",
     }
     assert set(TOOL_NAME_ALIASES.keys()) == expected_cli_names
 
@@ -86,6 +86,38 @@ def test_readonly_tools_contains_expected_tools() -> None:
         ToolName.WEB_SEARCH,
     )
     assert expected == READONLY_TOOLS
+
+
+def test_write_plan_in_tool_name_enum() -> None:
+    """write_plan should be a valid ToolName."""
+    assert ToolName.WRITE_PLAN == "write_plan"
+
+
+def test_write_plan_alias_mapping() -> None:
+    """WritePlan CLI name should map to write_plan canonical name."""
+    from amelia.core.constants import TOOL_NAME_ALIASES
+
+    assert TOOL_NAME_ALIASES["WritePlan"] == "write_plan"
+
+
+def test_write_plan_canonical_to_cli() -> None:
+    """write_plan canonical should map back to WritePlan CLI name."""
+    from amelia.core.constants import CANONICAL_TO_CLI
+
+    assert CANONICAL_TO_CLI["write_plan"] == "WritePlan"
+
+
+def test_normalize_write_plan() -> None:
+    """normalize_tool_name should map WritePlan to write_plan."""
+    assert normalize_tool_name("WritePlan") == "write_plan"
+    assert normalize_tool_name("write_plan") == "write_plan"
+
+
+def test_write_plan_normalization_chain() -> None:
+    """Full normalization: WritePlan → write_plan → ToolName.WRITE_PLAN."""
+    normalized = normalize_tool_name("WritePlan")
+    assert normalized == ToolName.WRITE_PLAN
+    assert normalized == "write_plan"
 
 
 def test_readonly_tools_excludes_write_and_exec() -> None:

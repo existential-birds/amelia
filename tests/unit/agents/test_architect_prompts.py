@@ -112,6 +112,29 @@ class TestArchitectPromptInjection:
             assert len(architect_default.plan_prompt) > 50
 
 
+class TestWritePlanPromptReferences:
+    """Tests that system and user prompts reference the write_plan tool."""
+
+    def test_system_prompt_mentions_write_plan(self) -> None:
+        """System prompt should instruct the model to use write_plan tool."""
+        assert "write_plan" in Architect.SYSTEM_PROMPT_PLAN
+
+    async def test_agentic_prompt_instructs_write_plan(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """User prompt output section should reference write_plan tool."""
+        config = AgentConfig(driver="claude", model="sonnet")
+        state, profile = mock_execution_state_factory()
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+            architect = Architect(config)
+            prompt = architect._build_agentic_prompt(state, profile)
+
+        assert "write_plan" in prompt
+
+
 class TestArchitectValidationFeedback:
     """Tests for validation feedback in architect prompts."""
 

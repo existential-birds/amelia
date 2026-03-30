@@ -1280,13 +1280,13 @@ class TestBuildOptionsAllowedTools:
         )
         assert options.allowed_tools == ["Read", "Glob", "Grep"]
 
-    def test_build_options_raises_on_unknown_canonical_names(self, driver: ClaudeCliDriver) -> None:
-        """Unknown canonical names raise ValueError to prevent silent misconfiguration."""
-        with pytest.raises(ValueError, match="Unknown canonical tool name: 'unknown_tool'"):
-            driver._build_options(
-                cwd="/test",
-                allowed_tools=["read_file", "unknown_tool"],
-            )
+    def test_build_options_passes_through_unknown_tool_names(self, driver: ClaudeCliDriver) -> None:
+        """Unknown tool names pass through as-is (custom tools like submit_evaluation)."""
+        options = driver._build_options(
+            cwd="/test",
+            allowed_tools=["read_file", "submit_evaluation"],
+        )
+        assert options.allowed_tools == ["Read", "submit_evaluation"]
 
     def test_build_options_warns_on_empty_allowed_tools(
         self, driver: ClaudeCliDriver

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from loguru import logger
@@ -20,6 +20,7 @@ from amelia.agents.schemas.evaluator import (
     EvaluationResult,
 )
 from amelia.core.types import AgentConfig, Profile, collect_all_comments
+from amelia.drivers.base import AgenticMessageType, SubmitToolDef
 from amelia.drivers.factory import get_driver
 from amelia.server.models.events import (
     EPHEMERAL_SEQUENCE,
@@ -166,13 +167,13 @@ Provide clear evidence for each disposition decision."""
         parts.append("""
 ---
 
-For each review item above, evaluate it against the codebase and assign a disposition:
-- IMPLEMENT: The issue is valid and in scope for the current task
-- REJECT: The issue is technically incorrect (provide evidence)
-- DEFER: The issue is valid but out of scope for this task
-- CLARIFY: The issue is ambiguous and needs clarification
+For each review item above, evaluate it against the codebase and assign a disposition.
 
-Return your evaluation as an EvaluationOutput with all items and a summary.""")
+When you have completed your evaluation, call the `submit_evaluation` tool with your results. The tool expects:
+- `evaluated_items`: list of objects, each with: number (int), title (str), file_path (str), line (int), disposition ("implement"|"reject"|"defer"|"clarify"), reason (str), original_issue (str), suggested_fix (str)
+- `summary`: a brief summary string of your evaluation decisions
+
+You MUST call `submit_evaluation` exactly once with all items.""")
 
         return "\n\n".join(parts)
 
@@ -243,13 +244,63 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
             comments_count=len(all_comments),
         )
 
-        response, new_session_id = await self.driver.generate(
-            prompt=prompt,
-            system_prompt=self.system_prompt,
+        # Build driver-agnostic submit tool.  The on_call callback captures the
+        # result directly; stream interception is kept as a fallback for drivers
+        # that surface tool calls in the message stream (e.g. mocked in tests).
+        captured: list[EvaluationOutput] = []
+
+        async def _on_submit(args: Any) -> None:
+            if not captured:
+                captured.append(EvaluationOutput.model_validate(args))
+            else:
+                logger.warning(
+                    "submit_evaluation called more than once; ignoring duplicate",
+                    agent="evaluator",
+                    workflow_id=workflow_id,
+                )
+
+        submit_tool = SubmitToolDef(
+            name="submit_evaluation",
+            description="Submit the evaluation results for all review items. Call this exactly once.",
             schema=EvaluationOutput,
+            on_call=_on_submit,
+        )
+
+        # Execute agentic evaluation with submit_evaluation tool (per D-05, D-06)
+        new_session_id: str | None = None
+        stream_result_input: Any | None = None  # fallback for drivers/tests that don't invoke on_call
+
+        async for msg in self.driver.execute_agentic(
+            prompt=prompt,
             cwd=profile.repo_root,
             session_id=None,  # Fresh session to avoid bias from prior agent context
+            instructions=self.system_prompt,
+            submit_tools=[submit_tool],
+        ):
+            if msg.type == AgenticMessageType.RESULT:
+                new_session_id = msg.session_id
+            elif (
+                msg.type == AgenticMessageType.TOOL_CALL
+                and msg.tool_name == "submit_evaluation"
+                and stream_result_input is None
+            ):
+                stream_result_input = msg.tool_input
+
+        # on_call callback captures result directly (primary); stream interception is fallback
+        result_data = captured[0] if captured else (
+            EvaluationOutput.model_validate(stream_result_input)
+            if stream_result_input is not None
+            else None
         )
+
+        if result_data is None:
+            raise RuntimeError("Evaluator did not call submit_evaluation")
+        expected_numbers = set(range(1, len(all_comments) + 1))
+        actual_numbers = {item.number for item in result_data.evaluated_items}
+        if actual_numbers != expected_numbers:
+            raise RuntimeError(
+                "submit_evaluation must cover every review item exactly once"
+            )
 
         # Partition items by disposition
         items_to_implement: list[EvaluatedItem] = []
@@ -264,7 +315,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
             Disposition.CLARIFY: items_needing_clarification,
         }
 
-        for item in response.evaluated_items:
+        for item in result_data.evaluated_items:
             disposition_map[item.disposition].append(item)
 
         logger.info(
@@ -307,7 +358,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
             items_rejected=items_rejected,
             items_deferred=items_deferred,
             items_needing_clarification=items_needing_clarification,
-            summary=response.summary,
+            summary=result_data.summary,
         )
 
         return result, new_session_id
