@@ -232,7 +232,7 @@ async def plan_validator_node(
                 if f not in seen:
                     seen.add(f)
                     key_files_from_structured.append(f)
-        key_files = key_files_from_structured if key_files_from_structured else _extract_key_files_from_plan(plan_content)
+        key_files = key_files_from_structured
     else:
         goal = _extract_goal_from_plan(plan_content)
         key_files = _extract_key_files_from_plan(plan_content)
