@@ -5,12 +5,14 @@ import asyncio
 import re
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from loguru import logger
 
+from amelia.agents.schemas.reviewer import SubmitReviewInput
 from amelia.core.types import AgentConfig, Profile, ReviewResult, Severity
+from amelia.drivers.base import AgenticMessageType, SubmitToolDef
 from amelia.drivers.factory import get_driver
 from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
 
@@ -87,23 +89,28 @@ class Reviewer:
 
 ## Process
 
-1. **Identify Changed Files**: Run `git diff --name-only {{base_commit}}` to see what files changed
-2. **Get the Diff**: Run `git diff {{base_commit}}` to get the full diff
-3. **Review**: Evaluate the code against the review guidelines above
-4. **Output**: Provide your review in the following markdown format:
+1. **Read the Diff**: Read the pre-fetched diff from `{{diff_path}}` — do NOT run `git diff` yourself
+2. **Review**: Evaluate the code against the review guidelines above
+3. **Output**: Provide your review in the following markdown format:
 
 ```markdown
 {REVIEW_OUTPUT_FORMAT}
 ```
 
-## Rules
+4. **Rules**:
+   - Number every issue sequentially (1, 2, 3...)
+   - Include FILE:LINE for each issue
+   - Separate Issue/Why/Fix clearly
+   - Categorize by actual severity (Critical/Major/Minor)
+   - Only flag real issues - check linters first before flagging style issues
+   - "Ready: Yes" means approved to merge as-is
 
-- Number every issue sequentially (1, 2, 3...)
-- Include FILE:LINE for each issue
-- Separate Issue/Why/Fix clearly
-- Categorize by actual severity (Critical/Major/Minor)
-- Only flag real issues - check linters first before flagging style issues
-- "Ready: Yes" means approved to merge as-is"""
+5. **Submit**: When your review is complete, call the `submit_review` tool with your findings:
+   - `approved`: boolean — true if code is ready to merge as-is
+   - `severity`: string — "critical", "major", "minor", or "none"
+   - `comments`: list of strings — each in format "[severity] [FILE:LINE] Description"
+
+   You MUST call `submit_review` exactly once after completing your review."""
 
     def __init__(
         self,
@@ -236,16 +243,19 @@ class Reviewer:
         profile: Profile,
         *,
         workflow_id: uuid.UUID,
+        diff_path: str | None = None,
     ) -> tuple[ReviewResult, str | None]:
-        """Perform agentic code review that fetches diff using git tools.
+        """Perform agentic code review that reads the diff from a pre-fetched file.
 
         The reviewer uses pre-loaded review guidelines (injected at construction
         via ``review_guidelines``) as its system prompt.  Stack detection and
         skill loading happen upstream in ``call_reviewer_node``; this method
         focuses on executing the review and parsing results.
 
-        This approach avoids passing large diffs via command line arguments,
-        which can fail with "Argument list too long" errors.
+        When ``diff_path`` is provided, the reviewer reads the diff from that
+        pre-fetched file (written by ``call_reviewer_node``) instead of running
+        git diff itself.  This eliminates redundant git diff calls across
+        multiple review passes and avoids "Argument list too long" errors.
 
         Uses the unified AgenticMessage stream from the driver, independent
         of the specific driver implementation (CLI or API).
@@ -255,26 +265,37 @@ class Reviewer:
             base_commit: Git commit hash to diff against.
             profile: The profile containing working directory settings.
             workflow_id: Workflow ID for stream events (required).
+            diff_path: Optional path to pre-fetched diff file. When provided,
+                the reviewer reads from this file instead of running git diff.
 
         Returns:
             Tuple of (ReviewResult, session_id from driver).
 
         """
-        from amelia.drivers.base import AgenticMessageType  # noqa: PLC0415
-
         # Build the task prompt using shared helper
         task_context = self._extract_task_context(state) or "Review the code changes."
 
-        prompt = f"""Review the code changes for this task:
+        if diff_path:
+            prompt = f"""Review the code changes for this task:
+
+{task_context}
+
+The diff is pre-fetched at: {diff_path}
+Read it from that file rather than running git diff.
+
+The changes are against commit: {base_commit}"""
+        else:
+            prompt = f"""Review the code changes for this task:
 
 {task_context}
 
 The changes are in git - diff against commit: {base_commit}"""
 
-        # Build system prompt with base_commit and review_guidelines
+        # Build system prompt with base_commit, review_guidelines, and diff_path
         system_prompt = self.agentic_prompt.format(
             base_commit=base_commit,
             review_guidelines=self._review_guidelines,
+            diff_path=diff_path or "(not provided — use git diff)",
         )
 
         cwd = profile.repo_root
@@ -292,7 +313,34 @@ The changes are in git - diff against commit: {base_commit}"""
             workflow_id=workflow_id,
         )
 
+        # Build driver-agnostic submit tool. The on_call callback captures the result;
+        # stream interception is kept as a fallback.
+        captured_review: list[SubmitReviewInput] = []
+
+        async def _on_submit_review(args: Any) -> None:
+            if not captured_review:
+                captured_review.append(SubmitReviewInput.model_validate(args))
+            else:
+                logger.warning(
+                    "submit_review called more than once; ignoring duplicate",
+                    agent=self._agent_name,
+                    workflow_id=workflow_id,
+                )
+
+        submit_tool = SubmitToolDef(
+            name="submit_review",
+            description=(
+                "Submit the completed code review. Call this exactly once "
+                "after finishing the review."
+            ),
+            schema=SubmitReviewInput,
+            on_call=_on_submit_review,
+        )
+
         # Execute agentic review with retry on empty output (e.g. rate-limit silencing the stream)
+        stream_review_data: dict[str, Any] | None = None  # fallback: captured from stream
+        stream_already_called = False
+
         for attempt in range(_MAX_REVIEW_ATTEMPTS):
             attempt_result: str | None = None
             attempt_session_id: str | None = None
@@ -303,11 +351,30 @@ The changes are in git - diff against commit: {base_commit}"""
                 cwd=cwd,
                 session_id=session_id,
                 instructions=system_prompt,
+                submit_tools=[submit_tool],
             ):
                 # Emit stream events for visibility using to_workflow_event()
                 if self._event_bus is not None and msg.type != AgenticMessageType.RESULT:
                     event = msg.to_workflow_event(workflow_id=workflow_id, agent=self._agent_name)
                     self._event_bus.emit(event)
+
+                # Fallback: capture submit_review from stream (used when driver mocked in tests)
+                if msg.type == AgenticMessageType.TOOL_CALL and msg.tool_name == "submit_review":
+                    if not stream_already_called:
+                        stream_already_called = True
+                        stream_review_data = msg.tool_input
+                        logger.info(
+                            "Captured submit_review tool call",
+                            agent=self._agent_name,
+                            approved=msg.tool_input.get("approved") if msg.tool_input else None,
+                            workflow_id=workflow_id,
+                        )
+                    else:
+                        logger.warning(
+                            "submit_review called more than once; ignoring duplicate",
+                            agent=self._agent_name,
+                            workflow_id=workflow_id,
+                        )
 
                 # Capture final result from RESULT message
                 if msg.type == AgenticMessageType.RESULT:
@@ -339,8 +406,53 @@ The changes are in git - diff against commit: {base_commit}"""
                 )
                 await asyncio.sleep(_REVIEW_RETRY_DELAY)
 
-        # Parse the result to extract review
-        result = self._parse_review_result(final_result, workflow_id)
+        # on_call callback captures result (primary); fall back to stream interception
+        submit_review_captured = captured_review[0] if captured_review else None
+
+        # Prefer submit_review tool data over markdown parsing
+        if submit_review_captured is not None:
+            approved = submit_review_captured.approved
+            severity_str = submit_review_captured.severity.value
+            comments_raw: list[Any] = list(submit_review_captured.comments)
+        elif stream_review_data is not None:
+            approved = stream_review_data.get("approved", True)
+            severity_str = stream_review_data.get("severity", "none")
+            comments_raw = stream_review_data.get("comments", [])
+        else:
+            # Fallback to markdown parsing (transition safety)
+            result = self._parse_review_result(final_result, workflow_id)
+            approved = result.approved
+            severity_str = None
+
+        if severity_str is not None:
+            # Validate severity
+            try:
+                severity = Severity(severity_str)
+            except ValueError:
+                logger.warning(
+                    "Invalid severity from submit_review, defaulting to MINOR",
+                    raw_severity=severity_str,
+                    agent=self._agent_name,
+                    workflow_id=workflow_id,
+                )
+                severity = Severity.MINOR
+
+            comments = [str(c) for c in comments_raw][:MAX_REVIEW_COMMENTS]
+
+            result = ReviewResult(
+                reviewer_persona="Agentic",
+                approved=approved,
+                comments=comments,
+                severity=severity,
+            )
+            logger.info(
+                "Review result from submit_review tool",
+                agent=self._agent_name,
+                approved=approved,
+                severity=severity,
+                comments_count=len(comments),
+                workflow_id=workflow_id,
+            )
 
         logger.debug(
             "After _parse_review_result",
@@ -435,8 +547,9 @@ The changes are in git - diff against commit: {base_commit}"""
         issues: list[tuple[str, str]] = []  # (severity, issue_text)
 
         # Match numbered issues: "1. [FILE:LINE] TITLE" or just "1. TITLE"
+        # Also handles bold-wrapped variants like "**1. [FILE:LINE] TITLE**"
         issue_pattern = re.compile(
-            r"^\s*(\d+)\.\s*(?:\[([^\]]+)\])?\s*(.+?)$",
+            r"^\s*\*{0,3}(\d+)\.\s*(?:\[([^\]]+)\])?\s*(.+?)\*{0,3}$",
             re.MULTILINE,
         )
 

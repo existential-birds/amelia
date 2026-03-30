@@ -8,16 +8,17 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.constants import ToolName, resolve_plan_path
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, DriverType, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.drivers.factory import get_driver
 from amelia.server.models.events import WorkflowEvent
+from amelia.tools.write_plan import create_write_plan_tool
 
 
 if TYPE_CHECKING:
@@ -42,6 +43,9 @@ class Architect:
 Write comprehensive implementation plans assuming the executor has ZERO context for the codebase and questionable taste. Document everything they need: which files to touch, complete code, exact commands, how to test it. Give the whole plan as bite-sized tasks.
 
 You have read-only access to explore the codebase before planning.
+
+## Writing Plans
+When available, use the `write_plan` tool to create your implementation plan. This tool takes structured input (goal, architecture, tasks with steps) and renders consistent markdown. If `write_plan` is not available, use the `write_file` tool to create the plan as a markdown file.
 
 ## File Paths
 When creating or referencing files, use virtual absolute paths starting with / (e.g., /docs/plan.md, /src/component.ts).
@@ -88,8 +92,10 @@ Before planning, discover:
             profile_name=config.profile_name,
             options=config.options,
         )
+        self._driver_type = config.driver
         self.options = config.options
         self._prompts = prompts or {}
+        self._write_plan_tool_cache: dict[str, Any] = {}  # keyed by root_dir
 
     @property
     def plan_prompt(self) -> str:
@@ -144,13 +150,28 @@ Before planning, discover:
             plan_path=plan_path,
         )
 
+        # Build kwargs for driver execution
+        driver_kwargs: dict[str, Any] = {
+            "required_file_path": plan_path,
+        }
+
+        # For API driver: inject write_plan as a custom tool with structured schema
+        # CLI drivers don't support custom tool injection — they use write_file
+        if self._driver_type == DriverType.API:
+            # Cache the tool per root_dir to avoid re-instantiating on every plan() call
+            if cwd not in self._write_plan_tool_cache:
+                self._write_plan_tool_cache[cwd] = create_write_plan_tool(root_dir=cwd)
+            driver_kwargs["tools"] = [self._write_plan_tool_cache[cwd]]
+            driver_kwargs["required_tool"] = "write_plan"
+        else:
+            driver_kwargs["required_tool"] = "write_file"
+
         try:
             async for message in self.driver.execute_agentic(
                 prompt=user_prompt,
                 cwd=cwd,
                 instructions=self.plan_prompt,
-                required_tool="write_file",
-                required_file_path=plan_path,
+                **driver_kwargs,
             ):
                 event: WorkflowEvent | None = None
 
@@ -212,13 +233,13 @@ Before planning, discover:
                         raw_output_preview=raw_output[:300] if raw_output else None,
                     )
 
-                    # Extract plan_path from Write tool calls
+                    # Extract plan_path from write_plan or write_file tool calls
                     # Note: CLI driver normalizes "Write" to "write_file" (ToolName.WRITE_FILE)
                     extracted_plan_path: Path | None = None
                     for tc in tool_calls:
-                        if tc.tool_name == ToolName.WRITE_FILE and "file_path" in tc.tool_input:
+                        if tc.tool_name in (ToolName.WRITE_PLAN, ToolName.WRITE_FILE) and "file_path" in tc.tool_input:
                             extracted_plan_path = Path(tc.tool_input["file_path"])
-                            break  # Use first Write call (should be the plan)
+                            break  # Use first write call (should be the plan)
 
                     # Yield final state with all updates
                     current_state = state.model_copy(update={
@@ -305,14 +326,13 @@ Before planning, discover:
             plan_path = f'/{plan_path}'
         parts.append("\n## Output (CRITICAL)")
         parts.append(
-            f"**CRITICAL REQUIREMENT**: Create a markdown file at `{plan_path}` containing your implementation plan. "
-            "This is NOT optional.\n\n"
-            "Steps:\n"
-            "1. Explore the codebase to understand patterns\n"
-            "2. Create your implementation plan\n"
-            f"3. Create the markdown file `{plan_path}` with the plan content\n"
-            "4. Confirm the file was created\n\n"
-            "Do NOT just output the plan as text - you MUST create the file. "
+            f"**CRITICAL REQUIREMENT**: Create a markdown plan file at `{plan_path}`.\n\n"
+            "**Preferred method**: Use the `write_plan` tool with structured input (goal, "
+            "architecture_summary, tech_stack, tasks). The tool validates your input and "
+            "renders consistent markdown.\n\n"
+            "**Fallback**: If `write_plan` is not available, use `write_file` to create "
+            f"the markdown file at `{plan_path}` directly.\n\n"
+            "Do NOT just output the plan as text - you MUST use a tool to create the file. "
             "The workflow will fail if you don't create the plan file."
         )
 

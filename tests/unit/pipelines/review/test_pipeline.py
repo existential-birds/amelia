@@ -4,6 +4,8 @@ from uuid import uuid4
 
 from amelia.pipelines.base import PipelineMetadata
 from amelia.pipelines.implementation.state import ImplementationState
+from amelia.pipelines.review.graph import create_review_graph
+from amelia.pipelines.review.nodes import call_review_developer_node
 from amelia.pipelines.review.pipeline import ReviewPipeline
 
 
@@ -100,3 +102,9 @@ class TestReviewPipelineGraphStructure:
         graph = pipeline.create_graph()
         assert "review_approval_node" not in graph.nodes
         assert "end_approval_node" not in graph.nodes
+
+    def test_developer_node_uses_review_fix_callable(self) -> None:
+        """Review graph must not reuse implementation call_developer_node (plan required)."""
+        graph = create_review_graph()
+        afunc = graph.nodes["developer_node"].bound.afunc
+        assert afunc is call_review_developer_node

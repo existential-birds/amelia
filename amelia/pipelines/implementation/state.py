@@ -29,6 +29,7 @@ from pydantic import Field
 from amelia.core.agentic_state import AgenticStatus, ToolCall, ToolResult
 from amelia.core.types import Design, Issue, PlanValidationResult, ReviewResult
 from amelia.pipelines.base import BasePipelineState
+from amelia.tools.write_plan_schema import WritePlanInput
 
 
 if TYPE_CHECKING:
@@ -90,6 +91,9 @@ class ImplementationState(BasePipelineState):
     review_pass: int = 0
     review_mode: str | None = None
     max_review_passes: int = 3
+
+    # Structured plan data (from write_plan JSON sidecar)
+    plan_structured: WritePlanInput | None = None
 
     # External plan tracking
     external_plan: bool = False

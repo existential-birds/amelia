@@ -1,5 +1,6 @@
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
@@ -132,6 +133,32 @@ class AgenticMessage(BaseModel):
         )
 
 
+@dataclass
+class SubmitToolDef:
+    """Driver-agnostic definition for a structured-output submission tool.
+
+    Agents use submit tools to return structured results at the end of an
+    agentic loop instead of writing to files or printing text.  Each driver
+    converts a SubmitToolDef into its native representation:
+
+    - ClaudeCliDriver  → in-process SDK MCP server (``create_sdk_mcp_server``)
+    - ApiDriver        → LangChain ``StructuredTool`` + ``required_tool`` hint
+
+    Attributes:
+        name: Tool name Claude will use when calling it.
+        description: Human-readable description passed to the model.
+        schema: Pydantic model whose JSON schema defines the tool's input.
+        on_call: Async callback invoked with the validated raw ``dict`` when
+            the tool is called.  The driver calls this before returning a
+            success response to the model.
+    """
+
+    name: str
+    description: str
+    schema: type[BaseModel]
+    on_call: Callable[[Any], Awaitable[None]]
+
+
 # Type alias for generate return value: (output, session_id)
 # output is str when no schema, or instance of schema when schema provided
 # (Any is used because Python's type system cannot express schema-dependent return types)
@@ -189,7 +216,13 @@ class DriverInterface(Protocol):
             allowed_tools: Optional list of canonical tool names to allow.
                 When None, all tools are available. When set, only listed
                 tools may be used. Use canonical names from ToolName enum.
-            **kwargs: Driver-specific options (e.g., required_tool, max_continuations).
+                Not supported by all drivers (e.g. ApiDriver raises
+                NotImplementedError; use submit_tools instead).
+            **kwargs: Driver-specific options.  Cross-driver kwargs:
+                - submit_tools: list[SubmitToolDef] — inject structured-output
+                  capture tools.  Each driver converts them to its native format
+                  and calls on_call() with the raw input dict when invoked.
+                  Prefer this over allowed_tools + mcp_servers for portability.
 
         Yields:
             AgenticMessage for each event during execution.

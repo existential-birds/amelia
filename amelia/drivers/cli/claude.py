@@ -4,10 +4,18 @@ This driver wraps the Claude CLI via the official claude-agent-sdk package,
 providing both single-turn generation and agentic execution capabilities.
 """
 import json
+import re
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
-from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ProcessError, query
+from claude_agent_sdk import (
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
+    ProcessError,
+    create_sdk_mcp_server,
+    query,
+    tool as sdk_tool,
+)
 from claude_agent_sdk._errors import MessageParseError  # private API, pinned to >=0.1.38
 from claude_agent_sdk._internal.message_parser import parse_message as _sdk_parse_message
 from claude_agent_sdk.types import (
@@ -32,6 +40,7 @@ from amelia.drivers.base import (
     DriverInterface,
     DriverUsage,
     GenerateResult,
+    SubmitToolDef,
 )
 from amelia.drivers.cli.utils import strip_markdown_fences
 from amelia.logging import log_claude_result
@@ -56,11 +65,40 @@ def _build_sanitized_env() -> dict[str, str]:
     return dict(_NESTED_SESSION_OVERRIDES)
 
 
+# Patterns that match common secret formats in CLI stderr output.
+_SECRET_PATTERNS: list[re.Pattern[str]] = [
+    # API keys: sk-ant-*, sk-*, key-*, etc.
+    re.compile(r"\b(sk-ant-[A-Za-z0-9_-]{10,})", re.IGNORECASE),
+    re.compile(r"\b(sk-[A-Za-z0-9_-]{20,})", re.IGNORECASE),
+    re.compile(r"\b(key-[A-Za-z0-9_-]{20,})", re.IGNORECASE),
+    # Bearer / token headers
+    re.compile(r"(Bearer\s+[A-Za-z0-9_.~+/=-]{10,})", re.IGNORECASE),
+    re.compile(r"(token[=: ]+[A-Za-z0-9_.~+/=-]{10,})", re.IGNORECASE),
+    # Session IDs (hex or UUID-like)
+    re.compile(r"(session[_-]?id[=: ]+[A-Za-z0-9_-]{8,})", re.IGNORECASE),
+    # Generic long hex strings (40+ chars, e.g. SHA tokens)
+    re.compile(r"\b([0-9a-f]{40,})\b", re.IGNORECASE),
+    # x-api-key header values
+    re.compile(r"(x-api-key[=: ]+[A-Za-z0-9_.~+/=-]{10,})", re.IGNORECASE),
+]
+
+
 def _sanitize_stderr(stderr: str, max_len: int = 1000) -> str:
-    """Return a redacted, size-limited stderr snippet safe for logs."""
+    """Return a redacted, size-limited stderr snippet safe for logs.
+
+    Redacts API keys, tokens, session IDs, and other secret-like patterns
+    before truncating, so credentials are never exposed in logs or exceptions.
+    """
     snippet = stderr.replace("\n", " ").strip()
+    redacted = False
+    for pattern in _SECRET_PATTERNS:
+        snippet, count = pattern.subn("[REDACTED]", snippet)
+        if count:
+            redacted = True
     if len(snippet) > max_len:
-        snippet = f"{snippet[:max_len]}…"
+        snippet = f"{snippet[:max_len]}…[truncated]"
+    elif redacted:
+        snippet = f"{snippet} [redacted]"
     return snippet
 
 
@@ -285,6 +323,7 @@ class ClaudeCliDriver(DriverInterface):
         schema: type[BaseModel] | None = None,
         bypass_permissions: bool = False,
         allowed_tools: list[str] | None = None,
+        mcp_servers: dict[str, Any] | None = None,
     ) -> ClaudeAgentOptions:
         """Build ClaudeAgentOptions from driver configuration.
 
@@ -295,7 +334,10 @@ class ClaudeCliDriver(DriverInterface):
             schema: Optional Pydantic model for structured output.
             bypass_permissions: Whether to bypass permission prompts for this call.
             allowed_tools: Optional list of canonical tool names. Mapped to CLI SDK
-                names via CANONICAL_TO_CLI. Unknown names raise ValueError.
+                names via CANONICAL_TO_CLI. Unknown names are passed through as-is
+                for custom/MCP tools.
+            mcp_servers: Optional dict of MCP server configurations to inject.
+                Passed directly to ClaudeAgentOptions.mcp_servers.
 
         Returns:
             Configured ClaudeAgentOptions instance.
@@ -329,14 +371,8 @@ class ClaudeCliDriver(DriverInterface):
         if allowed_tools is not None:
             cli_allowed_tools = []
             for name in allowed_tools:
-                cli_name = CANONICAL_TO_CLI.get(name)
-                if cli_name:
-                    cli_allowed_tools.append(cli_name)
-                else:
-                    raise ValueError(
-                        f"Unknown canonical tool name: {name!r}. "
-                        f"Valid names: {sorted(CANONICAL_TO_CLI)}"
-                    )
+                cli_name = CANONICAL_TO_CLI.get(name, name)  # Unknown names pass through as-is
+                cli_allowed_tools.append(cli_name)
 
         # Build options kwargs. The SDK defaults allowed_tools to [] (no restriction),
         # so we only include it when the caller explicitly provided a list.
@@ -353,6 +389,9 @@ class ClaudeCliDriver(DriverInterface):
             if len(cli_allowed_tools) == 0:
                 logger.warning("allowed_tools resolved to empty list — agent will have no tools")
             kwargs["allowed_tools"] = cli_allowed_tools
+
+        if mcp_servers is not None:
+            kwargs["mcp_servers"] = mcp_servers
 
         return ClaudeAgentOptions(**kwargs)
 
@@ -512,6 +551,18 @@ class ClaudeCliDriver(DriverInterface):
         except Exception as e:
             if isinstance(e, (RuntimeError, SchemaValidationError)):
                 raise
+            # The SDK raises bare Exception for CLI process failures (e.g.
+            # "Command failed with exit code 1").  Surface captured stderr so
+            # the operator can diagnose the root cause instead of seeing only
+            # "Check stderr output for details".
+            captured_stderr = "\n".join(stderr_lines) if stderr_lines else ""
+            safe_stderr = _sanitize_stderr(captured_stderr)
+            if safe_stderr:
+                raise ModelProviderError(
+                    f"Claude CLI error: {e}\nCaptured stderr:\n{safe_stderr}",
+                    provider_name="claude-cli",
+                    original_message=str(e),
+                ) from e
             raise RuntimeError(f"Error executing Claude SDK: {e}") from e
 
     async def execute_agentic(
@@ -542,13 +593,48 @@ class ClaudeCliDriver(DriverInterface):
         Yields:
             AgenticMessage for each event (thinking, tool_call, tool_result, result).
         """
+        # Build MCP servers from submit_tools definitions (driver-agnostic portable API).
+        # Each SubmitToolDef becomes an in-process MCP tool whose on_call() is invoked
+        # when Claude calls the tool, capturing structured output via closure.
+        submit_tools: list[SubmitToolDef] | None = kwargs.get("submit_tools")
+        mcp_servers: dict[str, Any] | None = kwargs.get("mcp_servers")
+        effective_allowed_tools = allowed_tools
+
+        if submit_tools:
+            sdk_tools = []
+            for tool_def in submit_tools:
+                # Capture tool_def in closure so each tool keeps its own on_call
+                def _make_handler(td: SubmitToolDef) -> Any:
+                    @sdk_tool(td.name, td.description, td.schema.model_json_schema())
+                    async def _handler(args: Any) -> dict[str, Any]:
+                        try:
+                            await td.on_call(args)
+                        except Exception as exc:
+                            return {
+                                "content": [{"type": "text", "text": f"Error: {exc}"}],
+                                "is_error": True,
+                            }
+                        return {"content": [{"type": "text", "text": "Submitted successfully."}]}
+                    return _handler
+
+                sdk_tools.append(_make_handler(tool_def))
+
+            submit_mcp = create_sdk_mcp_server("amelia-submit", tools=sdk_tools)
+            mcp_servers = {**(mcp_servers or {}), "amelia-submit": submit_mcp}
+            # Keep normal workspace tools available and add the submit tools.
+            if allowed_tools is None:
+                effective_allowed_tools = None
+            else:
+                effective_allowed_tools = [*allowed_tools, *(td.name for td in submit_tools)]
+
         options = self._build_options(
             cwd=cwd,
             session_id=session_id,
             system_prompt=instructions,
             schema=schema,
             bypass_permissions=True,  # Agentic execution always bypasses permissions
-            allowed_tools=allowed_tools,
+            allowed_tools=effective_allowed_tools,
+            mcp_servers=mcp_servers,
         )
 
         # Capture stderr lines from the CLI subprocess for diagnostics.
@@ -666,8 +752,19 @@ class ClaudeCliDriver(DriverInterface):
                 provider_name="claude-cli",
                 original_message=str(e),
             ) from e
-        except Exception:
-            logger.exception("Error in agentic execution")
+        except Exception as e:
+            captured_stderr = "\n".join(stderr_lines) if stderr_lines else ""
+            safe_stderr = _sanitize_stderr(captured_stderr)
+            logger.exception(
+                "Error in agentic execution",
+                stderr=safe_stderr or "(empty)",
+            )
+            if safe_stderr and not isinstance(e, (RuntimeError, SchemaValidationError)):
+                raise ModelProviderError(
+                    f"Claude CLI error: {e}\nCaptured stderr:\n{safe_stderr}",
+                    provider_name="claude-cli",
+                    original_message=str(e),
+                ) from e
             raise
 
     def clear_tool_history(self) -> None:

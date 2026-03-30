@@ -9,9 +9,12 @@ from typing import Any
 from langchain_core.runnables.config import RunnableConfig
 from loguru import logger
 
+from amelia.agents.developer import Developer
 from amelia.agents.evaluator import Evaluator
+from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.pipelines.nodes import _save_token_usage
+from amelia.pipelines.nodes import _resolve_commit, _save_token_usage
+from amelia.pipelines.review.developer_prompt import build_review_fix_prompt
 from amelia.pipelines.utils import extract_node_config
 
 
@@ -53,7 +56,104 @@ async def call_evaluation_node(
         },
     )
 
-    return {
+    # Build a goal for the developer node from the items to implement.
+    # Without this, the shared developer_node raises because goal is required.
+    goal: str | None = None
+    if evaluation_result.items_to_implement:
+        lines = ["Fix the following review items:\n"]
+        for item in evaluation_result.items_to_implement:
+            lines.append(
+                f"- [{item.file_path}:{item.line}] {item.title}: "
+                f"{item.original_issue} — suggested fix: {item.suggested_fix}"
+            )
+        goal = "\n".join(lines)
+
+    result: dict[str, Any] = {
         "evaluation_result": evaluation_result,
         "driver_session_id": new_session_id,
+    }
+    if goal is not None:
+        result["goal"] = goal
+    return result
+
+
+async def call_review_developer_node(
+    state: ImplementationState,
+    config: RunnableConfig | None = None,
+) -> dict[str, Any]:
+    """Run the Developer agent for review-fix work (no architect plan).
+
+    Uses a dedicated user prompt and ``developer.review_fix`` system instructions
+    so :meth:`Developer._build_prompt` (which requires ``plan_markdown``) is not used.
+
+    Args:
+        state: State with ``goal`` and ``evaluation_result`` from the evaluator.
+        config: RunnableConfig with profile, thread_id, prompts, etc.
+
+    Returns:
+        Partial state update matching :func:`amelia.pipelines.nodes.call_developer_node`,
+        plus ``review_pass`` incremented by one.
+
+    """
+    if not state.goal:
+        raise ValueError(
+            "Review developer node has no goal. The evaluation node should set goal from items to implement."
+        )
+
+    nc = extract_node_config(config)
+
+    logger.info(
+        "Starting review-fix developer execution",
+        review_pass=state.review_pass,
+    )
+
+    pre_dev_commit = await _resolve_commit(nc.profile.repo_root, nc.sandbox_provider)
+    state = state.model_copy(update={"driver_session_id": None})
+
+    agent_config = nc.profile.get_agent_config("developer")
+    developer = Developer(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
+
+    review_fix_instructions = nc.prompts.get(
+        "developer.review_fix",
+        PROMPT_DEFAULTS["developer.review_fix"].content,
+    )
+
+    final_state = state
+    try:
+        async for new_state, event in developer.run(
+            state,
+            nc.profile,
+            nc.workflow_id,
+            prompt_builder=build_review_fix_prompt,
+            instructions=review_fix_instructions,
+        ):
+            final_state = new_state
+            if nc.event_bus and event is not None:
+                nc.event_bus.emit(event)
+    except Exception:
+        logger.exception(
+            "Review-fix developer execution failed",
+            workflow_id=str(nc.workflow_id),
+        )
+        raise
+
+    await _save_token_usage(developer.driver, nc.workflow_id, "developer", nc.repository)
+
+    logger.info(
+        "Agent action completed",
+        agent="developer",
+        action="review_fix_agentic_execution",
+        tool_calls_count=len(final_state.tool_calls),
+        agentic_status=str(final_state.agentic_status),
+    )
+
+    return {
+        "tool_calls": list(final_state.tool_calls),
+        "tool_results": list(final_state.tool_results),
+        "agentic_status": final_state.agentic_status,
+        "final_response": final_state.final_response,
+        "error": final_state.error,
+        "driver_session_id": final_state.driver_session_id,
+        "base_commit": pre_dev_commit or state.base_commit,
+        "review_pass": state.review_pass + 1,
     }

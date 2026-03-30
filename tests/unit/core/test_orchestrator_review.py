@@ -62,7 +62,7 @@ def run_reviewer_node(
 
         captured_base_commit: list[str] = []
 
-        async def mock_agentic_review(state, base_commit: str, profile, *, workflow_id: str):
+        async def mock_agentic_review(state, base_commit: str, profile, *, workflow_id: str, diff_path: str | None = None):
             captured_base_commit.append(base_commit)
             return review_result, "session-123"
 
@@ -188,7 +188,7 @@ class TestCallReviewNodeMultipleReviewTypes:
 
         review_call_count = 0
 
-        async def mock_agentic_review(state, base_commit, profile, *, workflow_id):
+        async def mock_agentic_review(state, base_commit, profile, *, workflow_id, diff_path: str | None = None):
             nonlocal review_call_count
             review_call_count += 1
             if review_call_count == 1:

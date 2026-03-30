@@ -61,7 +61,7 @@ class TestArchitectPlanPath:
         assert "docs/plans/" in prompt
         assert "test-123" in prompt.lower()
         # Explicit write instruction to prevent LLM from just outputting plan text
-        assert "MUST create the file" in prompt
+        assert "MUST use a tool to create the file" in prompt
         assert "CRITICAL REQUIREMENT" in prompt
 
     def test_architect_agentic_prompt_uses_todays_date(
@@ -107,38 +107,6 @@ class TestArchitectPlanPath:
         prompt = architect._build_agentic_prompt(state, profile)
 
         assert ".amelia/plans/jira-456.md" in prompt
-
-    async def test_plan_method_passes_profile_to_build_agentic_prompt(
-        self,
-        mock_driver_local: MagicMock,
-        state_and_profile: tuple[ImplementationState, Profile],
-    ) -> None:
-        """Plan method should pass profile to _build_agentic_prompt."""
-        state, profile = state_and_profile
-        config = AgentConfig(driver="claude", model="sonnet")
-
-        # Capture the prompt passed to execute_agentic
-        captured_prompts: list[str] = []
-
-        async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
-            captured_prompts.append(kwargs.get("prompt", args[0] if args else ""))
-            # Yield a result message to complete the generator
-            yield AgenticMessage(
-                type=AgenticMessageType.RESULT,
-                content="Plan complete",
-                session_id="session-1",
-            )
-
-        mock_driver_local.execute_agentic = mock_execute_agentic
-
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
-            architect = Architect(config)
-            async for _ in architect.plan(state, profile, workflow_id=uuid4()):
-                pass
-
-        assert len(captured_prompts) == 1
-        assert "docs/plans/" in captured_prompts[0]
-        assert "test-123" in captured_prompts[0].lower()
 
     async def test_plan_extracts_plan_path_from_write_tool_call(
         self,

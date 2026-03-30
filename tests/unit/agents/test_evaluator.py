@@ -1,6 +1,6 @@
 """Tests for the Evaluator agent."""
 from collections.abc import Callable
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -13,7 +13,9 @@ from amelia.agents.schemas.evaluator import (
     EvaluationResult,
 )
 from amelia.core.types import AgentConfig, Profile, ReviewResult, SandboxConfig, Severity
+from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
+from tests.conftest import AsyncIteratorMock
 
 
 class TestEvaluatedItem:
@@ -181,6 +183,24 @@ class TestEvaluator:
             summary="Mixed evaluation results",
         )
 
+    def _make_agentic_mock(
+        self, mock_driver: MagicMock, evaluation_output: EvaluationOutput, session_id: str = "session-123"
+    ) -> None:
+        """Helper to wire mock_driver.execute_agentic for a standard submit_evaluation flow."""
+        tool_call_msg = AgenticMessage(
+            type=AgenticMessageType.TOOL_CALL,
+            tool_name="submit_evaluation",
+            tool_input=evaluation_output.model_dump(),
+        )
+        result_msg = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content="Evaluation complete",
+            session_id=session_id,
+        )
+        mock_driver.execute_agentic = MagicMock(
+            return_value=AsyncIteratorMock([tool_call_msg, result_msg])
+        )
+
     async def test_evaluate_with_review_feedback(
         self,
         mock_driver: MagicMock,
@@ -201,10 +221,8 @@ class TestEvaluator:
             code_changes_for_review="diff content",
         )
 
-        # Mock driver to return evaluation output
-        mock_driver.generate = AsyncMock(
-            return_value=(evaluation_output_with_items, "session-123")
-        )
+        # Mock driver to return evaluation output via execute_agentic
+        self._make_agentic_mock(mock_driver, evaluation_output_with_items, "session-123")
 
         config = AgentConfig(driver="claude", model="sonnet")
         with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
@@ -220,10 +238,12 @@ class TestEvaluator:
         assert len(result.items_needing_clarification) == 1
         assert result.summary == "Mixed evaluation results"
 
-        # Verify driver was called with correct schema
-        mock_driver.generate.assert_called_once()
-        call_kwargs = mock_driver.generate.call_args.kwargs
-        assert call_kwargs["schema"] == EvaluationOutput
+        # Verify driver was called with execute_agentic (not generate)
+        mock_driver.execute_agentic.assert_called_once()
+        call_kwargs = mock_driver.execute_agentic.call_args.kwargs
+        submit_tools = call_kwargs["submit_tools"]
+        assert len(submit_tools) == 1
+        assert submit_tools[0].name == "submit_evaluation"
 
     async def test_evaluate_empty_comments(
         self,
@@ -258,7 +278,7 @@ class TestEvaluator:
         assert "No review comments" in result.summary
 
         # Driver should NOT be called for empty comments
-        mock_driver.generate.assert_not_called()
+        mock_driver.execute_agentic.assert_not_called()
 
     async def test_evaluate_partitions_by_disposition(
         self,
@@ -314,7 +334,7 @@ class TestEvaluator:
             last_reviews=[review_result],
         )
 
-        mock_driver.generate = AsyncMock(return_value=(evaluation_output, None))
+        self._make_agentic_mock(mock_driver, evaluation_output, session_id="session-1")
 
         config = AgentConfig(driver="claude", model="sonnet")
         with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
@@ -384,7 +404,7 @@ class TestEvaluator:
             ],
             summary="Evaluation done",
         )
-        mock_driver.generate = AsyncMock(return_value=(evaluation_output, None))
+        self._make_agentic_mock(mock_driver, evaluation_output, session_id="session-1")
 
         config = AgentConfig(driver="claude", model="sonnet")
         with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
@@ -397,69 +417,150 @@ class TestEvaluator:
         assert call_args.agent == "evaluator"
         assert call_args.workflow_id is not None  # UUID propagated
 
-    async def test_evaluate_builds_prompt_with_goal(
+    async def test_evaluate_submit_evaluation_first_call_wins(
         self,
         mock_driver: MagicMock,
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     ) -> None:
-        """Test that prompt includes goal when available."""
+        """Test that when submit_evaluation is called twice, only the first call's data is used."""
         review_result = ReviewResult(
             reviewer_persona="General",
             approved=False,
-            comments=["Check this"],
-            severity=Severity.NONE,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
         )
         state, profile = mock_execution_state_factory(
-            goal="Implement feature X",
+            goal="Fix bugs",
             last_reviews=[review_result],
-            code_changes_for_review="diff content",
         )
 
-        evaluation_output = EvaluationOutput(
-            evaluated_items=[],
-            summary="Empty",
+        first_output = EvaluationOutput(
+            evaluated_items=[
+                EvaluatedItem(
+                    number=1,
+                    title="First bug",
+                    file_path="first.py",
+                    line=1,
+                    disposition=Disposition.IMPLEMENT,
+                    reason="Valid first",
+                    original_issue="First issue",
+                    suggested_fix="First fix",
+                ),
+            ],
+            summary="First call summary",
         )
-        mock_driver.generate = AsyncMock(return_value=(evaluation_output, None))
+        second_output = EvaluationOutput(
+            evaluated_items=[
+                EvaluatedItem(
+                    number=1,
+                    title="Second bug",
+                    file_path="second.py",
+                    line=2,
+                    disposition=Disposition.REJECT,
+                    reason="Invalid second",
+                    original_issue="Second issue",
+                    suggested_fix="Second fix",
+                ),
+            ],
+            summary="Second call summary",
+        )
+
+        # Two tool calls followed by result
+        first_tool_call = AgenticMessage(
+            type=AgenticMessageType.TOOL_CALL,
+            tool_name="submit_evaluation",
+            tool_input=first_output.model_dump(),
+        )
+        second_tool_call = AgenticMessage(
+            type=AgenticMessageType.TOOL_CALL,
+            tool_name="submit_evaluation",
+            tool_input=second_output.model_dump(),
+        )
+        result_msg = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content="Evaluation complete",
+            session_id="session-1",
+        )
+        mock_driver.execute_agentic = MagicMock(
+            return_value=AsyncIteratorMock([first_tool_call, second_tool_call, result_msg])
+        )
+
+        config = AgentConfig(driver="claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
+        result, _ = await evaluator.evaluate(state, profile, workflow_id=uuid4())
+
+        # First call wins — should have IMPLEMENT item from first output
+        assert result.summary == "First call summary"
+        assert len(result.items_to_implement) == 1
+        assert result.items_to_implement[0].title == "First bug"
+        assert len(result.items_rejected) == 0  # second call ignored
+
+    async def test_evaluate_no_submit_evaluation_raises(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """Test that RuntimeError is raised when submit_evaluation is never called."""
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        state, profile = mock_execution_state_factory(
+            goal="Fix bugs",
+            last_reviews=[review_result],
+        )
+
+        # Only a RESULT message, no TOOL_CALL with submit_evaluation
+        result_msg = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content="Evaluation complete",
+            session_id="session-1",
+        )
+        mock_driver.execute_agentic = MagicMock(
+            return_value=AsyncIteratorMock([result_msg])
+        )
+
+        config = AgentConfig(driver="claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
+
+        with pytest.raises(RuntimeError, match="Evaluator did not call submit_evaluation"):
+            await evaluator.evaluate(state, profile, workflow_id=uuid4())
+
+    async def test_evaluate_uses_execute_agentic_with_allowed_tools(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+        evaluation_output_with_items: EvaluationOutput,
+    ) -> None:
+        """Test that execute_agentic is called with allowed_tools=['submit_evaluation']."""
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1", "Issue 2", "Issue 3", "Issue 4"],
+            severity=Severity.MINOR,
+        )
+        state, profile = mock_execution_state_factory(
+            goal="Fix bugs",
+            last_reviews=[review_result],
+        )
+
+        self._make_agentic_mock(mock_driver, evaluation_output_with_items)
 
         config = AgentConfig(driver="claude", model="sonnet")
         with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
             evaluator = Evaluator(config)
         await evaluator.evaluate(state, profile, workflow_id=uuid4())
 
-        # Check that prompt contains the goal
-        call_args = mock_driver.generate.call_args
-        prompt = call_args.kwargs.get("prompt") or call_args.args[0]
-        assert "Implement feature X" in prompt
+        # execute_agentic should be called with submit_tools containing submit_evaluation
+        mock_driver.execute_agentic.assert_called_once()
+        call_kwargs = mock_driver.execute_agentic.call_args.kwargs
+        submit_tools = call_kwargs["submit_tools"]
+        assert len(submit_tools) == 1
+        assert submit_tools[0].name == "submit_evaluation"
 
-    async def test_evaluate_builds_prompt_with_issue_fallback(
-        self,
-        mock_driver: MagicMock,
-        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
-    ) -> None:
-        """Test that prompt uses issue context when no goal available."""
-        review_result = ReviewResult(
-            reviewer_persona="General",
-            approved=False,
-            comments=["Check this"],
-            severity=Severity.NONE,
-        )
-        state, profile = mock_execution_state_factory(
-            goal=None,  # No goal
-            last_reviews=[review_result],
-        )
-
-        evaluation_output = EvaluationOutput(
-            evaluated_items=[],
-            summary="Empty",
-        )
-        mock_driver.generate = AsyncMock(return_value=(evaluation_output, None))
-
-        config = AgentConfig(driver="claude", model="sonnet")
-        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
-            evaluator = Evaluator(config)
-        await evaluator.evaluate(state, profile, workflow_id=uuid4())
-
-        # Check that prompt contains issue context
-        call_args = mock_driver.generate.call_args
-        prompt = call_args.kwargs.get("prompt") or call_args.args[0]
-        assert "Issue Context" in prompt or "Test Issue" in prompt
+        # generate should NOT have been called
+        mock_driver.generate.assert_not_called()

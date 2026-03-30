@@ -24,6 +24,7 @@ class ToolName(StrEnum):
     # Planning
     ENTER_PLAN_MODE = "enter_plan_mode"
     EXIT_PLAN_MODE = "exit_plan_mode"
+    WRITE_PLAN = "write_plan"
     # Interaction
     ASK_USER_QUESTION = "ask_user_question"
     SKILL = "skill"
@@ -52,6 +53,7 @@ TOOL_NAME_ALIASES: dict[str, str] = {
     "TaskStop": ToolName.TASK_STOP,
     "EnterPlanMode": ToolName.ENTER_PLAN_MODE,
     "ExitPlanMode": ToolName.EXIT_PLAN_MODE,
+    "WritePlan": ToolName.WRITE_PLAN,
     "AskUserQuestion": ToolName.ASK_USER_QUESTION,
     "Skill": ToolName.SKILL,
     "TaskCreate": ToolName.TASK_CREATE,
