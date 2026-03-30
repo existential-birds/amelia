@@ -6,9 +6,11 @@ them into consistent markdown.
 """
 
 import re
+from pathlib import PurePosixPath
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+
 
 # Reusable type that strips whitespace then rejects empty strings.
 NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -109,8 +111,6 @@ class WritePlanInput(BaseModel):
         relative to *root_dir*.  The runtime resolved-path guard ensures the
         final write target stays inside *root_dir*.
         """
-        from pathlib import PurePosixPath
-
         parts = PurePosixPath(v).parts
         if ".." in parts:
             raise ValueError(

@@ -15,7 +15,7 @@ from typing import Any
 import typer
 from langchain_core.runnables.config import RunnableConfig
 from loguru import logger
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from amelia.agents.architect import Architect
 from amelia.core.constants import ToolName, resolve_plan_path
