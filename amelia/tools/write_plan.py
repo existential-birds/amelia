@@ -151,6 +151,8 @@ def create_write_plan_tool(root_dir: str) -> StructuredTool:
             result = await execute_write_plan(tool_input, root_dir=root_dir)
         except WritePlanValidationError as exc:
             return f"Validation error in write_plan input: {exc.errors}. Please fix and retry."
+        except ValueError as exc:
+            return f"Validation error in write_plan input: {exc}. Please fix and retry."
         return (
             f"Successfully wrote plan with {result.task_count} task(s) to {file_path}. "
             f"Goal: {result.goal}"
