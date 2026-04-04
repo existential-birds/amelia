@@ -389,6 +389,7 @@ describe("SpecBuilderPage", () => {
       repo_root: "",
       max_concurrent: 5,
       active_profile: "test",
+      condense_threshold_chars: 2000,
       active_profile_info: {
         name: "test",
         driver: "api",
