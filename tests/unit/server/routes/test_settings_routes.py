@@ -1,5 +1,6 @@
 # tests/unit/server/routes/test_settings_routes.py
 """Tests for settings API routes."""
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -7,7 +8,16 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
-from amelia.server.dependencies import get_profile_repository, get_settings_repository
+from amelia.server.dependencies import (
+    get_model_cache_repository,
+    get_profile_repository,
+    get_settings_repository,
+)
+from amelia.server.models.model_cache import (
+    ModelCacheCapabilities,
+    ModelCacheEntry,
+    ModelCacheModalities,
+)
 from amelia.server.routes.settings import router
 
 from .conftest import _make_server_settings
@@ -47,6 +57,31 @@ def make_test_profile(
     )
 
 
+def make_cached_model(
+    model_id: str = "anthropic/claude-sonnet-4",
+) -> ModelCacheEntry:
+    """Create a cached model entry for route tests."""
+    now = datetime.now(UTC)
+    return ModelCacheEntry(
+        id=model_id,
+        name="Claude Sonnet 4",
+        provider="anthropic",
+        context_length=200_000,
+        max_output_tokens=16_000,
+        input_cost_per_m=3.0,
+        output_cost_per_m=15.0,
+        capabilities=ModelCacheCapabilities(
+            tool_call=True,
+            reasoning=True,
+            structured_output=True,
+        ),
+        modalities=ModelCacheModalities(input=["text"], output=["text"]),
+        raw_response={"id": model_id},
+        fetched_at=now,
+        created_at=now,
+    )
+
+
 # --- Fixtures ---
 
 @pytest.fixture
@@ -68,18 +103,34 @@ def app(mock_repo: MagicMock) -> FastAPI:
 
 
 @pytest.fixture
+def mock_model_cache_repo() -> MagicMock:
+    """Create a mock model cache repository."""
+    repo = MagicMock()
+    repo.get_model = AsyncMock(return_value=None)
+    repo.upsert_model = AsyncMock()
+    repo.list_models = AsyncMock(return_value=[])
+    repo.is_stale = AsyncMock(return_value=True)
+    return repo
+
+
+@pytest.fixture
 def client(app: FastAPI) -> TestClient:
     """Create test client."""
     return TestClient(app)
 
 
 @pytest.fixture
-def profile_app(mock_repo: MagicMock, mock_profile_repo: MagicMock) -> FastAPI:
+def profile_app(
+    mock_repo: MagicMock,
+    mock_profile_repo: MagicMock,
+    mock_model_cache_repo: MagicMock,
+) -> FastAPI:
     """Create test FastAPI app with both settings and profile dependencies."""
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_settings_repository] = lambda: mock_repo
     app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
+    app.dependency_overrides[get_model_cache_repository] = lambda: mock_model_cache_repo
     return app
 
 
@@ -118,6 +169,71 @@ class TestSettingsRoutes:
         data = response.json()
         assert data["log_retention_days"] == 60
         assert data["max_concurrent"] == 10
+
+    def test_get_model_returns_fresh_cached_entry(
+        self,
+        profile_client: TestClient,
+        mock_model_cache_repo: MagicMock,
+    ) -> None:
+        """GET /api/models/{id} returns fresh cached metadata without remote lookup."""
+        cached = make_cached_model()
+        mock_model_cache_repo.get_model.return_value = cached
+        mock_model_cache_repo.is_stale.return_value = False
+
+        response = profile_client.get("/api/models/anthropic/claude-sonnet-4")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "id": "anthropic/claude-sonnet-4",
+            "name": "Claude Sonnet 4",
+            "provider": "anthropic",
+            "capabilities": {
+                "tool_call": True,
+                "reasoning": True,
+                "structured_output": True,
+            },
+            "cost": {"input": 3.0, "output": 15.0},
+            "limit": {"context": 200000, "output": 16000},
+            "modalities": {"input": ["text"], "output": ["text"]},
+        }
+        mock_model_cache_repo.get_model.assert_awaited_once_with("anthropic/claude-sonnet-4")
+        mock_model_cache_repo.upsert_model.assert_not_awaited()
+
+    def test_get_model_fetches_and_upserts_when_cache_missing(
+        self,
+        profile_client: TestClient,
+        mock_model_cache_repo: MagicMock,
+    ) -> None:
+        """GET /api/models/{id} fetches, normalizes, and caches a missing model."""
+        fetched = make_cached_model("meta-llama/llama-4-scout")
+        mock_model_cache_repo.get_model.return_value = None
+        mock_model_cache_repo.is_stale.return_value = True
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "amelia.server.routes.settings.fetch_openrouter_model_entry",
+                AsyncMock(return_value=fetched),
+            )
+            response = profile_client.get("/api/models/meta-llama/llama-4-scout")
+
+        assert response.status_code == 200
+        assert response.json()["id"] == "meta-llama/llama-4-scout"
+        mock_model_cache_repo.upsert_model.assert_awaited_once()
+
+    def test_get_model_returns_404_when_openrouter_does_not_know_model(
+        self,
+        profile_client: TestClient,
+    ) -> None:
+        """GET /api/models/{id} returns 404 for an unknown model id."""
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "amelia.server.routes.settings.fetch_openrouter_model_entry",
+                AsyncMock(return_value=None),
+            )
+            response = profile_client.get("/api/models/unknown/not-real")
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Model not found"
 
 
 # --- Profile tests ---

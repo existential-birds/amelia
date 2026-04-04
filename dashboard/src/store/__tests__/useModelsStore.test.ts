@@ -257,4 +257,51 @@ describe('useModelsStore', () => {
       expect(result).toHaveLength(1);
     });
   });
+
+  describe('lookupModelById', () => {
+    it('should fetch a single model and merge it into the store', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 'meta-llama/llama-4-scout',
+            name: 'Llama 4 Scout',
+            provider: 'meta-llama',
+            capabilities: {
+              tool_call: true,
+              reasoning: true,
+              structured_output: true,
+            },
+            cost: { input: 0.2, output: 0.8 },
+            limit: { context: 1000000, output: 8000 },
+            modalities: { input: ['text'], output: ['text'] },
+          }),
+      });
+
+      const model = await useModelsStore.getState().lookupModelById('meta-llama/llama-4-scout');
+
+      expect(model.id).toBe('meta-llama/llama-4-scout');
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/models/meta-llama/llama-4-scout',
+        expect.objectContaining({
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+      expect(useModelsStore.getState().models.some((entry) => entry.id === model.id)).toBe(true);
+      expect(useModelsStore.getState().providers).toContain('meta-llama');
+    });
+
+    it('should throw the API detail when model lookup fails', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ detail: 'Model not found' }),
+      });
+
+      await expect(
+        useModelsStore.getState().lookupModelById('unknown/not-real')
+      ).rejects.toThrow('Model not found');
+    });
+  });
 });

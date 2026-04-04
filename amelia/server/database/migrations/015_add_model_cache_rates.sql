@@ -1,0 +1,2 @@
+ALTER TABLE model_cache ADD COLUMN IF NOT EXISTS cache_read_cost_per_m DOUBLE PRECISION;
+ALTER TABLE model_cache ADD COLUMN IF NOT EXISTS cache_write_cost_per_m DOUBLE PRECISION;

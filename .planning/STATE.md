@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Milestone complete
-last_updated: "2026-03-29T14:14:12.437Z"
-last_activity: 2026-03-29
+last_updated: "2026-03-30T23:55:00.000Z"
+last_activity: 2026-03-30
 progress:
   total_phases: 1
   completed_phases: 1
@@ -14,7 +14,7 @@ progress:
 
 # Project State
 
-Last activity: 2026-03-29
+Last activity: 2026-03-30
 
 ## Project Reference
 
@@ -54,3 +54,4 @@ None
 | 260320-2hx | PR autofix pipeline should use git worktrees instead of operating on main checkout | 2026-03-20 | 733f2cf2 | [260320-2hx-pr-autofix-pipeline-should-use-git-workt](./quick/260320-2hx-pr-autofix-pipeline-should-use-git-workt/) |
 | 260320-4np | Write missing integration tests for PR auto-fix | 2026-03-20 | a5601961 | [260320-4np-write-missing-integration-tests-for-pr-a](./quick/260320-4np-write-missing-integration-tests-for-pr-a/) |
 | 260322-pgw | Implement 6 GitHub issue selection polish issues | 2026-03-22 | f0eafc0c | [260322-pgw-implement-6-issues-from-github-issue-sel](./quick/260322-pgw-implement-6-issues-from-github-issue-sel/) |
+| 260330-qm0 | Implement issue 561: allow free-text OpenRouter model code entry with backend lookup and cache | 2026-03-30 | working tree | [260330-qm0-implement-issue-561-allow-free-text-open](./quick/260330-qm0-implement-issue-561-allow-free-text-open/) |

@@ -150,6 +150,20 @@ export function filterModelsByRequirements(
 }
 
 /**
+ * Insert or replace a model in a list, keeping all other entries.
+ */
+export function upsertModelInfo(models: ModelInfo[], model: ModelInfo): ModelInfo[] {
+  const existingIndex = models.findIndex((entry) => entry.id === model.id);
+  if (existingIndex === -1) {
+    return [...models, model];
+  }
+
+  const nextModels = [...models];
+  nextModels[existingIndex] = model;
+  return nextModels;
+}
+
+/**
  * Format context size for display (e.g., 200000 -> "200K").
  */
 export function formatContextSize(contextSize: number | null): string {

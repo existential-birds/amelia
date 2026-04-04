@@ -1,15 +1,23 @@
 """Token usage tracking and cost calculation."""
 
 import asyncio
+import importlib
 import os
 import time
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
 import httpx
 from loguru import logger
 from pydantic import BaseModel, Field
+
+from amelia.server.models.model_cache import ModelCacheEntry
+
+
+if TYPE_CHECKING:
+    from amelia.server.database.model_cache_repository import ModelCacheRepository
 
 
 class ModelPricing(BaseModel):
@@ -65,6 +73,36 @@ STATIC_FALLBACK_PRICING: dict[str, ModelPricing] = {
 _cached_pricing: dict[str, ModelPricing] = {}
 _cache_expires_at: float = 0.0
 _cache_lock: asyncio.Lock = asyncio.Lock()
+
+
+def _get_model_cache_repository() -> "ModelCacheRepository | None":
+    """Return a database-backed model cache repository when the server DB is initialized."""
+    try:
+        dependencies_module = importlib.import_module("amelia.server.dependencies")
+        repository_module = importlib.import_module("amelia.server.database.model_cache_repository")
+    except ImportError:
+        return None
+
+    try:
+        return cast(
+            "ModelCacheRepository",
+            repository_module.ModelCacheRepository(dependencies_module.get_database()),
+        )
+    except RuntimeError:
+        return None
+
+
+def _pricing_from_cache_entry(entry: ModelCacheEntry) -> ModelPricing | None:
+    """Convert cached model metadata into pricing when both rates are present."""
+    if entry.input_cost_per_m is None or entry.output_cost_per_m is None:
+        return None
+
+    return ModelPricing(
+        input=entry.input_cost_per_m,
+        output=entry.output_cost_per_m,
+        cache_read=entry.cache_read_cost_per_m or 0.0,
+        cache_write=entry.cache_write_cost_per_m or 0.0,
+    )
 
 
 async def fetch_openrouter_pricing() -> dict[str, ModelPricing]:
@@ -132,6 +170,14 @@ async def get_pricing(model: str) -> ModelPricing | None:
         ModelPricing if found, None otherwise.
     """
     global _cached_pricing, _cache_expires_at
+
+    repo = _get_model_cache_repository()
+    if repo is not None:
+        cached_entry = await repo.get_model(model)
+        if cached_entry is not None and not await repo.is_stale(model):
+            cached_pricing = _pricing_from_cache_entry(cached_entry)
+            if cached_pricing is not None:
+                return cached_pricing
 
     # Fast path: cache is valid
     if time.time() < _cache_expires_at:

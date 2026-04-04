@@ -112,6 +112,7 @@ export function makeMockModelsStore(
     ...defaultModelsStoreState,
     fetchModels: vi.fn(),
     refreshModels: vi.fn(),
+    lookupModelById: vi.fn(),
     getModelsForAgent: vi.fn().mockReturnValue(mockModels),
     ...overrides,
   };
