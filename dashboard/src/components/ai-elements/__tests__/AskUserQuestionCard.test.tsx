@@ -254,4 +254,36 @@ describe("AskUserQuestionCard", () => {
     // Ensure no description elements are rendered
     expect(screen.queryByText(/description/i)).not.toBeInTheDocument();
   });
+
+  it("option buttons have whitespace-normal for text wrapping", () => {
+    const longTextPayload: AskUserQuestionPayload = {
+      questions: [
+        {
+          question: "Pick a strategy",
+          header: "Strategy",
+          options: [
+            {
+              label: "Incremental migration with backward compatibility",
+              description:
+                "Migrate services one at a time while maintaining backward compatibility with the existing system throughout the entire process",
+            },
+            { label: "Short" },
+          ],
+          multi_select: false,
+        },
+      ],
+    };
+
+    render(
+      <AskUserQuestionCard payload={longTextPayload} onAnswer={vi.fn()} />
+    );
+
+    const longButton = screen.getByRole("button", {
+      name: /Incremental migration/,
+    });
+    expect(longButton.className).toMatch(/whitespace-normal/);
+    expect(longButton.className).toMatch(/text-left/);
+    expect(longButton.className).toMatch(/max-w-full/);
+    expect(longButton.className).toMatch(/break-words/);
+  });
 });

@@ -105,7 +105,7 @@ export function AskUserQuestionCard({
                 size="sm"
                 disabled={isDisabled}
                 onClick={() => handleSelect(q.question, opt.label, q.multi_select)}
-                className="flex flex-col items-start h-auto py-2 px-3"
+                className="flex flex-col items-start h-auto py-2 px-3 whitespace-normal text-left max-w-full break-words"
                 aria-pressed={q.multi_select ? isSelected(q.question, opt.label, q.multi_select) : undefined}
                 aria-label={`${opt.label}${opt.description ? `: ${opt.description}` : ""}`}
               >
