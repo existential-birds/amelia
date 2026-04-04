@@ -1153,3 +1153,8 @@ export interface ClassificationsResponse {
   classifications: ClassificationRecord[];
   total: number;
 }
+
+/** Response from POST /api/descriptions/condense. */
+export interface CondenseDescriptionResponse {
+  condensed: string;
+}

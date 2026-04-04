@@ -25,6 +25,7 @@ import type {
   RequestReviewRequest,
   PRAutoFixMetricsResponse,
   ClassificationsResponse,
+  CondenseDescriptionResponse,
 } from '../types';
 import type {
   KnowledgeDocument,
@@ -549,6 +550,25 @@ export const api = {
       signal,
     );
     return handleResponse<GitHubIssuesResponse>(response);
+  },
+
+  /**
+   * Condenses a long GitHub issue body using an LLM.
+   *
+   * @param description - The issue body text to condense.
+   * @param profile - Optional profile name; server falls back to active profile.
+   * @returns Condensed description text.
+   */
+  async condenseDescription(
+    description: string,
+    profile?: string,
+  ): Promise<CondenseDescriptionResponse> {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/descriptions/condense`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description, profile }),
+    });
+    return handleResponse<CondenseDescriptionResponse>(response);
   },
 
   /**

@@ -9,7 +9,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Zap, Upload, X } from 'lucide-react';
+import { Zap, Upload, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { api, ApiError } from '@/api/client';
@@ -67,6 +67,7 @@ type DevelopFormData = z.infer<typeof developSchema>;
  */
 export default function DevelopPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCondensing, setIsCondensing] = useState(false);
   const [importPath, setImportPath] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -104,6 +105,8 @@ export default function DevelopPage() {
 
   const worktreePath = watch('worktree_path');
   const profileValue = watch('profile');
+  const descriptionValue = watch('task_description');
+  const descriptionLength = descriptionValue?.length ?? 0;
 
   // Fetch server config on mount
   useEffect(() => {
@@ -197,6 +200,25 @@ export default function DevelopPage() {
     },
     [setValue],
   );
+
+  const handleCondense = useCallback(async () => {
+    const description = getValues('task_description');
+    if (!description) return;
+    setIsCondensing(true);
+    try {
+      const result = await api.condenseDescription(description, profileValue || undefined);
+      setValue('task_description', result.condensed, { shouldValidate: true });
+      toast.success('Description condensed');
+    } catch (error) {
+      if (error instanceof ApiError) {
+        toast.error(`Failed to condense: ${error.message}`);
+      } else {
+        toast.error('Failed to condense description');
+      }
+    } finally {
+      setIsCondensing(false);
+    }
+  }, [getValues, setValue, profileValue]);
 
   // Design document import handlers
   const populateFromContent = useCallback(
@@ -505,12 +527,33 @@ export default function DevelopPage() {
 
           {/* Description */}
           <div className="relative">
-            <Label
-              htmlFor="task_description"
-              className="absolute -top-2 left-3 bg-card px-1 text-[11px] font-heading uppercase tracking-wider text-muted-foreground z-10"
-            >
-              Description
-            </Label>
+            <div className="absolute -top-2 left-3 bg-card px-1 z-10 flex items-center gap-2">
+              <Label
+                htmlFor="task_description"
+                className="text-[11px] font-heading uppercase tracking-wider text-muted-foreground"
+              >
+                Description
+              </Label>
+              {hasSelectedIssue && descriptionLength > 2000 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={isCondensing}
+                  onClick={handleCondense}
+                  className="h-5 px-1.5 text-[10px] font-heading uppercase tracking-wide text-muted-foreground hover:text-primary"
+                >
+                  {isCondensing ? (
+                    <>
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                      Condensing...
+                    </>
+                  ) : (
+                    'Condense with AI'
+                  )}
+                </Button>
+              )}
+            </div>
             <Textarea
               id="task_description"
               placeholder="Add a logout button to the top navigation bar..."

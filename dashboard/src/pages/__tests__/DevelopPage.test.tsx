@@ -17,6 +17,13 @@ vi.mock('@/api/client', () => ({
     createWorkflow: vi.fn(),
     validatePath: vi.fn(),
     getGitHubIssues: vi.fn(),
+    condenseDescription: vi.fn(),
+  },
+  ApiError: class ApiError extends Error {
+    constructor(message: string, public code: string, public status: number) {
+      super(message);
+      this.name = 'ApiError';
+    }
   },
 }));
 
@@ -45,6 +52,8 @@ vi.mock('@/components/PlanImportSection', () => ({
   PlanImportSection: () => <div data-testid="plan-import-section" />,
 }));
 
+const LONG_BODY = 'x'.repeat(2001);
+
 // Mock GitHubIssueCombobox
 vi.mock('@/components/GitHubIssueCombobox', () => ({
   GitHubIssueCombobox: ({
@@ -63,6 +72,12 @@ vi.mock('@/components/GitHubIssueCombobox', () => ({
         onClick={() => onSelect({ number: 42, title: 'Fix login bug', body: 'Login crashes on submit' })}
       >
         {value ? `#${value.number} — ${value.title}` : 'mock combobox'}
+      </button>
+      <button
+        data-testid="issue-combobox-long"
+        onClick={() => onSelect({ number: 99, title: 'Long issue', body: LONG_BODY })}
+      >
+        select long issue
       </button>
       {value && onClear && (
         <button data-testid="clear-issue-btn" onClick={onClear}>
@@ -186,6 +201,42 @@ describe('DevelopPage', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(/task id/i)).toHaveValue('');
       expect(screen.getByLabelText(/task id/i)).not.toHaveAttribute('readonly');
+    });
+  });
+
+  it('shows condense button when issue selected with long description', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.selectOptions(screen.getByTestId('profile-select'), 'test');
+    await waitFor(() => expect(screen.getByTestId('issue-combobox-long')).toBeInTheDocument());
+
+    await user.click(screen.getByTestId('issue-combobox-long'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /condense with ai/i })).toBeInTheDocument();
+    });
+  });
+
+  it('condense button calls API and updates description', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.condenseDescription).mockResolvedValue({ condensed: 'Condensed result' });
+    renderPage();
+
+    await user.selectOptions(screen.getByTestId('profile-select'), 'test');
+    await waitFor(() => expect(screen.getByTestId('issue-combobox-long')).toBeInTheDocument());
+
+    await user.click(screen.getByTestId('issue-combobox-long'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /condense with ai/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /condense with ai/i }));
+
+    await waitFor(() => {
+      expect(api.condenseDescription).toHaveBeenCalledWith(LONG_BODY, 'test');
+      expect(screen.getByLabelText(/description/i)).toHaveValue('Condensed result');
     });
   });
 });
