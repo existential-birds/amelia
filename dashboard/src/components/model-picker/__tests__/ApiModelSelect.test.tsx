@@ -19,12 +19,12 @@ const mockUseRecentModels = vi.mocked(useRecentModels);
 
 describe('ApiModelSelect', () => {
   let mockFetchModels: ReturnType<typeof vi.fn>;
-  let mockLookupModelById: ReturnType<typeof vi.fn>;
-  let addRecentModel: ReturnType<typeof vi.fn>;
+  let mockLookupModelById: ReturnType<typeof vi.fn<(modelId: string) => Promise<ModelInfo>>>;
+  let addRecentModel: ReturnType<typeof vi.fn<(modelId: string) => void>>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    addRecentModel = vi.fn();
+    addRecentModel = vi.fn<(modelId: string) => void>();
 
     // Default useRecentModels return value; override per-test as needed
     mockUseRecentModels.mockReturnValue({
@@ -34,7 +34,7 @@ describe('ApiModelSelect', () => {
     });
 
     mockFetchModels = vi.fn();
-    mockLookupModelById = vi.fn();
+    mockLookupModelById = vi.fn<(modelId: string) => Promise<ModelInfo>>();
     vi.mocked(useModelsStore).mockImplementation(
       makeMockModelsStore({
         fetchModels: mockFetchModels,
