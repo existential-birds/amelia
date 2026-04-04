@@ -33,6 +33,8 @@ class ModelCacheEntry(BaseModel):
     max_output_tokens: int | None = None
     input_cost_per_m: float | None = None
     output_cost_per_m: float | None = None
+    cache_read_cost_per_m: float | None = None
+    cache_write_cost_per_m: float | None = None
     capabilities: ModelCacheCapabilities = Field(default_factory=ModelCacheCapabilities)
     modalities: ModelCacheModalities = Field(default_factory=ModelCacheModalities)
     raw_response: dict[str, Any] | None = None
@@ -137,6 +139,8 @@ def normalize_openrouter_model(
         max_output_tokens=normalized_output,
         input_cost_per_m=_parse_price_per_million(pricing.get("prompt")),
         output_cost_per_m=_parse_price_per_million(pricing.get("completion")),
+        cache_read_cost_per_m=_parse_price_per_million(pricing.get("cache_read")),
+        cache_write_cost_per_m=_parse_price_per_million(pricing.get("cache_write")),
         capabilities=ModelCacheCapabilities(
             tool_call=True,
             reasoning="reasoning" in supported_parameters,

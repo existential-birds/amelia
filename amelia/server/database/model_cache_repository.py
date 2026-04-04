@@ -34,12 +34,16 @@ class ModelCacheRepository:
             """
             INSERT INTO model_cache (
                 id, name, provider, context_length, max_output_tokens,
-                input_cost_per_m, output_cost_per_m, capabilities, modalities,
+                input_cost_per_m, output_cost_per_m,
+                cache_read_cost_per_m, cache_write_cost_per_m,
+                capabilities, modalities,
                 raw_response, fetched_at, created_at, updated_at
             ) VALUES (
                 $1, $2, $3, $4, $5,
-                $6, $7, $8, $9,
-                $10, $11, $12, NOW()
+                $6, $7,
+                $8, $9,
+                $10, $11,
+                $12, $13, $14, NOW()
             )
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
@@ -48,6 +52,8 @@ class ModelCacheRepository:
                 max_output_tokens = EXCLUDED.max_output_tokens,
                 input_cost_per_m = EXCLUDED.input_cost_per_m,
                 output_cost_per_m = EXCLUDED.output_cost_per_m,
+                cache_read_cost_per_m = EXCLUDED.cache_read_cost_per_m,
+                cache_write_cost_per_m = EXCLUDED.cache_write_cost_per_m,
                 capabilities = EXCLUDED.capabilities,
                 modalities = EXCLUDED.modalities,
                 raw_response = EXCLUDED.raw_response,
@@ -61,6 +67,8 @@ class ModelCacheRepository:
             entry.max_output_tokens,
             entry.input_cost_per_m,
             entry.output_cost_per_m,
+            entry.cache_read_cost_per_m,
+            entry.cache_write_cost_per_m,
             entry.capabilities.model_dump(),
             entry.modalities.model_dump(),
             entry.raw_response,
@@ -98,6 +106,8 @@ class ModelCacheRepository:
             max_output_tokens=row["max_output_tokens"],
             input_cost_per_m=row["input_cost_per_m"],
             output_cost_per_m=row["output_cost_per_m"],
+            cache_read_cost_per_m=row["cache_read_cost_per_m"],
+            cache_write_cost_per_m=row["cache_write_cost_per_m"],
             capabilities=ModelCacheCapabilities(**(row["capabilities"] or {})),
             modalities=ModelCacheModalities(**(row["modalities"] or {})),
             raw_response=row["raw_response"],

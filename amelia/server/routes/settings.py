@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 from asyncpg import UniqueViolationError
+from loguru import logger
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -189,10 +190,20 @@ async def fetch_openrouter_model_entry(model_id: str) -> ModelCacheEntry | None:
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(OPENROUTER_MODELS_URL, headers=headers)
-        response.raise_for_status()
-        data = response.json()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(OPENROUTER_MODELS_URL, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+    except httpx.ConnectError as e:
+        logger.warning("OpenRouter connect failed", error=str(e))
+        return None
+    except httpx.TimeoutException as e:
+        logger.warning("OpenRouter request timed out", error=str(e))
+        return None
+    except httpx.HTTPStatusError as e:
+        logger.warning("OpenRouter returned error", status=e.response.status_code)
+        return None
 
     for model_data in data.get("data", []):
         if not isinstance(model_data, dict) or model_data.get("id") != model_id:

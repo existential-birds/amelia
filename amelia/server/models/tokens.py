@@ -100,8 +100,8 @@ def _pricing_from_cache_entry(entry: ModelCacheEntry) -> ModelPricing | None:
     return ModelPricing(
         input=entry.input_cost_per_m,
         output=entry.output_cost_per_m,
-        cache_read=0.0,
-        cache_write=0.0,
+        cache_read=entry.cache_read_cost_per_m or 0.0,
+        cache_write=entry.cache_write_cost_per_m or 0.0,
     )
 
 

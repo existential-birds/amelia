@@ -194,7 +194,18 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       !('id' in data) ||
       typeof data.id !== 'string' ||
       !('name' in data) ||
-      typeof data.name !== 'string'
+      typeof data.name !== 'string' ||
+      !('provider' in data) ||
+      typeof data.provider !== 'string' ||
+      !('capabilities' in data) ||
+      data.capabilities === null ||
+      typeof data.capabilities !== 'object' ||
+      !('limit' in data) ||
+      data.limit === null ||
+      typeof data.limit !== 'object' ||
+      !('cost' in data) ||
+      data.cost === null ||
+      typeof data.cost !== 'object'
     ) {
       throw new Error('Invalid response shape from model lookup API');
     }
