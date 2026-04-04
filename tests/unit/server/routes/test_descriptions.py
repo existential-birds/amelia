@@ -40,6 +40,7 @@ def github_profile() -> Profile:
         repo_root="/tmp/repo",
         agents={
             "architect": AgentConfig(driver="api", model="openai/gpt-4o"),
+            "developer": AgentConfig(driver="api", model="openai/gpt-4o-mini"),
         },
     )
 
@@ -56,8 +57,8 @@ def noop_profile() -> Profile:
     )
 
 
-def _make_mock_driver(condensed_text: str = "Condensed text here") -> MagicMock:
-    """Create a mock driver whose generate method returns a condensed string."""
+def _mock_driver_and_condenser(condensed_text: str = "Condensed text here") -> MagicMock:
+    """Create a mock driver for patching get_driver."""
     driver = MagicMock()
     driver.generate = AsyncMock(return_value=(condensed_text, MagicMock()))
     return driver
@@ -71,11 +72,13 @@ class TestCondenseDescription:
         github_profile: Profile,
     ) -> None:
         mock_profile_repo.get_profile.return_value = github_profile
-        mock_driver = _make_mock_driver("Core task: fix the login bug")
 
         with patch(
+            "amelia.server.routes.descriptions.condense_description",
+            new=AsyncMock(return_value=("Core task: fix the login bug", None)),
+        ), patch(
             "amelia.server.routes.descriptions.get_driver",
-            return_value=mock_driver,
+            return_value=_mock_driver_and_condenser(),
         ):
             response = client.post(
                 "/api/descriptions/condense",
@@ -132,11 +135,13 @@ class TestCondenseDescription:
         github_profile: Profile,
     ) -> None:
         mock_profile_repo.get_active_profile.return_value = github_profile
-        mock_driver = _make_mock_driver("Condensed from active profile")
 
         with patch(
+            "amelia.server.routes.descriptions.condense_description",
+            new=AsyncMock(return_value=("Condensed from active profile", None)),
+        ), patch(
             "amelia.server.routes.descriptions.get_driver",
-            return_value=mock_driver,
+            return_value=_mock_driver_and_condenser(),
         ):
             response = client.post(
                 "/api/descriptions/condense",
@@ -166,12 +171,13 @@ class TestCondenseDescription:
         github_profile: Profile,
     ) -> None:
         mock_profile_repo.get_profile.return_value = github_profile
-        mock_driver = MagicMock()
-        mock_driver.generate = AsyncMock(side_effect=RuntimeError("LLM unreachable"))
 
         with patch(
+            "amelia.server.routes.descriptions.condense_description",
+            new=AsyncMock(side_effect=RuntimeError("LLM unreachable")),
+        ), patch(
             "amelia.server.routes.descriptions.get_driver",
-            return_value=mock_driver,
+            return_value=_mock_driver_and_condenser(),
         ):
             response = client.post(
                 "/api/descriptions/condense",
@@ -180,3 +186,29 @@ class TestCondenseDescription:
 
         assert response.status_code == 500
         assert "condense" in response.json()["detail"].lower()
+
+    def test_uses_custom_agent_type_when_provided(
+        self,
+        client: TestClient,
+        mock_profile_repo: AsyncMock,
+        github_profile: Profile,
+    ) -> None:
+        mock_profile_repo.get_profile.return_value = github_profile
+        mock_driver = _mock_driver_and_condenser("Result")
+
+        with patch(
+            "amelia.server.routes.descriptions.condense_description",
+            new=AsyncMock(return_value=("Result", None)),
+        ) as mock_condense, patch(
+            "amelia.server.routes.descriptions.get_driver",
+            return_value=mock_driver,
+        ) as mock_get_driver:
+            response = client.post(
+                "/api/descriptions/condense",
+                json={"description": "Some text", "profile": "test", "agent_type": "developer"},
+            )
+
+        assert response.status_code == 200
+        # Verify get_driver was called with developer agent's config
+        mock_get_driver.assert_called_once_with("api", model="openai/gpt-4o-mini", cwd=".")
+        mock_condense.assert_called_once()

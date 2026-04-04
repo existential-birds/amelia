@@ -309,4 +309,15 @@ Classify every comment provided. Do not skip any.""",
 - Group related fixes into a single logical change.
 - Ensure all existing tests still pass after your changes.""",
     ),
+    "condenser.system": PromptDefault(
+        agent="condenser",
+        name="Condenser System Prompt",
+        description="Instructions for extracting core task description from verbose issue bodies",
+        content=(
+            "Extract the task description from this GitHub issue body. "
+            "Keep the problem statement and acceptance criteria. "
+            "Remove implementation plans, technical specs, and checklists. "
+            "Return plain text under 4000 characters."
+        ),
+    ),
 }
