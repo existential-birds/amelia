@@ -7,8 +7,8 @@ from typing import Any
 
 import httpx
 from asyncpg import UniqueViolationError
-from loguru import logger
 from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from amelia.core.types import (
