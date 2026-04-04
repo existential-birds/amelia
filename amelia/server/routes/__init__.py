@@ -6,6 +6,7 @@ event streaming.
 
 Exports:
     config_router: Configuration endpoint for dashboard.
+    descriptions_router: AI-powered description condensation endpoint.
     files_router: File access endpoints for design document import.
     health_router: Health check and readiness endpoints.
     paths_router: Path validation endpoints for worktree verification.
@@ -15,6 +16,7 @@ Exports:
     workflows_router: REST endpoints for workflow management.
 """
 from amelia.server.routes.config import router as config_router
+from amelia.server.routes.descriptions import router as descriptions_router
 from amelia.server.routes.files import router as files_router
 from amelia.server.routes.github import router as github_router
 from amelia.server.routes.health import router as health_router
@@ -28,6 +30,7 @@ from amelia.server.routes.workflows import router as workflows_router
 
 __all__ = [
     "config_router",
+    "descriptions_router",
     "files_router",
     "github_router",
     "health_router",
