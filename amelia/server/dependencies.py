@@ -7,7 +7,12 @@ from fastapi import HTTPException
 from amelia.knowledge.repository import KnowledgeRepository
 from amelia.knowledge.service import KnowledgeService
 from amelia.server.config import ServerConfig
-from amelia.server.database import ProfileRepository, SettingsRepository, WorkflowRepository
+from amelia.server.database import (
+    ModelCacheRepository,
+    ProfileRepository,
+    SettingsRepository,
+    WorkflowRepository,
+)
 from amelia.server.database.connection import Database
 from amelia.server.database.metrics_repository import MetricsRepository
 from amelia.server.orchestrator.service import OrchestratorService
@@ -53,6 +58,10 @@ def get_settings_repository() -> SettingsRepository:
 
 def get_profile_repository() -> ProfileRepository:
     return ProfileRepository(get_database())
+
+
+def get_model_cache_repository() -> ModelCacheRepository:
+    return ModelCacheRepository(get_database())
 
 
 def set_orchestrator(orch: OrchestratorService) -> None:

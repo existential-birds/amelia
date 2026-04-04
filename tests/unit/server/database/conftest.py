@@ -50,7 +50,7 @@ async def db_with_schema() -> AsyncGenerator[Database, None]:
                 workflow_prompt_versions, prompt_versions, prompts,
                 brainstorm_artifacts, brainstorm_messages, brainstorm_sessions,
                 token_usage, workflow_log, workflows,
-                profiles, server_settings
+                profiles, server_settings, model_cache
             CASCADE
         """)
         yield db

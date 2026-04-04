@@ -8,6 +8,7 @@ operations for workflow state.
 from amelia.server.database.connection import Database
 from amelia.server.database.metrics_repository import MetricsRepository
 from amelia.server.database.migrator import Migrator
+from amelia.server.database.model_cache_repository import ModelCacheRepository
 from amelia.server.database.profile_repository import ProfileRecord, ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.database.settings_repository import ServerSettings, SettingsRepository
@@ -17,6 +18,7 @@ __all__ = [
     "Database",
     "MetricsRepository",
     "Migrator",
+    "ModelCacheRepository",
     "ProfileRecord",
     "ProfileRepository",
     "ServerSettings",

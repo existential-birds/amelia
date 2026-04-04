@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import type { ModelInfo } from '@/components/model-picker/types';
 import { AGENT_MODEL_REQUIREMENTS, MODELS_API_URL } from '@/components/model-picker/constants';
-import { flattenModelsData, filterModelsByRequirements } from '@/lib/models-utils';
+import { flattenModelsData, filterModelsByRequirements, upsertModelInfo } from '@/lib/models-utils';
 import { logger } from '@/lib/logger';
+import { API_BASE_URL, createTimeoutSignal } from '@/api/utils';
 
 /**
  * Custom error class for fetch timeout events.
@@ -37,8 +38,17 @@ interface ModelsState {
   fetchModels: () => Promise<void>;
   /** Force refresh models even if already loaded */
   refreshModels: () => Promise<void>;
+  /** Look up a single model by ID via the backend and merge it into the store */
+  lookupModelById: (modelId: string) => Promise<ModelInfo>;
   /** Get models filtered by agent requirements */
   getModelsForAgent: (agentKey: string) => ModelInfo[];
+}
+
+function encodeModelPath(modelId: string): string {
+  return modelId
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
 }
 
 /**
@@ -150,6 +160,57 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         clearTimeout(timeoutId);
       }
     }
+  },
+
+  lookupModelById: async (modelId: string) => {
+    const trimmedModelId = modelId.trim();
+    const response = await fetch(`${API_BASE_URL}/models/${encodeModelPath(trimmedModelId)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      signal: createTimeoutSignal(),
+    });
+
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      throw new Error(`Invalid JSON response from model lookup API: ${parseError}`);
+    }
+
+    if (!response.ok) {
+      const detail =
+        typeof data === 'object' &&
+        data !== null &&
+        'detail' in data &&
+        typeof data.detail === 'string'
+          ? data.detail
+          : `HTTP ${response.status}`;
+      throw new Error(detail);
+    }
+
+    if (
+      !data ||
+      typeof data !== 'object' ||
+      !('id' in data) ||
+      typeof data.id !== 'string' ||
+      !('name' in data) ||
+      typeof data.name !== 'string'
+    ) {
+      throw new Error('Invalid response shape from model lookup API');
+    }
+
+    const model = data as ModelInfo;
+    set((state) => {
+      const models = upsertModelInfo(state.models, model);
+      const providers = [...new Set(models.map((entry) => entry.provider))];
+
+      return {
+        models,
+        providers,
+      };
+    });
+
+    return model;
   },
 
   getModelsForAgent: (agentKey: string) => {

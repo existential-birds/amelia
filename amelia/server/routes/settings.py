@@ -1,9 +1,11 @@
 # amelia/server/routes/settings.py
 """API routes for server settings and profiles."""
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+import httpx
 from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -18,16 +20,25 @@ from amelia.core.types import (
     TrackerType,
 )
 from amelia.server.database import (
+    ModelCacheRepository,
     ProfileRepository,
     SettingsRepository,
 )
 from amelia.server.dependencies import (
+    get_model_cache_repository,
     get_profile_repository,
     get_settings_repository,
+)
+from amelia.server.models.model_cache import (
+    ModelCacheEntry,
+    ModelLookupResponse,
+    normalize_openrouter_model,
+    to_model_lookup_response,
 )
 
 
 router = APIRouter(prefix="/api", tags=["settings"])
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models?supported_parameters=tools"
 
 
 def _validate_repo_root_absolute(v: str | None) -> str | None:
@@ -171,6 +182,26 @@ class ProfileUpdate(BaseModel):
         return self
 
 
+async def fetch_openrouter_model_entry(model_id: str) -> ModelCacheEntry | None:
+    """Fetch and normalize a single OpenRouter model by scanning the model catalog."""
+    headers: dict[str, str] = {}
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(OPENROUTER_MODELS_URL, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+    for model_data in data.get("data", []):
+        if not isinstance(model_data, dict) or model_data.get("id") != model_id:
+            continue
+        return normalize_openrouter_model(model_data)
+
+    return None
+
+
 # Server settings endpoints
 @router.get("/settings", response_model=ServerSettingsResponse)
 async def get_server_settings(
@@ -204,6 +235,24 @@ async def update_server_settings(
         max_concurrent=settings.max_concurrent,
         pr_polling_enabled=settings.pr_polling_enabled,
     )
+
+
+@router.get("/models/{model_id:path}", response_model=ModelLookupResponse)
+async def get_model(
+    model_id: str,
+    repo: ModelCacheRepository = Depends(get_model_cache_repository),
+) -> ModelLookupResponse:
+    """Resolve a single OpenRouter model id using cache-first lookup."""
+    cached = await repo.get_model(model_id)
+    if cached is not None and not await repo.is_stale(model_id):
+        return to_model_lookup_response(cached)
+
+    fetched = await fetch_openrouter_model_entry(model_id)
+    if fetched is None:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    await repo.upsert_model(fetched)
+    return to_model_lookup_response(fetched)
 
 
 # Profile endpoints

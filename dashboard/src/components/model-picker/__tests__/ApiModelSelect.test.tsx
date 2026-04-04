@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ApiModelSelect } from '../ApiModelSelect';
 import { useModelsStore } from '@/store/useModelsStore';
 import { useRecentModels } from '@/hooks/useRecentModels';
 import { makeMockModelsStore } from '@/test/mocks/modelsStore';
+import type { ModelInfo } from '../types';
 
 // Mock the store
 vi.mock('@/store/useModelsStore');
@@ -17,20 +19,27 @@ const mockUseRecentModels = vi.mocked(useRecentModels);
 
 describe('ApiModelSelect', () => {
   let mockFetchModels: ReturnType<typeof vi.fn>;
+  let mockLookupModelById: ReturnType<typeof vi.fn>;
+  let addRecentModel: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    addRecentModel = vi.fn();
 
     // Default useRecentModels return value; override per-test as needed
     mockUseRecentModels.mockReturnValue({
       recentModelIds: ['claude-sonnet-4'],
-      addRecentModel: vi.fn(),
+      addRecentModel,
       hasParseError: false,
     });
 
     mockFetchModels = vi.fn();
+    mockLookupModelById = vi.fn();
     vi.mocked(useModelsStore).mockImplementation(
-      makeMockModelsStore({ fetchModels: mockFetchModels })
+      makeMockModelsStore({
+        fetchModels: mockFetchModels,
+        lookupModelById: mockLookupModelById,
+      })
     );
   });
 
@@ -187,5 +196,90 @@ describe('ApiModelSelect', () => {
 
     // onChange should NOT have been called — the browse sentinel opens the sheet instead
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('looks up a typed model id and selects it', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    mockLookupModelById.mockResolvedValue({
+      id: 'meta-llama/llama-4-scout',
+      name: 'Llama 4 Scout',
+      provider: 'meta-llama',
+      capabilities: { tool_call: true, reasoning: true, structured_output: true },
+      cost: { input: 0.2, output: 0.8 },
+      limit: { context: 1_000_000, output: 8_000 },
+      modalities: { input: ['text'], output: ['text'] },
+    } satisfies ModelInfo);
+
+    render(
+      <ApiModelSelect
+        agentKey="architect"
+        value=""
+        onChange={onChange}
+      />
+    );
+
+    await user.type(
+      screen.getByPlaceholderText(/type openrouter model id/i),
+      'meta-llama/llama-4-scout'
+    );
+    await user.click(screen.getByRole('button', { name: /use model code/i }));
+
+    await waitFor(() => {
+      expect(mockLookupModelById).toHaveBeenCalledWith('meta-llama/llama-4-scout');
+      expect(onChange).toHaveBeenCalledWith('meta-llama/llama-4-scout');
+      expect(addRecentModel).toHaveBeenCalledWith('meta-llama/llama-4-scout');
+    });
+  });
+
+  it('shows an inline error when typed model lookup fails', async () => {
+    const user = userEvent.setup();
+    mockLookupModelById.mockRejectedValue(new Error('Model not found'));
+
+    render(
+      <ApiModelSelect
+        agentKey="architect"
+        value="claude-sonnet-4"
+        onChange={vi.fn()}
+      />
+    );
+
+    await user.clear(screen.getByPlaceholderText(/type openrouter model id/i));
+    await user.type(screen.getByPlaceholderText(/type openrouter model id/i), 'unknown/not-real');
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByText('Model not found')).toBeInTheDocument();
+    });
+  });
+
+  it('warns when a resolved model does not meet agent requirements but still selects it', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    mockLookupModelById.mockResolvedValue({
+      id: 'openai/gpt-4o',
+      name: 'GPT-4o',
+      provider: 'openai',
+      capabilities: { tool_call: true, reasoning: false, structured_output: true },
+      cost: { input: 2.5, output: 10 },
+      limit: { context: 128_000, output: 16_384 },
+      modalities: { input: ['text'], output: ['text'] },
+    } satisfies ModelInfo);
+
+    render(
+      <ApiModelSelect
+        agentKey="architect"
+        value=""
+        onChange={onChange}
+      />
+    );
+
+    await user.type(screen.getByPlaceholderText(/type openrouter model id/i), 'openai/gpt-4o');
+    await user.click(screen.getByRole('button', { name: /use model code/i }));
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith('openai/gpt-4o');
+      expect(screen.getByText(/may not meet architect requirements/i)).toBeInTheDocument();
+    });
   });
 });

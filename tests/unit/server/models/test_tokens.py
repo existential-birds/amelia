@@ -10,6 +10,11 @@ from uuid import uuid4
 import httpx
 import pytest
 
+from amelia.server.models.model_cache import (
+    ModelCacheCapabilities,
+    ModelCacheEntry,
+    ModelCacheModalities,
+)
 from amelia.server.models.tokens import (
     STATIC_FALLBACK_PRICING,
     ModelPricing,
@@ -34,6 +39,27 @@ def make_usage(**overrides: Any) -> TokenUsage:
         "timestamp": datetime(2025, 1, 1, 12, 0, 0),
     }
     return TokenUsage(**{**defaults, **overrides})
+
+
+def make_cached_model_entry(
+    model_id: str = "anthropic/claude-sonnet-4",
+) -> ModelCacheEntry:
+    """Create a cached model entry with pricing data."""
+    now = datetime(2025, 1, 1, 12, 0, 0)
+    return ModelCacheEntry(
+        id=model_id,
+        name="Claude Sonnet 4",
+        provider="anthropic",
+        context_length=200_000,
+        max_output_tokens=16_000,
+        input_cost_per_m=3.0,
+        output_cost_per_m=15.0,
+        capabilities=ModelCacheCapabilities(tool_call=True, reasoning=True, structured_output=True),
+        modalities=ModelCacheModalities(input=["text"], output=["text"]),
+        raw_response={"id": model_id},
+        fetched_at=now,
+        created_at=now,
+    )
 
 
 class TestTokenUsage:
@@ -485,6 +511,28 @@ class TestGetPricing:
         pricing = await get_pricing("claude-sonnet-4-5-20251101")
         assert pricing is not None
         assert pricing.input == 99.0  # live, not static 3.0
+
+    async def test_prefers_fresh_database_model_cache_when_available(self) -> None:
+        """Database-backed model metadata is used before live pricing fetch."""
+        self._reset_cache()
+        repo = MagicMock()
+        repo.get_model = AsyncMock(return_value=make_cached_model_entry())
+        repo.is_stale = AsyncMock(return_value=False)
+
+        with (
+            patch("amelia.server.models.tokens._get_model_cache_repository", return_value=repo),
+            patch(
+                "amelia.server.models.tokens.fetch_openrouter_pricing",
+                new_callable=AsyncMock,
+                return_value={},
+            ) as fetch_pricing,
+        ):
+            pricing = await get_pricing("anthropic/claude-sonnet-4")
+
+        assert pricing is not None
+        assert pricing.input == 3.0
+        assert pricing.output == 15.0
+        fetch_pricing.assert_not_awaited()
 
 
 class TestCalculateTokenCost:
