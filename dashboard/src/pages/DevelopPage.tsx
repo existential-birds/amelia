@@ -26,7 +26,7 @@ import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import type { GitHubIssueSummary } from '@/types';
+import type { ConfigResponse, GitHubIssueSummary } from '@/types';
 
 /**
  * Zod schema for the develop form validation.
@@ -72,11 +72,13 @@ export default function DevelopPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [serverWorkingDir, setServerWorkingDir] = useState('');
+  const [config, setConfig] = useState<ConfigResponse | null>(null);
   const [planData, setPlanData] = useState<PlanData>({});
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [trackerType, setTrackerType] = useState<string>('');
   const [hasSelectedIssue, setHasSelectedIssue] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<GitHubIssueSummary | null>(null);
+  const [originalDescription, setOriginalDescription] = useState<string | null>(null);
 
   const hasExternalPlan = !!(planData.plan_file || planData.plan_content);
   const hasDesignDoc = !!importPath;
@@ -114,12 +116,13 @@ export default function DevelopPage() {
 
     async function init() {
       try {
-        const config = await api.getConfig();
+        const fetchedConfig = await api.getConfig();
         if (!mounted) return;
-        setServerWorkingDir(config.repo_root);
-        setValue('worktree_path', config.repo_root, { shouldValidate: true });
-        if (config.active_profile) {
-          setValue('profile', config.active_profile, { shouldValidate: true });
+        setConfig(fetchedConfig);
+        setServerWorkingDir(fetchedConfig.repo_root);
+        setValue('worktree_path', fetchedConfig.repo_root, { shouldValidate: true });
+        if (fetchedConfig.active_profile) {
+          setValue('profile', fetchedConfig.active_profile, { shouldValidate: true });
         }
       } catch {
         if (!mounted) return;
@@ -191,6 +194,7 @@ export default function DevelopPage() {
       const body = 'body' in issue ? issue.body : '';
       setValue('task_description', body || '', { shouldValidate: true });
       setHasSelectedIssue(true);
+      setOriginalDescription(null);
       if ('body' in issue) {
         setSelectedIssue(issue as GitHubIssueSummary);
       }
@@ -204,12 +208,14 @@ export default function DevelopPage() {
   const handleCondense = useCallback(async () => {
     const description = getValues('task_description');
     if (!description) return;
+    setOriginalDescription(description);
     setIsCondensing(true);
     try {
       const result = await api.condenseDescription(description, profileValue || undefined);
       setValue('task_description', result.condensed, { shouldValidate: true });
       toast.success('Description condensed');
     } catch (error) {
+      setOriginalDescription(null);
       if (error instanceof ApiError) {
         toast.error(`Failed to condense: ${error.message}`);
       } else {
@@ -219,6 +225,12 @@ export default function DevelopPage() {
       setIsCondensing(false);
     }
   }, [getValues, setValue, profileValue]);
+
+  const handleRestoreOriginal = useCallback(() => {
+    if (originalDescription === null) return;
+    setValue('task_description', originalDescription, { shouldValidate: true });
+    setOriginalDescription(null);
+  }, [originalDescription, setValue]);
 
   // Design document import handlers
   const populateFromContent = useCallback(
@@ -534,7 +546,7 @@ export default function DevelopPage() {
               >
                 Description
               </Label>
-              {hasSelectedIssue && descriptionLength > 2000 && (
+              {hasSelectedIssue && descriptionLength > (config?.condense_threshold_chars ?? 2000) && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -551,6 +563,17 @@ export default function DevelopPage() {
                   ) : (
                     'Condense with AI'
                   )}
+                </Button>
+              )}
+              {originalDescription !== null && originalDescription !== descriptionValue && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRestoreOriginal}
+                  className="h-5 px-1.5 text-[10px] font-heading uppercase tracking-wide text-muted-foreground hover:text-primary"
+                >
+                  Restore original
                 </Button>
               )}
             </div>

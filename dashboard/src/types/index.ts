@@ -907,6 +907,9 @@ export interface ConfigResponse {
 
   /** Full profile info for the active profile. */
   active_profile_info: ConfigProfileInfo | null;
+
+  /** Character count threshold above which the condense button appears. */
+  condense_threshold_chars: number;
 }
 
 // ============================================================================

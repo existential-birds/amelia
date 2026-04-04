@@ -10,22 +10,20 @@ import { MemoryRouter } from 'react-router-dom';
 import { api } from '@/api/client';
 import DevelopPage from '../DevelopPage';
 
-// Mock api client
-vi.mock('@/api/client', () => ({
-  api: {
-    getConfig: vi.fn(),
-    createWorkflow: vi.fn(),
-    validatePath: vi.fn(),
-    getGitHubIssues: vi.fn(),
-    condenseDescription: vi.fn(),
-  },
-  ApiError: class ApiError extends Error {
-    constructor(message: string, public code: string, public status: number) {
-      super(message);
-      this.name = 'ApiError';
-    }
-  },
-}));
+// Mock api client using vi.importActual for ApiError to avoid inline class duplication
+vi.mock('@/api/client', async () => {
+  const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client');
+  return {
+    ApiError: actual.ApiError,
+    api: {
+      getConfig: vi.fn(),
+      createWorkflow: vi.fn(),
+      validatePath: vi.fn(),
+      getGitHubIssues: vi.fn(),
+      condenseDescription: vi.fn(),
+    },
+  };
+});
 
 // Mock ProfileSelect to simplify - it fetches its own data
 vi.mock('@/components/ProfileSelect', () => ({
@@ -97,7 +95,7 @@ vi.mock('@/api/settings', () => ({
 
 // Mock toast
 vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
 function renderPage() {
@@ -116,6 +114,7 @@ describe('DevelopPage', () => {
       active_profile: 'test',
       max_concurrent: 3,
       active_profile_info: { name: 'test', driver: 'cli:claude', model: 'opus' },
+      condense_threshold_chars: 2000,
     });
     vi.mocked(api.validatePath).mockResolvedValue({
       exists: true,
@@ -237,6 +236,69 @@ describe('DevelopPage', () => {
     await waitFor(() => {
       expect(api.condenseDescription).toHaveBeenCalledWith(LONG_BODY, 'test');
       expect(screen.getByLabelText(/description/i)).toHaveValue('Condensed result');
+    });
+  });
+
+  it('shows restore original button after condensing', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.condenseDescription).mockResolvedValue({ condensed: 'Condensed result' });
+    renderPage();
+
+    await user.selectOptions(screen.getByTestId('profile-select'), 'test');
+    await waitFor(() => expect(screen.getByTestId('issue-combobox-long')).toBeInTheDocument());
+
+    await user.click(screen.getByTestId('issue-combobox-long'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /condense with ai/i })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /condense with ai/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /restore original/i })).toBeInTheDocument();
+    });
+  });
+
+  it('restore original button restores the description and disappears', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.condenseDescription).mockResolvedValue({ condensed: 'Condensed result' });
+    renderPage();
+
+    await user.selectOptions(screen.getByTestId('profile-select'), 'test');
+    await waitFor(() => expect(screen.getByTestId('issue-combobox-long')).toBeInTheDocument());
+
+    await user.click(screen.getByTestId('issue-combobox-long'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /condense with ai/i })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /condense with ai/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /restore original/i })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /restore original/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/description/i)).toHaveValue(LONG_BODY);
+      expect(screen.queryByRole('button', { name: /restore original/i })).not.toBeInTheDocument();
+    });
+  });
+
+  it('clears restore button when a new issue is selected', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.condenseDescription).mockResolvedValue({ condensed: 'Condensed result' });
+    renderPage();
+
+    await user.selectOptions(screen.getByTestId('profile-select'), 'test');
+    await waitFor(() => expect(screen.getByTestId('issue-combobox-long')).toBeInTheDocument());
+
+    // Select long issue and condense
+    await user.click(screen.getByTestId('issue-combobox-long'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /condense with ai/i })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /condense with ai/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /restore original/i })).toBeInTheDocument());
+
+    // Select a new (short) issue — restore button should disappear
+    await user.click(screen.getByTestId('issue-combobox'));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /restore original/i })).not.toBeInTheDocument();
     });
   });
 });
