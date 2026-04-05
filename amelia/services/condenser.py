@@ -12,6 +12,8 @@ from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 if TYPE_CHECKING:
     from amelia.drivers.base import DriverInterface
 
+MAX_CONDENSED_CHARS = 4000
+
 
 async def condense_description(
     description: str,
@@ -33,5 +35,8 @@ async def condense_description(
         prompt=description,
         system_prompt=effective_prompt,
     )
-    logger.debug("Condense complete", description_len=len(description), result_len=len(str(result)))
-    return str(result), session_id
+    condensed = str(result).strip()
+    if len(condensed) > MAX_CONDENSED_CHARS:
+        condensed = condensed[:MAX_CONDENSED_CHARS]
+    logger.debug("Condense complete", description_len=len(description), result_len=len(condensed))
+    return condensed, session_id

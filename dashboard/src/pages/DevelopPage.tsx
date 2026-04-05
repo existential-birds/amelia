@@ -182,6 +182,7 @@ export default function DevelopPage() {
   const clearIssueSelection = useCallback(() => {
     setHasSelectedIssue(false);
     setSelectedIssue(null);
+    setOriginalDescription(null);
     setValue('issue_id', '', { shouldValidate: true });
     setValue('task_title', '', { shouldValidate: true });
     setValue('task_description', '', { shouldValidate: true });
@@ -199,16 +200,20 @@ export default function DevelopPage() {
         setSelectedIssue(issue as GitHubIssueSummary);
       }
       if (body && body.length > 5000) {
+        const expectedIssue = issue.number;
         // Auto-condense to preserve context from long descriptions
         setOriginalDescription(body);
         setIsCondensing(true);
         api
           .condenseDescription(body, profileValue || undefined)
           .then((result) => {
+            // Discard if user switched issues while request was in-flight
+            if (getValues('issue_id') !== String(expectedIssue)) return;
             setValue('task_description', result.condensed, { shouldValidate: true });
             toast.success('Long description was automatically condensed to fit the 5000 character limit');
           })
           .catch(() => {
+            if (getValues('issue_id') !== String(expectedIssue)) return;
             // Fall back to hard truncation so the form isn't stuck invalid
             setValue('task_description', body.slice(0, 5000), { shouldValidate: true });
             toast.warning(
@@ -218,7 +223,7 @@ export default function DevelopPage() {
           .finally(() => setIsCondensing(false));
       }
     },
-    [setValue, profileValue],
+    [setValue, getValues, profileValue],
   );
 
   const handleCondense = useCallback(async () => {
@@ -376,6 +381,7 @@ export default function DevelopPage() {
         setImportPath('');
         setHasSelectedIssue(false);
         setSelectedIssue(null);
+        setOriginalDescription(null);
       } catch (error) {
         if (error instanceof ApiError) {
           toast.error(error.message);

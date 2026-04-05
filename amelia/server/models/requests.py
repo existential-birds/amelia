@@ -342,7 +342,9 @@ class CondenseDescriptionRequest(BaseModel):
         agent_type: Agent config to use for LLM call. Defaults to "architect".
     """
 
-    description: Annotated[str, Field(min_length=1, description="Issue body to condense")]
+    description: Annotated[
+        str, Field(min_length=1, max_length=50_000, description="Issue body to condense")
+    ]
     profile: Annotated[str | None, Field(default=None)] = None
     agent_type: Annotated[
         str, Field(default="architect", description="Agent config to use for LLM call")
@@ -358,7 +360,7 @@ class CondenseDescriptionResponse(BaseModel):
         condensed: The condensed description text.
     """
 
-    condensed: str
+    condensed: Annotated[str, Field(max_length=5000)]
 
 
 class SetPlanRequest(BaseModel):

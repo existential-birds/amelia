@@ -46,7 +46,7 @@ async def condense_description_route(
             detail=f"Profile '{profile.name}' has no '{request.agent_type}' agent configured",
         ) from exc
 
-    driver = get_driver(agent_cfg.driver, model=agent_cfg.model, cwd=".")
+    driver = get_driver(agent_cfg.driver, model=agent_cfg.model, cwd=profile.repo_root)
 
     try:
         condensed, _session_id = await condense_description(request.description, driver)

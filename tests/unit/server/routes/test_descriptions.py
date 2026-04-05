@@ -210,5 +210,5 @@ class TestCondenseDescription:
 
         assert response.status_code == 200
         # Verify get_driver was called with developer agent's config
-        mock_get_driver.assert_called_once_with("api", model="openai/gpt-4o-mini", cwd=".")
+        mock_get_driver.assert_called_once_with("api", model="openai/gpt-4o-mini", cwd="/tmp/repo")
         mock_condense.assert_called_once()
