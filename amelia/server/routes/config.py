@@ -37,6 +37,10 @@ class ConfigResponse(BaseModel):
         default=None,
         description="Full profile info for the active profile"
     )
+    condense_threshold_chars: int = Field(
+        default=2000,
+        description="Character count threshold above which the condense button appears",
+    )
 
 
 @router.get("", response_model=ConfigResponse)

@@ -9,7 +9,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Zap, Upload, X } from 'lucide-react';
+import { Zap, Upload, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { api, ApiError } from '@/api/client';
@@ -26,7 +26,7 @@ import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import type { GitHubIssueSummary } from '@/types';
+import type { ConfigResponse, GitHubIssueSummary } from '@/types';
 
 /**
  * Zod schema for the develop form validation.
@@ -67,15 +67,18 @@ type DevelopFormData = z.infer<typeof developSchema>;
  */
 export default function DevelopPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCondensing, setIsCondensing] = useState(false);
   const [importPath, setImportPath] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [serverWorkingDir, setServerWorkingDir] = useState('');
+  const [config, setConfig] = useState<ConfigResponse | null>(null);
   const [planData, setPlanData] = useState<PlanData>({});
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [trackerType, setTrackerType] = useState<string>('');
   const [hasSelectedIssue, setHasSelectedIssue] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<GitHubIssueSummary | null>(null);
+  const [originalDescription, setOriginalDescription] = useState<string | null>(null);
 
   const hasExternalPlan = !!(planData.plan_file || planData.plan_content);
   const hasDesignDoc = !!importPath;
@@ -104,6 +107,8 @@ export default function DevelopPage() {
 
   const worktreePath = watch('worktree_path');
   const profileValue = watch('profile');
+  const descriptionValue = watch('task_description');
+  const descriptionLength = descriptionValue?.length ?? 0;
 
   // Fetch server config on mount
   useEffect(() => {
@@ -111,12 +116,13 @@ export default function DevelopPage() {
 
     async function init() {
       try {
-        const config = await api.getConfig();
+        const fetchedConfig = await api.getConfig();
         if (!mounted) return;
-        setServerWorkingDir(config.repo_root);
-        setValue('worktree_path', config.repo_root, { shouldValidate: true });
-        if (config.active_profile) {
-          setValue('profile', config.active_profile, { shouldValidate: true });
+        setConfig(fetchedConfig);
+        setServerWorkingDir(fetchedConfig.repo_root);
+        setValue('worktree_path', fetchedConfig.repo_root, { shouldValidate: true });
+        if (fetchedConfig.active_profile) {
+          setValue('profile', fetchedConfig.active_profile, { shouldValidate: true });
         }
       } catch {
         if (!mounted) return;
@@ -176,6 +182,7 @@ export default function DevelopPage() {
   const clearIssueSelection = useCallback(() => {
     setHasSelectedIssue(false);
     setSelectedIssue(null);
+    setOriginalDescription(null);
     setValue('issue_id', '', { shouldValidate: true });
     setValue('task_title', '', { shouldValidate: true });
     setValue('task_description', '', { shouldValidate: true });
@@ -188,15 +195,63 @@ export default function DevelopPage() {
       const body = 'body' in issue ? issue.body : '';
       setValue('task_description', body || '', { shouldValidate: true });
       setHasSelectedIssue(true);
+      setOriginalDescription(null);
       if ('body' in issue) {
         setSelectedIssue(issue as GitHubIssueSummary);
       }
-      if (body && body.length > 4900) {
-        toast.info('Issue description was truncated to fit the 5000 character limit');
+      if (body && body.length > 5000) {
+        const expectedIssue = issue.number;
+        // Auto-condense to preserve context from long descriptions
+        setOriginalDescription(body);
+        setIsCondensing(true);
+        api
+          .condenseDescription(body, profileValue || undefined)
+          .then((result) => {
+            // Discard if user switched issues while request was in-flight
+            if (getValues('issue_id') !== String(expectedIssue)) return;
+            setValue('task_description', result.condensed, { shouldValidate: true });
+            toast.success('Long description was automatically condensed to fit the 5000 character limit');
+          })
+          .catch(() => {
+            if (getValues('issue_id') !== String(expectedIssue)) return;
+            // Fall back to hard truncation so the form isn't stuck invalid
+            setValue('task_description', body.slice(0, 5000), { shouldValidate: true });
+            toast.warning(
+              'Could not auto-condense description. It was truncated to 5000 characters.',
+            );
+          })
+          .finally(() => setIsCondensing(false));
       }
     },
-    [setValue],
+    [setValue, getValues, profileValue],
   );
+
+  const handleCondense = useCallback(async () => {
+    const description = getValues('task_description');
+    if (!description) return;
+    setOriginalDescription(description);
+    setIsCondensing(true);
+    try {
+      const result = await api.condenseDescription(description, profileValue || undefined);
+      setValue('task_description', result.condensed, { shouldValidate: true });
+      toast.success('Description condensed');
+    } catch (error) {
+      setOriginalDescription(null);
+      if (error instanceof ApiError) {
+        toast.error(`Failed to condense: ${error.message}`);
+      } else {
+        toast.error('Failed to condense description');
+      }
+    } finally {
+      setIsCondensing(false);
+    }
+  }, [getValues, setValue, profileValue]);
+
+  const handleRestoreOriginal = useCallback(() => {
+    if (originalDescription === null) return;
+    setValue('task_description', originalDescription, { shouldValidate: true });
+    setOriginalDescription(null);
+  }, [originalDescription, setValue]);
 
   // Design document import handlers
   const populateFromContent = useCallback(
@@ -326,6 +381,7 @@ export default function DevelopPage() {
         setImportPath('');
         setHasSelectedIssue(false);
         setSelectedIssue(null);
+        setOriginalDescription(null);
       } catch (error) {
         if (error instanceof ApiError) {
           toast.error(error.message);
@@ -505,12 +561,44 @@ export default function DevelopPage() {
 
           {/* Description */}
           <div className="relative">
-            <Label
-              htmlFor="task_description"
-              className="absolute -top-2 left-3 bg-card px-1 text-[11px] font-heading uppercase tracking-wider text-muted-foreground z-10"
-            >
-              Description
-            </Label>
+            <div className="absolute -top-2 left-3 bg-card px-1 z-10 flex items-center gap-2">
+              <Label
+                htmlFor="task_description"
+                className="text-[11px] font-heading uppercase tracking-wider text-muted-foreground"
+              >
+                Description
+              </Label>
+              {hasSelectedIssue && descriptionLength > (config?.condense_threshold_chars ?? 2000) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={isCondensing}
+                  onClick={handleCondense}
+                  className="h-5 px-1.5 text-[10px] font-heading uppercase tracking-wide text-muted-foreground hover:text-primary"
+                >
+                  {isCondensing ? (
+                    <>
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                      Condensing...
+                    </>
+                  ) : (
+                    'Condense with AI'
+                  )}
+                </Button>
+              )}
+              {originalDescription !== null && originalDescription !== descriptionValue && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRestoreOriginal}
+                  className="h-5 px-1.5 text-[10px] font-heading uppercase tracking-wide text-muted-foreground hover:text-primary"
+                >
+                  Restore original
+                </Button>
+              )}
+            </div>
             <Textarea
               id="task_description"
               placeholder="Add a logout button to the top navigation bar..."

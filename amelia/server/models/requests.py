@@ -333,6 +333,36 @@ class RequestReviewRequest(BaseModel):
     base_commit: str | None = None
 
 
+class CondenseDescriptionRequest(BaseModel):
+    """Request to condense a long issue description using AI.
+
+    Attributes:
+        description: The issue body to condense (required, min 1 char).
+        profile: Optional profile name; falls back to active profile if omitted.
+        agent_type: Agent config to use for LLM call. Defaults to "architect".
+    """
+
+    description: Annotated[
+        str, Field(min_length=1, max_length=50_000, description="Issue body to condense")
+    ]
+    profile: Annotated[str | None, Field(default=None)] = None
+    agent_type: Annotated[
+        str, Field(default="architect", description="Agent config to use for LLM call")
+    ] = "architect"
+
+    validate_profile = field_validator("profile", mode="after")(_validate_profile)
+
+
+class CondenseDescriptionResponse(BaseModel):
+    """Response containing the AI-condensed description.
+
+    Attributes:
+        condensed: The condensed description text.
+    """
+
+    condensed: Annotated[str, Field(max_length=5000)]
+
+
 class SetPlanRequest(BaseModel):
     """Request to set or replace the plan for a queued workflow.
 

@@ -95,6 +95,7 @@ from amelia.server.lifecycle.server import ServerLifecycle
 from amelia.server.orchestrator.service import OrchestratorService
 from amelia.server.routes import (
     config_router,
+    descriptions_router,
     files_router,
     github_router,
     health_router,
@@ -363,6 +364,7 @@ def create_app() -> FastAPI:
 
     # Mount routes
     application.include_router(config_router, prefix="/api")
+    application.include_router(descriptions_router, prefix="/api")
     application.include_router(files_router, prefix="/api")
     application.include_router(github_router, prefix="/api")
     application.include_router(health_router, prefix="/api")

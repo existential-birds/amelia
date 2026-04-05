@@ -164,7 +164,7 @@ class TestParseIssue:
         long_body = "x" * 6000
         result = _parse_issue(self._make_item(long_body))
         assert result.body.endswith("... [truncated]")
-        assert len(result.body) <= 5000 + len("... [truncated]")
+        assert len(result.body) <= 5000
 
     def test_parse_issue_preserves_short_body(self) -> None:
         short_body = "x" * 100

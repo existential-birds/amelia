@@ -17,14 +17,13 @@ from starlette.responses import JSONResponse
 from amelia.core.types import (
     AggressivenessLevel,
     PRAutoFixConfig,
-    Profile,
     PRReviewComment,
     PRSummary,
-    TrackerType,
 )
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.server.database import ProfileRepository
 from amelia.server.dependencies import get_profile_repository
+from amelia.server.routes._helpers import resolve_github_profile
 from amelia.services.github_pr import GitHubPRService
 
 
@@ -70,7 +69,8 @@ def _parse_issue(item: dict[str, Any]) -> GitHubIssueSummary:
     assignees = item.get("assignees") or []
     raw_labels = item.get("labels") or []
     raw_body = item.get("body") or ""
-    body = raw_body[:_MAX_BODY_LENGTH] + "... [truncated]" if len(raw_body) > _MAX_BODY_LENGTH else raw_body
+    _suffix = "... [truncated]"
+    body = raw_body[:_MAX_BODY_LENGTH - len(_suffix)] + _suffix if len(raw_body) > _MAX_BODY_LENGTH else raw_body
     return GitHubIssueSummary(
         number=item["number"],
         title=item["title"],
@@ -105,7 +105,7 @@ async def list_github_issues(
         HTTPException: 400 if profile doesn't use github tracker,
             404 if profile not found, 500 if gh CLI fails.
     """
-    resolved = await _resolve_github_profile(profile, profile_repo)
+    resolved = await resolve_github_profile(profile, profile_repo)
 
     cmd = [
         "gh",
@@ -189,38 +189,6 @@ class PRAutoFixStatusResponse(BaseModel):
     config: PRAutoFixConfig | None
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-async def _resolve_github_profile(
-    profile_name: str,
-    profile_repo: ProfileRepository,
-) -> Profile:
-    """Resolve and validate a GitHub profile.
-
-    Args:
-        profile_name: Profile name to resolve.
-        profile_repo: Profile repository for lookup.
-
-    Returns:
-        Resolved Profile instance.
-
-    Raises:
-        HTTPException: 404 if not found, 400 if not GitHub tracker.
-    """
-    resolved = await profile_repo.get_profile(profile_name)
-    if resolved is None:
-        raise HTTPException(status_code=404, detail=f"Profile '{profile_name}' not found")
-
-    if resolved.tracker != TrackerType.GITHUB:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Profile '{profile_name}' uses tracker '{resolved.tracker}', not GitHub",
-        )
-    return resolved
-
 
 async def _get_repo_name(repo_root: str) -> str:
     """Get repository name in 'owner/repo' format via gh CLI.
@@ -275,7 +243,7 @@ async def get_pr_autofix_config(
     Returns:
         PRAutoFixStatusResponse with enabled flag and config (if set).
     """
-    resolved = await _resolve_github_profile(profile, profile_repo)
+    resolved = await resolve_github_profile(profile, profile_repo)
     return PRAutoFixStatusResponse(
         enabled=resolved.pr_autofix is not None,
         config=resolved.pr_autofix,
@@ -298,7 +266,7 @@ async def get_pr_comments(
     Returns:
         PRCommentsResponse with list of unresolved review comments.
     """
-    resolved = await _resolve_github_profile(profile, profile_repo)
+    resolved = await resolve_github_profile(profile, profile_repo)
     service = GitHubPRService(resolved.repo_root)
     comments = await service.fetch_review_comments(number)
     return PRCommentsResponse(comments=comments)
@@ -318,7 +286,7 @@ async def list_prs(
     Returns:
         PRListResponse with list of open PRs.
     """
-    resolved = await _resolve_github_profile(profile, profile_repo)
+    resolved = await resolve_github_profile(profile, profile_repo)
     service = GitHubPRService(resolved.repo_root)
     prs = await service.list_open_prs()
     return PRListResponse(prs=prs)
@@ -351,7 +319,7 @@ async def trigger_pr_autofix(
     Raises:
         HTTPException: 400 if pr_autofix not configured, 404 if profile not found.
     """
-    resolved = await _resolve_github_profile(profile, profile_repo)
+    resolved = await resolve_github_profile(profile, profile_repo)
 
     if resolved.pr_autofix is None:
         raise HTTPException(
