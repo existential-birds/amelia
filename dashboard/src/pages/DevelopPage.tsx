@@ -198,11 +198,27 @@ export default function DevelopPage() {
       if ('body' in issue) {
         setSelectedIssue(issue as GitHubIssueSummary);
       }
-      if (body && body.length > 4900) {
-        toast.info('Issue description was truncated to fit the 5000 character limit');
+      if (body && body.length > 5000) {
+        // Auto-condense to preserve context from long descriptions
+        setOriginalDescription(body);
+        setIsCondensing(true);
+        api
+          .condenseDescription(body, profileValue || undefined)
+          .then((result) => {
+            setValue('task_description', result.condensed, { shouldValidate: true });
+            toast.success('Long description was automatically condensed to fit the 5000 character limit');
+          })
+          .catch(() => {
+            // Fall back to hard truncation so the form isn't stuck invalid
+            setValue('task_description', body.slice(0, 5000), { shouldValidate: true });
+            toast.warning(
+              'Could not auto-condense description. It was truncated to 5000 characters.',
+            );
+          })
+          .finally(() => setIsCondensing(false));
       }
     },
-    [setValue],
+    [setValue, profileValue],
   );
 
   const handleCondense = useCallback(async () => {

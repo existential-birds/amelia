@@ -69,7 +69,8 @@ def _parse_issue(item: dict[str, Any]) -> GitHubIssueSummary:
     assignees = item.get("assignees") or []
     raw_labels = item.get("labels") or []
     raw_body = item.get("body") or ""
-    body = raw_body[:_MAX_BODY_LENGTH] + "... [truncated]" if len(raw_body) > _MAX_BODY_LENGTH else raw_body
+    _suffix = "... [truncated]"
+    body = raw_body[:_MAX_BODY_LENGTH - len(_suffix)] + _suffix if len(raw_body) > _MAX_BODY_LENGTH else raw_body
     return GitHubIssueSummary(
         number=item["number"],
         title=item["title"],
