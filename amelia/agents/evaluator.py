@@ -72,6 +72,11 @@ VERIFICATION METHODS:
 - "Missing import" claims -> check file imports
 - "Style/Convention" claims -> check existing codebase patterns
 
+You are running inside the actual working tree at the current working directory.
+Use your available file-reading and shell tools to fetch file contents and
+diffs on demand as you verify each review item. The user prompt provides only
+a manifest of changed files; do not expect an inlined diff in the prompt itself.
+
 Never trust review feedback blindly. Always verify against the code.
 Provide clear evidence for each disposition decision."""
 
@@ -123,6 +128,38 @@ Provide clear evidence for each disposition decision."""
         """
         return self._prompts.get(self.PROMPT_KEY_SYSTEM, self.SYSTEM_PROMPT)
 
+    @staticmethod
+    def _parse_changed_files(diff_text: str | None) -> list[str]:
+        """Extract post-change file paths from `diff --git` headers.
+
+        Returns paths in order of first appearance, deduplicated. Handles
+        rename headers (`a/old.py b/new.py`) by returning the `b/` path.
+        """
+        if not diff_text:
+            return []
+        seen: set[str] = set()
+        out: list[str] = []
+        for line in diff_text.splitlines():
+            if not line.startswith("diff --git "):
+                continue
+            parts = line.split()
+            # Expected: ["diff", "--git", "a/<path>", "b/<path>"]
+            if len(parts) < 4:
+                continue
+            a_token = parts[2]
+            b_token = parts[3]
+            # For deleted files, b/ is "b/dev/null"; fall back to the a/ path.
+            token = a_token if b_token == "b/dev/null" else b_token
+            if token in {"a/dev/null", "b/dev/null"}:
+                continue
+            if not (token.startswith("a/") or token.startswith("b/")):
+                continue
+            path = token[2:]
+            if path and path not in seen:
+                seen.add(path)
+                out.append(path)
+        return out
+
     def _build_prompt(self, state: ImplementationState) -> str:
         """Build the user prompt for evaluation from state.
 
@@ -160,9 +197,26 @@ Provide clear evidence for each disposition decision."""
         for i, comment in enumerate(all_comments, start=1):
             parts.append(f"### Item {i}\n\n{comment}\n")
 
-        # Code changes context (if available)
+        # Code changes context — emit a manifest, not an inlined diff. The
+        # agent fetches actual file contents/diffs on demand via Read/Grep/Bash.
         if state.code_changes_for_review:
-            parts.append(f"## Code Changes\n\n```diff\n{state.code_changes_for_review}\n```")
+            changed = self._parse_changed_files(state.code_changes_for_review)
+            if changed:
+                manifest_lines = ["## Changed Files", ""]
+                manifest_lines += [f"- {p}" for p in changed]
+                base = getattr(state, "base_commit", None)
+                if base:
+                    manifest_lines.append("")
+                    manifest_lines.append(
+                        f"To inspect changes for a specific file, run: "
+                        f"`git diff {base} HEAD -- <path>` from the repo root."
+                    )
+                manifest_lines.append("")
+                manifest_lines.append(
+                    "Use your available file-reading and shell tools to fetch "
+                    "file contents or diffs on demand as you verify each review item."
+                )
+                parts.append("\n".join(manifest_lines))
 
         parts.append("""
 ---
@@ -269,6 +323,7 @@ You MUST call `submit_evaluation` exactly once with all items.""")
         # Execute agentic evaluation with submit_evaluation tool (per D-05, D-06)
         new_session_id: str | None = None
         stream_result_input: Any | None = None  # fallback for drivers/tests that don't invoke on_call
+        driver_error: str | None = None
 
         async for msg in self.driver.execute_agentic(
             prompt=prompt,
@@ -279,6 +334,14 @@ You MUST call `submit_evaluation` exactly once with all items.""")
         ):
             if msg.type == AgenticMessageType.RESULT:
                 new_session_id = msg.session_id
+                if msg.is_error:
+                    driver_error = msg.content or "(no error detail from driver)"
+                    logger.error(
+                        "Agentic evaluation failed at driver level",
+                        agent="evaluator",
+                        error=driver_error,
+                        workflow_id=workflow_id,
+                    )
             elif (
                 msg.type == AgenticMessageType.TOOL_CALL
                 and msg.tool_name == "submit_evaluation"
@@ -292,6 +355,11 @@ You MUST call `submit_evaluation` exactly once with all items.""")
             if stream_result_input is not None
             else None
         )
+
+        if driver_error is not None:
+            raise RuntimeError(
+                f"Evaluator driver error (Claude CLI): {driver_error}"
+            )
 
         if result_data is None:
             raise RuntimeError("Evaluator did not call submit_evaluation")

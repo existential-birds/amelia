@@ -49,6 +49,156 @@ class TestEvaluationResult:
         assert result.items_needing_clarification == []
 
 
+class TestParseChangedFiles:
+    """Tests for Evaluator._parse_changed_files helper."""
+
+    def test_parses_simple_diff_headers(self) -> None:
+        diff = (
+            "diff --git a/x/y.py b/x/y.py\n"
+            "index abc..def 100644\n"
+            "--- a/x/y.py\n"
+            "+++ b/x/y.py\n"
+            "@@ -1 +1 @@\n"
+            "-old\n+new\n"
+            "diff --git a/a.md b/a.md\n"
+            "--- a/a.md\n"
+            "+++ b/a.md\n"
+        )
+        assert Evaluator._parse_changed_files(diff) == ["x/y.py", "a.md"]
+
+    def test_parses_rename(self) -> None:
+        diff = "diff --git a/old.py b/new.py\n"
+        assert Evaluator._parse_changed_files(diff) == ["new.py"]
+
+    def test_parses_deleted_file_hunk(self) -> None:
+        diff = (
+            "diff --git a/deleted.py b/deleted.py\n"
+            "--- a/deleted.py\n"
+            "+++ /dev/null\n"
+        )
+        assert Evaluator._parse_changed_files(diff) == ["deleted.py"]
+
+    def test_deduplicates_preserving_order(self) -> None:
+        diff = (
+            "diff --git a/a.py b/a.py\n"
+            "diff --git a/b.py b/b.py\n"
+            "diff --git a/a.py b/a.py\n"
+        )
+        assert Evaluator._parse_changed_files(diff) == ["a.py", "b.py"]
+
+    def test_empty_or_none(self) -> None:
+        assert Evaluator._parse_changed_files(None) == []
+        assert Evaluator._parse_changed_files("") == []
+        assert Evaluator._parse_changed_files("no headers here\njust text\n") == []
+
+
+class TestBuildPromptShape:
+    """Tests for Evaluator._build_prompt manifest shape."""
+
+    @pytest.fixture
+    def evaluator_instance(self, mock_driver: MagicMock) -> Evaluator:
+        config = AgentConfig(driver="claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            return Evaluator(config)
+
+    def test_no_inlined_diff_block(
+        self,
+        evaluator_instance: Evaluator,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        diff_body = (
+            "diff --git a/foo.py b/foo.py\n"
+            "--- a/foo.py\n+++ b/foo.py\n@@ -1 +1 @@\n-old line\n+new line\n"
+        )
+        state, _ = mock_execution_state_factory(
+            goal="g",
+            last_reviews=[review_result],
+            code_changes_for_review=diff_body,
+        )
+        prompt = evaluator_instance._build_prompt(state)
+        assert "```diff" not in prompt
+        assert "-old line" not in prompt
+        assert "+new line" not in prompt
+        assert "## Changed Files" in prompt
+        assert "- foo.py" in prompt
+
+    def test_base_commit_hint_present_when_set(
+        self,
+        evaluator_instance: Evaluator,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        state, _ = mock_execution_state_factory(
+            goal="g",
+            last_reviews=[review_result],
+            code_changes_for_review="diff --git a/foo.py b/foo.py\n",
+            base_commit="deadbeef",
+        )
+        prompt = evaluator_instance._build_prompt(state)
+        assert "git diff deadbeef HEAD -- <path>" in prompt
+
+    def test_no_base_commit_hint_when_unset(
+        self,
+        evaluator_instance: Evaluator,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        state, _ = mock_execution_state_factory(
+            goal="g",
+            last_reviews=[review_result],
+            code_changes_for_review="diff --git a/foo.py b/foo.py\n",
+        )
+        prompt = evaluator_instance._build_prompt(state)
+        assert "git diff" not in prompt
+
+    def test_no_changed_files_section_when_empty(
+        self,
+        evaluator_instance: Evaluator,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        state, _ = mock_execution_state_factory(
+            goal="g",
+            last_reviews=[review_result],
+        )
+        prompt = evaluator_instance._build_prompt(state)
+        assert "## Changed Files" not in prompt
+
+
+class TestSystemPromptFetchOnDemand:
+    """SYSTEM_PROMPT must guide the agent to fetch on demand."""
+
+    def test_system_prompt_mentions_fetch_on_demand_tools(self) -> None:
+        sp = Evaluator.SYSTEM_PROMPT
+        # Driver-agnostic phrasing: don't hardcode Claude CLI tool names
+        assert "file-reading" in sp.lower()
+        assert "shell tools" in sp.lower()
+        assert "on demand" in sp.lower() or "as needed" in sp.lower()
+        # Must not instruct the agent to rely on an inlined diff
+        assert "do not expect an inlined diff" in sp.lower()
+
+
 class TestEvaluator:
     """Tests for Evaluator agent."""
 
@@ -529,6 +679,116 @@ class TestEvaluator:
 
         with pytest.raises(RuntimeError, match="Evaluator did not call submit_evaluation"):
             await evaluator.evaluate(state, profile, workflow_id=uuid4())
+
+    async def test_evaluate_propagates_driver_error_with_content(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """Driver RESULT with is_error=True must surface the driver content verbatim."""
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        state, profile = mock_execution_state_factory(
+            goal="Fix bugs",
+            last_reviews=[review_result],
+        )
+
+        result_msg = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content="Prompt is too long",
+            session_id="s-err",
+            is_error=True,
+        )
+        mock_driver.execute_agentic = MagicMock(
+            return_value=AsyncIteratorMock([result_msg])
+        )
+
+        config = AgentConfig(driver="claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
+
+        with pytest.raises(RuntimeError, match="Prompt is too long") as exc_info:
+            await evaluator.evaluate(state, profile, workflow_id=uuid4())
+
+        msg = str(exc_info.value)
+        assert "Evaluator" in msg or "driver" in msg.lower()
+        assert "did not call submit_evaluation" not in msg
+
+    async def test_evaluate_no_tool_call_without_driver_error_still_raises_missing(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """Non-error RESULT without submit_evaluation still raises the missing-tool error."""
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        state, profile = mock_execution_state_factory(
+            goal="Fix bugs",
+            last_reviews=[review_result],
+        )
+
+        result_msg = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content="ok",
+            session_id="s-ok",
+            is_error=False,
+        )
+        mock_driver.execute_agentic = MagicMock(
+            return_value=AsyncIteratorMock([result_msg])
+        )
+
+        config = AgentConfig(driver="claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
+
+        with pytest.raises(RuntimeError, match="did not call submit_evaluation"):
+            await evaluator.evaluate(state, profile, workflow_id=uuid4())
+
+    async def test_evaluate_driver_error_without_content(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """is_error=True with empty content still identifies as a driver-side failure."""
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        state, profile = mock_execution_state_factory(
+            goal="Fix bugs",
+            last_reviews=[review_result],
+        )
+
+        result_msg = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content=None,
+            session_id="s-err",
+            is_error=True,
+        )
+        mock_driver.execute_agentic = MagicMock(
+            return_value=AsyncIteratorMock([result_msg])
+        )
+
+        config = AgentConfig(driver="claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
+
+        with pytest.raises(RuntimeError) as exc_info:
+            await evaluator.evaluate(state, profile, workflow_id=uuid4())
+
+        msg = str(exc_info.value).lower()
+        assert "driver" in msg or "claude cli" in msg
+        assert "did not call submit_evaluation" not in str(exc_info.value)
 
     async def test_evaluate_uses_execute_agentic_with_allowed_tools(
         self,

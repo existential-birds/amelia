@@ -14,7 +14,7 @@ progress:
 
 # Project State
 
-Last activity: 2026-04-04 - Completed quick task 260404-inz: Refactor condense-description — shared helper, service layer, centralized prompt, undo UI
+Last activity: 2026-04-07 - Completed quick task 260407-49u: Evaluator: propagate driver errors and replace inlined diff with on-demand fetching
 
 ## Project Reference
 
@@ -59,3 +59,4 @@ None
 | 260330-qm0 | Implement issue 561: allow free-text OpenRouter model code entry with backend lookup and cache | 2026-03-30 | working tree | | [260330-qm0-implement-issue-561-allow-free-text-open](./quick/260330-qm0-implement-issue-561-allow-free-text-open/) |
 | 260404-fxm | Implement AI-powered description condensation for long GitHub issue bodies (issue #566) | 2026-04-04 | 66de0a42 | Verified | [260404-fxm-implement-ai-powered-description-condens](./quick/260404-fxm-implement-ai-powered-description-condens/) |
 | 260404-inz | Refactor condense-description — shared helper, service layer, centralized prompt, undo UI | 2026-04-04 | b7c3a9c8 | Verified | [260404-inz-refactor-condense-description-shared-hel](./quick/260404-inz-refactor-condense-description-shared-hel/) |
+| 260407-49u | Evaluator: propagate driver errors and replace inlined diff with on-demand fetching | 2026-04-07 | 9c8ad17d | Verified | [260407-49u-evaluator-propagate-driver-errors-and-re](./quick/260407-49u-evaluator-propagate-driver-errors-and-re/) |
