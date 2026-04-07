@@ -269,6 +269,7 @@ You MUST call `submit_evaluation` exactly once with all items.""")
         # Execute agentic evaluation with submit_evaluation tool (per D-05, D-06)
         new_session_id: str | None = None
         stream_result_input: Any | None = None  # fallback for drivers/tests that don't invoke on_call
+        driver_error: str | None = None
 
         async for msg in self.driver.execute_agentic(
             prompt=prompt,
@@ -279,6 +280,14 @@ You MUST call `submit_evaluation` exactly once with all items.""")
         ):
             if msg.type == AgenticMessageType.RESULT:
                 new_session_id = msg.session_id
+                if msg.is_error:
+                    driver_error = msg.content or "(no error detail from driver)"
+                    logger.error(
+                        "Agentic evaluation failed at driver level",
+                        agent="evaluator",
+                        error=driver_error,
+                        workflow_id=workflow_id,
+                    )
             elif (
                 msg.type == AgenticMessageType.TOOL_CALL
                 and msg.tool_name == "submit_evaluation"
@@ -292,6 +301,11 @@ You MUST call `submit_evaluation` exactly once with all items.""")
             if stream_result_input is not None
             else None
         )
+
+        if driver_error is not None:
+            raise RuntimeError(
+                f"Evaluator driver error (Claude CLI): {driver_error}"
+            )
 
         if result_data is None:
             raise RuntimeError("Evaluator did not call submit_evaluation")

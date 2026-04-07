@@ -530,6 +530,116 @@ class TestEvaluator:
         with pytest.raises(RuntimeError, match="Evaluator did not call submit_evaluation"):
             await evaluator.evaluate(state, profile, workflow_id=uuid4())
 
+    async def test_evaluate_propagates_driver_error_with_content(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """Driver RESULT with is_error=True must surface the driver content verbatim."""
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        state, profile = mock_execution_state_factory(
+            goal="Fix bugs",
+            last_reviews=[review_result],
+        )
+
+        result_msg = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content="Prompt is too long",
+            session_id="s-err",
+            is_error=True,
+        )
+        mock_driver.execute_agentic = MagicMock(
+            return_value=AsyncIteratorMock([result_msg])
+        )
+
+        config = AgentConfig(driver="claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
+
+        with pytest.raises(RuntimeError, match="Prompt is too long") as exc_info:
+            await evaluator.evaluate(state, profile, workflow_id=uuid4())
+
+        msg = str(exc_info.value)
+        assert "Evaluator" in msg or "driver" in msg.lower()
+        assert "did not call submit_evaluation" not in msg
+
+    async def test_evaluate_no_tool_call_without_driver_error_still_raises_missing(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """Non-error RESULT without submit_evaluation still raises the missing-tool error."""
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        state, profile = mock_execution_state_factory(
+            goal="Fix bugs",
+            last_reviews=[review_result],
+        )
+
+        result_msg = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content="ok",
+            session_id="s-ok",
+            is_error=False,
+        )
+        mock_driver.execute_agentic = MagicMock(
+            return_value=AsyncIteratorMock([result_msg])
+        )
+
+        config = AgentConfig(driver="claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
+
+        with pytest.raises(RuntimeError, match="did not call submit_evaluation"):
+            await evaluator.evaluate(state, profile, workflow_id=uuid4())
+
+    async def test_evaluate_driver_error_without_content(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """is_error=True with empty content still identifies as a driver-side failure."""
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        state, profile = mock_execution_state_factory(
+            goal="Fix bugs",
+            last_reviews=[review_result],
+        )
+
+        result_msg = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content=None,
+            session_id="s-err",
+            is_error=True,
+        )
+        mock_driver.execute_agentic = MagicMock(
+            return_value=AsyncIteratorMock([result_msg])
+        )
+
+        config = AgentConfig(driver="claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
+
+        with pytest.raises(RuntimeError) as exc_info:
+            await evaluator.evaluate(state, profile, workflow_id=uuid4())
+
+        msg = str(exc_info.value).lower()
+        assert "driver" in msg or "claude cli" in msg
+        assert "did not call submit_evaluation" not in str(exc_info.value)
+
     async def test_evaluate_uses_execute_agentic_with_allowed_tools(
         self,
         mock_driver: MagicMock,
