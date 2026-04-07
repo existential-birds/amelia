@@ -189,7 +189,7 @@ class TestSystemPromptFetchOnDemand:
         assert "shell tools" in sp.lower()
         assert "on demand" in sp.lower() or "as needed" in sp.lower()
         # Must not instruct the agent to rely on an inlined diff
-        assert "rely on" not in sp.lower() or "inlined diff" not in sp.lower() or "do not expect" in sp.lower()
+        assert "do not expect an inlined diff" in sp.lower()
 
 
 class TestEvaluator:

@@ -146,10 +146,15 @@ Provide clear evidence for each disposition decision."""
             # Expected: ["diff", "--git", "a/<path>", "b/<path>"]
             if len(parts) < 4:
                 continue
+            a_token = parts[2]
             b_token = parts[3]
-            if not b_token.startswith("b/"):
+            # For deleted files, b/ is "b/dev/null"; fall back to the a/ path.
+            token = a_token if b_token == "b/dev/null" else b_token
+            if token in {"a/dev/null", "b/dev/null"}:
                 continue
-            path = b_token[2:]
+            if not (token.startswith("a/") or token.startswith("b/")):
+                continue
+            path = token[2:]
             if path and path not in seen:
                 seen.add(path)
                 out.append(path)
@@ -204,7 +209,7 @@ Provide clear evidence for each disposition decision."""
                     manifest_lines.append("")
                     manifest_lines.append(
                         f"To inspect changes for a specific file, run: "
-                        f"`git diff {base} -- <path>` from the repo root."
+                        f"`git diff {base} HEAD -- <path>` from the repo root."
                     )
                 manifest_lines.append("")
                 manifest_lines.append(
