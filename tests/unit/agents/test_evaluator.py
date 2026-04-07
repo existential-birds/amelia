@@ -49,6 +49,149 @@ class TestEvaluationResult:
         assert result.items_needing_clarification == []
 
 
+class TestParseChangedFiles:
+    """Tests for Evaluator._parse_changed_files helper."""
+
+    def test_parses_simple_diff_headers(self) -> None:
+        diff = (
+            "diff --git a/x/y.py b/x/y.py\n"
+            "index abc..def 100644\n"
+            "--- a/x/y.py\n"
+            "+++ b/x/y.py\n"
+            "@@ -1 +1 @@\n"
+            "-old\n+new\n"
+            "diff --git a/a.md b/a.md\n"
+            "--- a/a.md\n"
+            "+++ b/a.md\n"
+        )
+        assert Evaluator._parse_changed_files(diff) == ["x/y.py", "a.md"]
+
+    def test_parses_rename(self) -> None:
+        diff = "diff --git a/old.py b/new.py\n"
+        assert Evaluator._parse_changed_files(diff) == ["new.py"]
+
+    def test_deduplicates_preserving_order(self) -> None:
+        diff = (
+            "diff --git a/a.py b/a.py\n"
+            "diff --git a/b.py b/b.py\n"
+            "diff --git a/a.py b/a.py\n"
+        )
+        assert Evaluator._parse_changed_files(diff) == ["a.py", "b.py"]
+
+    def test_empty_or_none(self) -> None:
+        assert Evaluator._parse_changed_files(None) == []
+        assert Evaluator._parse_changed_files("") == []
+        assert Evaluator._parse_changed_files("no headers here\njust text\n") == []
+
+
+class TestBuildPromptShape:
+    """Tests for Evaluator._build_prompt manifest shape."""
+
+    @pytest.fixture
+    def evaluator_instance(self, mock_driver: MagicMock) -> Evaluator:
+        config = AgentConfig(driver="claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            return Evaluator(config)
+
+    def test_no_inlined_diff_block(
+        self,
+        evaluator_instance: Evaluator,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        diff_body = (
+            "diff --git a/foo.py b/foo.py\n"
+            "--- a/foo.py\n+++ b/foo.py\n@@ -1 +1 @@\n-old line\n+new line\n"
+        )
+        state, _ = mock_execution_state_factory(
+            goal="g",
+            last_reviews=[review_result],
+            code_changes_for_review=diff_body,
+        )
+        prompt = evaluator_instance._build_prompt(state)
+        assert "```diff" not in prompt
+        assert "-old line" not in prompt
+        assert "+new line" not in prompt
+        assert "## Changed Files" in prompt
+        assert "- foo.py" in prompt
+
+    def test_base_commit_hint_present_when_set(
+        self,
+        evaluator_instance: Evaluator,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        state, _ = mock_execution_state_factory(
+            goal="g",
+            last_reviews=[review_result],
+            code_changes_for_review="diff --git a/foo.py b/foo.py\n",
+            base_commit="deadbeef",
+        )
+        prompt = evaluator_instance._build_prompt(state)
+        assert "deadbeef" in prompt
+        assert "git diff" in prompt
+
+    def test_no_base_commit_hint_when_unset(
+        self,
+        evaluator_instance: Evaluator,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        state, _ = mock_execution_state_factory(
+            goal="g",
+            last_reviews=[review_result],
+            code_changes_for_review="diff --git a/foo.py b/foo.py\n",
+        )
+        prompt = evaluator_instance._build_prompt(state)
+        assert "git diff" not in prompt
+
+    def test_no_changed_files_section_when_empty(
+        self,
+        evaluator_instance: Evaluator,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity=Severity.MINOR,
+        )
+        state, _ = mock_execution_state_factory(
+            goal="g",
+            last_reviews=[review_result],
+        )
+        prompt = evaluator_instance._build_prompt(state)
+        assert "## Changed Files" not in prompt
+
+
+class TestSystemPromptFetchOnDemand:
+    """SYSTEM_PROMPT must guide the agent to fetch on demand."""
+
+    def test_system_prompt_mentions_fetch_on_demand_tools(self) -> None:
+        sp = Evaluator.SYSTEM_PROMPT
+        assert "Read" in sp
+        assert "Grep" in sp
+        assert "Bash" in sp
+        assert "on demand" in sp.lower() or "as needed" in sp.lower()
+        # Must not instruct the agent to rely on an inlined diff
+        assert "rely on" not in sp.lower() or "inlined diff" not in sp.lower() or "do not expect" in sp.lower()
+
+
 class TestEvaluator:
     """Tests for Evaluator agent."""
 
