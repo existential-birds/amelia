@@ -73,9 +73,9 @@ VERIFICATION METHODS:
 - "Style/Convention" claims -> check existing codebase patterns
 
 You are running inside the actual working tree at the current working directory.
-Use the Read, Grep, and Bash tools to fetch file contents and diffs on demand
-as you verify each review item. The user prompt provides only a manifest of
-changed files; do not expect an inlined diff in the prompt itself.
+Use your available file-reading and shell tools to fetch file contents and
+diffs on demand as you verify each review item. The user prompt provides only
+a manifest of changed files; do not expect an inlined diff in the prompt itself.
 
 Never trust review feedback blindly. Always verify against the code.
 Provide clear evidence for each disposition decision."""
@@ -208,8 +208,8 @@ Provide clear evidence for each disposition decision."""
                     )
                 manifest_lines.append("")
                 manifest_lines.append(
-                    "Use Read/Grep/Bash to fetch file contents or diffs on demand "
-                    "as you verify each review item."
+                    "Use your available file-reading and shell tools to fetch "
+                    "file contents or diffs on demand as you verify each review item."
                 )
                 parts.append("\n".join(manifest_lines))
 

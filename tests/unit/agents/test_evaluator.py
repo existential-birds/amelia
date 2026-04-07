@@ -184,9 +184,9 @@ class TestSystemPromptFetchOnDemand:
 
     def test_system_prompt_mentions_fetch_on_demand_tools(self) -> None:
         sp = Evaluator.SYSTEM_PROMPT
-        assert "Read" in sp
-        assert "Grep" in sp
-        assert "Bash" in sp
+        # Driver-agnostic phrasing: don't hardcode Claude CLI tool names
+        assert "file-reading" in sp.lower()
+        assert "shell tools" in sp.lower()
         assert "on demand" in sp.lower() or "as needed" in sp.lower()
         # Must not instruct the agent to rely on an inlined diff
         assert "rely on" not in sp.lower() or "inlined diff" not in sp.lower() or "do not expect" in sp.lower()
