@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-04-07
+
+### Added
+
+- **descriptions:** AI-powered issue description condensation ([#568](https://github.com/existential-birds/amelia/pull/568))
+- **models:** Manual model code entry with DB-backed cache ([#565](https://github.com/existential-birds/amelia/pull/565))
+- **review:** `write_plan` tool, review-fix pipeline, and tool-based submission ([#562](https://github.com/existential-birds/amelia/pull/562))
+
+### Changed
+
+- **dashboard:** Remove activity log and clean up dashboard ([#555](https://github.com/existential-birds/amelia/pull/555))
+
+### Fixed
+
+- **evaluator:** Surface driver errors and fetch diffs on-demand ([#570](https://github.com/existential-birds/amelia/pull/570))
+- **dashboard:** Fix `AskUserQuestionCard` option button text wrapping ([#567](https://github.com/existential-birds/amelia/pull/567))
+
+### Security
+
+- **deps:** Bump vite to patched version ([#569](https://github.com/existential-birds/amelia/pull/569))
+- **deps:** Bump lodash to patched version ([#564](https://github.com/existential-birds/amelia/pull/564))
+- **deps:** Bump aiohttp to patched version ([#563](https://github.com/existential-birds/amelia/pull/563))
+
 ## [0.19.0] - 2026-03-27
 
 ### Added
@@ -497,7 +520,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/existential-birds/amelia/compare/v0.19.0...v0.20.0
+[0.19.0]: https://github.com/existential-birds/amelia/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/existential-birds/amelia/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/existential-birds/amelia/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/existential-birds/amelia/compare/v0.15.0...v0.16.0
