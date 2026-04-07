@@ -70,6 +70,14 @@ class TestParseChangedFiles:
         diff = "diff --git a/old.py b/new.py\n"
         assert Evaluator._parse_changed_files(diff) == ["new.py"]
 
+    def test_parses_deleted_file_hunk(self) -> None:
+        diff = (
+            "diff --git a/deleted.py b/deleted.py\n"
+            "--- a/deleted.py\n"
+            "+++ /dev/null\n"
+        )
+        assert Evaluator._parse_changed_files(diff) == ["deleted.py"]
+
     def test_deduplicates_preserving_order(self) -> None:
         diff = (
             "diff --git a/a.py b/a.py\n"
@@ -138,8 +146,7 @@ class TestBuildPromptShape:
             base_commit="deadbeef",
         )
         prompt = evaluator_instance._build_prompt(state)
-        assert "deadbeef" in prompt
-        assert "git diff" in prompt
+        assert "git diff deadbeef HEAD -- <path>" in prompt
 
     def test_no_base_commit_hint_when_unset(
         self,
