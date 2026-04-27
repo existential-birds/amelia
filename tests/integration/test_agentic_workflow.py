@@ -73,8 +73,8 @@ def _mock_api_key(mock_api_key: None) -> None:
 class TestArchitectNodeIntegration:
     """Test architect node with real Architect, mock at driver.execute_agentic() level."""
 
-    async def test_architect_node_returns_raw_output(self, tmp_path: Path) -> None:
-        """Architect node should return raw output; plan extraction is done by plan_validator_node.
+    async def test_architect_node_returns_plan_markdown(self, tmp_path: Path) -> None:
+        """Architect node should return plan_markdown; goal/key_files extraction is done by plan_validator_node.
 
         Real components: get_driver, ApiDriver, Architect
         Mock boundary: ApiDriver.execute_agentic (LLM call)
@@ -107,14 +107,14 @@ class TestArchitectNodeIntegration:
         with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result = await call_architect_node(state, cast(RunnableConfig, config))
 
-        # Architect node returns raw output - goal/plan extraction is done by plan_validator_node
-        assert "raw_architect_output" in result
-        assert result["raw_architect_output"] == plan_markdown
+        # Architect node returns the architect's RESULT message in plan_markdown.
+        # plan_validator_node later replaces it with the plan file's content.
+        assert "plan_markdown" in result
+        assert result["plan_markdown"] == plan_markdown
         assert "tool_calls" in result
         assert "tool_results" in result
-        # These fields are NOT set by architect_node (set by plan_validator_node)
+        # goal extraction happens in plan_validator_node, not here
         assert "goal" not in result
-        assert "plan_markdown" not in result
 
     async def test_architect_node_requires_issue(self, tmp_path: Path) -> None:
         """Architect node should raise error if no issue provided."""
@@ -334,7 +334,7 @@ class TestArchitectValidatorFlowIntegration:
         Mock boundary: ApiDriver.execute_agentic (architect), ApiDriver.generate (validator)
 
         This tests the complete handoff:
-        1. architect_node calls LLM, writes plan file via Write tool, returns raw_architect_output
+        1. architect_node calls LLM, writes plan file via Write tool, returns plan_markdown
         2. plan_validator_node reads plan file, extracts goal/plan_markdown/key_files
         """
         from amelia.core.constants import resolve_plan_path
@@ -419,10 +419,10 @@ Add comprehensive tests for the authentication flow.
         with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
             architect_result = await call_architect_node(state, cast(RunnableConfig, config))
 
-        # Verify architect returns raw output
-        assert "raw_architect_output" in architect_result
-        # raw_architect_output is the RESULT message content, not the plan itself
-        assert "implementation plan" in architect_result["raw_architect_output"].lower()
+        # Verify architect returns plan_markdown (the RESULT message at this stage,
+        # not the actual plan content - that gets populated by plan_validator_node)
+        assert "plan_markdown" in architect_result
+        assert "implementation plan" in architect_result["plan_markdown"].lower()
 
         # Verify tool calls were recorded
         assert "tool_calls" in architect_result
@@ -437,7 +437,7 @@ Add comprehensive tests for the authentication flow.
         # --- Phase 2: Plan Validator node ---
         # Update state with architect results (simulating graph transition)
         state_after_architect = state.model_copy(
-            update={"raw_architect_output": architect_result["raw_architect_output"]}
+            update={"plan_markdown": architect_result["plan_markdown"]}
         )
 
         # plan_validator_node uses regex-only extraction (no LLM call)
@@ -481,7 +481,7 @@ Add comprehensive tests for the authentication flow.
         state = make_execution_state(
             issue=issue,
             profile=profile,
-            raw_architect_output="Some content that wasn't written to disk",
+            plan_markdown="Some content that wasn't written to disk",
         )
         config = make_config(thread_id=str(uuid4()), profile=profile)
 

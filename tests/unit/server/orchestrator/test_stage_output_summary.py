@@ -89,14 +89,14 @@ class TestSummarizeStageOutput:
 
     def test_architect_node_realistic_output(self) -> None:
         output = {
-            "raw_architect_output": "B" * 2000,
+            "plan_markdown": "B" * 2000,
             "architect_error": None,
             "tool_calls": [{"id": "1"}],
             "tool_results": [{"output": "r1"}],
         }
         result = _summarize_stage_output(output)
         assert result is not None
-        assert result["raw_architect_output"].endswith("… [truncated]")
+        assert result["plan_markdown"].endswith("… [truncated]")
         assert result["architect_error"] is None
         assert result["tool_calls_count"] == 1
         assert result["tool_results_count"] == 1

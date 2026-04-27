@@ -287,7 +287,9 @@ async def call_architect_node(
         config: Optional RunnableConfig with stream_emitter in configurable.
 
     Returns:
-        Partial state dict with raw_architect_output, tool_calls, and tool_results.
+        Partial state dict with plan_markdown, tool_calls, and tool_results.
+        plan_markdown holds the architect's final RESULT message at this stage;
+        plan_validator_node replaces it with the plan file's content.
 
     Raises:
         ValueError: If no issue is provided in the state.
@@ -356,7 +358,7 @@ async def call_architect_node(
             tool_calls=final_state.tool_calls,
             plan_path=plan_path,
             working_dir=working_dir,
-            raw_output=final_state.raw_architect_output,
+            raw_output=final_state.plan_markdown,
         )
 
     if plan_written:
@@ -365,7 +367,7 @@ async def call_architect_node(
             agent="architect",
             action="generated_plan",
             details={
-                "raw_output_length": len(final_state.raw_architect_output) if final_state.raw_architect_output else 0,
+                "raw_output_length": len(final_state.plan_markdown) if final_state.plan_markdown else 0,
                 "tool_calls_count": len(final_state.tool_calls),
             },
         )
@@ -376,13 +378,13 @@ async def call_architect_node(
             action="generated_plan",
             success=False,
             details={
-                "raw_output_length": len(final_state.raw_architect_output) if final_state.raw_architect_output else 0,
+                "raw_output_length": len(final_state.plan_markdown) if final_state.plan_markdown else 0,
                 "tool_calls_count": len(final_state.tool_calls),
             },
         )
 
     return {
-        "raw_architect_output": final_state.raw_architect_output,
+        "plan_markdown": final_state.plan_markdown,
         "architect_error": final_state.architect_error,
         "tool_calls": list(final_state.tool_calls),
         "tool_results": list(final_state.tool_results),

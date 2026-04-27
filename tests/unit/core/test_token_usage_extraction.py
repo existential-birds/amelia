@@ -310,7 +310,7 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
 
         # The architect.plan() now yields (ImplementationState, WorkflowEvent) tuples
         mock_final_state = state.model_copy(update={
-            "raw_architect_output": "**Goal:** Implement feature X\n\n# Plan\n\nStep 1...",
+            "plan_markdown": "**Goal:** Implement feature X\n\n# Plan\n\nStep 1...",
             "plan_path": Path("/docs/plans/test.md"),
             "tool_calls": [],
             "tool_results": [],

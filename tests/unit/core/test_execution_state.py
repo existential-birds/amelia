@@ -9,42 +9,42 @@ from amelia.pipelines.implementation.state import ImplementationState
 _wf_id = uuid4()
 
 
-class TestExecutionStateRawArchitectOutput:
-    """Tests for raw_architect_output field."""
+class TestExecutionStatePlanMarkdown:
+    """Tests for plan_markdown field (canonical architect output)."""
 
-    def test_raw_architect_output_defaults_to_none(self) -> None:
-        """raw_architect_output should default to None."""
+    def test_plan_markdown_defaults_to_none(self) -> None:
+        """plan_markdown should default to None."""
         state = ImplementationState(
             workflow_id=_wf_id,
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
         )
-        assert state.raw_architect_output is None
+        assert state.plan_markdown is None
 
-    def test_raw_architect_output_stores_string(self) -> None:
-        """raw_architect_output should store markdown string."""
+    def test_plan_markdown_stores_string(self) -> None:
+        """plan_markdown should store markdown string."""
         markdown = "# Plan\n\n**Goal:** Do something"
         state = ImplementationState(
             workflow_id=_wf_id,
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
-            raw_architect_output=markdown,
+            plan_markdown=markdown,
         )
-        assert state.raw_architect_output == markdown
+        assert state.plan_markdown == markdown
 
-    def test_raw_architect_output_in_model_copy(self) -> None:
-        """raw_architect_output should work with model_copy."""
+    def test_plan_markdown_in_model_copy(self) -> None:
+        """plan_markdown should work with model_copy."""
         state = ImplementationState(
             workflow_id=_wf_id,
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
         )
-        new_state = state.model_copy(update={"raw_architect_output": "# Updated"})
-        assert new_state.raw_architect_output == "# Updated"
-        assert state.raw_architect_output is None  # Original unchanged
+        new_state = state.model_copy(update={"plan_markdown": "# Updated"})
+        assert new_state.plan_markdown == "# Updated"
+        assert state.plan_markdown is None  # Original unchanged
 
 
 class TestArchitectErrorField:
@@ -72,17 +72,17 @@ class TestArchitectErrorField:
         )
         assert state.architect_error == error_msg
 
-    def test_architect_error_separate_from_raw_output(self) -> None:
-        """architect_error and raw_architect_output should be independent."""
+    def test_architect_error_separate_from_plan_markdown(self) -> None:
+        """architect_error and plan_markdown should be independent."""
         state = ImplementationState(
             workflow_id=_wf_id,
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
-            raw_architect_output="# Plan content",
+            plan_markdown="# Plan content",
             architect_error="Some error occurred",
         )
-        assert state.raw_architect_output == "# Plan content"
+        assert state.plan_markdown == "# Plan content"
         assert state.architect_error == "Some error occurred"
 
 

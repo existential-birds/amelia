@@ -236,12 +236,14 @@ Before planning, discover:
                             extracted_plan_path = Path(tc.tool_input["file_path"])
                             break  # Use first write call (should be the plan)
 
-                    # Yield final state with all updates
+                    # Yield final state with all updates.
+                    # plan_markdown holds the architect's final RESULT message here; the
+                    # plan_validator_node later replaces it with the actual plan content
+                    # read from the file written by the write_plan / write_file tool.
                     current_state = state.model_copy(update={
                         "tool_calls": tool_calls,
                         "tool_results": tool_results,
-                        "raw_architect_output": raw_output,
-                        "plan_markdown": raw_output,  # Backward compat until #199
+                        "plan_markdown": raw_output,
                         "plan_path": extracted_plan_path,
                     })
                     yield current_state, event
