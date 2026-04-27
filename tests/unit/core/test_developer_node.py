@@ -31,7 +31,7 @@ def create_developer_with_mock_driver(mock_driver: MagicMock) -> Developer:
     from amelia.agents.developer import Developer
 
     config = AgentConfig(driver="api", model="test-model")
-    with patch("amelia.agents.developer.get_driver") as mock_get_driver:
+    with patch("amelia.agents._driver_init.get_driver") as mock_get_driver:
         mock_get_driver.return_value = mock_driver
         return Developer(config)
 

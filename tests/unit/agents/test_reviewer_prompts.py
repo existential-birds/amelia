@@ -12,7 +12,7 @@ from amelia.core.types import AgentConfig, DriverType
 def create_reviewer(mock_driver: MagicMock) -> Callable[..., Reviewer]:
     """Factory fixture to create Reviewer with mock driver injected."""
     def _create(prompts: dict[str, str] | None = None) -> Reviewer:
-        with patch("amelia.agents.reviewer.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             config = AgentConfig(driver=DriverType.CLAUDE, model="sonnet", options={})
             return Reviewer(config, prompts=prompts)
     return _create

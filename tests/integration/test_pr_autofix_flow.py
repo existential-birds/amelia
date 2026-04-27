@@ -215,7 +215,7 @@ class TestPipelineEndToEnd:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.agents.developer.get_driver",
+                "amelia.agents._driver_init.get_driver",
                 return_value=mock_driver,
             ),
             patch(
@@ -402,7 +402,7 @@ class TestOrchestratorThreadsComments:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.agents.developer.get_driver",
+                "amelia.agents._driver_init.get_driver",
                 return_value=mock_driver,
             ),
             patch(
@@ -655,7 +655,7 @@ class TestEventEmissionSequence:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.agents.developer.get_driver",
+                "amelia.agents._driver_init.get_driver",
                 return_value=mock_driver,
             ),
             patch(
@@ -901,7 +901,7 @@ class TestMultiFileGroupPartialFailure:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.agents.developer.get_driver",
+                "amelia.agents._driver_init.get_driver",
                 return_value=mock_driver,
             ),
             patch(
@@ -1055,7 +1055,7 @@ class TestConfidenceThresholdFiltering:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.agents.developer.get_driver",
+                "amelia.agents._driver_init.get_driver",
                 return_value=mock_driver,
             ),
             patch(
@@ -1191,7 +1191,7 @@ class TestAggressivenessFiltering:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.agents.developer.get_driver",
+                "amelia.agents._driver_init.get_driver",
                 return_value=mock_driver,
             ),
             patch(
@@ -1272,7 +1272,7 @@ class TestCommitMessageContent:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.agents.developer.get_driver",
+                "amelia.agents._driver_init.get_driver",
                 return_value=mock_driver,
             ),
             patch(
@@ -1358,7 +1358,7 @@ class TestWorkflowStatusLifecycle:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.agents.developer.get_driver",
+                "amelia.agents._driver_init.get_driver",
                 return_value=mock_driver,
             ),
             patch(
@@ -1450,7 +1450,7 @@ class TestMetricsPersistence:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.agents.developer.get_driver",
+                "amelia.agents._driver_init.get_driver",
                 return_value=mock_driver,
             ),
             patch(
@@ -1699,7 +1699,7 @@ class TestTokenUsagePersistence:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.agents.developer.get_driver",
+                "amelia.agents._driver_init.get_driver",
                 return_value=mock_driver,
             ),
             patch(
@@ -1787,7 +1787,7 @@ class TestTokenUsagePersistence:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.agents.developer.get_driver",
+                "amelia.agents._driver_init.get_driver",
                 return_value=mock_driver,
             ),
             patch(
@@ -1885,7 +1885,7 @@ class TestTokenUsageEndToEnd:
                 return_value=mock_driver,
             ),
             patch(
-                "amelia.agents.developer.get_driver",
+                "amelia.agents._driver_init.get_driver",
                 return_value=mock_driver,
             ),
             patch(

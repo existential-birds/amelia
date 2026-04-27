@@ -52,7 +52,7 @@ class TestArchitectPlanPath:
         state, profile = state_and_profile
         config = AgentConfig(driver="claude", model="sonnet")
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver_local):
             architect = Architect(config)
 
         prompt = architect._build_agentic_prompt(state, profile)
@@ -73,7 +73,7 @@ class TestArchitectPlanPath:
         state, profile = state_and_profile
         config = AgentConfig(driver="claude", model="sonnet")
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver_local):
             architect = Architect(config)
 
         prompt = architect._build_agentic_prompt(state, profile)
@@ -101,7 +101,7 @@ class TestArchitectPlanPath:
         )
         config = AgentConfig(driver="claude", model="sonnet")
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver_local):
             architect = Architect(config)
 
         prompt = architect._build_agentic_prompt(state, profile)
@@ -142,7 +142,7 @@ class TestArchitectPlanPath:
 
         mock_driver_local.execute_agentic = mock_execute_agentic
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver_local):
             architect = Architect(config)
             final_state = state
             async for new_state, _event in architect.plan(state, profile, workflow_id=uuid4()):

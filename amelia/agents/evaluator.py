@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from loguru import logger
 
+from amelia.agents._driver_init import init_agent_driver
 from amelia.agents.schemas.evaluator import (
     Disposition,
     EvaluatedItem,
@@ -21,7 +22,6 @@ from amelia.agents.schemas.evaluator import (
 )
 from amelia.core.types import AgentConfig, Profile, collect_all_comments
 from amelia.drivers.base import AgenticMessageType, SubmitToolDef
-from amelia.drivers.factory import get_driver
 from amelia.server.models.events import (
     EPHEMERAL_SEQUENCE,
     EventLevel,
@@ -96,17 +96,12 @@ Provide clear evidence for each disposition decision."""
             sandbox_provider: Optional shared sandbox provider for sandbox reuse.
 
         """
-        self.driver = get_driver(
-            config.driver,
-            model=config.model,
-            sandbox_config=config.sandbox,
+        self.driver, self.options, self._prompts = init_agent_driver(
+            config,
+            prompts=prompts,
             sandbox_provider=sandbox_provider,
-            profile_name=config.profile_name,
-            options=config.options,
         )
-        self.options = config.options
         self._event_bus = event_bus
-        self._prompts = prompts or {}
 
         if self.PROMPT_KEY_SYSTEM not in self._prompts:
             logger.debug(

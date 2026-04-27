@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from amelia.agents._driver_init import init_agent_driver
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.constants import ToolName, resolve_plan_path
 from amelia.core.types import AgentConfig, DriverType, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
-from amelia.drivers.factory import get_driver
 from amelia.server.models.events import WorkflowEvent
 from amelia.tools.write_plan import create_write_plan_tool
 
@@ -84,17 +84,12 @@ Before planning, discover:
             sandbox_provider: Optional shared sandbox provider for sandbox reuse.
 
         """
-        self.driver = get_driver(
-            config.driver,
-            model=config.model,
-            sandbox_config=config.sandbox,
+        self.driver, self.options, self._prompts = init_agent_driver(
+            config,
+            prompts=prompts,
             sandbox_provider=sandbox_provider,
-            profile_name=config.profile_name,
-            options=config.options,
         )
         self._driver_type = config.driver
-        self.options = config.options
-        self._prompts = prompts or {}
         self._write_plan_tool_cache: dict[str, Any] = {}  # keyed by root_dir
 
     @property

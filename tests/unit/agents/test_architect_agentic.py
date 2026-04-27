@@ -23,7 +23,7 @@ class TestArchitectInitWithAgentConfig:
         """Architect should accept AgentConfig and create its own driver."""
         config = AgentConfig(driver="claude", model="sonnet")
 
-        with patch("amelia.agents.architect.get_driver") as mock_get_driver:
+        with patch("amelia.agents._driver_init.get_driver") as mock_get_driver:
             mock_driver = MagicMock()
             mock_get_driver.return_value = mock_driver
 
@@ -83,7 +83,7 @@ class TestArchitectPlanAsyncGenerator:
 
         mock_agentic_driver.execute_agentic = mock_stream
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_agentic_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_agentic_driver):
             architect = Architect(config)
 
             result = architect.plan(state, profile, workflow_id=uuid4())
@@ -121,7 +121,7 @@ class TestArchitectPlanAsyncGenerator:
 
         mock_agentic_driver.execute_agentic = mock_stream
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_agentic_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_agentic_driver):
             architect = Architect(config)
 
             results = []
@@ -175,7 +175,7 @@ class TestArchitectCwdPassing:
 
         mock_driver.execute_agentic = mock_stream
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             architect = Architect(config)
 
             async for _ in architect.plan(state, profile, workflow_id=uuid4()):
@@ -235,7 +235,7 @@ class TestArchitectToolCallAccumulation:
 
         mock_driver.execute_agentic = mock_stream
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             architect = Architect(config)
 
             final_state = None
@@ -287,7 +287,7 @@ class TestArchitectDesignDocumentInPrompt:
 
         mock_driver.execute_agentic = mock_stream
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             architect = Architect(config)
 
             async for _ in architect.plan(state, profile, workflow_id=uuid4()):
@@ -328,7 +328,7 @@ class TestArchitectDesignDocumentInPrompt:
 
         mock_driver.execute_agentic = mock_stream
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             architect = Architect(config)
 
             async for _ in architect.plan(state, profile, workflow_id=uuid4()):
@@ -385,7 +385,7 @@ class TestArchitectPlanNoDoubleCount:
 
         mock_driver.execute_agentic = mock_stream
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             architect = Architect(config)
 
             final_state = None
@@ -428,7 +428,7 @@ class TestArchitectWritePlanTool:
         mock_drv = MagicMock()
         mock_drv.execute_agentic = capture_execute
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_drv):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_drv):
             architect = Architect(config)
 
             issue = mock_issue_factory()
@@ -469,7 +469,7 @@ class TestArchitectWritePlanTool:
         mock_drv = MagicMock()
         mock_drv.execute_agentic = capture_execute
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_drv):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_drv):
             architect = Architect(config)
 
             issue = mock_issue_factory()
@@ -507,7 +507,7 @@ class TestArchitectWritePlanTool:
         mock_drv = MagicMock()
         mock_drv.execute_agentic = capture_execute
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_drv):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_drv):
             architect = Architect(config)
 
             issue = mock_issue_factory()
@@ -555,7 +555,7 @@ class TestArchitectWritePlanTool:
         mock_drv = MagicMock()
         mock_drv.execute_agentic = mock_stream
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_drv):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_drv):
             architect = Architect(config)
 
             issue = mock_issue_factory()
@@ -595,7 +595,7 @@ class TestArchitectWritePlanTool:
         mock_drv = MagicMock()
         mock_drv.execute_agentic = capture_execute
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_drv):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_drv):
             architect = Architect(config)
 
             issue = mock_issue_factory()

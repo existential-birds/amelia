@@ -10,10 +10,10 @@ from uuid import uuid4
 
 from loguru import logger
 
+from amelia.agents._driver_init import init_agent_driver
 from amelia.agents.schemas.reviewer import SubmitReviewInput
 from amelia.core.types import AgentConfig, Profile, ReviewResult, Severity
 from amelia.drivers.base import AgenticMessageType, SubmitToolDef
-from amelia.drivers.factory import get_driver
 from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
 
 
@@ -135,17 +135,12 @@ class Reviewer:
                 the system prompt. When empty, the reviewer uses generic guidelines.
 
         """
-        self.driver = get_driver(
-            config.driver,
-            model=config.model,
-            sandbox_config=config.sandbox,
+        self.driver, self.options, self._prompts = init_agent_driver(
+            config,
+            prompts=prompts,
             sandbox_provider=sandbox_provider,
-            profile_name=config.profile_name,
-            options=config.options,
         )
-        self.options = config.options
         self._event_bus = event_bus
-        self._prompts = prompts or {}
         self._agent_name = agent_name
         self._review_guidelines = review_guidelines or ""
 

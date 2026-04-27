@@ -138,7 +138,7 @@ class TestPlanCommand:
 
         with patch("amelia.client.cli._get_profile_from_server", new_callable=AsyncMock) as mock_get_profile, \
              patch("amelia.client.cli.create_tracker") as mock_create_tracker, \
-             patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+             patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
 
             mock_get_profile.return_value = mock_profile
             mock_create_tracker.return_value.get_issue.return_value = mock_issue
@@ -211,7 +211,7 @@ class TestPlanCommand:
 
         with patch("amelia.client.cli._get_profile_from_server", new_callable=AsyncMock) as mock_get_profile, \
              patch("amelia.client.cli.create_tracker") as mock_create_tracker, \
-             patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+             patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
 
             mock_get_profile.return_value = work_profile
             mock_create_tracker.return_value.get_issue.return_value = mock_issue
