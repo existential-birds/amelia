@@ -21,6 +21,11 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "pnpm": {
+    "overrides": {
+      "vite": "^6.4.2"
+    }
+  },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
