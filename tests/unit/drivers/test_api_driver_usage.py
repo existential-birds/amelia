@@ -28,18 +28,8 @@ class TestApiDriverGetUsage:
 class TestApiDriverUsageAccumulation:
     """Tests for ApiDriver usage accumulation during execute_agentic."""
 
-    @pytest.fixture
-    def mock_deepagents_for_usage(self) -> Generator[MagicMock, None, None]:
-        """Set up mock for DeepAgents with usage metadata."""
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}), \
-             patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create, \
-             patch("amelia.drivers.api.deepagents.init_chat_model"), \
-             patch("amelia.drivers.api.deepagents.LocalSandbox"):
-
-            yield mock_create
-
     async def test_accumulates_usage_from_ai_messages(
-        self, mock_deepagents_for_usage: MagicMock
+        self, mock_deepagents_local_sandbox: MagicMock
     ) -> None:
         """execute_agentic should accumulate usage from AIMessage.usage_metadata."""
         from amelia.drivers.api.deepagents import ApiDriver
@@ -67,7 +57,7 @@ class TestApiDriverUsageAccumulation:
 
         mock_agent = MagicMock()
         mock_agent.astream = mock_astream
-        mock_deepagents_for_usage.return_value = mock_agent
+        mock_deepagents_local_sandbox.create_deep_agent.return_value = mock_agent
 
         driver = ApiDriver(model="test/model", provider="openrouter")
 
@@ -85,7 +75,7 @@ class TestApiDriverUsageAccumulation:
         assert usage.num_turns == 2
 
     async def test_extracts_cost_from_openrouter_metadata(
-        self, mock_deepagents_for_usage: MagicMock
+        self, mock_deepagents_local_sandbox: MagicMock
     ) -> None:
         """execute_agentic should extract cost from OpenRouter response_metadata."""
         from amelia.drivers.api.deepagents import ApiDriver
@@ -105,7 +95,7 @@ class TestApiDriverUsageAccumulation:
 
         mock_agent = MagicMock()
         mock_agent.astream = mock_astream
-        mock_deepagents_for_usage.return_value = mock_agent
+        mock_deepagents_local_sandbox.create_deep_agent.return_value = mock_agent
 
         driver = ApiDriver(model="test/model", provider="openrouter")
 
@@ -117,7 +107,7 @@ class TestApiDriverUsageAccumulation:
         assert usage.cost_usd == 0.0025
 
     async def test_accumulates_cost_from_multiple_messages(
-        self, mock_deepagents_for_usage: MagicMock
+        self, mock_deepagents_local_sandbox: MagicMock
     ) -> None:
         """Cost should accumulate from multiple AIMessages with response_metadata."""
         from amelia.drivers.api.deepagents import ApiDriver
@@ -145,7 +135,7 @@ class TestApiDriverUsageAccumulation:
 
         mock_agent = MagicMock()
         mock_agent.astream = mock_astream
-        mock_deepagents_for_usage.return_value = mock_agent
+        mock_deepagents_local_sandbox.create_deep_agent.return_value = mock_agent
 
         driver = ApiDriver(model="test/model", provider="openrouter")
 
@@ -157,7 +147,7 @@ class TestApiDriverUsageAccumulation:
         assert usage.cost_usd == 0.003  # 0.001 + 0.002
 
     async def test_tracks_duration_ms(
-        self, mock_deepagents_for_usage: MagicMock
+        self, mock_deepagents_local_sandbox: MagicMock
     ) -> None:
         """execute_agentic should track execution duration in milliseconds."""
         from amelia.drivers.api.deepagents import ApiDriver
@@ -173,7 +163,7 @@ class TestApiDriverUsageAccumulation:
 
         mock_agent = MagicMock()
         mock_agent.astream = mock_astream
-        mock_deepagents_for_usage.return_value = mock_agent
+        mock_deepagents_local_sandbox.create_deep_agent.return_value = mock_agent
 
         driver = ApiDriver(model="test/model", provider="openrouter")
 
@@ -186,7 +176,7 @@ class TestApiDriverUsageAccumulation:
         assert usage.duration_ms >= 100  # At least 100ms
 
     async def test_resets_usage_on_new_execution(
-        self, mock_deepagents_for_usage: MagicMock
+        self, mock_deepagents_local_sandbox: MagicMock
     ) -> None:
         """Each execute_agentic call should reset and start fresh usage tracking."""
         from amelia.drivers.api.deepagents import ApiDriver
@@ -213,7 +203,7 @@ class TestApiDriverUsageAccumulation:
 
         mock_agent = MagicMock()
         mock_agent.astream = mock_astream
-        mock_deepagents_for_usage.return_value = mock_agent
+        mock_deepagents_local_sandbox.create_deep_agent.return_value = mock_agent
 
         driver = ApiDriver(model="test/model", provider="openrouter")
 
@@ -246,18 +236,8 @@ class TestApiDriverSessionContinuity:
             yield
             ApiDriver._sessions.clear()
 
-    @pytest.fixture
-    def mock_deepagents_for_sessions(self) -> Generator[MagicMock, None, None]:
-        """Set up mock for DeepAgents session testing."""
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}), \
-             patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create, \
-             patch("amelia.drivers.api.deepagents.init_chat_model"), \
-             patch("amelia.drivers.api.deepagents.LocalSandbox"):
-
-            yield mock_create
-
     async def test_new_session_creates_checkpointer(
-        self, mock_deepagents_for_sessions: MagicMock
+        self, mock_deepagents_local_sandbox: MagicMock
     ) -> None:
         """execute_agentic without session_id creates a new session."""
         from amelia.drivers.api.deepagents import ApiDriver
@@ -272,7 +252,7 @@ class TestApiDriverSessionContinuity:
 
         mock_agent = MagicMock()
         mock_agent.astream = mock_astream
-        mock_deepagents_for_sessions.return_value = mock_agent
+        mock_deepagents_local_sandbox.create_deep_agent.return_value = mock_agent
 
         driver = ApiDriver(model="test/model", provider="openrouter")
 
@@ -289,7 +269,7 @@ class TestApiDriverSessionContinuity:
         assert result_msg.session_id in ApiDriver._sessions
 
     async def test_resuming_session_reuses_checkpointer(
-        self, mock_deepagents_for_sessions: MagicMock
+        self, mock_deepagents_local_sandbox: MagicMock
     ) -> None:
         """execute_agentic with session_id reuses existing checkpointer."""
         from langgraph.checkpoint.memory import MemorySaver
@@ -314,7 +294,7 @@ class TestApiDriverSessionContinuity:
             mock_agent.astream = mock_astream
             return mock_agent
 
-        mock_deepagents_for_sessions.side_effect = capture_checkpointer
+        mock_deepagents_local_sandbox.create_deep_agent.side_effect = capture_checkpointer
 
         driver = ApiDriver(model="test/model", provider="openrouter")
 
@@ -340,7 +320,7 @@ class TestApiDriverSessionContinuity:
         assert captured_checkpointers[0] is captured_checkpointers[1]
 
     async def test_system_prompt_always_passed(
-        self, mock_deepagents_for_sessions: MagicMock
+        self, mock_deepagents_local_sandbox: MagicMock
     ) -> None:
         """System prompt should always be passed, even on resumed sessions.
 
@@ -366,7 +346,7 @@ class TestApiDriverSessionContinuity:
             mock_agent.astream = mock_astream
             return mock_agent
 
-        mock_deepagents_for_sessions.side_effect = capture_system_prompt
+        mock_deepagents_local_sandbox.create_deep_agent.side_effect = capture_system_prompt
 
         driver = ApiDriver(model="test/model", provider="openrouter")
 
@@ -397,7 +377,7 @@ class TestApiDriverSessionContinuity:
         assert captured_system_prompts[1] == "You are a helpful assistant"
 
     async def test_different_session_ids_create_separate_checkpointers(
-        self, mock_deepagents_for_sessions: MagicMock
+        self, mock_deepagents_local_sandbox: MagicMock
     ) -> None:
         """Different session_ids should create separate checkpointers."""
         from amelia.drivers.api.deepagents import ApiDriver
@@ -412,7 +392,7 @@ class TestApiDriverSessionContinuity:
 
         mock_agent = MagicMock()
         mock_agent.astream = mock_astream
-        mock_deepagents_for_sessions.return_value = mock_agent
+        mock_deepagents_local_sandbox.create_deep_agent.return_value = mock_agent
 
         driver = ApiDriver(model="test/model", provider="openrouter")
 

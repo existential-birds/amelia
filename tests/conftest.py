@@ -5,6 +5,7 @@ used throughout the test suite for the agentic execution model.
 """
 import os
 from collections.abc import AsyncGenerator, Callable, Generator
+from contextlib import contextmanager
 from typing import Any, NamedTuple
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -322,40 +323,40 @@ def mock_driver() -> MagicMock:
 
 
 
-@pytest.fixture
-def mock_deepagents() -> Generator[MagicMock, None, None]:
-    """Fixture for mocking DeepAgents library calls.
+@contextmanager
+def _deepagents_mock_context(sandbox_class: str) -> Generator[MagicMock, None, None]:
+    """Build the deepagents mock context, parameterized by sandbox class.
 
-    Mocks create_deep_agent, init_chat_model, and FilesystemBackend.
-    The returned mock object contains references to all mocked components
-    and allows setting return values for agent.ainvoke() and agent.astream().
+    The deepagents API driver references two backend classes from the same
+    module: ``FilesystemBackend`` (used by ``generate()`` for non-agentic calls)
+    and ``LocalSandbox`` (used by ``execute_agentic()`` for shell-enabled
+    agentic runs). Tests need to patch whichever one their code path actually
+    instantiates so the real backend doesn't touch disk.
 
-    Usage:
-        def test_example(mock_deepagents):
-            mock_deepagents.agent_result["messages"] = [AIMessage(content="response")]
-            # ... call driver.generate() ...
-            mock_deepagents.create_deep_agent.assert_called_once()
+    Yields a ``MagicMock`` container with attributes:
+      - ``create_deep_agent``: the patched factory mock
+      - ``init_chat_model``: the patched model init mock
+      - ``backend_class``: the patched sandbox/backend class
+      - ``agent``: the AsyncMock agent returned by ``create_deep_agent``
+      - ``agent_result``: dict consumed by ``agent.ainvoke``; mutate to control
+      - ``stream_chunks``: list consumed by ``agent.astream``; mutate to control
     """
     from collections.abc import AsyncIterator
 
     with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-api-key"}), \
          patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create_agent, \
          patch("amelia.drivers.api.deepagents.init_chat_model") as mock_init_model, \
-         patch("amelia.drivers.api.deepagents.FilesystemBackend") as mock_backend_class:
+         patch(f"amelia.drivers.api.deepagents.{sandbox_class}") as mock_backend_class:
 
-        # Set up default agent result (can be modified by tests)
         agent_result: dict[str, Any] = {"messages": []}
 
-        # Create container for all mocks first so closures can reference it
         mocks = MagicMock()
-        mocks.stream_chunks = []  # Initialize default stream chunks
+        mocks.stream_chunks = []
 
-        # Create mock agent
         mock_agent = AsyncMock()
         mock_agent.ainvoke = AsyncMock(return_value=agent_result)
 
         async def mock_astream(*args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
-            # Look up stream_chunks on mocks dynamically to allow test modification
             for chunk in mocks.stream_chunks:
                 yield chunk
 
@@ -365,13 +366,41 @@ def mock_deepagents() -> Generator[MagicMock, None, None]:
         mock_init_model.return_value = MagicMock()
         mock_backend_class.return_value = MagicMock()
 
-        # Set remaining attributes on mocks container
         mocks.create_deep_agent = mock_create_agent
         mocks.init_chat_model = mock_init_model
         mocks.backend_class = mock_backend_class
         mocks.agent = mock_agent
         mocks.agent_result = agent_result
 
+        yield mocks
+
+
+@pytest.fixture
+def mock_deepagents() -> Generator[MagicMock, None, None]:
+    """Mock DeepAgents library calls for non-agentic ``generate()`` paths.
+
+    Patches ``FilesystemBackend`` (the backend used by ``generate()``).
+    Use :func:`mock_deepagents_local_sandbox` instead when the test exercises
+    ``execute_agentic()``.
+
+    Usage:
+        def test_example(mock_deepagents):
+            mock_deepagents.agent_result["messages"] = [AIMessage(content="response")]
+            # ... call driver.generate() ...
+            mock_deepagents.create_deep_agent.assert_called_once()
+    """
+    with _deepagents_mock_context("FilesystemBackend") as mocks:
+        yield mocks
+
+
+@pytest.fixture
+def mock_deepagents_local_sandbox() -> Generator[MagicMock, None, None]:
+    """Mock DeepAgents library calls for ``execute_agentic()`` paths.
+
+    Patches ``LocalSandbox`` (the backend used by ``execute_agentic()``)
+    instead of ``FilesystemBackend``. Surface mirrors :func:`mock_deepagents`.
+    """
+    with _deepagents_mock_context("LocalSandbox") as mocks:
         yield mocks
 
 
