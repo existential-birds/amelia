@@ -200,6 +200,18 @@ async def plan_validator_node(
     if not plan_content.strip():
         raise ValueError(f"Plan file is empty at {plan_path}")
 
+    # Defensive guard: plan_markdown field changes meaning between pipeline stages.
+    # Before this node: holds architect's raw RESULT message ("I've written...")
+    # After this node: holds actual plan content from file.
+    # Validate the file content looks like a real plan to catch stage confusion.
+    if not _looks_like_plan(plan_content):
+        raise ValueError(
+            f"Plan file at {plan_path} does not contain valid plan structure. "
+            "Expected markdown with task headers (### Task N:). "
+            "This may indicate the architect's raw output was written instead of "
+            "the structured plan."
+        )
+
     # Check for structured plan data (JSON sidecar from write_plan tool)
     json_sidecar = plan_path.with_suffix(".json")
     parsed_sidecar: WritePlanInput | None = None

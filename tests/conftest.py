@@ -404,6 +404,57 @@ def mock_deepagents_local_sandbox() -> Generator[MagicMock, None, None]:
         yield mocks
 
 
+@pytest.fixture
+def mock_deepagents_both() -> Generator[MagicMock, None, None]:
+    """Mock DeepAgents library calls for tests exercising both code paths.
+
+    Patches both ``FilesystemBackend`` (used by ``generate()``) and
+    ``LocalSandbox`` (used by ``execute_agentic()``) simultaneously.
+    Use this fixture when a test calls both methods.
+
+    Usage:
+        def test_example(mock_deepagents_both):
+            mock_deepagents_both.agent_result["messages"] = [AIMessage(content="response")]
+            # ... call driver.generate() and/or driver.execute_agentic() ...
+            mock_deepagents_both.create_deep_agent.assert_called()
+    """
+    from collections.abc import AsyncIterator
+
+    with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-api-key"}), \
+         patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create_agent, \
+         patch("amelia.drivers.api.deepagents.init_chat_model") as mock_init_model, \
+         patch("amelia.drivers.api.deepagents.FilesystemBackend") as mock_fs_backend, \
+         patch("amelia.drivers.api.deepagents.LocalSandbox") as mock_local_sandbox:
+
+        agent_result: dict[str, Any] = {"messages": []}
+
+        mocks = MagicMock()
+        mocks.stream_chunks = []
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=agent_result)
+
+        async def mock_astream(*args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
+            for chunk in mocks.stream_chunks:
+                yield chunk
+
+        mock_agent.astream = mock_astream
+
+        mock_create_agent.return_value = mock_agent
+        mock_init_model.return_value = MagicMock()
+        mock_fs_backend.return_value = MagicMock()
+        mock_local_sandbox.return_value = MagicMock()
+
+        mocks.create_deep_agent = mock_create_agent
+        mocks.init_chat_model = mock_init_model
+        mocks.filesystem_backend = mock_fs_backend
+        mocks.local_sandbox = mock_local_sandbox
+        mocks.agent = mock_agent
+        mocks.agent_result = agent_result
+
+        yield mocks
+
+
 class LangGraphMocks(NamedTuple):
     """Container for LangGraph mock objects."""
     graph: MagicMock
