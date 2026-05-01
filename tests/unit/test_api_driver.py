@@ -305,7 +305,7 @@ class TestLocalSandbox:
     @pytest.fixture
     def sandbox(self, tmp_path: Path) -> LocalSandbox:
         """Create LocalSandbox instance for tests."""
-        return LocalSandbox(root_dir=str(tmp_path))
+        return LocalSandbox(root_dir=str(tmp_path), virtual_mode=False)
 
     def test_contract_sandbox_backend_protocol(self, sandbox: LocalSandbox) -> None:
         """Should pass isinstance check for SandboxBackendProtocol.
@@ -357,7 +357,7 @@ class TestLocalSandbox:
         """Should return error response when command times out."""
         from amelia.drivers.api.deepagents import LocalSandbox
 
-        sandbox = LocalSandbox(root_dir=str(tmp_path))
+        sandbox = LocalSandbox(root_dir=str(tmp_path), virtual_mode=False)
 
         with patch("amelia.drivers.api.deepagents._DEFAULT_TIMEOUT", 0.01):
             result = sandbox.execute("sleep 1")
@@ -405,8 +405,10 @@ class TestLocalSandbox:
         (tmp_path / "subdir" / "file.txt").write_text("content here")
 
         # Read using virtual path (with leading /)
-        content = sandbox.read("/subdir/file.txt")
-        assert "content here" in content
+        result = sandbox.read("/subdir/file.txt")
+        assert result.error is None
+        assert result.file_data is not None
+        assert "content here" in result.file_data["content"]
 
 
 class TestExecuteAgenticYieldsAgenticMessage:

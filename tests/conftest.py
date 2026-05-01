@@ -34,6 +34,20 @@ from amelia.server.models.events import EventType, WorkflowEvent
 rebuild_implementation_state()
 
 
+@pytest.fixture(autouse=True)
+def _isolate_git_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clear inherited git env vars so subprocess `git` invocations honor cwd.
+
+    When pytest runs inside a git hook (e.g. pre-push), git sets `GIT_DIR` and
+    `GIT_WORK_TREE` in the env. Those override `cwd=` on `subprocess.run`/
+    `create_subprocess_exec`, causing tests that create temp git repos or call
+    `git` against a `cwd=` to silently operate on the host repo instead —
+    committing, checking out, and resetting the wrong tree.
+    """
+    for var in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY"):
+        monkeypatch.delenv(var, raising=False)
+
+
 @pytest.fixture
 def event_bus() -> EventBus:
     """Create EventBus instance for testing."""
