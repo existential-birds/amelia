@@ -1,6 +1,6 @@
 """Unit tests for _driver_init module.
 
-Tests for init_agent_driver() helper and AgentDriverInit namedtuple.
+Tests for init_agent_driver() helper and AgentDriverInit model.
 """
 from unittest.mock import MagicMock, patch
 
@@ -9,9 +9,9 @@ from amelia.core.types import AgentConfig, SandboxConfig
 
 
 class TestAgentDriverInit:
-    """Tests for AgentDriverInit namedtuple."""
+    """Tests for AgentDriverInit model."""
 
-    def test_namedtuple_attributes(self) -> None:
+    def test_model_attributes(self) -> None:
         """AgentDriverInit should have driver, options, and prompts attributes."""
         mock_driver = MagicMock()
         options = {"max_iterations": 5}
@@ -20,8 +20,8 @@ class TestAgentDriverInit:
         result = AgentDriverInit(driver=mock_driver, options=options, prompts=prompts)
 
         assert result.driver is mock_driver
-        assert result.options is options
-        assert result.prompts is prompts
+        assert result.options == options
+        assert result.prompts == prompts
 
     def test_tuple_unpacking(self) -> None:
         """AgentDriverInit should support tuple unpacking."""
@@ -33,8 +33,8 @@ class TestAgentDriverInit:
 
         driver, opts, prts = result
         assert driver is mock_driver
-        assert opts is options
-        assert prts is prompts
+        assert opts == options
+        assert prts == prompts
 
 
 class TestInitAgentDriver:
@@ -116,7 +116,7 @@ class TestInitAgentDriver:
 
             result = init_agent_driver(config, prompts=prompts)
 
-            assert result.prompts is prompts
+            assert result.prompts == prompts
 
     def test_sandbox_provider_none_by_default(self) -> None:
         """init_agent_driver should pass sandbox_provider=None when not provided."""

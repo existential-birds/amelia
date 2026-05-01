@@ -59,7 +59,7 @@ async def test_call_architect_node_creates_plan_directory_if_missing(
         plan_file.write_text(plan_content)
         # Create mock final state
         mock_final_state = MagicMock()
-        mock_final_state.plan_markdown = "Plan written to file."
+        mock_final_state.architect_raw_output = "Plan written to file."
         mock_final_state.tool_calls = []
         mock_final_state.plan_path = None
         yield mock_final_state, MagicMock()

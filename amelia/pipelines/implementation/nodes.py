@@ -200,16 +200,30 @@ async def plan_validator_node(
     if not plan_content.strip():
         raise ValueError(f"Plan file is empty at {plan_path}")
 
-    # Defensive guard: plan_markdown field changes meaning between pipeline stages.
-    # Before this node: holds architect's raw RESULT message ("I've written...")
-    # After this node: holds actual plan content from file.
-    # Validate the file content looks like a real plan to catch stage confusion.
+    # Defensive guard: plan_markdown is set by plan_validator_node from the file.
+    # Catch the case where the architect wrote raw scratch output (e.g. "I've written
+    # the plan...") to the plan path instead of structured markdown.
     if not _looks_like_plan(plan_content):
+        preview = plan_content.strip().splitlines()[:5]
+        preview_text = "\n  ".join(preview) if preview else "(empty)"
+        # Surface the structural validator's specific issues so the failure message
+        # tells the operator what is missing (task headers, goal, length) rather
+        # than a generic "does not look like a plan".
+        diag = validate_plan_structure(_extract_goal_from_plan(plan_content), plan_content)
+        diag_lines = "; ".join(diag.issues) if diag.issues else "no specific structural issues detected"
+        logger.warning(
+            "Plan file failed structural pre-check",
+            plan_path=str(plan_path),
+            content_length=len(plan_content),
+            preview_lines=preview,
+            diagnostic_issues=diag.issues,
+        )
         raise ValueError(
-            f"Plan file at {plan_path} does not contain valid plan structure. "
+            f"Plan file at {plan_path} does not contain valid plan structure: "
+            f"{diag_lines}. "
             "Expected markdown with task headers (### Task N:). "
             "This may indicate the architect's raw output was written instead of "
-            "the structured plan."
+            f"the structured plan. First lines:\n  {preview_text}"
         )
 
     # Check for structured plan data (JSON sidecar from write_plan tool)
@@ -299,9 +313,9 @@ async def call_architect_node(
         config: Optional RunnableConfig with stream_emitter in configurable.
 
     Returns:
-        Partial state dict with plan_markdown, tool_calls, and tool_results.
-        plan_markdown holds the architect's final RESULT message at this stage;
-        plan_validator_node replaces it with the plan file's content.
+        Partial state dict with architect_raw_output, tool_calls, and tool_results.
+        architect_raw_output holds the architect's RESULT message (e.g., "I've written...").
+        plan_markdown is set later by plan_validator_node from the actual plan file.
 
     Raises:
         ValueError: If no issue is provided in the state.
@@ -370,16 +384,17 @@ async def call_architect_node(
             tool_calls=final_state.tool_calls,
             plan_path=plan_path,
             working_dir=working_dir,
-            raw_output=final_state.plan_markdown,
+            raw_output=final_state.architect_raw_output,
         )
 
+    raw_output_len = len(final_state.architect_raw_output) if final_state.architect_raw_output else 0
     if plan_written:
         logger.info(
             "Agent action completed",
             agent="architect",
             action="generated_plan",
             details={
-                "raw_output_length": len(final_state.plan_markdown) if final_state.plan_markdown else 0,
+                "raw_output_length": raw_output_len,
                 "tool_calls_count": len(final_state.tool_calls),
             },
         )
@@ -390,13 +405,13 @@ async def call_architect_node(
             action="generated_plan",
             success=False,
             details={
-                "raw_output_length": len(final_state.plan_markdown) if final_state.plan_markdown else 0,
+                "raw_output_length": raw_output_len,
                 "tool_calls_count": len(final_state.tool_calls),
             },
         )
 
     return {
-        "plan_markdown": final_state.plan_markdown,
+        "architect_raw_output": final_state.architect_raw_output,
         "architect_error": final_state.architect_error,
         "tool_calls": list(final_state.tool_calls),
         "tool_results": list(final_state.tool_results),

@@ -164,7 +164,7 @@ class TestGenerateProviderErrorWrapping:
     """Tests that generate wraps model provider ValueErrors."""
 
     async def test_generate_wraps_model_provider_error(
-        self, mock_deepagents: MagicMock
+        self, mock_deepagents_filesystem: MagicMock
     ) -> None:
         """generate should wrap dict-based ValueError as ModelProviderError."""
         from amelia.drivers.api.deepagents import ApiDriver
@@ -175,7 +175,7 @@ class TestGenerateProviderErrorWrapping:
                 {"error": {"message": "invalid function arguments json string"}, "provider": "minimax"}
             )
         )
-        mock_deepagents.create_deep_agent.return_value = mock_agent
+        mock_deepagents_filesystem.create_deep_agent.return_value = mock_agent
 
         driver = ApiDriver(model="test/model", provider="openrouter")
 

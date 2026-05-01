@@ -73,8 +73,8 @@ def _mock_api_key(mock_api_key: None) -> None:
 class TestArchitectNodeIntegration:
     """Test architect node with real Architect, mock at driver.execute_agentic() level."""
 
-    async def test_architect_node_returns_plan_markdown(self, tmp_path: Path) -> None:
-        """Architect node should return plan_markdown; goal/key_files extraction is done by plan_validator_node.
+    async def test_architect_node_returns_raw_output(self, tmp_path: Path) -> None:
+        """Architect node should return architect_raw_output; goal/key_files extraction is done by plan_validator_node.
 
         Real components: get_driver, ApiDriver, Architect
         Mock boundary: ApiDriver.execute_agentic (LLM call)
@@ -91,7 +91,7 @@ class TestArchitectNodeIntegration:
         config = make_config(thread_id=str(uuid4()), profile=profile)
 
         # Mock at driver.execute_agentic level - this is the HTTP boundary
-        plan_markdown = "# Plan\n\n**Goal:** Implement feature X by modifying component Y\n\n1. Do thing A\n2. Do thing B"
+        raw_output = "# Plan\n\n**Goal:** Implement feature X by modifying component Y\n\n1. Do thing A\n2. Do thing B"
         mock_messages = [
             AgenticMessage(
                 type=AgenticMessageType.THINKING,
@@ -99,7 +99,7 @@ class TestArchitectNodeIntegration:
             ),
             AgenticMessage(
                 type=AgenticMessageType.RESULT,
-                content=plan_markdown,
+                content=raw_output,
                 session_id="session-123",
             ),
         ]
@@ -107,14 +107,15 @@ class TestArchitectNodeIntegration:
         with patch.object(ApiDriver, "execute_agentic", create_mock_execute_agentic(mock_messages)):
             result = await call_architect_node(state, cast(RunnableConfig, config))
 
-        # Architect node returns the architect's RESULT message in plan_markdown.
-        # plan_validator_node later replaces it with the plan file's content.
-        assert "plan_markdown" in result
-        assert result["plan_markdown"] == plan_markdown
+        # Architect node returns the architect's RESULT message in architect_raw_output.
+        # plan_markdown is set later by plan_validator_node from the actual plan file.
+        assert "architect_raw_output" in result
+        assert result["architect_raw_output"] == raw_output
         assert "tool_calls" in result
         assert "tool_results" in result
-        # goal extraction happens in plan_validator_node, not here
+        # goal and plan_markdown extraction happens in plan_validator_node, not here
         assert "goal" not in result
+        assert "plan_markdown" not in result
 
     async def test_architect_node_requires_issue(self, tmp_path: Path) -> None:
         """Architect node should raise error if no issue provided."""
@@ -419,10 +420,10 @@ Add comprehensive tests for the authentication flow.
         with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
             architect_result = await call_architect_node(state, cast(RunnableConfig, config))
 
-        # Verify architect returns plan_markdown (the RESULT message at this stage,
-        # not the actual plan content - that gets populated by plan_validator_node)
-        assert "plan_markdown" in architect_result
-        assert "implementation plan" in architect_result["plan_markdown"].lower()
+        # Verify architect returns architect_raw_output (the RESULT message).
+        # plan_markdown is set later by plan_validator_node from the actual plan file.
+        assert "architect_raw_output" in architect_result
+        assert "implementation plan" in architect_result["architect_raw_output"].lower()
 
         # Verify tool calls were recorded
         assert "tool_calls" in architect_result
@@ -437,7 +438,7 @@ Add comprehensive tests for the authentication flow.
         # --- Phase 2: Plan Validator node ---
         # Update state with architect results (simulating graph transition)
         state_after_architect = state.model_copy(
-            update={"plan_markdown": architect_result["plan_markdown"]}
+            update={"architect_raw_output": architect_result["architect_raw_output"]}
         )
 
         # plan_validator_node uses regex-only extraction (no LLM call)

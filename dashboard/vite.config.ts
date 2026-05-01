@@ -31,17 +31,16 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'router': ['react-router-dom'],
-          'radix': [
-            '@radix-ui/react-collapsible',
-            '@radix-ui/react-dialog',
-            '@radix-ui/react-dropdown-menu',
-            '@radix-ui/react-scroll-area',
-            '@radix-ui/react-slot',
-            '@radix-ui/react-tooltip',
-          ],
+        manualChunks(id) {
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            return 'react-vendor';
+          }
+          if (id.includes('node_modules/react-router-dom/')) {
+            return 'router';
+          }
+          if (/node_modules\/@radix-ui\/react-(collapsible|dialog|dropdown-menu|scroll-area|slot|tooltip)\//.test(id)) {
+            return 'radix';
+          }
         },
       },
     },

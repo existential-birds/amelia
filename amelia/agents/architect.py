@@ -84,11 +84,14 @@ Before planning, discover:
             sandbox_provider: Optional shared sandbox provider for sandbox reuse.
 
         """
-        self.driver, self.options, self._prompts = init_agent_driver(
+        _init = init_agent_driver(
             config,
             prompts=prompts,
             sandbox_provider=sandbox_provider,
         )
+        self.driver = _init.driver
+        self.options = _init.options
+        self._prompts = _init.prompts
         self._driver_type = config.driver
         self._write_plan_tool_cache: dict[str, Any] = {}  # keyed by root_dir
 
@@ -237,13 +240,12 @@ Before planning, discover:
                             break  # Use first write call (should be the plan)
 
                     # Yield final state with all updates.
-                    # plan_markdown holds the architect's final RESULT message here; the
-                    # plan_validator_node later replaces it with the actual plan content
-                    # read from the file written by the write_plan / write_file tool.
+                    # architect_raw_output holds the RESULT message (e.g., "I've written...").
+                    # plan_markdown is set later by plan_validator_node from the actual file.
                     current_state = state.model_copy(update={
                         "tool_calls": tool_calls,
                         "tool_results": tool_results,
-                        "plan_markdown": raw_output,
+                        "architect_raw_output": raw_output,
                         "plan_path": extracted_plan_path,
                     })
                     yield current_state, event

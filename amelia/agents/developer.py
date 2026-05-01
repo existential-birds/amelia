@@ -53,11 +53,14 @@ class Developer:
                 Supports key: "developer.system".
             sandbox_provider: Optional shared sandbox provider for sandbox reuse.
         """
-        self.driver, self.options, self._prompts = init_agent_driver(
+        _init = init_agent_driver(
             config,
             prompts=prompts,
             sandbox_provider=sandbox_provider,
         )
+        self.driver = _init.driver
+        self.options = _init.options
+        self._prompts = _init.prompts
 
     @property
     def system_prompt(self) -> str:

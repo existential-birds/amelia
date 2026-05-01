@@ -2,7 +2,7 @@
 
 import os
 import uuid
-from collections.abc import AsyncGenerator, Awaitable
+from collections.abc import AsyncGenerator, Coroutine
 from datetime import UTC, datetime
 from typing import Protocol
 from uuid import uuid4
@@ -34,7 +34,7 @@ class WorkflowFactory(Protocol):
         workflow_status: WorkflowStatus | str = ...,
         completed_at: datetime | None = ...,
         failure_reason: str | None = ...,
-    ) -> Awaitable[ServerExecutionState]:
+    ) -> Coroutine[None, None, ServerExecutionState]:
         ...
 
 
@@ -54,7 +54,7 @@ class TokenUsageFactory(Protocol):
         cache_read_tokens: int = ...,
         duration_ms: int = ...,
         num_turns: int = ...,
-    ) -> Awaitable[TokenUsage]:
+    ) -> Coroutine[None, None, TokenUsage]:
         ...
 
 

@@ -96,11 +96,14 @@ Provide clear evidence for each disposition decision."""
             sandbox_provider: Optional shared sandbox provider for sandbox reuse.
 
         """
-        self.driver, self.options, self._prompts = init_agent_driver(
+        _init = init_agent_driver(
             config,
             prompts=prompts,
             sandbox_provider=sandbox_provider,
         )
+        self.driver = _init.driver
+        self.options = _init.options
+        self._prompts = _init.prompts
         self._event_bus = event_bus
 
         if self.PROMPT_KEY_SYSTEM not in self._prompts:

@@ -135,11 +135,14 @@ class Reviewer:
                 the system prompt. When empty, the reviewer uses generic guidelines.
 
         """
-        self.driver, self.options, self._prompts = init_agent_driver(
+        _init = init_agent_driver(
             config,
             prompts=prompts,
             sandbox_provider=sandbox_provider,
         )
+        self.driver = _init.driver
+        self.options = _init.options
+        self._prompts = _init.prompts
         self._event_bus = event_bus
         self._agent_name = agent_name
         self._review_guidelines = review_guidelines or ""

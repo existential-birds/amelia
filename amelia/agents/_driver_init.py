@@ -7,19 +7,22 @@ focus on agent-specific state.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, NamedTuple
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 
+from pydantic import BaseModel, ConfigDict, SkipValidation
+
+from amelia.drivers.base import DriverInterface
 from amelia.drivers.factory import get_driver
 
 
 if TYPE_CHECKING:
     from amelia.core.types import AgentConfig
-    from amelia.drivers.base import DriverInterface
     from amelia.sandbox.provider import SandboxProvider
 
 
-class AgentDriverInit(NamedTuple):
-    """Tuple of values produced by :func:`init_agent_driver`.
+class AgentDriverInit(BaseModel):
+    """Result of :func:`init_agent_driver`.
 
     Attributes:
         driver: Configured LLM driver instance.
@@ -27,9 +30,19 @@ class AgentDriverInit(NamedTuple):
         prompts: Normalised prompt overrides (``{}`` when none provided).
     """
 
-    driver: DriverInterface
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    driver: SkipValidation[DriverInterface]
     options: dict[str, Any]
     prompts: dict[str, str]
+
+    def __iter__(self) -> Iterator[Any]:  # type: ignore[override]
+        """Support tuple unpacking for backward compatibility."""
+        return iter((self.driver, self.options, self.prompts))
+
+    def __len__(self) -> int:
+        """Return number of fields for unpacking."""
+        return 3
 
 
 def init_agent_driver(

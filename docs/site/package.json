@@ -24,6 +24,9 @@
   "pnpm": {
     "overrides": {
       "vite": "^6.4.2"
+    },
+    "overridesComments": {
+      "vite": "Path traversal in optimized deps .map handling, fixed in vite 6.4.2 (Dependabot alert #55). VitePress 1.x pins vite ^5.4.14 transitively; force 6.4.2 here. Remove this override once VitePress upgrades its vite peer."
     }
   },
   "license": "Apache-2.0",

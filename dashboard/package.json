@@ -83,6 +83,10 @@
     "overrides": {
       "lodash-es": "^4.18.1",
       "uuid": "^14.0.0"
+    },
+    "overridesComments": {
+      "lodash-es": "Prototype pollution and code injection (Dependabot alerts #50, #51). chevrotain transitively pins lodash-es 4.17.21; force ^4.18.1 here. Remove this override once chevrotain updates its lodash-es peer.",
+      "uuid": "Missing buffer bounds check (Dependabot alert #67). mermaid transitively pins uuid ^11.1.0; force ^14.0.0 here. Remove this override once mermaid updates its uuid peer."
     }
   }
 }

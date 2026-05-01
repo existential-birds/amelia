@@ -347,6 +347,10 @@ class TestPipelineEndToEnd:
                 return_value=mock_driver,
             ),
             patch(
+                "amelia.agents._driver_init.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
                 "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
                 return_value=mock_git_ops,
             ),

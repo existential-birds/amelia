@@ -376,7 +376,7 @@ def _deepagents_mock_context(sandbox_class: str) -> Generator[MagicMock, None, N
 
 
 @pytest.fixture
-def mock_deepagents() -> Generator[MagicMock, None, None]:
+def mock_deepagents_filesystem() -> Generator[MagicMock, None, None]:
     """Mock DeepAgents library calls for non-agentic ``generate()`` paths.
 
     Patches ``FilesystemBackend`` (the backend used by ``generate()``).
@@ -384,10 +384,10 @@ def mock_deepagents() -> Generator[MagicMock, None, None]:
     ``execute_agentic()``.
 
     Usage:
-        def test_example(mock_deepagents):
-            mock_deepagents.agent_result["messages"] = [AIMessage(content="response")]
+        def test_example(mock_deepagents_filesystem):
+            mock_deepagents_filesystem.agent_result["messages"] = [AIMessage(content="response")]
             # ... call driver.generate() ...
-            mock_deepagents.create_deep_agent.assert_called_once()
+            mock_deepagents_filesystem.create_deep_agent.assert_called_once()
     """
     with _deepagents_mock_context("FilesystemBackend") as mocks:
         yield mocks
@@ -398,7 +398,7 @@ def mock_deepagents_local_sandbox() -> Generator[MagicMock, None, None]:
     """Mock DeepAgents library calls for ``execute_agentic()`` paths.
 
     Patches ``LocalSandbox`` (the backend used by ``execute_agentic()``)
-    instead of ``FilesystemBackend``. Surface mirrors :func:`mock_deepagents`.
+    instead of ``FilesystemBackend``. Surface mirrors :func:`mock_deepagents_filesystem`.
     """
     with _deepagents_mock_context("LocalSandbox") as mocks:
         yield mocks
