@@ -18,7 +18,7 @@ class Migrator:
         """Apply pending migrations."""
         await self._ensure_migrations_table()
         current = await self._current_version()
-        migrations = self._load_migrations()
+        migrations = Migrator._load_migrations()
 
         for version, sql in migrations:
             if version > current:
@@ -44,7 +44,8 @@ class Migrator:
         )
         return int(result) if result is not None else 0
 
-    def _load_migrations(self) -> list[tuple[int, str]]:
+    @staticmethod
+    def _load_migrations() -> list[tuple[int, str]]:
         """Load SQL migration files from the migrations directory."""
         migrations_dir = resources.files("amelia.server.database") / "migrations"
         result = []

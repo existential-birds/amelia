@@ -3,6 +3,7 @@
 import os
 from collections.abc import AsyncIterator
 
+import asyncpg
 import pytest
 
 from amelia.server.database.connection import Database
@@ -16,7 +17,8 @@ DATABASE_URL = os.environ.get(
     "postgresql://amelia:amelia@localhost:5434/amelia_test",
 )
 
-LATEST_MIGRATION_VERSION = max(v for v, _ in Migrator(None)._load_migrations())  # type: ignore[arg-type]
+_MIGRATION_VERSIONS = {v for v, _ in Migrator._load_migrations()}
+LATEST_MIGRATION_VERSION = max(_MIGRATION_VERSIONS)
 
 
 @pytest.fixture
@@ -66,13 +68,20 @@ async def test_migrator_applies_initial_schema(db: Database) -> None:
 async def test_migrator_records_version(db: Database) -> None:
     migrator = Migrator(db)
     await migrator.run()
-    version = await db.fetch_scalar("SELECT MAX(version) FROM schema_migrations")
-    assert version == LATEST_MIGRATION_VERSION
+    rows: list[asyncpg.Record] = await db.fetch_all(
+        "SELECT version FROM schema_migrations ORDER BY version"
+    )
+    recorded: set[int] = {row["version"] for row in rows}
+    assert recorded == _MIGRATION_VERSIONS
 
 
 async def test_migrator_is_idempotent(db: Database) -> None:
     migrator = Migrator(db)
     await migrator.run()
     await migrator.run()  # Should not fail
-    version = await db.fetch_scalar("SELECT MAX(version) FROM schema_migrations")
-    assert version == LATEST_MIGRATION_VERSION
+    rows: list[asyncpg.Record] = await db.fetch_all(
+        "SELECT version FROM schema_migrations ORDER BY version"
+    )
+    recorded: set[int] = {row["version"] for row in rows}
+    assert recorded == _MIGRATION_VERSIONS
+    assert len(rows) == len(_MIGRATION_VERSIONS)
