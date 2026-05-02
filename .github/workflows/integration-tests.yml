@@ -1,0 +1,176 @@
+name: Integration Tests
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+on:
+  pull_request_review:
+    types: [submitted]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch, tag, or SHA) to run integration tests against"
+        required: true
+        default: "main"
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+      sha: ${{ steps.gate.outputs.sha }}
+    steps:
+      - name: Determine eligibility
+        id: gate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const event = context.eventName;
+
+            if (event === 'workflow_dispatch') {
+              core.info(`Manual dispatch for ref=${context.payload.inputs.ref}`);
+              core.setOutput('run', 'true');
+              core.setOutput('sha', context.payload.inputs.ref);
+              return;
+            }
+
+            let pr_number = null;
+            let head_sha = null;
+
+            if (event === 'pull_request_review') {
+              if (context.payload.review.state !== 'approved') {
+                core.info(`Skip: review state=${context.payload.review.state}`);
+                return;
+              }
+              pr_number = context.payload.pull_request.number;
+              head_sha = context.payload.pull_request.head.sha;
+            } else if (event === 'workflow_run') {
+              const wr = context.payload.workflow_run;
+              if (wr.conclusion !== 'success') {
+                core.info(`Skip: CI conclusion=${wr.conclusion}`);
+                return;
+              }
+              if (wr.event !== 'pull_request') {
+                core.info(`Skip: CI run event=${wr.event}`);
+                return;
+              }
+              const prs = wr.pull_requests || [];
+              if (prs.length === 0) {
+                core.info('Skip: no PRs associated with CI run');
+                return;
+              }
+              pr_number = prs[0].number;
+              head_sha = wr.head_sha;
+            } else {
+              core.info(`Skip: unsupported event ${event}`);
+              return;
+            }
+
+            core.info(`Evaluating PR #${pr_number} at sha ${head_sha}`);
+
+            const ciRuns = await github.paginate(
+              github.rest.actions.listWorkflowRunsForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                head_sha,
+                per_page: 100,
+              },
+            );
+            const ciRun = ciRuns.find(
+              (r) => r.name === 'CI' && r.event === 'pull_request',
+            );
+            if (!ciRun) {
+              core.info(`Skip: no CI pull_request run found for sha ${head_sha}`);
+              return;
+            }
+            if (ciRun.status !== 'completed') {
+              core.info(`Skip: CI for ${head_sha} status=${ciRun.status}`);
+              return;
+            }
+            if (ciRun.conclusion !== 'success') {
+              core.info(`Skip: CI for ${head_sha} conclusion=${ciRun.conclusion}`);
+              return;
+            }
+
+            const reviews = await github.paginate(
+              github.rest.pulls.listReviews,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr_number,
+                per_page: 100,
+              },
+            );
+            const latestByUser = {};
+            for (const r of reviews) {
+              if (!r.user) continue;
+              if (
+                r.state === 'APPROVED' ||
+                r.state === 'CHANGES_REQUESTED' ||
+                r.state === 'DISMISSED'
+              ) {
+                latestByUser[r.user.login] = r.state;
+              }
+            }
+            const approved = Object.values(latestByUser).some(
+              (s) => s === 'APPROVED',
+            );
+            if (!approved) {
+              core.info('Skip: no current approving review');
+              return;
+            }
+
+            core.info(`Gate passed: PR #${pr_number} approved + CI green at ${head_sha}`);
+            core.setOutput('run', 'true');
+            core.setOutput('sha', head_sha);
+
+  integration:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: amelia
+          POSTGRES_PASSWORD: amelia
+          POSTGRES_DB: amelia_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://amelia:amelia@localhost:5432/amelia_test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run integration tests
+        run: uv run pytest tests/integration -m integration -v
