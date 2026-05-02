@@ -145,7 +145,7 @@ def create_mock_graph(
             raise fail_with
 
         # Yield architect_node update
-        yield ("updates", {"architect_node": {"goal": goal, "plan_markdown": plan_markdown}})
+        yield ("updates", {"architect_node": {"goal": goal, "architect_raw_output": plan_markdown}})
 
         if interrupt_immediately:
             # Yield interrupt chunk to signal waiting at human_approval_node

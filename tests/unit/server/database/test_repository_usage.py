@@ -1,14 +1,14 @@
 """Tests for WorkflowRepository usage trend methods."""
 
 from datetime import UTC, date, datetime
-from uuid import uuid4
 
 import pytest
 
 from amelia.server.database.connection import Database
 from amelia.server.database.repository import WorkflowRepository
-from amelia.server.models.state import ServerExecutionState, WorkflowStatus
-from amelia.server.models.tokens import TokenUsage
+from amelia.server.models.state import WorkflowStatus
+
+from .conftest import TokenUsageFactory, WorkflowFactory
 
 
 pytestmark = pytest.mark.integration
@@ -19,7 +19,10 @@ class TestUsageTrend:
 
     @pytest.fixture
     async def db_with_token_usage(
-        self, db_with_schema: Database
+        self,
+        db_with_schema: Database,
+        make_workflow: WorkflowFactory,
+        make_token_usage: TokenUsageFactory,
     ) -> Database:
         """Create database with token usage data across multiple days and models.
 
@@ -31,106 +34,81 @@ class TestUsageTrend:
         Returns:
             Database with token usage records.
         """
-        repo = WorkflowRepository(db_with_schema)
-
-        # Create workflows
-        wf1_id = uuid4()
-        wf2_id = uuid4()
-        wf3_id = uuid4()
-        wf1 = ServerExecutionState(
-            id=wf1_id,
+        wf1 = await make_workflow(
             issue_id="USAGE-1",
             worktree_path="/tmp/test-usage-1",
-            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
         )
-        wf2 = ServerExecutionState(
-            id=wf2_id,
+        wf2 = await make_workflow(
             issue_id="USAGE-2",
             worktree_path="/tmp/test-usage-2",
-            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
         )
-        wf3 = ServerExecutionState(
-            id=wf3_id,
+        wf3 = await make_workflow(
             issue_id="USAGE-3",
             worktree_path="/tmp/test-usage-3",
-            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
         )
-        await repo.create(wf1)
-        await repo.create(wf2)
-        await repo.create(wf3)
 
         # Day 1 (Jan 15): wf1 with sonnet and opus
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf1_id,
-                agent="architect",
-                model="claude-sonnet-4-20250514",
-                input_tokens=1000,
-                output_tokens=500,
-                cost_usd=0.01,
-                duration_ms=5000,
-                num_turns=3,
-                timestamp=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf1.id,
+            agent="architect",
+            model="claude-sonnet-4-20250514",
+            input_tokens=1000,
+            output_tokens=500,
+            cost_usd=0.01,
+            duration_ms=5000,
+            num_turns=3,
+            timestamp=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
         )
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf1_id,
-                agent="developer",
-                model="claude-opus-4-20250514",
-                input_tokens=2000,
-                output_tokens=1000,
-                cost_usd=0.05,
-                duration_ms=10000,
-                num_turns=5,
-                timestamp=datetime(2026, 1, 15, 11, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf1.id,
+            agent="developer",
+            model="claude-opus-4-20250514",
+            input_tokens=2000,
+            output_tokens=1000,
+            cost_usd=0.05,
+            duration_ms=10000,
+            num_turns=5,
+            timestamp=datetime(2026, 1, 15, 11, 0, 0, tzinfo=UTC),
         )
 
         # Day 2 (Jan 16): wf2 with sonnet only
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf2_id,
-                agent="architect",
-                model="claude-sonnet-4-20250514",
-                input_tokens=1500,
-                output_tokens=700,
-                cost_usd=0.015,
-                duration_ms=6000,
-                num_turns=4,
-                timestamp=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf2.id,
+            agent="architect",
+            model="claude-sonnet-4-20250514",
+            input_tokens=1500,
+            output_tokens=700,
+            cost_usd=0.015,
+            duration_ms=6000,
+            num_turns=4,
+            timestamp=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
         )
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf2_id,
-                agent="developer",
-                model="claude-sonnet-4-20250514",
-                input_tokens=2500,
-                output_tokens=1200,
-                cost_usd=0.025,
-                duration_ms=12000,
-                num_turns=6,
-                timestamp=datetime(2026, 1, 16, 11, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf2.id,
+            agent="developer",
+            model="claude-sonnet-4-20250514",
+            input_tokens=2500,
+            output_tokens=1200,
+            cost_usd=0.025,
+            duration_ms=12000,
+            num_turns=6,
+            timestamp=datetime(2026, 1, 16, 11, 0, 0, tzinfo=UTC),
         )
 
         # Day 3 (Jan 17): wf3 with opus only
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf3_id,
-                agent="architect",
-                model="claude-opus-4-20250514",
-                input_tokens=3000,
-                output_tokens=1500,
-                cost_usd=0.08,
-                duration_ms=15000,
-                num_turns=7,
-                timestamp=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf3.id,
+            agent="architect",
+            model="claude-opus-4-20250514",
+            input_tokens=3000,
+            output_tokens=1500,
+            cost_usd=0.08,
+            duration_ms=15000,
+            num_turns=7,
+            timestamp=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
         )
 
         return db_with_schema
@@ -233,7 +211,10 @@ class TestUsageSummaryWithSuccessMetrics:
 
     @pytest.fixture
     async def db_with_workflows_and_usage(
-        self, db_with_schema: Database
+        self,
+        db_with_schema: Database,
+        make_workflow: WorkflowFactory,
+        make_token_usage: TokenUsageFactory,
     ) -> Database:
         """Create database with workflows of various statuses and token usage.
 
@@ -244,89 +225,64 @@ class TestUsageSummaryWithSuccessMetrics:
         Returns:
             Database with workflow and token usage records.
         """
-        repo = WorkflowRepository(db_with_schema)
-
         # Previous period workflows (Jan 8-14)
-        wf_prev1_id = uuid4()
-        wf_prev2_id = uuid4()
-        wf_prev1 = ServerExecutionState(
-            id=wf_prev1_id,
+        wf_prev1 = await make_workflow(
             issue_id="USAGE-4",
             worktree_path="/tmp/test-prev-1",
-            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 10, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 10, 12, 0, 0, tzinfo=UTC),
         )
-        wf_prev2 = ServerExecutionState(
-            id=wf_prev2_id,
+        wf_prev2 = await make_workflow(
             issue_id="USAGE-5",
             worktree_path="/tmp/test-prev-2",
-            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 12, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 12, 12, 0, 0, tzinfo=UTC),
         )
-        await repo.create(wf_prev1)
-        await repo.create(wf_prev2)
 
         # Previous period token usage
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf_prev1_id,
-                agent="architect",
-                model="claude-sonnet-4-20250514",
-                input_tokens=1000,
-                output_tokens=500,
-                cost_usd=0.04,
-                duration_ms=5000,
-                num_turns=3,
-                timestamp=datetime(2026, 1, 10, 10, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf_prev1.id,
+            agent="architect",
+            model="claude-sonnet-4-20250514",
+            input_tokens=1000,
+            output_tokens=500,
+            cost_usd=0.04,
+            duration_ms=5000,
+            num_turns=3,
+            timestamp=datetime(2026, 1, 10, 10, 0, 0, tzinfo=UTC),
         )
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf_prev2_id,
-                agent="architect",
-                model="claude-sonnet-4-20250514",
-                input_tokens=1200,
-                output_tokens=600,
-                cost_usd=0.06,
-                duration_ms=6000,
-                num_turns=4,
-                timestamp=datetime(2026, 1, 12, 10, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf_prev2.id,
+            agent="architect",
+            model="claude-sonnet-4-20250514",
+            input_tokens=1200,
+            output_tokens=600,
+            cost_usd=0.06,
+            duration_ms=6000,
+            num_turns=4,
+            timestamp=datetime(2026, 1, 12, 10, 0, 0, tzinfo=UTC),
         )
 
         # Current period workflows (Jan 15-21): 3 completed, 1 failed
-        wf_curr1_id = uuid4()
-        wf_curr2_id = uuid4()
-        wf_curr3_id = uuid4()
-        wf_curr4_id = uuid4()
-        wf_curr1 = ServerExecutionState(
-            id=wf_curr1_id,
+        wf_curr1 = await make_workflow(
             issue_id="USAGE-6",
             worktree_path="/tmp/test-curr-1",
-            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC),
         )
-        wf_curr2 = ServerExecutionState(
-            id=wf_curr2_id,
+        wf_curr2 = await make_workflow(
             issue_id="USAGE-7",
             worktree_path="/tmp/test-curr-2",
-            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC),
         )
-        wf_curr3 = ServerExecutionState(
-            id=wf_curr3_id,
+        wf_curr3 = await make_workflow(
             issue_id="USAGE-8",
             worktree_path="/tmp/test-curr-3",
-            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 17, 12, 0, 0, tzinfo=UTC),
         )
-        wf_curr4 = ServerExecutionState(
-            id=wf_curr4_id,
+        wf_curr4 = await make_workflow(
             issue_id="USAGE-9",
             worktree_path="/tmp/test-curr-4",
             workflow_status=WorkflowStatus.FAILED,
@@ -334,63 +290,51 @@ class TestUsageSummaryWithSuccessMetrics:
             completed_at=datetime(2026, 1, 18, 11, 0, 0, tzinfo=UTC),
             failure_reason="Test failure",
         )
-        await repo.create(wf_curr1)
-        await repo.create(wf_curr2)
-        await repo.create(wf_curr3)
-        await repo.create(wf_curr4)
 
         # Current period token usage (one per workflow)
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf_curr1_id,
-                agent="architect",
-                model="claude-sonnet-4-20250514",
-                input_tokens=1000,
-                output_tokens=500,
-                cost_usd=0.03,
-                duration_ms=5000,
-                num_turns=3,
-                timestamp=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf_curr1.id,
+            agent="architect",
+            model="claude-sonnet-4-20250514",
+            input_tokens=1000,
+            output_tokens=500,
+            cost_usd=0.03,
+            duration_ms=5000,
+            num_turns=3,
+            timestamp=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
         )
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf_curr2_id,
-                agent="architect",
-                model="claude-sonnet-4-20250514",
-                input_tokens=1100,
-                output_tokens=550,
-                cost_usd=0.035,
-                duration_ms=5500,
-                num_turns=3,
-                timestamp=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf_curr2.id,
+            agent="architect",
+            model="claude-sonnet-4-20250514",
+            input_tokens=1100,
+            output_tokens=550,
+            cost_usd=0.035,
+            duration_ms=5500,
+            num_turns=3,
+            timestamp=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
         )
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf_curr3_id,
-                agent="architect",
-                model="claude-sonnet-4-20250514",
-                input_tokens=1200,
-                output_tokens=600,
-                cost_usd=0.04,
-                duration_ms=6000,
-                num_turns=4,
-                timestamp=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf_curr3.id,
+            agent="architect",
+            model="claude-sonnet-4-20250514",
+            input_tokens=1200,
+            output_tokens=600,
+            cost_usd=0.04,
+            duration_ms=6000,
+            num_turns=4,
+            timestamp=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
         )
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf_curr4_id,
-                agent="architect",
-                model="claude-sonnet-4-20250514",
-                input_tokens=500,
-                output_tokens=250,
-                cost_usd=0.015,
-                duration_ms=2500,
-                num_turns=2,
-                timestamp=datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf_curr4.id,
+            agent="architect",
+            model="claude-sonnet-4-20250514",
+            input_tokens=500,
+            output_tokens=250,
+            cost_usd=0.015,
+            duration_ms=2500,
+            num_turns=2,
+            timestamp=datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC),
         )
 
         return db_with_schema
@@ -475,7 +419,10 @@ class TestUsageByModelWithTrendAndSuccess:
 
     @pytest.fixture
     async def db_with_multi_model_usage(
-        self, db_with_schema: Database
+        self,
+        db_with_schema: Database,
+        make_workflow: WorkflowFactory,
+        make_token_usage: TokenUsageFactory,
     ) -> Database:
         """Create database with multiple models across multiple days.
 
@@ -487,39 +434,26 @@ class TestUsageByModelWithTrendAndSuccess:
         Returns:
             Database with workflow and token usage records.
         """
-        repo = WorkflowRepository(db_with_schema)
-
         # Create workflows with mixed statuses
-        wf1_id = uuid4()
-        wf2_id = uuid4()
-        wf3_id = uuid4()
-        wf4_id = uuid4()
-        wf1 = ServerExecutionState(
-            id=wf1_id,
+        wf1 = await make_workflow(
             issue_id="USAGE-10",
             worktree_path="/tmp/test-model-1",
-            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC),
         )
-        wf2 = ServerExecutionState(
-            id=wf2_id,
+        wf2 = await make_workflow(
             issue_id="USAGE-11",
             worktree_path="/tmp/test-model-2",
-            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC),
         )
-        wf3 = ServerExecutionState(
-            id=wf3_id,
+        wf3 = await make_workflow(
             issue_id="USAGE-12",
             worktree_path="/tmp/test-model-3",
-            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 17, 12, 0, 0, tzinfo=UTC),
         )
-        wf4 = ServerExecutionState(
-            id=wf4_id,
+        wf4 = await make_workflow(
             issue_id="USAGE-13",
             worktree_path="/tmp/test-model-4",
             workflow_status=WorkflowStatus.FAILED,
@@ -527,82 +461,68 @@ class TestUsageByModelWithTrendAndSuccess:
             completed_at=datetime(2026, 1, 18, 11, 0, 0, tzinfo=UTC),
             failure_reason="Test failure",
         )
-        await repo.create(wf1)
-        await repo.create(wf2)
-        await repo.create(wf3)
-        await repo.create(wf4)
 
         # wf1 (Jan 15): uses sonnet only
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf1_id,
-                agent="architect",
-                model="claude-sonnet-4-20250514",
-                input_tokens=1000,
-                output_tokens=500,
-                cost_usd=0.03,
-                duration_ms=5000,
-                num_turns=3,
-                timestamp=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf1.id,
+            agent="architect",
+            model="claude-sonnet-4-20250514",
+            input_tokens=1000,
+            output_tokens=500,
+            cost_usd=0.03,
+            duration_ms=5000,
+            num_turns=3,
+            timestamp=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
         )
 
         # wf2 (Jan 16): uses sonnet and opus
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf2_id,
-                agent="architect",
-                model="claude-sonnet-4-20250514",
-                input_tokens=1100,
-                output_tokens=550,
-                cost_usd=0.035,
-                duration_ms=5500,
-                num_turns=3,
-                timestamp=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf2.id,
+            agent="architect",
+            model="claude-sonnet-4-20250514",
+            input_tokens=1100,
+            output_tokens=550,
+            cost_usd=0.035,
+            duration_ms=5500,
+            num_turns=3,
+            timestamp=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
         )
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf2_id,
-                agent="developer",
-                model="claude-opus-4-20250514",
-                input_tokens=2000,
-                output_tokens=1000,
-                cost_usd=0.08,
-                duration_ms=10000,
-                num_turns=5,
-                timestamp=datetime(2026, 1, 16, 11, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf2.id,
+            agent="developer",
+            model="claude-opus-4-20250514",
+            input_tokens=2000,
+            output_tokens=1000,
+            cost_usd=0.08,
+            duration_ms=10000,
+            num_turns=5,
+            timestamp=datetime(2026, 1, 16, 11, 0, 0, tzinfo=UTC),
         )
 
         # wf3 (Jan 17): uses opus only
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf3_id,
-                agent="architect",
-                model="claude-opus-4-20250514",
-                input_tokens=2500,
-                output_tokens=1200,
-                cost_usd=0.10,
-                duration_ms=12000,
-                num_turns=6,
-                timestamp=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf3.id,
+            agent="architect",
+            model="claude-opus-4-20250514",
+            input_tokens=2500,
+            output_tokens=1200,
+            cost_usd=0.10,
+            duration_ms=12000,
+            num_turns=6,
+            timestamp=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
         )
 
         # wf4 (Jan 18, failed): uses sonnet
-        await repo.save_token_usage(
-            TokenUsage(
-                workflow_id=wf4_id,
-                agent="architect",
-                model="claude-sonnet-4-20250514",
-                input_tokens=500,
-                output_tokens=250,
-                cost_usd=0.015,
-                duration_ms=2500,
-                num_turns=2,
-                timestamp=datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC),
-            )
+        await make_token_usage(
+            workflow_id=wf4.id,
+            agent="architect",
+            model="claude-sonnet-4-20250514",
+            input_tokens=500,
+            output_tokens=250,
+            cost_usd=0.015,
+            duration_ms=2500,
+            num_turns=2,
+            timestamp=datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC),
         )
 
         return db_with_schema

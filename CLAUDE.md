@@ -48,9 +48,17 @@ Use `agent-browser` for web automation: `agent-browser open <url>`, then `agent-
 
 ## Agent Discipline
 
-- **No "pre-existing" failures.** You are the only agent modifying this codebase. If a test fails, you caused it — investigate and fix it before proceeding. Never dismiss a failure as "pre-existing" or "unrelated."
+- **There is no such thing as a pre-existing failure. Ever.** This is absolute. If a test fails during your session, you fix it. The following rationalizations are ALL forbidden and have ALL been used incorrectly before:
+  - "Pre-existing on main" (verifying against main to dismiss is itself a violation)
+  - "Unrelated to this work"
+  - "Environmental issue" (fixture setup, missing services, git state, DB seed pollution — these are CODE BUGS, fix them)
+  - "Outside the scope of this task"
+  - "Excluded from the pre-push gate" (the gate is a floor, not a ceiling)
+  - "Not caused by my changes" (irrelevant — they failed in your session)
+  - Running the same suite on a parent commit to prove you didn't cause it (forbidden — you're still required to fix them)
+  Do not surface these failures to the user as "for your awareness" or "as a separate concern." Fix them, or stop and ask how to proceed — never both proceed AND leave failures behind.
 - **No "unrelated" changes.** All uncommitted changes on the branch are your responsibility. When committing, `git status` shows YOUR work — stage and commit everything, or explicitly revert what shouldn't be there. Never selectively ignore dirty files.
-- **All tests must pass.** 100% pass rate is the bar. Do not proceed past verification with any failures.
+- **All tests must pass.** 100% pass rate is the bar. Unit, integration, e2e — all of them. Do not proceed past verification with any failures, including suites the pre-push gate skips.
 
 ## Release Process
 

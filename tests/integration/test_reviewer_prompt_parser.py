@@ -84,7 +84,7 @@ def create_reviewer_with_defaults(mock_driver: MagicMock) -> Callable[..., Revie
 
     def _create() -> Reviewer:
         prompts = {pid: pd.content for pid, pd in PROMPT_DEFAULTS.items()}
-        with patch("amelia.agents.reviewer.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             config = AgentConfig(driver=DriverType.CLAUDE, model="sonnet", options={})
             return Reviewer(config, prompts=prompts, agent_name="task_reviewer")
 

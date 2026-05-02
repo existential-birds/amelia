@@ -14,8 +14,12 @@ from amelia.core.exceptions import ModelProviderError
 
 
 @pytest.fixture
-def mock_deepagents() -> Generator[MagicMock, None, None]:
-    """Set up mocks for ApiDriver with transient error testing."""
+def mock_create_deep_agent() -> Generator[MagicMock, None, None]:
+    """Set up mocks for ApiDriver with transient error testing.
+
+    Returns the patched ``create_deep_agent`` factory directly (not the full
+    mocks container from global fixtures) for simpler error injection.
+    """
     with (
         patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}),
         patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create,
@@ -49,14 +53,14 @@ class TestGenerateTransientErrors:
 
     @pytest.mark.parametrize("label,error", TRANSIENT_ERRORS, ids=[t[0] for t in TRANSIENT_ERRORS])
     async def test_generate_wraps_transient_error(
-        self, mock_deepagents: MagicMock, label: str, error: Exception
+        self, mock_create_deep_agent: MagicMock, label: str, error: Exception
     ) -> None:
         """generate should wrap httpx transport errors as ModelProviderError."""
         from amelia.drivers.api.deepagents import ApiDriver
 
         mock_agent = MagicMock()
         mock_agent.ainvoke = AsyncMock(side_effect=error)
-        mock_deepagents.return_value = mock_agent
+        mock_create_deep_agent.return_value = mock_agent
 
         driver = ApiDriver(model="test/model", provider="openrouter")
 
@@ -72,7 +76,7 @@ class TestGenerateJSONDecodeError:
     """Tests that generate wraps JSONDecodeError as ModelProviderError."""
 
     async def test_generate_wraps_json_decode_error(
-        self, mock_deepagents: MagicMock
+        self, mock_create_deep_agent: MagicMock
     ) -> None:
         """JSONDecodeError from invalid API response should become ModelProviderError."""
         from amelia.drivers.api.deepagents import ApiDriver
@@ -80,7 +84,7 @@ class TestGenerateJSONDecodeError:
         error = json.JSONDecodeError("Expecting value", "<!DOCTYPE html>...", 0)
         mock_agent = MagicMock()
         mock_agent.ainvoke = AsyncMock(side_effect=error)
-        mock_deepagents.return_value = mock_agent
+        mock_create_deep_agent.return_value = mock_agent
 
         driver = ApiDriver(model="test/model", provider="openrouter")
 
@@ -97,7 +101,7 @@ class TestExecuteAgenticTransientErrors:
 
     @pytest.mark.parametrize("label,error", TRANSIENT_ERRORS, ids=[t[0] for t in TRANSIENT_ERRORS])
     async def test_execute_agentic_wraps_transient_error(
-        self, mock_deepagents: MagicMock, label: str, error: Exception
+        self, mock_create_deep_agent: MagicMock, label: str, error: Exception
     ) -> None:
         """execute_agentic should wrap httpx transport errors as ModelProviderError."""
         from amelia.drivers.api.deepagents import ApiDriver
@@ -109,7 +113,7 @@ class TestExecuteAgenticTransientErrors:
 
         mock_agent = MagicMock()
         mock_agent.astream = failing_stream
-        mock_deepagents.return_value = mock_agent
+        mock_create_deep_agent.return_value = mock_agent
 
         driver = ApiDriver(model="test/model", provider="openrouter")
 

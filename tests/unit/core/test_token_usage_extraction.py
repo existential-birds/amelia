@@ -11,6 +11,7 @@ The token usage extraction works by:
 4. DriverUsage is converted to TokenUsage and saved (if repository is in config)
 """
 from collections.abc import AsyncGenerator, Callable
+from datetime import UTC, datetime as dt
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -74,46 +75,80 @@ class TestTokenUsageExtraction:
         base_config["configurable"]["repository"] = mock_repository
         return base_config, mock_repository
 
+    @pytest.fixture
+    def implementation_state_factory(
+        self,
+        mock_issue_factory: Callable[..., Issue],
+    ) -> Callable[..., ImplementationState]:
+        """Build ImplementationState with sensible defaults; override via kwargs.
+
+        `profile` (required) supplies `profile_id`. Any field accepted by
+        ImplementationState may be passed through to override the defaults.
+        """
+        def _create(profile: Profile, **overrides: Any) -> ImplementationState:
+            defaults: dict[str, Any] = {
+                "workflow_id": self._wf_id,
+                "created_at": dt.now(UTC),
+                "status": "running",
+                "profile_id": profile.name,
+                "issue": mock_issue_factory(),
+            }
+            defaults.update(overrides)
+            return ImplementationState(**defaults)
+        return _create
+
+    @pytest.fixture
+    def mock_run_factory(
+        self,
+    ) -> Callable[..., Callable[..., AsyncGenerator[tuple[ImplementationState, MagicMock], None]]]:
+        """Build a mock async generator emulating Developer.run for a given state.
+
+        The returned async generator yields a single `(final_state, mock_event)`
+        tuple where `final_state` is `state.model_copy(update=state_updates)`.
+        `state_updates` always sets `agentic_status="completed"` unless the
+        caller overrides it; additional fields can be merged in via kwargs.
+        """
+        def _build(
+            state: ImplementationState,
+            **state_updates: Any,
+        ) -> Callable[..., AsyncGenerator[tuple[ImplementationState, MagicMock], None]]:
+            updates: dict[str, Any] = {"agentic_status": "completed"}
+            updates.update(state_updates)
+
+            async def mock_run(
+                *args: Any, **kwargs: Any
+            ) -> AsyncGenerator[tuple[ImplementationState, MagicMock], None]:
+                final_state = state.model_copy(update=updates)
+                mock_event = MagicMock()
+                mock_event.type = "output"
+                yield final_state, mock_event
+
+            return mock_run
+        return _build
+
 
 class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
     """Tests for token usage extraction in call_developer_node."""
 
     async def test_developer_node_extracts_token_usage_from_driver(
         self,
-        mock_profile_factory: Callable[..., Profile],
-        mock_issue_factory: Callable[..., Issue],
         mock_driver_usage_full: DriverUsage,
         config_with_repository: tuple[RunnableConfig, AsyncMock],
+        implementation_state_factory: Callable[..., ImplementationState],
+        mock_run_factory: Callable[..., Any],
     ) -> None:
         """call_developer_node should extract usage from driver and save it."""
         from amelia.pipelines.nodes import call_developer_node
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
-        issue = mock_issue_factory()
-
-        from datetime import UTC, datetime as dt  # noqa: PLC0415
-        state = ImplementationState(
-            workflow_id=self._wf_id,
-            created_at=dt.now(UTC),
-            status="running",
-            profile_id=profile.name,
-            issue=issue,
+        state = implementation_state_factory(
+            profile=profile,
             goal="Implement test feature",
             plan_markdown="# Test Plan\n\nImplement feature X",
         )
 
-        # Mock Developer.run to yield events
-        async def mock_run(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[tuple[ImplementationState, MagicMock], None]:
-            final_state = state.model_copy(update={
-                "agentic_status": "completed",
-                "final_response": "Done",
-            })
-            mock_event = MagicMock()
-            mock_event.type = "output"
-            yield final_state, mock_event
+        mock_run = mock_run_factory(state, final_response="Done")
 
         with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()
@@ -144,37 +179,23 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
 
     async def test_developer_node_skips_save_when_no_usage(
         self,
-        mock_profile_factory: Callable[..., Profile],
-        mock_issue_factory: Callable[..., Issue],
         mock_driver_usage_none: None,
         config_with_repository: tuple[RunnableConfig, AsyncMock],
+        implementation_state_factory: Callable[..., ImplementationState],
+        mock_run_factory: Callable[..., Any],
     ) -> None:
         """call_developer_node should not call save when no usage data."""
         from amelia.pipelines.nodes import call_developer_node
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
-        issue = mock_issue_factory()
-
-        from datetime import UTC, datetime as dt  # noqa: PLC0415
-        state = ImplementationState(
-            workflow_id=self._wf_id,
-            created_at=dt.now(UTC),
-            status="running",
-            profile_id=profile.name,
-            issue=issue,
+        state = implementation_state_factory(
+            profile=profile,
             goal="Implement test feature",
             plan_markdown="# Test Plan",
         )
 
-        async def mock_run(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[tuple[ImplementationState, MagicMock], None]:
-            final_state = state.model_copy(update={
-                "agentic_status": "completed",
-            })
-            mock_event = MagicMock()
-            yield final_state, mock_event
+        mock_run = mock_run_factory(state)
 
         with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()
@@ -191,34 +212,22 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
 
     async def test_developer_node_works_without_repository(
         self,
-        mock_profile_factory: Callable[..., Profile],
-        mock_issue_factory: Callable[..., Issue],
         mock_driver_usage_full: DriverUsage,
         base_config: RunnableConfig,
+        implementation_state_factory: Callable[..., ImplementationState],
+        mock_run_factory: Callable[..., Any],
     ) -> None:
         """call_developer_node should work when repository is not in config."""
         from amelia.pipelines.nodes import call_developer_node
 
         profile = base_config["configurable"]["profile"]
-        issue = mock_issue_factory()
-
-        from datetime import UTC, datetime as dt  # noqa: PLC0415
-        state = ImplementationState(
-            workflow_id=self._wf_id,
-            created_at=dt.now(UTC),
-            status="running",
-            profile_id=profile.name,
-            issue=issue,
+        state = implementation_state_factory(
+            profile=profile,
             goal="Test goal",
             plan_markdown="# Plan",
         )
 
-        async def mock_run(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[tuple[ImplementationState, MagicMock], None]:
-            final_state = state.model_copy(update={"agentic_status": "completed"})
-            mock_event = MagicMock()
-            yield final_state, mock_event
+        mock_run = mock_run_factory(state)
 
         with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()
@@ -238,10 +247,9 @@ class TestReviewerNodeTokenUsage(TestTokenUsageExtraction):
 
     async def test_reviewer_node_extracts_token_usage(
         self,
-        mock_profile_factory: Callable[..., Profile],
-        mock_issue_factory: Callable[..., Issue],
         mock_driver_usage_full: DriverUsage,
         config_with_repository: tuple[RunnableConfig, AsyncMock],
+        implementation_state_factory: Callable[..., ImplementationState],
     ) -> None:
         """call_reviewer_node should extract usage from driver and save it."""
         from amelia.core.types import ReviewResult
@@ -249,15 +257,8 @@ class TestReviewerNodeTokenUsage(TestTokenUsageExtraction):
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
-        issue = mock_issue_factory()
-
-        from datetime import UTC, datetime as dt  # noqa: PLC0415
-        state = ImplementationState(
-            workflow_id=self._wf_id,
-            created_at=dt.now(UTC),
-            status="running",
-            profile_id=profile.name,
-            issue=issue,
+        state = implementation_state_factory(
+            profile=profile,
             goal="Review test feature",
             base_commit="abc123",
         )
@@ -295,33 +296,21 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
 
     async def test_architect_node_extracts_token_usage(
         self,
-        mock_profile_factory: Callable[..., Profile],
-        mock_issue_factory: Callable[..., Issue],
         mock_driver_usage_full: DriverUsage,
         config_with_repository: tuple[RunnableConfig, AsyncMock],
+        implementation_state_factory: Callable[..., ImplementationState],
     ) -> None:
         """call_architect_node should extract usage from driver and save it."""
-        from datetime import UTC, datetime
-
         from amelia.pipelines.implementation.nodes import call_architect_node
         from amelia.server.models.events import EventType, WorkflowEvent
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
-        issue = mock_issue_factory()
-
-        from datetime import datetime as dt  # noqa: PLC0415
-        state = ImplementationState(
-            workflow_id=self._wf_id,
-            created_at=dt.now(UTC),
-            status="running",
-            profile_id=profile.name,
-            issue=issue,
-        )
+        state = implementation_state_factory(profile=profile)
 
         # The architect.plan() now yields (ImplementationState, WorkflowEvent) tuples
         mock_final_state = state.model_copy(update={
-            "raw_architect_output": "**Goal:** Implement feature X\n\n# Plan\n\nStep 1...",
+            "plan_markdown": "**Goal:** Implement feature X\n\n# Plan\n\nStep 1...",
             "plan_path": Path("/docs/plans/test.md"),
             "tool_calls": [],
             "tool_results": [],
@@ -332,7 +321,7 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
             sequence=0,
             event_type=EventType.AGENT_OUTPUT,
             message="Plan generated",
-            timestamp=datetime.now(UTC),
+            timestamp=dt.now(UTC),
             agent="architect",
         )
 
@@ -365,24 +354,17 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
 
     async def test_handles_partial_usage_data(
         self,
-        mock_profile_factory: Callable[..., Profile],
-        mock_issue_factory: Callable[..., Issue],
         config_with_repository: tuple[RunnableConfig, AsyncMock],
+        implementation_state_factory: Callable[..., ImplementationState],
+        mock_run_factory: Callable[..., Any],
     ) -> None:
         """Should handle DriverUsage with partial usage data."""
         from amelia.pipelines.nodes import call_developer_node
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
-        issue = mock_issue_factory()
-
-        from datetime import UTC, datetime as dt  # noqa: PLC0415
-        state = ImplementationState(
-            workflow_id=self._wf_id,
-            created_at=dt.now(UTC),
-            status="running",
-            profile_id=profile.name,
-            issue=issue,
+        state = implementation_state_factory(
+            profile=profile,
             goal="Test",
             plan_markdown="# Plan",
         )
@@ -394,12 +376,7 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
             # All other fields None
         )
 
-        async def mock_run(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[tuple[ImplementationState, MagicMock], None]:
-            final_state = state.model_copy(update={"agentic_status": "completed"})
-            mock_event = MagicMock()
-            yield final_state, mock_event
+        mock_run = mock_run_factory(state)
 
         with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()
@@ -424,24 +401,17 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
 
     async def test_handles_missing_model_in_both_usage_and_driver(
         self,
-        mock_profile_factory: Callable[..., Profile],
-        mock_issue_factory: Callable[..., Issue],
         config_with_repository: tuple[RunnableConfig, AsyncMock],
+        implementation_state_factory: Callable[..., ImplementationState],
+        mock_run_factory: Callable[..., Any],
     ) -> None:
         """Should use 'unknown' when model is missing from both usage and driver."""
         from amelia.pipelines.nodes import call_developer_node
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
-        issue = mock_issue_factory()
-
-        from datetime import UTC, datetime as dt  # noqa: PLC0415
-        state = ImplementationState(
-            workflow_id=self._wf_id,
-            created_at=dt.now(UTC),
-            status="running",
-            profile_id=profile.name,
-            issue=issue,
+        state = implementation_state_factory(
+            profile=profile,
             goal="Test",
             plan_markdown="# Plan",
         )
@@ -453,12 +423,7 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
             model=None,
         )
 
-        async def mock_run(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[tuple[ImplementationState, MagicMock], None]:
-            final_state = state.model_copy(update={"agentic_status": "completed"})
-            mock_event = MagicMock()
-            yield final_state, mock_event
+        mock_run = mock_run_factory(state)
 
         with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()
@@ -479,25 +444,18 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
 
     async def test_handles_repository_save_error_gracefully(
         self,
-        mock_profile_factory: Callable[..., Profile],
-        mock_issue_factory: Callable[..., Issue],
         mock_driver_usage_full: DriverUsage,
         config_with_repository: tuple[RunnableConfig, AsyncMock],
+        implementation_state_factory: Callable[..., ImplementationState],
+        mock_run_factory: Callable[..., Any],
     ) -> None:
         """Should log error but not fail workflow when repository save fails."""
         from amelia.pipelines.nodes import call_developer_node
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
-        issue = mock_issue_factory()
-
-        from datetime import UTC, datetime as dt  # noqa: PLC0415
-        state = ImplementationState(
-            workflow_id=self._wf_id,
-            created_at=dt.now(UTC),
-            status="running",
-            profile_id=profile.name,
-            issue=issue,
+        state = implementation_state_factory(
+            profile=profile,
             goal="Test",
             plan_markdown="# Plan",
         )
@@ -505,12 +463,7 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
         # Make repository raise an error
         mock_repository.save_token_usage.side_effect = Exception("DB error")
 
-        async def mock_run(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[tuple[ImplementationState, MagicMock], None]:
-            final_state = state.model_copy(update={"agentic_status": "completed"})
-            mock_event = MagicMock()
-            yield final_state, mock_event
+        mock_run = mock_run_factory(state)
 
         with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()
@@ -526,34 +479,22 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
 
     async def test_handles_driver_without_get_usage(
         self,
-        mock_profile_factory: Callable[..., Profile],
-        mock_issue_factory: Callable[..., Issue],
         config_with_repository: tuple[RunnableConfig, AsyncMock],
+        implementation_state_factory: Callable[..., ImplementationState],
+        mock_run_factory: Callable[..., Any],
     ) -> None:
         """Should handle gracefully when driver has no get_usage method."""
         from amelia.pipelines.nodes import call_developer_node
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
-        issue = mock_issue_factory()
-
-        from datetime import UTC, datetime as dt  # noqa: PLC0415
-        state = ImplementationState(
-            workflow_id=self._wf_id,
-            created_at=dt.now(UTC),
-            status="running",
-            profile_id=profile.name,
-            issue=issue,
+        state = implementation_state_factory(
+            profile=profile,
             goal="Test",
             plan_markdown="# Plan",
         )
 
-        async def mock_run(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[tuple[ImplementationState, MagicMock], None]:
-            final_state = state.model_copy(update={"agentic_status": "completed"})
-            mock_event = MagicMock()
-            yield final_state, mock_event
+        mock_run = mock_run_factory(state)
 
         with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()

@@ -33,7 +33,7 @@ def create_reviewer(mock_driver: MagicMock) -> Callable[..., Reviewer]:
         prompts: dict[str, str] | None = None,
         agent_name: str = "reviewer",
     ) -> Reviewer:
-        with patch("amelia.agents.reviewer.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             config = AgentConfig(driver=DriverType.CLAUDE, model="sonnet", options={})
             return Reviewer(config, event_bus=event_bus, prompts=prompts, agent_name=agent_name)
     return _create
@@ -50,7 +50,7 @@ class TestReviewerInit:
             options={"max_iterations": 5},
         )
 
-        with patch("amelia.agents.reviewer.get_driver") as mock_get_driver:
+        with patch("amelia.agents._driver_init.get_driver") as mock_get_driver:
             mock_driver = MagicMock()
             mock_get_driver.return_value = mock_driver
 

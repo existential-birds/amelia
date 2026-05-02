@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from amelia.agents._driver_init import init_agent_driver
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.constants import ToolName, resolve_plan_path
 from amelia.core.types import AgentConfig, DriverType, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
-from amelia.drivers.factory import get_driver
 from amelia.server.models.events import WorkflowEvent
 from amelia.tools.write_plan import create_write_plan_tool
 
@@ -84,17 +84,15 @@ Before planning, discover:
             sandbox_provider: Optional shared sandbox provider for sandbox reuse.
 
         """
-        self.driver = get_driver(
-            config.driver,
-            model=config.model,
-            sandbox_config=config.sandbox,
+        _init = init_agent_driver(
+            config,
+            prompts=prompts,
             sandbox_provider=sandbox_provider,
-            profile_name=config.profile_name,
-            options=config.options,
         )
+        self.driver = _init.driver
+        self.options = _init.options
+        self._prompts = _init.prompts
         self._driver_type = config.driver
-        self.options = config.options
-        self._prompts = prompts or {}
         self._write_plan_tool_cache: dict[str, Any] = {}  # keyed by root_dir
 
     @property
@@ -241,12 +239,13 @@ Before planning, discover:
                             extracted_plan_path = Path(tc.tool_input["file_path"])
                             break  # Use first write call (should be the plan)
 
-                    # Yield final state with all updates
+                    # Yield final state with all updates.
+                    # architect_raw_output holds the RESULT message (e.g., "I've written...").
+                    # plan_markdown is set later by plan_validator_node from the actual file.
                     current_state = state.model_copy(update={
                         "tool_calls": tool_calls,
                         "tool_results": tool_results,
-                        "raw_architect_output": raw_output,
-                        "plan_markdown": raw_output,  # Backward compat until #199
+                        "architect_raw_output": raw_output,
                         "plan_path": extracted_plan_path,
                     })
                     yield current_state, event

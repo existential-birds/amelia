@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from amelia.agents._driver_init import init_agent_driver
 from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.types import AgentConfig, Profile, collect_rejected_comments
 from amelia.drivers.base import AgenticMessageType
-from amelia.drivers.factory import get_driver
 from amelia.server.models.events import WorkflowEvent
 
 
@@ -53,16 +53,14 @@ class Developer:
                 Supports key: "developer.system".
             sandbox_provider: Optional shared sandbox provider for sandbox reuse.
         """
-        self.driver = get_driver(
-            config.driver,
-            model=config.model,
-            sandbox_config=config.sandbox,
+        _init = init_agent_driver(
+            config,
+            prompts=prompts,
             sandbox_provider=sandbox_provider,
-            profile_name=config.profile_name,
-            options=config.options,
         )
-        self.options = config.options
-        self._prompts = prompts or {}
+        self.driver = _init.driver
+        self.options = _init.options
+        self._prompts = _init.prompts
 
     @property
     def system_prompt(self) -> str:

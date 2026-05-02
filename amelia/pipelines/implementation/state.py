@@ -59,8 +59,10 @@ class ImplementationState(BasePipelineState):
     design: Design | None = None
     goal: str | None = None
     base_commit: str | None = None
+    architect_raw_output: str | None = None
+    """Raw RESULT message from architect (e.g., 'I've written the plan...')."""
     plan_markdown: str | None = None
-    raw_architect_output: str | None = None
+    """Validated plan content read from file. Only set after plan_validator_node."""
     architect_error: str | None = None
     plan_path: Path | None = None
     key_files: list[str] = Field(default_factory=list)

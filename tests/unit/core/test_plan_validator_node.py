@@ -26,17 +26,18 @@ def plan_content() -> str:
 
 This plan implements JWT-based authentication.
 
-## Files to Modify
+### Task 1: Add JWT library dependency
+- Modify: `pyproject.toml`
+- Deliverable: JWT library added to project dependencies
 
-- `src/auth/handler.py` - Add JWT validation
-- `src/models/user.py` - Add token fields
-- `tests/test_auth.py` - Add auth tests
+### Task 2: Create token validation middleware
+- Create: `src/auth/handler.py`
+- Modify: `src/models/user.py`
+- Deliverable: Working JWT validation middleware
 
-## Implementation Steps
-
-1. Add JWT library dependency
-2. Create token validation middleware
-3. Update user model
+### Task 3: Add auth tests
+- Create: `tests/test_auth.py`
+- Deliverable: Test coverage for authentication
 """
 
 
@@ -407,10 +408,10 @@ Do second thing.
 
         assert result["total_tasks"] == 2
 
-    async def test_plan_validator_defaults_total_tasks_to_one_for_simple_plans(
+    async def test_plan_validator_raises_for_plans_without_task_markers(
         self, tmp_path: Path
     ) -> None:
-        """plan_validator_node should set total_tasks=1 for plans without task markers."""
+        """plan_validator_node should raise ValueError for plans without task markers."""
         from amelia.pipelines.implementation.nodes import plan_validator_node
 
         plan_content = """
@@ -461,9 +462,8 @@ Do implementation.
             }
         }
 
-        result = await plan_validator_node(state, config)
-
-        assert result["total_tasks"] == 1
+        with pytest.raises(ValueError, match="does not contain valid plan structure"):
+            await plan_validator_node(state, config)
 
 
 class TestPlanValidatorNodeValidation:
@@ -502,13 +502,13 @@ It describes the implementation in reasonable detail.
         assert result["plan_validation_result"].issues == []
         assert result["plan_revision_count"] == 0
 
-    async def test_returns_invalid_for_no_tasks(
+    async def test_raises_for_no_task_headers(
         self,
         mock_state: ImplementationState,
         mock_profile: Profile,
         tmp_path: Path,
     ) -> None:
-        """A plan with no ### Task headers should fail structural validation."""
+        """A plan with no ### Task headers should raise ValueError."""
         from amelia.pipelines.implementation.nodes import plan_validator_node
 
         plan = """# Some Plan
@@ -524,10 +524,8 @@ the downstream task processor expects.
         create_plan_file(tmp_path, plan)
         config = make_config(mock_profile)
 
-        result = await plan_validator_node(mock_state, config)
-
-        assert result["plan_validation_result"].valid is False
-        assert any("Task" in i for i in result["plan_validation_result"].issues)
+        with pytest.raises(ValueError, match="does not contain valid plan structure"):
+            await plan_validator_node(mock_state, config)
 
     async def test_increments_revision_count_on_invalid(
         self,
@@ -537,7 +535,16 @@ the downstream task processor expects.
         """Revision count should increment when validation fails."""
         from amelia.pipelines.implementation.nodes import plan_validator_node
 
-        plan = "short"  # Will fail validation
+        # Plan with task headers (passes _looks_like_plan) but missing goal (fails validate_plan_structure)
+        plan = """# Implementation Plan
+
+### Task 1: Do something
+
+This task will implement the feature.
+Some additional content here to make it longer.
+More content to pass the minimum length check.
+Even more content because we need at least 200 chars.
+"""
         create_plan_file(tmp_path, plan)
 
         state = ImplementationState(

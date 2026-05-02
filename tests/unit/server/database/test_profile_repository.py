@@ -57,28 +57,26 @@ def test_profile_record_with_agents_json():
     assert parsed["architect"]["model"] == "opus"
 
 
-def test_row_to_profile_parses_agents_json():
-    """_row_to_profile should parse agents JSONB into AgentConfig dict."""
-    # JSONB codec returns dicts directly from asyncpg
-    agents_data = {
-        "architect": {"driver": "claude", "model": "opus", "options": {}},
-        "developer": {"driver": "claude", "model": "sonnet", "options": {}},
-    }
+@pytest.mark.asyncio
+async def test_get_profile_parses_agents_jsonb_into_agent_config(db_with_schema):
+    """Reading a profile back through the public API parses agents JSONB
+    into AgentConfig instances (exercises _row_to_profile).
+    """
+    repo = ProfileRepository(db_with_schema)
 
-    mock_row = {
-        "id": "test",
-        "tracker": "noop",
-        "repo_root": "/tmp/test",
-        "plan_output_dir": "docs/plans",
-        "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
-        "agents": agents_data,
-        "is_active": True,
-        "created_at": "2025-01-01T00:00:00",
-        "updated_at": "2025-01-01T00:00:00",
-    }
+    await repo.create_profile(
+        Profile(
+            name="test",
+            tracker="noop",
+            repo_root="/tmp/test",
+            agents={
+                "architect": AgentConfig(driver="claude", model="opus"),
+                "developer": AgentConfig(driver="claude", model="sonnet"),
+            },
+        )
+    )
 
-    repo = ProfileRepository.__new__(ProfileRepository)  # Skip __init__
-    profile = repo._row_to_profile(mock_row)
+    profile = await repo.get_profile("test")
 
     assert isinstance(profile, Profile)
     assert "architect" in profile.agents

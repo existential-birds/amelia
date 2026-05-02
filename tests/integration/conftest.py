@@ -502,7 +502,7 @@ def create_planning_graph_mock(
 
     # Mock astream to yield chunks including interrupt
     astream_items: list[tuple[str, dict[str, Any]]] = [
-        ("updates", {"architect_node": {"goal": goal, "plan_markdown": plan_markdown}}),
+        ("updates", {"architect_node": {"goal": goal, "architect_raw_output": plan_markdown}}),
     ]
     if extra_stream_items:
         astream_items.extend(extra_stream_items)

@@ -45,7 +45,7 @@ class TestArchitectPromptInjection:
 
         mock_driver.execute_agentic = mock_execute_agentic
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             architect = Architect(config, prompts=prompts)
             async for _ in architect.plan(state, profile, workflow_id=uuid4()):
                 pass
@@ -82,7 +82,7 @@ class TestArchitectPromptInjection:
 
         mock_driver.execute_agentic = mock_execute_agentic
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             architect = Architect(config)  # No prompts injected
             async for _ in architect.plan(state, profile, workflow_id=uuid4()):
                 pass
@@ -101,7 +101,7 @@ class TestArchitectPromptInjection:
         custom_prompt = "Custom plan prompt"
         config = AgentConfig(driver="claude", model="sonnet")
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             # With custom prompt
             architect_custom = Architect(config, prompts={"architect.plan": custom_prompt})
             assert architect_custom.plan_prompt == custom_prompt
@@ -128,7 +128,7 @@ class TestWritePlanPromptReferences:
         config = AgentConfig(driver="claude", model="sonnet")
         state, profile = mock_execution_state_factory()
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             architect = Architect(config)
             prompt = architect._build_agentic_prompt(state, profile)
 
@@ -153,7 +153,7 @@ class TestArchitectValidationFeedback:
         )
         config = AgentConfig(driver="claude", model="sonnet")
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             architect = Architect(config)
             prompt = architect._build_agentic_prompt(state, profile)
 
@@ -169,7 +169,7 @@ class TestArchitectValidationFeedback:
         state, profile = mock_execution_state_factory()
         config = AgentConfig(driver="claude", model="sonnet")
 
-        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
             architect = Architect(config)
             prompt = architect._build_agentic_prompt(state, profile)
 

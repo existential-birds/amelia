@@ -1,82 +1,70 @@
 """Tests for usage repository methods."""
 
 from datetime import UTC, date, datetime
-from uuid import uuid4
 
 import pytest
 
 from amelia.server.database import WorkflowRepository
-from amelia.server.database.connection import Database
-from amelia.server.models.state import ServerExecutionState
-from amelia.server.models.tokens import TokenUsage
+
+from .conftest import TokenUsageFactory, WorkflowFactory
 
 
 pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
-async def seed_data(db_with_schema: Database, repository: WorkflowRepository) -> None:
+async def seed_data(
+    make_workflow: WorkflowFactory,
+    make_token_usage: TokenUsageFactory,
+) -> None:
     """Seed test data for usage queries."""
-    wf1_id = uuid4()
-    wf2_id = uuid4()
-
     # Create two workflows
-    wf1 = ServerExecutionState(
-        id=wf1_id,
+    wf1 = await make_workflow(
         issue_id="ISSUE-1",
         worktree_path="/tmp/repo1",
         workflow_status="completed",
         started_at=datetime(2026, 1, 10, 10, 0, 0, tzinfo=UTC),
     )
-    wf2 = ServerExecutionState(
-        id=wf2_id,
+    wf2 = await make_workflow(
         issue_id="ISSUE-2",
         worktree_path="/tmp/repo2",
         workflow_status="completed",
         started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
     )
-    await repository.create(wf1)
-    await repository.create(wf2)
 
     # Create token usage records
-    await repository.save_token_usage(
-        TokenUsage(
-            workflow_id=wf1_id,
-            agent="architect",
-            model="claude-sonnet-4",
-            input_tokens=10000,
-            output_tokens=2000,
-            cache_read_tokens=5000,
-            cost_usd=0.50,
-            duration_ms=30000,
-            timestamp=datetime(2026, 1, 10, 10, 5, 0, tzinfo=UTC),
-        )
+    await make_token_usage(
+        workflow_id=wf1.id,
+        agent="architect",
+        model="claude-sonnet-4",
+        input_tokens=10000,
+        output_tokens=2000,
+        cache_read_tokens=5000,
+        cost_usd=0.50,
+        duration_ms=30000,
+        timestamp=datetime(2026, 1, 10, 10, 5, 0, tzinfo=UTC),
     )
-    await repository.save_token_usage(
-        TokenUsage(
-            workflow_id=wf1_id,
-            agent="developer",
-            model="claude-sonnet-4",
-            input_tokens=20000,
-            output_tokens=5000,
-            cache_read_tokens=8000,
-            cost_usd=1.20,
-            duration_ms=60000,
-            timestamp=datetime(2026, 1, 10, 10, 10, 0, tzinfo=UTC),
-        )
+    await make_token_usage(
+        workflow_id=wf1.id,
+        agent="developer",
+        model="claude-sonnet-4",
+        input_tokens=20000,
+        output_tokens=5000,
+        cache_read_tokens=8000,
+        cost_usd=1.20,
+        duration_ms=60000,
+        timestamp=datetime(2026, 1, 10, 10, 10, 0, tzinfo=UTC),
     )
-    await repository.save_token_usage(
-        TokenUsage(
-            workflow_id=wf2_id,
-            agent="architect",
-            model="claude-opus-4",
-            input_tokens=15000,
-            output_tokens=3000,
-            cache_read_tokens=0,
-            cost_usd=2.50,
-            duration_ms=45000,
-            timestamp=datetime(2026, 1, 15, 10, 5, 0, tzinfo=UTC),
-        )
+    await make_token_usage(
+        workflow_id=wf2.id,
+        agent="architect",
+        model="claude-opus-4",
+        input_tokens=15000,
+        output_tokens=3000,
+        cache_read_tokens=0,
+        cost_usd=2.50,
+        duration_ms=45000,
+        timestamp=datetime(2026, 1, 15, 10, 5, 0, tzinfo=UTC),
     )
 
 

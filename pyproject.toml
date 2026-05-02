@@ -23,7 +23,7 @@ dependencies = [
     "langgraph-checkpoint-postgres>=3.0.4",
     "websockets>=15.0",
     "tiktoken>=0.7.0",
-    "docling>=2.73.0",
+    "docling>=2.91.0",
     "pgvector>=0.3.7",
     "daytona-sdk>=0.148.0",
 ]

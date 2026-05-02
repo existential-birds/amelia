@@ -18,7 +18,7 @@ from tests.conftest import create_mock_execute_agentic
 def mock_developer() -> Developer:
     """Create a Developer with a mocked driver for prompt tests."""
     config = AgentConfig(driver=DriverType.API, model="test-model")
-    with patch("amelia.agents.developer.get_driver") as mock_get_driver:
+    with patch("amelia.agents._driver_init.get_driver") as mock_get_driver:
         mock_get_driver.return_value = MagicMock()
         return Developer(config)
 
@@ -170,7 +170,7 @@ class TestDeveloperSystemPrompt:
         captured_kwargs: list[dict[str, object]] = []
         custom_prompt = "Custom Amelia developer system prompt"
 
-        with patch("amelia.agents.developer.get_driver") as mock_get_driver:
+        with patch("amelia.agents._driver_init.get_driver") as mock_get_driver:
             mock_driver = MagicMock()
             mock_driver.execute_agentic = create_mock_execute_agentic(
                 [
@@ -211,7 +211,7 @@ class TestDeveloperSystemPrompt:
         profile: Profile = mock_profile_factory()
         captured_kwargs: list[dict[str, object]] = []
 
-        with patch("amelia.agents.developer.get_driver") as mock_get_driver:
+        with patch("amelia.agents._driver_init.get_driver") as mock_get_driver:
             mock_driver = MagicMock()
             mock_driver.execute_agentic = create_mock_execute_agentic(
                 [
@@ -255,7 +255,7 @@ class TestDeveloperSystemPrompt:
         def _fake_builder(_state: ImplementationState) -> str:
             return "review-fix user prompt body"
 
-        with patch("amelia.agents.developer.get_driver") as mock_get_driver:
+        with patch("amelia.agents._driver_init.get_driver") as mock_get_driver:
             mock_driver = MagicMock()
             mock_driver.execute_agentic = create_mock_execute_agentic(
                 [
