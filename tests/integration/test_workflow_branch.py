@@ -47,6 +47,10 @@ def git_mocks():
             new_callable=AsyncMock,
         ) as mock_uncommitted,
         patch(
+            "amelia.tools.git_utils.checkout_branch",
+            new_callable=AsyncMock,
+        ) as mock_checkout_branch,
+        patch(
             "amelia.server.orchestrator.service.get_git_head",
             new_callable=AsyncMock,
             return_value="abc123",
@@ -56,11 +60,13 @@ def git_mocks():
         mock_get_branch.return_value = "main"
         mock_uncommitted.return_value = False
         mock_create_branch.return_value = None
+        mock_checkout_branch.return_value = None
 
         yield {
             "get_current_branch": mock_get_branch,
             "create_and_checkout_branch": mock_create_branch,
             "has_uncommitted_changes": mock_uncommitted,
+            "checkout_branch": mock_checkout_branch,
         }
 
 
