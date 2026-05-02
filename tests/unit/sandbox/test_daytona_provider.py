@@ -159,12 +159,14 @@ class TestDaytonaSandboxProviderEnsureRunning:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
-            mock_client = AsyncMock()
-
+            # MagicMock + direct assignment avoids AsyncMock's _execute_mock_call
+            # wrapper, which can be left unawaited when asyncio.timeout cancels
+            # the side_effect mid-execution.
             async def hang(*args: object, **kwargs: object) -> None:
                 await asyncio.sleep(999)
 
-            mock_client.create.side_effect = hang
+            mock_client = MagicMock()
+            mock_client.create = hang
             mock_cls.return_value = mock_client
 
             provider = DaytonaSandboxProvider(
