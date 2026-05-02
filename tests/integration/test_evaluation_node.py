@@ -257,7 +257,7 @@ class TestEvaluationNodeToolCapture:
     async def test_evaluation_node_uses_execute_agentic_with_submit_evaluation(
         self, tmp_path: Path
     ) -> None:
-        """Uses execute_agentic with allowed_tools submit_evaluation; generate is unused."""
+        """Uses execute_agentic with submit_tools submit_evaluation; generate is unused."""
         profile = make_profile(repo_root=str(tmp_path))
 
         review_result = ReviewResult(
