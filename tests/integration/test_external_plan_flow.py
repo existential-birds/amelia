@@ -12,6 +12,8 @@ Real components:
 - import_external_plan function with regex extraction
 """
 
+import os
+import subprocess
 from pathlib import Path
 
 import httpx
@@ -36,7 +38,54 @@ from amelia.server.database.repository import WorkflowRepository
 def fake_git_repo(tmp_path: Path) -> tuple[Path, str]:
     git_dir = tmp_path / "git-repo"
     git_dir.mkdir()
-    (git_dir / ".git").mkdir()
+
+    # Isolate from parent git environment
+    clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+    subprocess.run(
+        ["git", "init", "-b", "main", str(git_dir)],
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=git_dir,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=git_dir,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "commit.gpgsign", "false"],
+        cwd=git_dir,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+
+    (git_dir / "README.md").write_text("# Test")
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=git_dir,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "Initial"],
+        cwd=git_dir,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+
     return git_dir, str(git_dir.resolve())
 
 
@@ -132,6 +181,19 @@ class TestExternalPlanAtCreation:
         plan_file = docs_dir / "plan.md"
         plan_file.write_text(plan_content)
 
+        # Commit the plan file so the worktree is clean before workflow setup.
+        clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        subprocess.run(
+            ["git", "add", "."], cwd=git_dir, env=clean_env, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "Add plan"],
+            cwd=git_dir,
+            env=clean_env,
+            check=True,
+            capture_output=True,
+        )
+
         response = await test_client.post(
             "/api/workflows",
             json={
@@ -197,6 +259,19 @@ class TestExternalPlanAtCreation:
         custom_plan = git_dir / "docs" / "plans" / "my-custom-plan.md"
         custom_plan.parent.mkdir(parents=True, exist_ok=True)
         custom_plan.write_text("**Goal:** Do it\n\n### Task 1: Do it\n\nDo the thing.\n")
+
+        # Commit the plan file so the worktree is clean before workflow setup.
+        clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        subprocess.run(
+            ["git", "add", "."], cwd=git_dir, env=clean_env, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "Add plan"],
+            cwd=git_dir,
+            env=clean_env,
+            check=True,
+            capture_output=True,
+        )
 
         response = await test_client.post(
             "/api/workflows",
