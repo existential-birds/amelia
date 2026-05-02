@@ -100,22 +100,45 @@ class IngestionPipeline:
                 chunker, tokenizer = self._build_chunker()
                 chunks = await self._chunk(docling_doc, chunker)
 
-                # Contextualize each chunk and filter out tiny ones
+                # Contextualize each chunk and filter out tiny ones using the
+                # public tokenizer. We measure the contextualized text — i.e.
+                # exactly what gets embedded — rather than calling the chunker's
+                # internal token counter on the raw chunk.
                 kept: list[tuple[Any, str, int]] = []
                 dropped = 0
+                dropped_previews: list[str] = []
                 for chunk in chunks:
                     text = chunker.contextualize(chunk=chunk)
                     n_tokens = tokenizer.count_tokens(text)
                     if n_tokens < MIN_CHUNK_TOKENS:
                         dropped += 1
+                        if len(dropped_previews) < 3:
+                            preview = text.strip().replace("\n", " ")
+                            if len(preview) > 120:
+                                preview = preview[:120] + "..."
+                            dropped_previews.append(preview)
                         continue
                     kept.append((chunk, text, n_tokens))
 
+                total_chunks_seen = len(chunks)
                 if dropped > 0:
                     logger.warning(
                         "dropped tiny chunks",
                         document_id=document_id,
                         count=dropped,
+                        total=total_chunks_seen,
+                        ratio=(
+                            dropped / total_chunks_seen
+                            if total_chunks_seen > 0
+                            else 0.0
+                        ),
+                        previews=dropped_previews,
+                    )
+
+                if not kept:
+                    raise IngestionError(
+                        "The document did not contain enough text to index. "
+                        "Please upload a document with more content."
                     )
 
                 total_chunks = len(kept)

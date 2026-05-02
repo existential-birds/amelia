@@ -583,6 +583,81 @@ async def test_drops_chunks_below_min_tokens(
 
 
 @pytest.mark.asyncio
+async def test_min_token_filter_against_real_chunker(
+    pipeline: IngestionPipeline,
+    mock_repo: AsyncMock,
+    mock_embedding: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """Integration: real HybridChunker + real tokenizer drop sub-MIN_CHUNK_TOKENS chunks.
+
+    Unlike the mock-based tests above, this exercises the actual
+    `_build_chunker()` (HybridChunker + OpenAI tiktoken tokenizer) and the
+    real Docling `DocumentConverter` against a markdown document that
+    contains one substantial section and one trivially small section.
+    The tiny section must be filtered out before embedding/storage.
+    """
+    md_path = tmp_path / "doc.md"
+    md_path.write_text(
+        "# Big Section\n\n"
+        f"{LONG_CHUNK_TEXT} We add a few more sentences here to make sure the "
+        "section is comfortably above the sixty-four token floor enforced by "
+        "the new tiny-chunk filter, even after contextualization adds the "
+        "heading prefix.\n\n"
+        "# Tiny Section\n\n"
+        "Hi.\n",
+        encoding="utf-8",
+    )
+
+    # Echo back one embedding per text so embed_batch matches kept-chunk count.
+    mock_embedding.embed_batch.side_effect = (
+        lambda texts, **_kw: [[0.1] * 1536] * len(texts)
+    )
+
+    captured_logs: list[str] = []
+    sink_id = logger.add(
+        lambda msg: captured_logs.append(msg.record["message"]),
+        level="WARNING",
+    )
+
+    try:
+        # NOTE: no patch on `_build_chunker` or `DocumentConverter` — real
+        # chunker and real Docling pipeline run end-to-end.
+        await pipeline.ingest_document(
+            document_id="doc-real-chunker",
+            file_path=md_path,
+            content_type="text/markdown",
+        )
+    finally:
+        logger.remove(sink_id)
+
+    # Exactly one chunk survived the filter — the "Big Section" body — and
+    # the "Tiny Section" was dropped.
+    mock_repo.insert_chunks.assert_called_once()
+    inserted = mock_repo.insert_chunks.call_args.args[1]
+    assert len(inserted) == 1, (
+        f"Expected only the big section to survive, got {len(inserted)} chunks: "
+        f"{[c['content'][:40] for c in inserted]}"
+    )
+    surviving = inserted[0]
+    assert surviving["heading_path"] == ["Big Section"]
+    assert "Hi." not in surviving["content"]
+    # Real tokenizer must report a token count that cleared the threshold.
+    assert surviving["token_count"] >= 64
+
+    # Embedding was called once, with exactly the surviving contextualized text.
+    mock_embedding.embed_batch.assert_called_once()
+    embedded_texts = mock_embedding.embed_batch.call_args.args[0]
+    assert len(embedded_texts) == 1
+    assert "Hi." not in embedded_texts[0]
+
+    # And the warn-and-continue path fired for the dropped tiny chunk.
+    assert any("dropped tiny chunks" in line for line in captured_logs), (
+        f"Expected 'dropped tiny chunks' warning, captured: {captured_logs}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_embeds_contextualized_text(
     pipeline: IngestionPipeline,
     mock_repo: AsyncMock,
@@ -627,7 +702,6 @@ async def test_embeds_contextualized_text(
     mock_embedding.embed_batch.assert_called_once()
     embedded_texts = mock_embedding.embed_batch.call_args.args[0]
     assert embedded_texts == [contextualized]
-    assert chunk.text not in embedded_texts  # Raw chunk text was not embedded.
 
     # The stored chunk content is also the contextualized text.
     inserted = mock_repo.insert_chunks.call_args.args[1]
