@@ -7,6 +7,7 @@ This module provides:
 
 import os
 import socket
+import subprocess
 import uuid
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
@@ -625,11 +626,46 @@ def test_orchestrator(
 
 @pytest.fixture
 def valid_worktree(tmp_path: Path) -> str:
-    """Create a valid git worktree directory with required settings file."""
+    """Create a valid git worktree directory with required settings file.
+
+    Initializes a real git repo with an initial commit so production code
+    paths that shell out to git (e.g. ``get_current_branch``) succeed.
+    """
     worktree = tmp_path / "worktree"
     worktree.mkdir()
-    # Create fake .git directory - production code only checks .git exists
-    (worktree / ".git").mkdir()
+
+    # Isolate from any parent git environment that could leak in.
+    clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+    subprocess.run(
+        ["git", "init", "-b", "main", str(worktree)],
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=worktree,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=worktree,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "commit.gpgsign", "false"],
+        cwd=worktree,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+
+    (worktree / "README.md").write_text("# Test")
 
     # Worktree settings are required (no fallback to server settings)
     settings_content = """
@@ -644,6 +680,22 @@ profiles:
     strategy: single
 """
     (worktree / "settings.amelia.yaml").write_text(settings_content)
+
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=worktree,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "Initial"],
+        cwd=worktree,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+
     return str(worktree)
 
 
