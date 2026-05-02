@@ -482,7 +482,6 @@ Add comprehensive tests for the authentication flow.
         state = make_execution_state(
             issue=issue,
             profile=profile,
-            plan_markdown="Some content that wasn't written to disk",
         )
         config = make_config(thread_id=str(uuid4()), profile=profile)
 
