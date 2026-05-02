@@ -263,7 +263,11 @@ class TestEvaluationNodeToolCapture:
         review_result = ReviewResult(
             reviewer_persona="Code Reviewer",
             approved=False,
-            comments=["[test.py:10] Missing error handling"],
+            comments=[
+                "[test.py:10] Missing error handling",
+                "[x.py:1] Other",
+                "[y.py:2] Later",
+            ],
             severity=Severity.MAJOR,
         )
         state = make_execution_state(
@@ -337,7 +341,9 @@ class TestEvaluationNodeToolCapture:
         mock_generate.assert_not_called()
 
         assert len(captured_kwargs) >= 1
-        assert captured_kwargs[0]["allowed_tools"] == ["submit_evaluation"]
+        submit_tools = captured_kwargs[0]["submit_tools"]
+        assert len(submit_tools) == 1
+        assert submit_tools[0].name == "submit_evaluation"
 
         assert result["evaluation_result"] is not None
         ev = result["evaluation_result"]
