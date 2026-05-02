@@ -1,7 +1,9 @@
 """Tests for schema migrator."""
 
 import os
+from collections.abc import AsyncIterator
 
+import asyncpg
 import pytest
 
 from amelia.server.database.connection import Database
@@ -15,9 +17,14 @@ DATABASE_URL = os.environ.get(
     "postgresql://amelia:amelia@localhost:5434/amelia_test",
 )
 
+@pytest.fixture
+def migration_versions() -> set[int]:
+    """Load migration versions at test time, not import time."""
+    return {v for v, _ in Migrator._load_migrations()}
+
 
 @pytest.fixture
-async def db():
+async def db() -> AsyncIterator[Database]:
     database = Database(DATABASE_URL)
     await database.connect()
     # Drop all tables to test fresh migration
@@ -27,16 +34,16 @@ async def db():
     await database.close()
 
 
-async def test_migrator_creates_schema_migrations_table(db):
+async def test_migrator_creates_schema_migrations_table(db: Database) -> None:
     migrator = Migrator(db)
     await migrator.run()
     row = await db.fetch_one(
         "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'schema_migrations')"
     )
-    assert row[0] is True
+    assert row is not None and row[0] is True
 
 
-async def test_migrator_applies_initial_schema(db):
+async def test_migrator_applies_initial_schema(db: Database) -> None:
     migrator = Migrator(db)
     await migrator.run()
     # Check that all core tables exist
@@ -57,19 +64,25 @@ async def test_migrator_applies_initial_schema(db):
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)",
             table,
         )
-        assert row[0] is True, f"Table {table} not created"
+        assert row is not None and row[0] is True, f"Table {table} not created"
 
 
-async def test_migrator_records_version(db):
+async def test_migrator_records_version(db: Database, migration_versions: set[int]) -> None:
     migrator = Migrator(db)
     await migrator.run()
-    version = await db.fetch_scalar("SELECT MAX(version) FROM schema_migrations")
-    assert version == 12
+    rows: list[asyncpg.Record] = await db.fetch_all(
+        "SELECT version FROM schema_migrations ORDER BY version"
+    )
+    recorded: set[int] = {row["version"] for row in rows}
+    assert recorded == migration_versions
 
 
-async def test_migrator_is_idempotent(db):
+async def test_migrator_is_idempotent(db: Database, migration_versions: set[int]) -> None:
     migrator = Migrator(db)
     await migrator.run()
     await migrator.run()  # Should not fail
-    version = await db.fetch_scalar("SELECT MAX(version) FROM schema_migrations")
-    assert version == 12
+    rows: list[asyncpg.Record] = await db.fetch_all(
+        "SELECT version FROM schema_migrations ORDER BY version"
+    )
+    recorded: set[int] = {row["version"] for row in rows}
+    assert recorded == migration_versions

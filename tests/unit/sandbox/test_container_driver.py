@@ -12,6 +12,7 @@ from amelia.drivers.base import (
     AgenticMessageType,
     DriverUsage,
 )
+from amelia.sandbox.provider import SandboxProvider
 
 
 class SampleSchema(BaseModel):
@@ -22,7 +23,7 @@ class SampleSchema(BaseModel):
 
 def _make_provider_mock(lines: list[str]) -> AsyncMock:
     """Create a mock SandboxProvider whose exec_stream returns the given lines."""
-    provider = AsyncMock()
+    provider = AsyncMock(spec=SandboxProvider)
     provider.ensure_running = AsyncMock()
     provider.write_file = AsyncMock()
 
@@ -124,7 +125,7 @@ class TestExecuteAgentic:
         lines = [result.model_dump_json()]
 
         calls: list[list[str]] = []
-        provider = AsyncMock()
+        provider = AsyncMock(spec=SandboxProvider)
         provider.ensure_running = AsyncMock()
         provider.write_file = AsyncMock()
 
@@ -155,7 +156,7 @@ class TestExecuteAgentic:
         from amelia.sandbox.driver import ContainerDriver
 
         calls: list[list[str]] = []
-        provider = AsyncMock()
+        provider = AsyncMock(spec=SandboxProvider)
         provider.ensure_running = AsyncMock()
         provider.write_file = AsyncMock()
 

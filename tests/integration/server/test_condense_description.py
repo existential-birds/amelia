@@ -174,7 +174,9 @@ class TestCondenseDescriptionIntegration:
 
         assert resp.status_code == 200
         # Developer agent uses gpt-4o-mini in our fixture
-        mock_get_driver.assert_called_once_with("api", model="openai/gpt-4o-mini", cwd=".")
+        mock_get_driver.assert_called_once_with(
+            "api", model="openai/gpt-4o-mini", cwd=github_profile.repo_root
+        )
 
     async def test_rejects_non_github_profile(
         self, client: httpx.AsyncClient, noop_profile: Profile
