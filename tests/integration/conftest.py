@@ -7,6 +7,7 @@ This module provides:
 
 import os
 import socket
+import subprocess
 import uuid
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
@@ -45,6 +46,75 @@ rebuild_implementation_state()
 # Free model for OpenRouter integration tests (incurs no costs)
 # Must support tool use - see https://openrouter.ai/models?q=:free
 OPENROUTER_FREE_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+
+
+# =============================================================================
+# Git Repository Helpers
+# =============================================================================
+
+
+def _run_git(
+    args: list[str],
+    **kwargs: Any,
+) -> subprocess.CompletedProcess[bytes]:
+    """Run a git command with stderr included in any CalledProcessError.
+
+    When subprocess.run uses check=True with capture_output=True, a failure
+    raises CalledProcessError but the default exception message doesn't include
+    stderr, making CI debugging difficult. This wrapper re-raises with stderr
+    context.
+    """
+    result = subprocess.run(args, capture_output=True, **kwargs)
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            args,
+            output=result.stdout,
+            stderr=result.stderr,
+        )
+    return result
+
+
+def init_git_repo(
+    path: Path,
+    *,
+    branch: str = "main",
+    initial_files: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Initialize a git repository with standard config for testing.
+
+    Creates a git repo isolated from parent git environments, with user config
+    and GPG signing disabled. Commits all provided files as the initial commit.
+
+    Args:
+        path: Directory path to initialize as a git repo (must exist).
+        branch: Initial branch name (default: "main").
+        initial_files: Dict of {relative_path: content} to create before initial commit.
+            If None, creates only README.md with "# Test".
+
+    Returns:
+        A dict containing the clean environment used (for additional git operations).
+        The dict has the same structure as os.environ but without GIT_* variables.
+    """
+    # Isolate from any parent git environment that could leak in.
+    clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+    _run_git(["git", "init", "-b", branch, str(path)], env=clean_env)
+    _run_git(["git", "config", "user.email", "test@test.com"], cwd=path, env=clean_env)
+    _run_git(["git", "config", "user.name", "Test"], cwd=path, env=clean_env)
+    _run_git(["git", "config", "commit.gpgsign", "false"], cwd=path, env=clean_env)
+
+    # Create initial files
+    files_to_create = initial_files if initial_files is not None else {"README.md": "# Test"}
+    for file_path, content in files_to_create.items():
+        full_path = path / file_path
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path.write_text(content)
+
+    _run_git(["git", "add", "."], cwd=path, env=clean_env)
+    _run_git(["git", "commit", "-m", "Initial"], cwd=path, env=clean_env)
+
+    return clean_env
 
 
 # =============================================================================
@@ -625,11 +695,13 @@ def test_orchestrator(
 
 @pytest.fixture
 def valid_worktree(tmp_path: Path) -> str:
-    """Create a valid git worktree directory with required settings file."""
+    """Create a valid git worktree directory with required settings file.
+
+    Initializes a real git repo with an initial commit so production code
+    paths that shell out to git (e.g. ``get_current_branch``) succeed.
+    """
     worktree = tmp_path / "worktree"
     worktree.mkdir()
-    # Create fake .git directory - production code only checks .git exists
-    (worktree / ".git").mkdir()
 
     # Worktree settings are required (no fallback to server settings)
     settings_content = """
@@ -643,7 +715,14 @@ profiles:
     tracker: noop
     strategy: single
 """
-    (worktree / "settings.amelia.yaml").write_text(settings_content)
+    init_git_repo(
+        worktree,
+        initial_files={
+            "README.md": "# Test",
+            "settings.amelia.yaml": settings_content,
+        },
+    )
+
     return str(worktree)
 
 

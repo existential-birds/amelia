@@ -8,7 +8,6 @@ the orchestrator's routing logic and node transitions:
 4. Execution halts when max review iterations reached
 """
 
-import os
 import subprocess
 from pathlib import Path
 from typing import Any, cast
@@ -25,6 +24,7 @@ from amelia.pipelines.implementation.nodes import next_task_node
 from amelia.pipelines.nodes import call_developer_node, call_reviewer_node
 from tests.conftest import create_mock_execute_agentic
 from tests.integration.conftest import (
+    init_git_repo,
     make_config,
     make_execution_state,
     make_profile,
@@ -41,39 +41,7 @@ def git_repo(tmp_path: Path) -> Path:
     """
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
-
-    # Isolate from parent git environment
-    clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-
-    subprocess.run(["git", "init", str(repo_dir)], env=clean_env, check=True)
-    subprocess.run(
-        ["git", "config", "user.email", "test@test.com"],
-        cwd=repo_dir,
-        env=clean_env,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "Test"],
-        cwd=repo_dir,
-        env=clean_env,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "config", "commit.gpgsign", "false"],
-        cwd=repo_dir,
-        env=clean_env,
-        check=True,
-    )
-
-    (repo_dir / "README.md").write_text("# Test")
-    subprocess.run(["git", "add", "."], cwd=repo_dir, env=clean_env, check=True)
-    subprocess.run(
-        ["git", "commit", "-m", "Initial"],
-        cwd=repo_dir,
-        env=clean_env,
-        check=True,
-    )
-
+    init_git_repo(repo_dir)
     return repo_dir
 
 

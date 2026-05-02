@@ -12,6 +12,7 @@ Real components:
 - import_external_plan function with regex extraction
 """
 
+import subprocess
 from pathlib import Path
 
 import httpx
@@ -22,6 +23,7 @@ from amelia.core.constants import resolve_plan_path
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
+from tests.integration.conftest import init_git_repo
 
 
 # =============================================================================
@@ -33,11 +35,17 @@ from amelia.server.database.repository import WorkflowRepository
 
 
 @pytest.fixture
-def fake_git_repo(tmp_path: Path) -> tuple[Path, str]:
+def fake_git_repo(tmp_path: Path) -> tuple[Path, str, dict[str, str]]:
+    """Initialize a git repo for testing and return its path with clean environment.
+
+    Returns:
+        Tuple of (git_dir, resolved_path, clean_env) where clean_env is the
+        environment dict without GIT_* variables (for subsequent git operations).
+    """
     git_dir = tmp_path / "git-repo"
     git_dir.mkdir()
-    (git_dir / ".git").mkdir()
-    return git_dir, str(git_dir.resolve())
+    clean_env = init_git_repo(git_dir)
+    return git_dir, str(git_dir.resolve()), clean_env
 
 
 @pytest.fixture
@@ -86,10 +94,10 @@ class TestExternalPlanAtCreation:
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
-        fake_git_repo: tuple[Path, str],
+        fake_git_repo: tuple[Path, str, dict[str, str]],
     ) -> None:
         """Creating workflow with plan_content sets external_plan=True."""
-        _git_dir, resolved_path = fake_git_repo
+        _git_dir, resolved_path, _clean_env = fake_git_repo
 
         plan_content = "**Goal:** Do thing\n\n### Task 1: Do thing\n\nDo it."
 
@@ -120,10 +128,10 @@ class TestExternalPlanAtCreation:
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
-        fake_git_repo: tuple[Path, str],
+        fake_git_repo: tuple[Path, str, dict[str, str]],
     ) -> None:
         """Creating workflow with plan_file reads file and sets external_plan=True."""
-        git_dir, resolved_path = fake_git_repo
+        git_dir, resolved_path, clean_env = fake_git_repo
 
         # Create plan file in the git repo
         plan_content = "**Goal:** Create module\n\n### Task 1: Create module\n\nCreate it."
@@ -131,6 +139,18 @@ class TestExternalPlanAtCreation:
         docs_dir.mkdir()
         plan_file = docs_dir / "plan.md"
         plan_file.write_text(plan_content)
+
+        # Commit the plan file so the worktree is clean before workflow setup.
+        subprocess.run(
+            ["git", "add", "."], cwd=git_dir, env=clean_env, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "Add plan"],
+            cwd=git_dir,
+            env=clean_env,
+            check=True,
+            capture_output=True,
+        )
 
         response = await test_client.post(
             "/api/workflows",
@@ -158,10 +178,10 @@ class TestExternalPlanAtCreation:
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
-        fake_git_repo: tuple[Path, str],
+        fake_git_repo: tuple[Path, str, dict[str, str]],
     ) -> None:
         """Creating workflow without plan leaves external_plan=False."""
-        _git_dir, resolved_path = fake_git_repo
+        _git_dir, resolved_path, _clean_env = fake_git_repo
 
         response = await test_client.post(
             "/api/workflows",
@@ -188,15 +208,27 @@ class TestExternalPlanAtCreation:
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
-        fake_git_repo: tuple[Path, str],
+        fake_git_repo: tuple[Path, str, dict[str, str]],
     ) -> None:
         """When plan_file is provided, the file should be used in-place (no copy)."""
-        git_dir, resolved_path = fake_git_repo
+        git_dir, resolved_path, clean_env = fake_git_repo
 
         # Create plan at a custom location (not the plan_path_pattern location)
         custom_plan = git_dir / "docs" / "plans" / "my-custom-plan.md"
         custom_plan.parent.mkdir(parents=True, exist_ok=True)
         custom_plan.write_text("**Goal:** Do it\n\n### Task 1: Do it\n\nDo the thing.\n")
+
+        # Commit the plan file so the worktree is clean before workflow setup.
+        subprocess.run(
+            ["git", "add", "."], cwd=git_dir, env=clean_env, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "Add plan"],
+            cwd=git_dir,
+            env=clean_env,
+            check=True,
+            capture_output=True,
+        )
 
         response = await test_client.post(
             "/api/workflows",
@@ -225,10 +257,10 @@ class TestExternalPlanAtCreation:
     async def test_create_workflow_with_both_plan_file_and_content_returns_422(
         self,
         test_client: httpx.AsyncClient,
-        fake_git_repo: tuple[Path, str],
+        fake_git_repo: tuple[Path, str, dict[str, str]],
     ) -> None:
         """Creating workflow with both plan_file and plan_content returns 422."""
-        _git_dir, resolved_path = fake_git_repo
+        _git_dir, resolved_path, _clean_env = fake_git_repo
 
         response = await test_client.post(
             "/api/workflows",
@@ -258,10 +290,10 @@ class TestSetPlanEndpoint:
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
-        fake_git_repo: tuple[Path, str],
+        fake_git_repo: tuple[Path, str, dict[str, str]],
     ) -> None:
         """Setting plan on pending workflow succeeds and sets external_plan=True."""
-        _git_dir, resolved_path = fake_git_repo
+        _git_dir, resolved_path, _clean_env = fake_git_repo
 
         # Create workflow without plan
         response = await test_client.post(
@@ -319,10 +351,10 @@ class TestSetPlanEndpoint:
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
-        fake_git_repo: tuple[Path, str],
+        fake_git_repo: tuple[Path, str, dict[str, str]],
     ) -> None:
         """Setting plan without plan_content or plan_file returns 422."""
-        _git_dir, resolved_path = fake_git_repo
+        _git_dir, resolved_path, _clean_env = fake_git_repo
 
         # Create workflow
         response = await test_client.post(
@@ -349,10 +381,10 @@ class TestSetPlanEndpoint:
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
-        fake_git_repo: tuple[Path, str],
+        fake_git_repo: tuple[Path, str, dict[str, str]],
     ) -> None:
         """Setting plan on workflow that already has a plan requires force=True."""
-        _git_dir, resolved_path = fake_git_repo
+        _git_dir, resolved_path, _clean_env = fake_git_repo
 
         # Create workflow with initial plan
         plan_content = "**Goal:** First thing\n\n### Task 1: First thing"
@@ -400,10 +432,10 @@ class TestSetPlanEndpoint:
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
-        fake_git_repo: tuple[Path, str],
+        fake_git_repo: tuple[Path, str, dict[str, str]],
     ) -> None:
         """When setting plan via plan_file, the file should be used in-place."""
-        git_dir, resolved_path = fake_git_repo
+        git_dir, resolved_path, _clean_env = fake_git_repo
 
         # First create a pending workflow (no plan)
         create_resp = await test_client.post(
@@ -448,10 +480,10 @@ class TestExternalPlanValidation:
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
-        fake_git_repo: tuple[Path, str],
+        fake_git_repo: tuple[Path, str, dict[str, str]],
     ) -> None:
         """Setting plan with empty content returns validation error."""
-        _git_dir, resolved_path = fake_git_repo
+        _git_dir, resolved_path, _clean_env = fake_git_repo
 
         # Create workflow
         response = await test_client.post(
@@ -479,10 +511,10 @@ class TestExternalPlanValidation:
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
-        fake_git_repo: tuple[Path, str],
+        fake_git_repo: tuple[Path, str, dict[str, str]],
     ) -> None:
         """Setting plan with non-existent file path returns error."""
-        _git_dir, resolved_path = fake_git_repo
+        _git_dir, resolved_path, _clean_env = fake_git_repo
 
         # Create workflow
         response = await test_client.post(
@@ -515,10 +547,10 @@ class TestExternalPlanTaskCount:
         test_client: httpx.AsyncClient,
         test_repository: WorkflowRepository,
         setup_test_profile: Profile,
-        fake_git_repo: tuple[Path, str],
+        fake_git_repo: tuple[Path, str, dict[str, str]],
     ) -> None:
         """External plan with multiple tasks has correct total_tasks count."""
-        _git_dir, resolved_path = fake_git_repo
+        _git_dir, resolved_path, _clean_env = fake_git_repo
 
         # Plan with 3 tasks (uses regex-friendly format)
         plan_content = """**Goal:** Implement feature with models, routes, and tests

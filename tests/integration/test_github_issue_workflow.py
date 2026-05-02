@@ -29,6 +29,7 @@ from fastapi import status
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
+from tests.integration.conftest import init_git_repo
 
 
 # =============================================================================
@@ -38,10 +39,13 @@ from amelia.server.database.repository import WorkflowRepository
 
 @pytest.fixture
 def github_worktree(tmp_path: Path) -> str:
-    """Create a valid git worktree with a GitHub tracker profile."""
+    """Create a valid git worktree with a GitHub tracker profile.
+
+    Initializes a real git repo with an initial commit so production code
+    paths that shell out to git (e.g. ``get_current_branch``) succeed.
+    """
     worktree = tmp_path / "github-worktree"
     worktree.mkdir()
-    (worktree / ".git").mkdir()
 
     settings_content = """
 active_profile: github-project
@@ -54,7 +58,14 @@ profiles:
     tracker: github
     strategy: single
 """
-    (worktree / "settings.amelia.yaml").write_text(settings_content)
+    init_git_repo(
+        worktree,
+        initial_files={
+            "README.md": "# Test",
+            "settings.amelia.yaml": settings_content,
+        },
+    )
+
     return str(worktree)
 
 
