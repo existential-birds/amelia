@@ -406,9 +406,9 @@ class TestLocalSandbox:
 
         # Read using virtual path (with leading /)
         result = sandbox.read("/subdir/file.txt")
-        # FilesystemBackend.read returns plain str on success.
-        assert isinstance(result, str)
-        assert "content here" in result
+        assert result.error is None
+        assert result.file_data is not None
+        assert "content here" in result.file_data["content"]
 
 
 class TestExecuteAgenticYieldsAgenticMessage:
