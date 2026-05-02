@@ -17,8 +17,6 @@ Real components:
 - Profile resolution
 """
 
-import os
-import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -31,6 +29,7 @@ from fastapi import status
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
+from tests.integration.conftest import init_git_repo
 
 
 # =============================================================================
@@ -48,39 +47,6 @@ def github_worktree(tmp_path: Path) -> str:
     worktree = tmp_path / "github-worktree"
     worktree.mkdir()
 
-    # Isolate from any parent git environment that could leak in.
-    clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-
-    subprocess.run(
-        ["git", "init", "-b", "main", str(worktree)],
-        env=clean_env,
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.email", "test@test.com"],
-        cwd=worktree,
-        env=clean_env,
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "Test"],
-        cwd=worktree,
-        env=clean_env,
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "config", "commit.gpgsign", "false"],
-        cwd=worktree,
-        env=clean_env,
-        check=True,
-        capture_output=True,
-    )
-
-    (worktree / "README.md").write_text("# Test")
-
     settings_content = """
 active_profile: github-project
 profiles:
@@ -92,21 +58,12 @@ profiles:
     tracker: github
     strategy: single
 """
-    (worktree / "settings.amelia.yaml").write_text(settings_content)
-
-    subprocess.run(
-        ["git", "add", "."],
-        cwd=worktree,
-        env=clean_env,
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "commit", "-m", "Initial"],
-        cwd=worktree,
-        env=clean_env,
-        check=True,
-        capture_output=True,
+    init_git_repo(
+        worktree,
+        initial_files={
+            "README.md": "# Test",
+            "settings.amelia.yaml": settings_content,
+        },
     )
 
     return str(worktree)
