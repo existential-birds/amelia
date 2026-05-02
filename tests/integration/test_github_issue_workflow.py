@@ -17,6 +17,8 @@ Real components:
 - Profile resolution
 """
 
+import os
+import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -38,10 +40,46 @@ from amelia.server.database.repository import WorkflowRepository
 
 @pytest.fixture
 def github_worktree(tmp_path: Path) -> str:
-    """Create a valid git worktree with a GitHub tracker profile."""
+    """Create a valid git worktree with a GitHub tracker profile.
+
+    Initializes a real git repo with an initial commit so production code
+    paths that shell out to git (e.g. ``get_current_branch``) succeed.
+    """
     worktree = tmp_path / "github-worktree"
     worktree.mkdir()
-    (worktree / ".git").mkdir()
+
+    # Isolate from any parent git environment that could leak in.
+    clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+    subprocess.run(
+        ["git", "init", "-b", "main", str(worktree)],
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=worktree,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=worktree,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "commit.gpgsign", "false"],
+        cwd=worktree,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+
+    (worktree / "README.md").write_text("# Test")
 
     settings_content = """
 active_profile: github-project
@@ -55,6 +93,22 @@ profiles:
     strategy: single
 """
     (worktree / "settings.amelia.yaml").write_text(settings_content)
+
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=worktree,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "Initial"],
+        cwd=worktree,
+        env=clean_env,
+        check=True,
+        capture_output=True,
+    )
+
     return str(worktree)
 
 
