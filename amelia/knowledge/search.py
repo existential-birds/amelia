@@ -13,7 +13,7 @@ async def knowledge_search(
     repository: KnowledgeRepository,
     top_k: int = 5,
     tags: list[str] | None = None,
-    similarity_threshold: float = 0.5,  # Lowered from 0.7 for testing
+    similarity_threshold: float = 0.3,
 ) -> list[SearchResult]:
     """Search documentation chunks by semantic similarity.
 

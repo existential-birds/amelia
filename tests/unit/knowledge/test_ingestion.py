@@ -1,11 +1,13 @@
 """Test knowledge ingestion pipeline."""
 
 import asyncio
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, call, patch
 from uuid import uuid4
 
 import pytest
+from loguru import logger
 
 from amelia.knowledge.embeddings import EmbeddingClient, EmbeddingError
 from amelia.knowledge.ingestion import IngestionError, IngestionPipeline
@@ -16,6 +18,21 @@ from amelia.knowledge.repository import ChunkData, KnowledgeRepository
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+
+# A long, realistic chunk body that comfortably exceeds the 64-token floor
+# enforced by `MIN_CHUNK_TOKENS`. Tests use this so chunks are not silently
+# dropped by the new tiny-chunk filter.
+LONG_CHUNK_TEXT = (
+    "Knowledge ingestion in Amelia parses uploaded documents, splits them into "
+    "semantically coherent chunks, embeds each chunk for vector search, and "
+    "stores the results alongside heading metadata. The hybrid chunker walks "
+    "the Docling document tree, merges peer sections that fit within the "
+    "embedding model's token budget, and contextualizes each chunk with the "
+    "headings under which it appears. This guarantees that retrieval surfaces "
+    "passages that retain enough surrounding context to be answerable on their "
+    "own without forcing the agent to fetch additional sibling chunks first."
+)
 
 
 @pytest.fixture
@@ -53,15 +70,44 @@ def mock_converter() -> MagicMock:
     return converter
 
 
-@pytest.fixture
-def mock_chunker() -> MagicMock:
-    """Provide a mocked Docling HierarchicalChunker."""
+def _make_chunker_pair(
+    *,
+    chunks: list[MagicMock] | None = None,
+    contextualize_side_effect: Callable[[MagicMock], str] | None = None,
+    count_tokens_side_effect: Callable[[str], int] | None = None,
+) -> tuple[MagicMock, MagicMock]:
+    """Build (chunker, tokenizer) mocks suitable for `_build_chunker` patching.
+
+    Defaults produce a single chunk whose contextualized text is `LONG_CHUNK_TEXT`
+    and whose token count is 100 — well above `MIN_CHUNK_TOKENS = 64`.
+    """
+    if chunks is None:
+        mock_chunk = MagicMock()
+        mock_chunk.text = LONG_CHUNK_TEXT
+        mock_chunk.meta.headings = ["Heading 1"]
+        chunks = [mock_chunk]
+
     chunker = MagicMock()
-    mock_chunk = MagicMock()
-    mock_chunk.text = "Chunk text"
-    mock_chunk.meta.headings = ["Heading 1"]
-    chunker.chunk.return_value = [mock_chunk]
-    return chunker
+    chunker.chunk.return_value = chunks
+
+    if contextualize_side_effect is None:
+        chunker.contextualize.side_effect = lambda chunk: chunk.text
+    else:
+        chunker.contextualize.side_effect = contextualize_side_effect
+
+    tokenizer = MagicMock()
+    if count_tokens_side_effect is None:
+        tokenizer.count_tokens.return_value = 100
+    else:
+        tokenizer.count_tokens.side_effect = count_tokens_side_effect
+
+    return chunker, tokenizer
+
+
+@pytest.fixture
+def mock_chunker_pair() -> tuple[MagicMock, MagicMock]:
+    """Provide a default (chunker, tokenizer) tuple for `_build_chunker` patching."""
+    return _make_chunker_pair()
 
 
 @pytest.fixture
@@ -87,7 +133,6 @@ async def test_pipeline_initialization_stores_tag_config(
     mock_embedding: AsyncMock,
 ) -> None:
     """Should store tag derivation configuration parameters as instance variables."""
-    # Test with tag derivation enabled
     pipeline_enabled = IngestionPipeline(
         repository=mock_repo,
         embedding_client=mock_embedding,
@@ -98,7 +143,6 @@ async def test_pipeline_initialization_stores_tag_config(
     assert pipeline_enabled.tag_derivation_model == "openai/gpt-4o-mini"
     assert pipeline_enabled.tag_derivation_driver == "claude"
 
-    # Test with tag derivation disabled (None model)
     pipeline_disabled = IngestionPipeline(
         repository=mock_repo,
         embedding_client=mock_embedding,
@@ -109,7 +153,6 @@ async def test_pipeline_initialization_stores_tag_config(
     assert pipeline_disabled.tag_derivation_model is None
     assert pipeline_disabled.tag_derivation_driver == "api"
 
-    # Test with default parameters (backwards compatibility)
     pipeline_defaults = IngestionPipeline(
         repository=mock_repo,
         embedding_client=mock_embedding,
@@ -124,7 +167,7 @@ async def test_ingest_pdf_document(
     mock_repo: AsyncMock,
     mock_embedding: AsyncMock,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should ingest PDF: parse, chunk, embed, store, and update status."""
     with (
@@ -132,9 +175,10 @@ async def test_ingest_pdf_document(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
     ):
         result = await pipeline.ingest_document(
@@ -159,10 +203,12 @@ async def test_ingest_pdf_document(
     assert insert_args.args[0] == "doc-1"
     chunks: list[ChunkData] = insert_args.args[1]
     assert len(chunks) == 1
-    assert chunks[0]["content"] == "Chunk text"
+    assert chunks[0]["content"] == LONG_CHUNK_TEXT
     assert chunks[0]["heading_path"] == ["Heading 1"]
     assert chunks[0]["chunk_index"] == 0
     assert chunks[0]["embedding"] == [0.1] * 1536
+    # Token count comes from the real tokenizer's count_tokens, not len/4.
+    assert chunks[0]["token_count"] == 100
 
     # Returns a Document
     assert isinstance(result, Document)
@@ -174,7 +220,7 @@ async def test_ingest_markdown_document(
     mock_repo: AsyncMock,
     mock_embedding: AsyncMock,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should ingest markdown documents the same as PDF."""
     mock_repo.update_document_status.return_value = Document(
@@ -192,9 +238,10 @@ async def test_ingest_markdown_document(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
     ):
         result = await pipeline.ingest_document(
@@ -203,7 +250,6 @@ async def test_ingest_markdown_document(
             content_type="text/markdown",
         )
 
-    # Verify status transitions for markdown
     status_calls = mock_repo.update_document_status.call_args_list
     assert len(status_calls) >= 2
     assert status_calls[0] == call(
@@ -247,9 +293,6 @@ async def test_parse_empty_document(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-        ),
         pytest.raises(IngestionError) as exc_info,
     ):
         await pipeline.ingest_document(
@@ -275,9 +318,6 @@ async def test_parse_failure_sets_document_failed(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-        ),
         pytest.raises(IngestionError),
     ):
         await pipeline.ingest_document(
@@ -286,7 +326,6 @@ async def test_parse_failure_sets_document_failed(
             content_type="application/pdf",
         )
 
-    # Verify document marked as FAILED with error message
     failed_call = mock_repo.update_document_status.call_args_list[-1]
     assert failed_call.args[0] == "doc-5"
     assert failed_call.args[1] == DocumentStatus.FAILED
@@ -301,7 +340,7 @@ async def test_embed_failure_sets_document_failed(
     mock_repo: AsyncMock,
     mock_embedding: AsyncMock,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should set document status to FAILED when embedding raises EmbeddingError."""
     mock_embedding.embed_batch.side_effect = EmbeddingError("Rate limit exceeded")
@@ -311,9 +350,10 @@ async def test_embed_failure_sets_document_failed(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
         pytest.raises(IngestionError),
     ):
@@ -323,7 +363,6 @@ async def test_embed_failure_sets_document_failed(
             content_type="application/pdf",
         )
 
-    # Verify document marked as FAILED
     failed_call = mock_repo.update_document_status.call_args_list[-1]
     assert failed_call.args[0] == "doc-6"
     assert failed_call.args[1] == DocumentStatus.FAILED
@@ -336,7 +375,7 @@ async def test_embed_failure_sets_document_failed(
 async def test_progress_callback_called(
     pipeline: IngestionPipeline,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should call progress callback for all 4 stages with increasing progress."""
     progress_calls: list[tuple[str, float, int, int]] = []
@@ -351,9 +390,10 @@ async def test_progress_callback_called(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
     ):
         await pipeline.ingest_document(
@@ -363,21 +403,18 @@ async def test_progress_callback_called(
             progress_callback=progress_callback,
         )
 
-    # All 4 stages should appear
     stages_seen = [c[0] for c in progress_calls]
     assert "parsing" in stages_seen
     assert "chunking" in stages_seen
     assert "embedding" in stages_seen
     assert "storing" in stages_seen
 
-    # Progress values should be monotonically non-decreasing
     progress_values = [c[1] for c in progress_calls]
     for i in range(1, len(progress_values)):
         assert progress_values[i] >= progress_values[i - 1], (
             f"Progress should be non-decreasing: {progress_values}"
         )
 
-    # Final progress should be 1.0
     assert progress_values[-1] == pytest.approx(1.0)
 
 
@@ -430,20 +467,17 @@ async def test_concurrency_semaphore(
     mock_result.document.export_to_text.return_value = "Sample text"
     mock_converter.convert.return_value = mock_result
 
-    mock_chunker = MagicMock()
-    mock_chunk = MagicMock()
-    mock_chunk.text = "Chunk"
-    mock_chunk.meta.headings = ["H1"]
-    mock_chunker.chunk.return_value = [mock_chunk]
+    chunker_pair = _make_chunker_pair()
 
     with (
         patch(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=chunker_pair,
         ),
     ):
         tasks = [
@@ -469,6 +503,139 @@ async def test_concurrency_semaphore(
 
 
 # ---------------------------------------------------------------------------
+# New chunker contract: contextualize + min-token filter
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_drops_chunks_below_min_tokens(
+    pipeline: IngestionPipeline,
+    mock_repo: AsyncMock,
+    mock_embedding: AsyncMock,
+    mock_converter: MagicMock,
+) -> None:
+    """Tiny chunks (<MIN_CHUNK_TOKENS) are filtered out before embedding."""
+    big_chunk = MagicMock()
+    big_chunk.text = LONG_CHUNK_TEXT
+    big_chunk.meta.headings = ["Big Section"]
+
+    tiny_chunk = MagicMock()
+    tiny_chunk.text = "Tiny."
+    tiny_chunk.meta.headings = ["Tiny Section"]
+
+    chunker = MagicMock()
+    chunker.chunk.return_value = [big_chunk, tiny_chunk]
+    chunker.contextualize.side_effect = lambda chunk: chunk.text
+
+    tokenizer = MagicMock()
+
+    def count_tokens(text: str) -> int:
+        return 30 if text == "Tiny." else 100
+
+    tokenizer.count_tokens.side_effect = count_tokens
+
+    # Adjust embed_batch to return one embedding (only the big chunk survives)
+    mock_embedding.embed_batch.return_value = [[0.1] * 1536]
+
+    captured_logs: list[str] = []
+    sink_id = logger.add(
+        lambda msg: captured_logs.append(msg.record["message"]),
+        level="WARNING",
+    )
+
+    try:
+        with (
+            patch(
+                "docling.document_converter.DocumentConverter",
+                return_value=mock_converter,
+            ),
+            patch.object(
+                IngestionPipeline,
+                "_build_chunker",
+                return_value=(chunker, tokenizer),
+            ),
+        ):
+            await pipeline.ingest_document(
+                document_id="doc-tiny",
+                file_path=Path("/tmp/test.pdf"),
+                content_type="application/pdf",
+            )
+    finally:
+        logger.remove(sink_id)
+
+    # Only the big chunk's text was embedded; tiny chunk was dropped.
+    mock_embedding.embed_batch.assert_called_once()
+    embed_args = mock_embedding.embed_batch.call_args
+    embedded_texts = embed_args.args[0]
+    assert embedded_texts == [LONG_CHUNK_TEXT]
+    assert "Tiny." not in embedded_texts
+
+    # Repository received a single chunk (the big one).
+    mock_repo.insert_chunks.assert_called_once()
+    inserted = mock_repo.insert_chunks.call_args.args[1]
+    assert len(inserted) == 1
+    assert inserted[0]["content"] == LONG_CHUNK_TEXT
+
+    # A warning was logged about the dropped chunk.
+    assert any("dropped tiny chunks" in line for line in captured_logs), (
+        f"Expected 'dropped tiny chunks' warning, captured: {captured_logs}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_embeds_contextualized_text(
+    pipeline: IngestionPipeline,
+    mock_repo: AsyncMock,
+    mock_embedding: AsyncMock,
+    mock_converter: MagicMock,
+) -> None:
+    """Embedding input is `chunker.contextualize(...)` output, not raw chunk.text."""
+    chunk = MagicMock()
+    chunk.text = LONG_CHUNK_TEXT
+    chunk.meta.headings = ["Heading 1"]
+
+    contextualized = f"# Heading 1\n{LONG_CHUNK_TEXT}"
+
+    chunker = MagicMock()
+    chunker.chunk.return_value = [chunk]
+    chunker.contextualize.side_effect = lambda chunk: contextualized
+
+    tokenizer = MagicMock()
+    tokenizer.count_tokens.return_value = 120
+
+    mock_embedding.embed_batch.return_value = [[0.1] * 1536]
+
+    with (
+        patch(
+            "docling.document_converter.DocumentConverter",
+            return_value=mock_converter,
+        ),
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=(chunker, tokenizer),
+        ),
+    ):
+        await pipeline.ingest_document(
+            document_id="doc-ctx",
+            file_path=Path("/tmp/test.pdf"),
+            content_type="application/pdf",
+        )
+
+    # embed_batch must have been called with the heading-prepended text,
+    # NOT the raw chunk.text.
+    mock_embedding.embed_batch.assert_called_once()
+    embedded_texts = mock_embedding.embed_batch.call_args.args[0]
+    assert embedded_texts == [contextualized]
+    assert chunk.text not in embedded_texts  # Raw chunk text was not embedded.
+
+    # The stored chunk content is also the contextualized text.
+    inserted = mock_repo.insert_chunks.call_args.args[1]
+    assert inserted[0]["content"] == contextualized
+    assert inserted[0]["token_count"] == 120
+
+
+# ---------------------------------------------------------------------------
 # Tag Extraction Helper Tests
 # ---------------------------------------------------------------------------
 
@@ -477,7 +644,6 @@ def test_prepare_tag_extraction_input_truncates_long_text(
     pipeline: IngestionPipeline,
 ) -> None:
     """Should truncate text to MAX_RAW_TEXT_FOR_TAGS (8000 chars) and add note."""
-    # Create text longer than 8000 chars
     long_text = "a" * 10000
     chunks: list[ChunkData] = [
         ChunkData(
@@ -495,8 +661,7 @@ def test_prepare_tag_extraction_input_truncates_long_text(
         document_name="test.pdf",
     )
 
-    # Should truncate at 8000 chars
-    assert len(excerpt) > 8000  # Has truncation notice
+    assert len(excerpt) > 8000
     assert excerpt[:8000] == "a" * 8000
     assert "[... content truncated for tag extraction ...]" in excerpt
     assert headings == [["Heading 1"]]
@@ -544,7 +709,6 @@ def test_prepare_tag_extraction_input_extracts_unique_headings(
         document_name="test.pdf",
     )
 
-    # Should deduplicate and exclude empty
     assert len(headings) == 2
     assert ["Heading 1"] in headings
     assert ["Heading 2", "Subheading"] in headings
@@ -558,18 +722,17 @@ def test_validate_tags_deduplicates_and_cleans(
     raw_tags = [
         "Python",
         "  Django  ",
-        "PYTHON",  # Duplicate (case-insensitive)
+        "PYTHON",
         "kubernetes",
-        "",  # Empty
-        "   ",  # Whitespace only
-        "a" * 60,  # Too long (>50 chars)
+        "",
+        "   ",
+        "a" * 60,
         "React",
-        "react",  # Duplicate
+        "react",
     ]
 
     cleaned = pipeline._validate_tags(raw_tags)
 
-    # Should clean and deduplicate
     assert cleaned == ["python", "django", "kubernetes", "react"]
     assert len(cleaned) == 4
 
@@ -592,18 +755,11 @@ def test_build_tag_extraction_prompt(
         document_name=document_name,
     )
 
-    # Should contain document name
     assert document_name in prompt
-
-    # Should contain formatted heading tree with indentation
     assert "- Introduction" in prompt
     assert "  - Section 1.1" in prompt
     assert "  - Section 1.2" in prompt
-
-    # Should contain content excerpt
     assert raw_text_excerpt in prompt
-
-    # Should contain guidelines
     assert "5-10 relevant tags" in prompt
     assert "lowercase" in prompt
 
@@ -634,7 +790,6 @@ async def test_derive_tags_success(
     model = "openai/gpt-4o-mini"
     driver_type = "api"
 
-    # Mock the extract_structured function
     mock_output = TagExtractionOutput(
         tags=["Python", "  Django  ", "PYTHON", "web-framework", "tutorial"],
         reasoning="Document focuses on Django web framework tutorial using Python",
@@ -651,16 +806,13 @@ async def test_derive_tags_success(
             driver_type=driver_type,
         )
 
-    # Should return validated and cleaned tags (deduplicated, lowercase)
     assert result == ["python", "django", "web-framework", "tutorial"]
 
-    # Should have called extract_structured with correct arguments
     mock_extract.assert_called_once()
     call_kwargs = mock_extract.call_args.kwargs
     assert call_kwargs["model"] == model
     assert call_kwargs["driver_type"] == driver_type
     assert call_kwargs["schema"] == TagExtractionOutput
-    # Prompt should contain document name
     assert document_name in call_kwargs["prompt"]
 
 
@@ -683,7 +835,6 @@ async def test_derive_tags_handles_llm_failure(
     model = "openai/gpt-4o-mini"
     driver_type = "api"
 
-    # Mock extract_structured to raise an exception
     with patch("amelia.core.extraction.extract_structured") as mock_extract:
         mock_extract.side_effect = RuntimeError("LLM API unavailable")
 
@@ -695,10 +846,7 @@ async def test_derive_tags_handles_llm_failure(
             driver_type=driver_type,
         )
 
-    # Should return empty list on error (non-blocking)
     assert result == []
-
-    # Should have attempted extraction
     mock_extract.assert_called_once()
 
 
@@ -712,12 +860,11 @@ async def test_ingest_with_tag_derivation_enabled(
     mock_repo: AsyncMock,
     mock_embedding: AsyncMock,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should derive tags and update document when tag derivation is enabled."""
     from amelia.knowledge.models import TagExtractionOutput
 
-    # Create pipeline with tag derivation enabled
     pipeline = IngestionPipeline(
         repository=mock_repo,
         embedding_client=mock_embedding,
@@ -726,7 +873,6 @@ async def test_ingest_with_tag_derivation_enabled(
         tag_derivation_driver="api",
     )
 
-    # Mock the tag extraction to return tags
     mock_output = TagExtractionOutput(
         tags=["python", "django", "tutorial"],
         reasoning="Document is a Python Django tutorial",
@@ -737,9 +883,10 @@ async def test_ingest_with_tag_derivation_enabled(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
         patch("amelia.core.extraction.extract_structured") as mock_extract,
     ):
@@ -751,15 +898,10 @@ async def test_ingest_with_tag_derivation_enabled(
             content_type="application/pdf",
         )
 
-    # Should have called extract_structured
     mock_extract.assert_called_once()
-
-    # Should have updated document tags
     mock_repo.update_document_tags.assert_called_once_with(
         "doc-1", ["python", "django", "tutorial"]
     )
-
-    # Should still complete successfully
     assert isinstance(result, Document)
     assert result.status == DocumentStatus.READY
 
@@ -769,10 +911,9 @@ async def test_ingest_with_tag_derivation_disabled(
     mock_repo: AsyncMock,
     mock_embedding: AsyncMock,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should skip tag derivation when tag_derivation_model is None."""
-    # Create pipeline with tag derivation disabled (None model)
     pipeline = IngestionPipeline(
         repository=mock_repo,
         embedding_client=mock_embedding,
@@ -786,9 +927,10 @@ async def test_ingest_with_tag_derivation_disabled(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
         patch("amelia.core.extraction.extract_structured") as mock_extract,
     ):
@@ -798,13 +940,8 @@ async def test_ingest_with_tag_derivation_disabled(
             content_type="application/pdf",
         )
 
-    # Should NOT have called extract_structured
     mock_extract.assert_not_called()
-
-    # Should NOT have updated document tags
     mock_repo.update_document_tags.assert_not_called()
-
-    # Should complete successfully
     assert isinstance(result, Document)
     assert result.status == DocumentStatus.READY
 
@@ -814,12 +951,11 @@ async def test_progress_callback_includes_tag_derivation(
     mock_repo: AsyncMock,
     mock_embedding: AsyncMock,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should include deriving_tags stage in progress callbacks when enabled."""
     from amelia.knowledge.models import TagExtractionOutput
 
-    # Create pipeline with tag derivation enabled
     pipeline = IngestionPipeline(
         repository=mock_repo,
         embedding_client=mock_embedding,
@@ -845,9 +981,10 @@ async def test_progress_callback_includes_tag_derivation(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
         patch("amelia.core.extraction.extract_structured") as mock_extract,
     ):
@@ -860,35 +997,27 @@ async def test_progress_callback_includes_tag_derivation(
             progress_callback=progress_callback,
         )
 
-    # Extract stages
     stages_seen = [c[0] for c in progress_calls]
-
-    # All 5 stages should appear (parsing, chunking, embedding, deriving_tags, storing)
     assert "parsing" in stages_seen
     assert "chunking" in stages_seen
     assert "embedding" in stages_seen
     assert "deriving_tags" in stages_seen
     assert "storing" in stages_seen
 
-    # Progress values should be monotonically non-decreasing
     progress_values = [c[1] for c in progress_calls]
     for i in range(1, len(progress_values)):
         assert progress_values[i] >= progress_values[i - 1], (
             f"Progress should be non-decreasing: {progress_values}"
         )
 
-    # Final progress should be 1.0
     assert progress_values[-1] == pytest.approx(1.0)
 
-    # Verify deriving_tags progress is between embedding and storing
     deriving_tags_indices = [
         i for i, (stage, _, _, _) in enumerate(progress_calls) if stage == "deriving_tags"
     ]
     storing_indices = [
         i for i, (stage, _, _, _) in enumerate(progress_calls) if stage == "storing"
     ]
-
-    # deriving_tags should come before storing
     assert any(dt < s for dt in deriving_tags_indices for s in storing_indices)
 
 
@@ -897,12 +1026,11 @@ async def test_ingest_continues_when_tag_update_fails(
     mock_repo: AsyncMock,
     mock_embedding: AsyncMock,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should continue pipeline when update_document_tags fails (non-blocking error)."""
     from amelia.knowledge.models import TagExtractionOutput
 
-    # Create pipeline with tag derivation enabled
     pipeline = IngestionPipeline(
         repository=mock_repo,
         embedding_client=mock_embedding,
@@ -911,7 +1039,6 @@ async def test_ingest_continues_when_tag_update_fails(
         tag_derivation_driver="api",
     )
 
-    # Mock update_document_tags to raise exception
     mock_repo.update_document_tags.side_effect = RuntimeError("Database connection lost")
 
     mock_output = TagExtractionOutput(
@@ -924,27 +1051,24 @@ async def test_ingest_continues_when_tag_update_fails(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
         patch("amelia.core.extraction.extract_structured") as mock_extract,
     ):
         mock_extract.return_value = mock_output
 
-        # Should NOT raise exception - should continue pipeline
         result = await pipeline.ingest_document(
             document_id="doc-1",
             file_path=Path("/tmp/test.pdf"),
             content_type="application/pdf",
         )
 
-    # Should have attempted to update tags
     mock_repo.update_document_tags.assert_called_once_with(
         "doc-1", ["python", "django", "tutorial"]
     )
-
-    # Should still complete successfully despite tag update failure
     assert isinstance(result, Document)
     assert result.status == DocumentStatus.READY
 
@@ -954,12 +1078,11 @@ async def test_ingest_skips_tag_update_when_no_tags_derived(
     mock_repo: AsyncMock,
     mock_embedding: AsyncMock,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should skip update_document_tags call when no tags are derived."""
     from amelia.knowledge.models import TagExtractionOutput
 
-    # Create pipeline with tag derivation enabled
     pipeline = IngestionPipeline(
         repository=mock_repo,
         embedding_client=mock_embedding,
@@ -968,9 +1091,8 @@ async def test_ingest_skips_tag_update_when_no_tags_derived(
         tag_derivation_driver="api",
     )
 
-    # Mock tag extraction to return empty tags
     mock_output = TagExtractionOutput(
-        tags=["", "  ", "a" * 60],  # All will be filtered out by validation
+        tags=["", "  ", "a" * 60],
         reasoning="Could not identify clear tags",
     )
 
@@ -979,9 +1101,10 @@ async def test_ingest_skips_tag_update_when_no_tags_derived(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
         patch("amelia.core.extraction.extract_structured") as mock_extract,
     ):
@@ -993,9 +1116,6 @@ async def test_ingest_skips_tag_update_when_no_tags_derived(
             content_type="application/pdf",
         )
 
-    # Should NOT have called update_document_tags (no tags to update)
     mock_repo.update_document_tags.assert_not_called()
-
-    # Should complete successfully
     assert isinstance(result, Document)
     assert result.status == DocumentStatus.READY

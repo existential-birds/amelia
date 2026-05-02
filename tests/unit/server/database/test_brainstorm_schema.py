@@ -1,5 +1,7 @@
 # tests/unit/server/database/test_brainstorm_schema.py
 """Tests for brainstorming database schema."""
+from uuid import uuid4
+
 import asyncpg
 import pytest
 
@@ -95,70 +97,102 @@ class TestBrainstormConstraints:
 
     async def test_unique_constraint_on_session_sequence(self, db_with_schema: Database) -> None:
         """(session_id, sequence) is unique in brainstorm_messages."""
-        await db_with_schema.execute("""
+        session_id = uuid4()
+        msg_1_id = uuid4()
+        msg_2_id = uuid4()
+        await db_with_schema.execute(
+            """
             INSERT INTO brainstorm_sessions (id, profile_id, status, created_at, updated_at)
-            VALUES ('session-1', 'profile-1', 'active', NOW(), NOW())
-        """)
-        await db_with_schema.execute("""
+            VALUES ($1, 'profile-1', 'active', NOW(), NOW())
+            """,
+            session_id,
+        )
+        await db_with_schema.execute(
+            """
             INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at)
-            VALUES ('msg-1', 'session-1', 1, 'user', 'Hello', NOW())
-        """)
+            VALUES ($1, $2, 1, 'user', 'Hello', NOW())
+            """,
+            msg_1_id,
+            session_id,
+        )
         with pytest.raises(asyncpg.exceptions.UniqueViolationError):
-            await db_with_schema.execute("""
+            await db_with_schema.execute(
+                """
                 INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at)
-                VALUES ('msg-2', 'session-1', 1, 'assistant', 'Hi there', NOW())
-            """)
+                VALUES ($1, $2, 1, 'assistant', 'Hi there', NOW())
+                """,
+                msg_2_id,
+                session_id,
+            )
+
+
+def _message_inserts(session_id: object) -> list[tuple[str, list[object]]]:
+    """Build parametrized inserts for two brainstorm messages."""
+    return [
+        (
+            "INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at) VALUES ($1, $2, 1, 'user', 'Hello', NOW())",
+            [uuid4(), session_id],
+        ),
+        (
+            "INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at) VALUES ($1, $2, 2, 'assistant', 'Hi', NOW())",
+            [uuid4(), session_id],
+        ),
+    ]
+
+
+def _artifact_inserts(session_id: object) -> list[tuple[str, list[object]]]:
+    """Build parametrized inserts for a brainstorm artifact."""
+    return [
+        (
+            "INSERT INTO brainstorm_artifacts (id, session_id, type, path, title, created_at) VALUES ($1, $2, 'spec', '/path/to/spec.md', 'Feature Spec', NOW())",
+            [uuid4(), session_id],
+        ),
+    ]
 
 
 _CASCADE_DELETE_CASES = [
-    pytest.param(
-        "brainstorm_messages",
-        [
-            "INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at) VALUES ('msg-1', 'session-1', 1, 'user', 'Hello', NOW())",
-            "INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at) VALUES ('msg-2', 'session-1', 2, 'assistant', 'Hi', NOW())",
-        ],
-        2,
-        id="messages",
-    ),
-    pytest.param(
-        "brainstorm_artifacts",
-        [
-            "INSERT INTO brainstorm_artifacts (id, session_id, type, path, title, created_at) VALUES ('art-1', 'session-1', 'spec', '/path/to/spec.md', 'Feature Spec', NOW())",
-        ],
-        1,
-        id="artifacts",
-    ),
+    pytest.param("brainstorm_messages", _message_inserts, 2, id="messages"),
+    pytest.param("brainstorm_artifacts", _artifact_inserts, 1, id="artifacts"),
 ]
 
 
 class TestBrainstormCascadeDeletes:
     """Tests for cascade delete behavior."""
 
-    async def _insert_session(self, db: Database, session_id: str = "session-1") -> None:
+    async def _insert_session(self, db: Database, session_id: object) -> None:
         """Insert a brainstorm session for cascade tests."""
-        await db.execute(f"""
+        await db.execute(
+            """
             INSERT INTO brainstorm_sessions (id, profile_id, status, created_at, updated_at)
-            VALUES ('{session_id}', 'profile-1', 'active', NOW(), NOW())
-        """)
+            VALUES ($1, 'profile-1', 'active', NOW(), NOW())
+            """,
+            session_id,
+        )
 
-    @pytest.mark.parametrize("child_table,inserts,expected_count", _CASCADE_DELETE_CASES)
+    @pytest.mark.parametrize("child_table,build_inserts,expected_count", _CASCADE_DELETE_CASES)
     async def test_deleting_session_cascades_to_children(
         self,
         db_with_schema: Database,
         child_table: str,
-        inserts: list[str],
+        build_inserts: object,
         expected_count: int,
     ) -> None:
         """Deleting a session cascades to delete its child rows."""
-        await self._insert_session(db_with_schema)
-        for stmt in inserts:
-            await db_with_schema.execute(stmt)
+        session_id = uuid4()
+        await self._insert_session(db_with_schema, session_id)
+        for stmt, params in build_inserts(session_id):  # type: ignore[operator]
+            await db_with_schema.execute(stmt, *params)
         rows = await db_with_schema.fetch_all(
-            f"SELECT id FROM {child_table} WHERE session_id = 'session-1'"
+            f"SELECT id FROM {child_table} WHERE session_id = $1",
+            session_id,
         )
         assert len(rows) == expected_count
-        await db_with_schema.execute("DELETE FROM brainstorm_sessions WHERE id = 'session-1'")
+        await db_with_schema.execute(
+            "DELETE FROM brainstorm_sessions WHERE id = $1",
+            session_id,
+        )
         rows = await db_with_schema.fetch_all(
-            f"SELECT id FROM {child_table} WHERE session_id = 'session-1'"
+            f"SELECT id FROM {child_table} WHERE session_id = $1",
+            session_id,
         )
         assert len(rows) == 0

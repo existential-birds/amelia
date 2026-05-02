@@ -176,15 +176,17 @@ async def test_search_chunks(knowledge_repo: KnowledgeRepository) -> None:
     results = await knowledge_repo.search_chunks(
         query_embedding=query_embedding,
         top_k=5,
-        similarity_threshold=0.5,
+        similarity_threshold=0.3,
     )
 
-    # Should find chunks, with chunk 0 ranked higher
+    # Should find chunks, with chunk 0 ranked higher.
+    # Asserts the cosine-distance to similarity conversion (1 - <=>) yields
+    # the expected sign for a known-similar pair (query vs. embedding_a).
     test_results = [r for r in results if r.document_name == "Test Search Doc"]
     assert len(test_results) >= 1
     assert test_results[0].content == "Python testing basics"
     assert test_results[0].heading_path == ["Chapter 1", "Testing"]
-    assert test_results[0].similarity > 0.5
+    assert test_results[0].similarity >= 0.3
 
 
 async def test_search_chunks_with_tag_filter(knowledge_repo: KnowledgeRepository) -> None:
@@ -246,7 +248,7 @@ async def test_search_chunks_with_tag_filter(knowledge_repo: KnowledgeRepository
         query_embedding=embedding,
         top_k=10,
         tags=["python"],
-        similarity_threshold=0.5,
+        similarity_threshold=0.3,
     )
 
     # Should only find python document

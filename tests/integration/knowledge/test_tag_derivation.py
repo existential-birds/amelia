@@ -144,13 +144,29 @@ async def test_tag_derivation_failure_non_blocking(
         content_type="text/markdown",
     )
 
-    # Create test markdown file
+    # Create test markdown file. The body must comfortably exceed
+    # MIN_CHUNK_TOKENS=64 tokens so the new tiny-chunk filter does not drop
+    # all chunks before they reach the embedding/storage stages.
     test_file = tmp_path / "react.md"
     test_file.write_text("""
 # React Component Guide
 
 ## Introduction
-Learn React components.
+React components are the building blocks of any React application. A component
+is a self-contained unit of UI that can be reused throughout the app. Components
+can manage their own state, accept props from parents, and compose with other
+components to form complex interfaces. Modern React favors function components
+combined with hooks such as useState, useEffect, and useContext for managing
+side effects, local state, and shared application state. This guide walks
+through the lifecycle of a typical component, the difference between props and
+state, and the patterns used to keep components testable and maintainable.
+
+## Hooks
+Hooks let function components subscribe to React features without writing a
+class. The most common hooks are useState for local state and useEffect for
+running side effects after render. Custom hooks compose existing hooks into
+reusable behavior, which is the idiomatic way to share logic across multiple
+components in a modern React codebase.
 """)
 
     pipeline = pipeline_factory()

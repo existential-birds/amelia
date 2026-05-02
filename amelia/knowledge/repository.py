@@ -263,7 +263,7 @@ class KnowledgeRepository:
         query_embedding: list[float],
         top_k: int = 5,
         tags: list[str] | None = None,
-        similarity_threshold: float = 0.7,
+        similarity_threshold: float = 0.3,
     ) -> list[SearchResult]:
         """Semantic search for document chunks.
 
