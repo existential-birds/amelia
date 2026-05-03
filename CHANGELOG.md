@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-05-02
+
+### Changed
+
+- **deps:** Bump deepagents 0.4.3 → 0.5.6 with langchain stack pulled forward (anthropic 0.78→0.97, langchain 1.2.10→1.2.17, langchain-anthropic 1.3.3→1.4.2, langgraph 1.0.10rc1→1.1.10, langsmith 0.7.31→0.8.0) ([#582](https://github.com/existential-birds/amelia/pull/582))
+- **deps:** Bump deepagents to 0.5.x; LocalSandbox callers must pass `virtual_mode=False` explicitly to keep the unrestricted path ([#582](https://github.com/existential-birds/amelia/pull/582))
+- **deps:** Bump langchain-openai 1.1.9 → 1.1.14, python-multipart 0.0.22 → 0.0.26, langchain-core 1.2.22 → 1.2.28, lxml 6.0.2 → 6.1.0, python-dotenv 1.2.1 → 1.2.2, pillow 12.1.1 → 12.2.0 ([#572](https://github.com/existential-birds/amelia/pull/572), [#576](https://github.com/existential-birds/amelia/pull/576), [#577](https://github.com/existential-birds/amelia/pull/577), [#578](https://github.com/existential-birds/amelia/pull/578), [#573](https://github.com/existential-birds/amelia/pull/573))
+
+### Fixed
+
+- **knowledge:** Switch PDF chunker to `HybridChunker` (cl100k_base, max 512 tokens) with a 64-token minimum filter, contextualize chunks with heading breadcrumbs, and unify the search similarity threshold at 0.3 — eliminates noisy single-token chunks and improves semantic relevance of top results ([#587](https://github.com/existential-birds/amelia/pull/587))
+- **knowledge:** Drop document-text previews from the "tiny chunks" warning log to avoid leaking user-uploaded content into operator logs ([#587](https://github.com/existential-birds/amelia/pull/587))
+- **validation:** Reject plans without task structure (missing `### Task N:` headers) before processing, so architect raw output written to the wrong stage no longer slips through to execution ([#580](https://github.com/existential-birds/amelia/pull/580))
+- **dashboard:** Use function-form `manualChunks` in `vite.config.ts` for compatibility with current Rollup/Vite types — restores broken dashboard build ([#582](https://github.com/existential-birds/amelia/pull/582))
+
+### Security
+
+- **deps:** Patch Pygments 2.19.2 → 2.20.0 (Dependabot alert #39: ReDoS in GUID matching) ([#580](https://github.com/existential-birds/amelia/pull/580))
+- **deps:** Patch transformers 4.57.6 → 5.6.2 via docling 2.73 → 2.91 (Dependabot alert #56: Trainer arbitrary code execution) ([#580](https://github.com/existential-birds/amelia/pull/580))
+- **deps:** Patch lodash-es transitives → 4.18.1 via pnpm override (Dependabot alerts #50, #51: prototype pollution and code injection) ([#580](https://github.com/existential-birds/amelia/pull/580))
+- **deps:** Patch uuid transitive → 14.0.0 via pnpm override (Dependabot alert #67: missing buffer bounds check) ([#580](https://github.com/existential-birds/amelia/pull/580))
+- **deps:** Patch vite transitive → 6.4.2 via pnpm override in `docs/site` (Dependabot alert #55: path traversal in optimized deps `.map` handling) ([#580](https://github.com/existential-birds/amelia/pull/580))
+- **deps:** Bump dompurify 3.3.2 → 3.4.0 ([#575](https://github.com/existential-birds/amelia/pull/575))
+- **deps:** Bump postcss 8.5.6 → 8.5.12 in `docs/site` ([#579](https://github.com/existential-birds/amelia/pull/579))
+- **deps:** Bump cryptography 46.0.6 → 46.0.7 ([#572](https://github.com/existential-birds/amelia/pull/572))
+- **deps:** Bump uuid 11.1.0 → 11.1.1 in dashboard ([#583](https://github.com/existential-birds/amelia/pull/583))
+
 ## [0.20.0] - 2026-04-07
 
 ### Added
