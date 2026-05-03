@@ -33,21 +33,36 @@ async def test_tag_derivation_end_to_end(
         content_type="text/markdown",
     )
 
-    # Create test markdown file
+    # Create test markdown file. The body must comfortably exceed
+    # MIN_CHUNK_TOKENS=64 tokens so the new tiny-chunk filter does not drop
+    # all chunks before they reach the embedding/storage stages.
     test_file = tmp_path / "k8s-guide.md"
     test_file.write_text("""
 # Kubernetes Deployment Guide
 
 ## Introduction
-This guide covers deploying applications to Kubernetes clusters.
+This guide covers deploying applications to Kubernetes clusters in production.
+Kubernetes orchestrates containerized workloads across a fleet of nodes,
+handling scheduling, scaling, networking, and self-healing so operators can
+focus on application logic instead of infrastructure plumbing. The deployment
+model treats containers as the unit of work and clusters as the unit of
+capacity, with declarative manifests describing the desired state of every
+workload running on the platform.
 
 ## Prerequisites
-- Docker installed
-- kubectl configured
+Before deploying, ensure Docker is installed and the kubectl command line tool
+is configured to talk to your target cluster. You will also need a container
+registry that your cluster can pull images from, plus the right RBAC
+permissions to create deployments and services in your target namespace.
 
 ## Deployment Steps
-1. Create a deployment YAML
-2. Apply the configuration
+First, build a container image and push it to your registry. Next, create a
+deployment manifest that references the image and specifies replica counts,
+resource requests, liveness probes, and any environment variables your
+application needs at runtime. Apply the manifest with kubectl apply, then
+expose the workload through a Service or Ingress so traffic can reach the
+running pods. Finally, monitor the rollout with kubectl rollout status and
+verify the new pods become ready before declaring the deploy successful.
 """)
 
     pipeline = pipeline_factory()
@@ -97,13 +112,29 @@ async def test_tag_derivation_disabled(
         tags=["python", "programming"],
     )
 
-    # Create test markdown file
+    # Create test markdown file. The body must comfortably exceed
+    # MIN_CHUNK_TOKENS=64 tokens so the new tiny-chunk filter does not drop
+    # all chunks before they reach the embedding/storage stages.
     test_file = tmp_path / "python.md"
     test_file.write_text("""
 # Python Programming Guide
 
 ## Introduction
-Learn Python basics.
+Python is a high-level, dynamically typed programming language designed for
+readability and rapid development. The standard library is famously
+batteries-included, covering networking, filesystem operations, data
+serialization, regular expressions, and concurrency primitives without any
+external dependencies. The language has become a default choice for data
+science, scripting, web backends, and infrastructure automation because the
+same syntax scales from a five-line throwaway script to a multi-service
+production application.
+
+## Tooling
+Modern Python projects commonly use pyproject.toml as the canonical project
+file, uv or pip for dependency management, ruff for linting, and mypy for
+static type checking. Type hints are optional but widely adopted in
+production codebases because they catch entire classes of bugs at edit time
+and document intent for future maintainers.
 """)
 
     # Create pipeline with tag derivation DISABLED
@@ -209,17 +240,28 @@ async def test_tag_derivation_merges_with_existing_tags(
         tags=["aws", "serverless"],  # User-provided tags
     )
 
-    # Create test markdown file
+    # Create test markdown file. The body must comfortably exceed
+    # MIN_CHUNK_TOKENS=64 tokens so the new tiny-chunk filter does not drop
+    # all chunks before they reach the embedding/storage stages.
     test_file = tmp_path / "lambda.md"
     test_file.write_text("""
 # AWS Lambda Deployment Guide
 
 ## Introduction
-Deploy serverless functions to AWS Lambda using Python.
+AWS Lambda lets you run Python code without provisioning or managing servers.
+You package the function and its dependencies, upload the artifact, and Lambda
+handles the rest — invocation, scaling, and isolation — billing only for the
+compute time you actually consume. Functions can be triggered by HTTP requests
+through API Gateway, by events from S3 or DynamoDB, by SQS or SNS messages,
+or by scheduled EventBridge rules, which makes Lambda the connective tissue
+for most modern serverless architectures on AWS.
 
 ## Prerequisites
-- AWS account
-- Python 3.12
+You need an AWS account with permission to create IAM roles and Lambda
+functions, plus a recent Python runtime such as Python 3.12 installed locally
+for packaging and testing. The AWS CLI or an infrastructure-as-code tool such
+as the AWS CDK, SAM, or Terraform will make repeatable deploys substantially
+easier than clicking through the console for every change.
 """)
 
     pipeline = pipeline_factory()
