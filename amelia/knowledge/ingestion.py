@@ -106,17 +106,11 @@ class IngestionPipeline:
                 # internal token counter on the raw chunk.
                 kept: list[tuple[Any, str, int]] = []
                 dropped = 0
-                dropped_previews: list[str] = []
                 for chunk in chunks:
                     text = chunker.contextualize(chunk=chunk)
                     n_tokens = tokenizer.count_tokens(text)
                     if n_tokens < MIN_CHUNK_TOKENS:
                         dropped += 1
-                        if len(dropped_previews) < 3:
-                            preview = text.strip().replace("\n", " ")
-                            if len(preview) > 120:
-                                preview = preview[:120] + "..."
-                            dropped_previews.append(preview)
                         continue
                     kept.append((chunk, text, n_tokens))
 
@@ -132,7 +126,6 @@ class IngestionPipeline:
                             if total_chunks_seen > 0
                             else 0.0
                         ),
-                        previews=dropped_previews,
                     )
 
                 if not kept:
