@@ -29,6 +29,11 @@ _SUPPORTED_TYPES = {"application/pdf", "text/markdown"}
 # Max text length for tag extraction (~2000 tokens)
 MAX_RAW_TEXT_FOR_TAGS = 8000
 
+# Chunking configuration
+OPENAI_EMBED_MODEL = "text-embedding-3-small"
+MAX_CHUNK_TOKENS = 512
+MIN_CHUNK_TOKENS = 64
+
 
 class IngestionPipeline:
     """Parse, chunk, embed, and store documents.
@@ -92,15 +97,51 @@ class IngestionPipeline:
                 # Stage 2: Chunk
                 if progress_callback:
                     progress_callback("chunking", 0.1, 0, 0)
-                chunks = await self._chunk(docling_doc)
-                total_chunks = len(chunks)
+                chunker, tokenizer = self._build_chunker()
+                chunks = await self._chunk(docling_doc, chunker)
+
+                # Contextualize each chunk and filter out tiny ones using the
+                # public tokenizer. We measure the contextualized text — i.e.
+                # exactly what gets embedded — rather than calling the chunker's
+                # internal token counter on the raw chunk.
+                kept: list[tuple[Any, str, int]] = []
+                dropped = 0
+                for chunk in chunks:
+                    text = chunker.contextualize(chunk=chunk)
+                    n_tokens = tokenizer.count_tokens(text)
+                    if n_tokens < MIN_CHUNK_TOKENS:
+                        dropped += 1
+                        continue
+                    kept.append((chunk, text, n_tokens))
+
+                total_chunks_seen = len(chunks)
+                if dropped > 0:
+                    logger.warning(
+                        "dropped tiny chunks",
+                        document_id=document_id,
+                        count=dropped,
+                        total=total_chunks_seen,
+                        ratio=(
+                            dropped / total_chunks_seen
+                            if total_chunks_seen > 0
+                            else 0.0
+                        ),
+                    )
+
+                if not kept:
+                    raise IngestionError(
+                        "The document did not contain enough text to index. "
+                        "Please upload a document with more content."
+                    )
+
+                total_chunks = len(kept)
                 if progress_callback:
                     progress_callback("chunking", 0.2, 0, total_chunks)
 
                 # Stage 3: Embed
                 if progress_callback:
                     progress_callback("embedding", 0.2, 0, total_chunks)
-                chunk_texts = [c.text for c in chunks]
+                chunk_texts = [text for _, text, _ in kept]
 
                 def embed_progress(processed: int, total: int) -> None:
                     if progress_callback:
@@ -116,20 +157,18 @@ class IngestionPipeline:
                 # Build ChunkData list
                 chunk_data: list[ChunkData] = []
                 total_tokens = 0
-                for i, (chunk, embedding) in enumerate(
-                    zip(chunks, embeddings, strict=True)
+                for i, ((chunk, text, n_tokens), embedding) in enumerate(
+                    zip(kept, embeddings, strict=True)
                 ):
-                    # Estimate token count (~4 chars per token)
-                    token_count = max(1, len(chunk.text) // 4)
-                    total_tokens += token_count
+                    total_tokens += n_tokens
                     chunk_data.append(
                         ChunkData(
                             chunk_index=i,
-                            content=chunk.text,
+                            content=text,
                             heading_path=list(chunk.meta.headings)
                             if chunk.meta.headings
                             else [],
-                            token_count=token_count,
+                            token_count=n_tokens,
                             embedding=embedding,
                         )
                     )
@@ -241,18 +280,40 @@ class IngestionPipeline:
 
         return raw_text, result.document
 
-    async def _chunk(self, docling_doc: object) -> list[Any]:
-        """Chunk document using Docling's hierarchical chunker.
+    def _build_chunker(self) -> tuple[Any, Any]:
+        """Construct a HybridChunker plus its OpenAI tokenizer.
+
+        Both objects are returned so the caller can reuse the same tokenizer
+        for the per-chunk contextualize+count step (no double instantiation).
+
+        Returns:
+            Tuple of (chunker, tokenizer).
+        """
+        import tiktoken  # noqa: PLC0415
+        from docling_core.transforms.chunker.hybrid_chunker import (  # noqa: PLC0415
+            HybridChunker,
+        )
+        from docling_core.transforms.chunker.tokenizer.openai import (  # noqa: PLC0415
+            OpenAITokenizer,
+        )
+
+        tokenizer = OpenAITokenizer(
+            tokenizer=tiktoken.encoding_for_model(OPENAI_EMBED_MODEL),
+            max_tokens=MAX_CHUNK_TOKENS,
+        )
+        chunker = HybridChunker(tokenizer=tokenizer, merge_peers=True)
+        return chunker, tokenizer
+
+    async def _chunk(self, docling_doc: object, chunker: Any) -> list[Any]:
+        """Chunk document using the supplied Docling chunker.
 
         Args:
             docling_doc: Docling document object.
+            chunker: A pre-built Docling chunker instance.
 
         Returns:
             List of Docling chunk objects.
         """
-        from docling.chunking import HierarchicalChunker  # noqa: PLC0415
-
-        chunker = HierarchicalChunker()
         chunks = await asyncio.to_thread(chunker.chunk, docling_doc)
         return list(chunks)
 

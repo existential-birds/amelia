@@ -90,23 +90,29 @@ class TestBrainstormTables:
         assert expected_index in indexes
 
 
+_SESSION_UUID = "11111111-1111-1111-1111-111111111111"
+_MSG1_UUID = "22222222-2222-2222-2222-222222222221"
+_MSG2_UUID = "22222222-2222-2222-2222-222222222222"
+_ART1_UUID = "33333333-3333-3333-3333-333333333331"
+
+
 class TestBrainstormConstraints:
     """Tests for brainstorm table constraints."""
 
     async def test_unique_constraint_on_session_sequence(self, db_with_schema: Database) -> None:
         """(session_id, sequence) is unique in brainstorm_messages."""
-        await db_with_schema.execute("""
+        await db_with_schema.execute(f"""
             INSERT INTO brainstorm_sessions (id, profile_id, status, created_at, updated_at)
-            VALUES ('session-1', 'profile-1', 'active', NOW(), NOW())
+            VALUES ('{_SESSION_UUID}', 'profile-1', 'active', NOW(), NOW())
         """)
-        await db_with_schema.execute("""
+        await db_with_schema.execute(f"""
             INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at)
-            VALUES ('msg-1', 'session-1', 1, 'user', 'Hello', NOW())
+            VALUES ('{_MSG1_UUID}', '{_SESSION_UUID}', 1, 'user', 'Hello', NOW())
         """)
         with pytest.raises(asyncpg.exceptions.UniqueViolationError):
-            await db_with_schema.execute("""
+            await db_with_schema.execute(f"""
                 INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at)
-                VALUES ('msg-2', 'session-1', 1, 'assistant', 'Hi there', NOW())
+                VALUES ('{_MSG2_UUID}', '{_SESSION_UUID}', 1, 'assistant', 'Hi there', NOW())
             """)
 
 
@@ -114,8 +120,8 @@ _CASCADE_DELETE_CASES = [
     pytest.param(
         "brainstorm_messages",
         [
-            "INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at) VALUES ('msg-1', 'session-1', 1, 'user', 'Hello', NOW())",
-            "INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at) VALUES ('msg-2', 'session-1', 2, 'assistant', 'Hi', NOW())",
+            f"INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at) VALUES ('{_MSG1_UUID}', '{_SESSION_UUID}', 1, 'user', 'Hello', NOW())",
+            f"INSERT INTO brainstorm_messages (id, session_id, sequence, role, content, created_at) VALUES ('{_MSG2_UUID}', '{_SESSION_UUID}', 2, 'assistant', 'Hi', NOW())",
         ],
         2,
         id="messages",
@@ -123,7 +129,7 @@ _CASCADE_DELETE_CASES = [
     pytest.param(
         "brainstorm_artifacts",
         [
-            "INSERT INTO brainstorm_artifacts (id, session_id, type, path, title, created_at) VALUES ('art-1', 'session-1', 'spec', '/path/to/spec.md', 'Feature Spec', NOW())",
+            f"INSERT INTO brainstorm_artifacts (id, session_id, type, path, title, created_at) VALUES ('{_ART1_UUID}', '{_SESSION_UUID}', 'spec', '/path/to/spec.md', 'Feature Spec', NOW())",
         ],
         1,
         id="artifacts",
@@ -134,7 +140,7 @@ _CASCADE_DELETE_CASES = [
 class TestBrainstormCascadeDeletes:
     """Tests for cascade delete behavior."""
 
-    async def _insert_session(self, db: Database, session_id: str = "session-1") -> None:
+    async def _insert_session(self, db: Database, session_id: str = _SESSION_UUID) -> None:
         """Insert a brainstorm session for cascade tests."""
         await db.execute(f"""
             INSERT INTO brainstorm_sessions (id, profile_id, status, created_at, updated_at)
@@ -154,11 +160,13 @@ class TestBrainstormCascadeDeletes:
         for stmt in inserts:
             await db_with_schema.execute(stmt)
         rows = await db_with_schema.fetch_all(
-            f"SELECT id FROM {child_table} WHERE session_id = 'session-1'"
+            f"SELECT id FROM {child_table} WHERE session_id = '{_SESSION_UUID}'"
         )
         assert len(rows) == expected_count
-        await db_with_schema.execute("DELETE FROM brainstorm_sessions WHERE id = 'session-1'")
+        await db_with_schema.execute(
+            f"DELETE FROM brainstorm_sessions WHERE id = '{_SESSION_UUID}'"
+        )
         rows = await db_with_schema.fetch_all(
-            f"SELECT id FROM {child_table} WHERE session_id = 'session-1'"
+            f"SELECT id FROM {child_table} WHERE session_id = '{_SESSION_UUID}'"
         )
         assert len(rows) == 0

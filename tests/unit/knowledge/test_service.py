@@ -63,15 +63,32 @@ def mock_converter() -> MagicMock:
     return converter
 
 
+# A long, realistic chunk body that comfortably exceeds the 64-token floor
+# enforced by `MIN_CHUNK_TOKENS`. Tests use this so chunks are not silently
+# dropped by the new tiny-chunk filter.
+LONG_CHUNK_TEXT = (
+    "Knowledge ingestion in Amelia parses uploaded documents, splits them into "
+    "semantically coherent chunks, embeds each chunk for vector search, and "
+    "stores the results alongside heading metadata. The hybrid chunker walks "
+    "the Docling document tree, merges peer sections that fit within the "
+    "embedding model's token budget, and contextualizes each chunk with the "
+    "headings under which it appears."
+)
+
+
 @pytest.fixture
-def mock_chunker() -> MagicMock:
-    """Provide a mocked Docling HierarchicalChunker."""
+def mock_chunker_pair() -> tuple[MagicMock, MagicMock]:
+    """Provide (chunker, tokenizer) tuple for `_build_chunker` patching."""
     chunker = MagicMock()
     mock_chunk = MagicMock()
-    mock_chunk.text = "Chunk text"
+    mock_chunk.text = LONG_CHUNK_TEXT
     mock_chunk.meta.headings = ["Heading 1"]
     chunker.chunk.return_value = [mock_chunk]
-    return chunker
+    chunker.contextualize.side_effect = lambda chunk: chunk.text
+
+    tokenizer = MagicMock()
+    tokenizer.count_tokens.return_value = 100
+    return chunker, tokenizer
 
 
 @pytest.fixture
@@ -116,7 +133,7 @@ async def test_queue_ingestion_emits_started_event(
     service: KnowledgeService,
     mock_event_bus: MagicMock,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should emit DOCUMENT_INGESTION_STARTED when ingestion is queued."""
     with (
@@ -124,9 +141,10 @@ async def test_queue_ingestion_emits_started_event(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
     ):
         doc_id = uuid4()
@@ -149,7 +167,7 @@ async def test_queue_ingestion_emits_progress_events(
     service: KnowledgeService,
     mock_event_bus: MagicMock,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should emit DOCUMENT_INGESTION_PROGRESS events during pipeline stages."""
     with (
@@ -157,9 +175,10 @@ async def test_queue_ingestion_emits_progress_events(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
     ):
         doc_id = uuid4()
@@ -183,7 +202,7 @@ async def test_queue_ingestion_emits_completed_event(
     service: KnowledgeService,
     mock_event_bus: MagicMock,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should emit DOCUMENT_INGESTION_COMPLETED on successful ingestion."""
     with (
@@ -191,9 +210,10 @@ async def test_queue_ingestion_emits_completed_event(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
     ):
         doc_id = uuid4()
@@ -215,7 +235,7 @@ async def test_queue_ingestion_emits_failed_event(
     mock_event_bus: MagicMock,
     mock_embedding: AsyncMock,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should emit DOCUMENT_INGESTION_FAILED when pipeline raises an error."""
     mock_embedding.embed_batch.side_effect = EmbeddingError("fail")
@@ -225,9 +245,10 @@ async def test_queue_ingestion_emits_failed_event(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
     ):
         doc_id = uuid4()
@@ -246,7 +267,7 @@ async def test_queue_ingestion_emits_failed_event(
 async def test_cleanup_awaits_pending_tasks(
     service: KnowledgeService,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should cancel and await all pending tasks on cleanup."""
     with (
@@ -254,9 +275,10 @@ async def test_cleanup_awaits_pending_tasks(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
     ):
         doc_id = uuid4()
@@ -270,7 +292,7 @@ async def test_cleanup_awaits_pending_tasks(
 async def test_task_auto_removed_on_completion(
     service: KnowledgeService,
     mock_converter: MagicMock,
-    mock_chunker: MagicMock,
+    mock_chunker_pair: tuple[MagicMock, MagicMock],
 ) -> None:
     """Should auto-remove task from tracked set when it completes."""
     with (
@@ -278,9 +300,10 @@ async def test_task_auto_removed_on_completion(
             "docling.document_converter.DocumentConverter",
             return_value=mock_converter,
         ),
-        patch(
-            "docling.chunking.HierarchicalChunker",
-            return_value=mock_chunker,
+        patch.object(
+            IngestionPipeline,
+            "_build_chunker",
+            return_value=mock_chunker_pair,
         ),
     ):
         doc_id = uuid4()

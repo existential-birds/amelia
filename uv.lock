@@ -158,6 +158,7 @@ dependencies = [
     { name = "daytona-sdk" },
     { name = "deepagents" },
     { name = "docling" },
+    { name = "docling-core", extra = ["chunking-openai"] },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "langchain-openai" },
@@ -193,6 +194,7 @@ requires-dist = [
     { name = "daytona-sdk", specifier = ">=0.148.0" },
     { name = "deepagents", specifier = ">=0.5.5" },
     { name = "docling", specifier = ">=2.91.0" },
+    { name = "docling-core", extras = ["chunking-openai"], specifier = ">=2.74.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "langchain-openai", specifier = ">=1.1.14" },
@@ -815,6 +817,15 @@ wheels = [
 chunking = [
     { name = "semchunk" },
     { name = "transformers" },
+    { name = "tree-sitter" },
+    { name = "tree-sitter-c" },
+    { name = "tree-sitter-javascript" },
+    { name = "tree-sitter-python" },
+    { name = "tree-sitter-typescript" },
+]
+chunking-openai = [
+    { name = "semchunk" },
+    { name = "tiktoken" },
     { name = "tree-sitter" },
     { name = "tree-sitter-c" },
     { name = "tree-sitter-javascript" },
