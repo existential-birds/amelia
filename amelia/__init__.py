@@ -8,7 +8,7 @@ Exports:
     __version__: Package version string.
 """
 
-__version__ = "0.20.0"
+__version__ = "0.20.1"
 
 __all__ = [
     "__version__",
