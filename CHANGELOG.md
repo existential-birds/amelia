@@ -564,7 +564,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/existential-birds/amelia/compare/v0.20.1...v0.21.0
+[0.20.1]: https://github.com/existential-birds/amelia/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/existential-birds/amelia/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/existential-birds/amelia/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/existential-birds/amelia/compare/v0.17.0...v0.18.0
