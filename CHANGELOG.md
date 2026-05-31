@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-05-31
+
+### Added
+
+- **drivers:** Support arbitrary OpenAI-compatible models and providers — point Amelia at any OpenAI-compatible endpoint by specifying a custom model and base URL, beyond the built-in provider list ([#595](https://github.com/existential-birds/amelia/pull/595))
+
+### Changed
+
+- **deps:** Bump mermaid 11.12.2 → 11.15.0 in `dashboard` and postcss in `docs/site` ([#591](https://github.com/existential-birds/amelia/pull/591))
+- **deps:** Bump langchain-core 1.3.2 → 1.3.3 ([#590](https://github.com/existential-birds/amelia/pull/590))
+
+### Security
+
+- **deps:** Bump idna 3.11 → 3.15 ([#593](https://github.com/existential-birds/amelia/pull/593))
+- **deps:** Bump urllib3 in the uv group ([#590](https://github.com/existential-birds/amelia/pull/590))
+- **deps:** Bump python-multipart 0.0.26 → 0.0.27 ([#589](https://github.com/existential-birds/amelia/pull/589))
+
 ## [0.20.1] - 2026-05-02
 
 ### Changed
@@ -547,7 +564,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/existential-birds/amelia/compare/v0.20.1...v0.21.0
+[0.20.1]: https://github.com/existential-birds/amelia/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/existential-birds/amelia/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/existential-birds/amelia/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/existential-birds/amelia/compare/v0.17.0...v0.18.0
