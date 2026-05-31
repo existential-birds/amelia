@@ -254,6 +254,36 @@ class TestProfileCreate:
         assert "created successfully" in result.stdout
         mock_repo.create_profile.assert_called_once()
 
+    def test_profile_create_api_custom_provider_stores_options(
+        self, runner: CliRunner, mock_db: MagicMock
+    ) -> None:
+        """'amelia config profile create' stores custom provider options on agents."""
+        mock_repo = MagicMock()
+        mock_repo.get_profile = AsyncMock(return_value=None)
+        captured: dict[str, Profile] = {}
+
+        async def _create(profile: Profile) -> Profile:
+            captured["profile"] = profile
+            return profile
+
+        mock_repo.create_profile = AsyncMock(side_effect=_create)
+
+        with patch("amelia.cli.config.get_database", return_value=mock_db), \
+             patch("amelia.cli.config.ProfileRepository", return_value=mock_repo):
+            result = runner.invoke(app, [
+                "config", "profile", "create", "p1",
+                "--driver", "api", "--model", "my-model",
+                "--provider", "vllm", "--base-url", "http://localhost:8000/v1",
+                "--api-key-env-var", "VLLM_KEY",
+                "--tracker", "noop", "--repo-root", "/tmp/x",
+            ])
+
+        assert result.exit_code == 0
+        agent = next(iter(captured["profile"].agents.values()))
+        assert agent.options["provider"] == "vllm"
+        assert agent.options["base_url"] == "http://localhost:8000/v1"
+        assert agent.options["api_key_env_var"] == "VLLM_KEY"
+
     def test_profile_create_rejects_legacy_cli_driver(
         self, runner: CliRunner, mock_db: MagicMock
     ) -> None:
