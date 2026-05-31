@@ -220,7 +220,7 @@ describe('ApiModelSelect', () => {
     );
 
     await user.type(
-      screen.getByPlaceholderText(/type openrouter model id/i),
+      screen.getByPlaceholderText(/type any model id/i),
       'meta-llama/llama-4-scout'
     );
     await user.click(screen.getByRole('button', { name: /use model code/i }));
@@ -232,24 +232,21 @@ describe('ApiModelSelect', () => {
     });
   });
 
-  it('shows an inline error when typed model lookup fails', async () => {
+  it('accepts a typed model id even when lookup fails, with a non-blocking warning', async () => {
     const user = userEvent.setup();
+    const onChange = vi.fn();
     mockLookupModelById.mockRejectedValue(new Error('Model not found'));
 
-    render(
-      <ApiModelSelect
-        agentKey="architect"
-        value="claude-sonnet-4"
-        onChange={vi.fn()}
-      />
-    );
+    render(<ApiModelSelect agentKey="architect" value="" onChange={onChange} />);
 
-    await user.clear(screen.getByPlaceholderText(/type openrouter model id/i));
-    await user.type(screen.getByPlaceholderText(/type openrouter model id/i), 'unknown/not-real');
-    await user.keyboard('{Enter}');
+    await user.type(screen.getByPlaceholderText(/type any model id/i), 'unknown/not-real');
+    await user.click(screen.getByRole('button', { name: /use model code/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Model not found')).toBeInTheDocument();
+      expect(onChange).toHaveBeenCalledWith('unknown/not-real');
+      expect(addRecentModel).toHaveBeenCalledWith('unknown/not-real');
+      expect(screen.getByText(/couldn't verify/i)).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
   });
 
@@ -274,7 +271,7 @@ describe('ApiModelSelect', () => {
       />
     );
 
-    await user.type(screen.getByPlaceholderText(/type openrouter model id/i), 'openai/gpt-4o');
+    await user.type(screen.getByPlaceholderText(/type any model id/i), 'openai/gpt-4o');
     await user.click(screen.getByRole('button', { name: /use model code/i }));
 
     await waitFor(() => {
