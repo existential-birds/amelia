@@ -191,7 +191,13 @@ def get_driver(
         approval_mode = (options or {}).get("approval_mode", "full-auto")
         return CodexCliDriver(model=model, cwd=cwd, approval_mode=approval_mode)
     elif driver_key == "api":
-        return ApiDriver(provider="openrouter", model=model)
+        opts = options or {}
+        return ApiDriver(
+            provider=opts.get("provider", "openrouter"),
+            model=model,
+            base_url=opts.get("base_url"),
+            api_key_env_var=opts.get("api_key_env_var"),
+        )
     else:
         raise ValueError(
             f"Unknown driver key: {driver_key!r}. "

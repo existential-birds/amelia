@@ -37,7 +37,29 @@ class TestGetDriverExistingBehavior:
         with patch("amelia.drivers.factory.ApiDriver") as mock_cls:
             mock_cls.return_value = MagicMock()
             _driver = get_driver("api", model="test-model")
-            mock_cls.assert_called_once_with(provider="openrouter", model="test-model")
+            mock_cls.assert_called_once_with(
+                provider="openrouter", model="test-model",
+                base_url=None, api_key_env_var=None,
+            )
+
+    def test_api_driver_reads_provider_options(self) -> None:
+        with patch("amelia.drivers.factory.ApiDriver") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            get_driver("api", model="deepseek-chat",
+                       options={"provider": "deepseek", "base_url": None, "api_key_env_var": None})
+            mock_cls.assert_called_once_with(
+                provider="deepseek", model="deepseek-chat",
+                base_url=None, api_key_env_var=None,
+            )
+
+    def test_api_driver_custom_provider_options(self) -> None:
+        with patch("amelia.drivers.factory.ApiDriver") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            get_driver("api", model="m",
+                       options={"provider": "vllm", "base_url": "http://x/v1", "api_key_env_var": "VLLM_KEY"})
+            mock_cls.assert_called_once_with(
+                provider="vllm", model="m", base_url="http://x/v1", api_key_env_var="VLLM_KEY",
+            )
 
     def test_unknown_driver_raises(self) -> None:
         with pytest.raises(ValueError, match=r"Unknown driver key: 'unknown'\."):
@@ -79,13 +101,19 @@ class TestGetDriverContainerBranch:
         with patch("amelia.drivers.factory.ApiDriver") as mock_cls:
             mock_cls.return_value = MagicMock()
             _driver = get_driver("api", model="test-model", sandbox_config=sandbox)
-            mock_cls.assert_called_once_with(provider="openrouter", model="test-model")
+            mock_cls.assert_called_once_with(
+                provider="openrouter", model="test-model",
+                base_url=None, api_key_env_var=None,
+            )
 
     def test_no_sandbox_config_returns_normal_driver(self) -> None:
         with patch("amelia.drivers.factory.ApiDriver") as mock_cls:
             mock_cls.return_value = MagicMock()
             _driver = get_driver("api", model="test-model")
-            mock_cls.assert_called_once_with(provider="openrouter", model="test-model")
+            mock_cls.assert_called_once_with(
+                provider="openrouter", model="test-model",
+                base_url=None, api_key_env_var=None,
+            )
 
 
 class TestLegacyDriverRejection:
@@ -349,7 +377,10 @@ class TestGetDriverWithSharedProvider:
         with patch("amelia.drivers.factory.ApiDriver") as mock_cls:
             mock_cls.return_value = MagicMock()
             get_driver("api", model="test-model", sandbox_provider=None)
-            mock_cls.assert_called_once_with(provider="openrouter", model="test-model")
+            mock_cls.assert_called_once_with(
+                provider="openrouter", model="test-model",
+                base_url=None, api_key_env_var=None,
+            )
 
 
 class TestCreateDaytonaProvider:

@@ -174,7 +174,10 @@ class TestGenerate:
             mock_create.return_value = MagicMock()
             await driver.generate(prompt="test")
 
-            mock_create.assert_called_once_with("test/model", provider="openrouter")
+            mock_create.assert_called_once_with(
+                "test/model", provider="openrouter",
+                base_url=None, api_key_env_var=None,
+            )
 
 
 class TestExecuteAgentic:
@@ -202,7 +205,10 @@ class TestExecuteAgentic:
             async for _ in driver.execute_agentic(prompt="test", cwd="/test"):
                 pass
 
-            mock_create.assert_called_once_with("test/model", provider="openrouter")
+            mock_create.assert_called_once_with(
+                "test/model", provider="openrouter",
+                base_url=None, api_key_env_var=None,
+            )
 
     async def test_yields_agentic_messages_from_stream(
         self, mock_deepagents_filesystem: MagicMock
