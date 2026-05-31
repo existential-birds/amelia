@@ -315,6 +315,20 @@ class TestGetDriverDaytonaBranch:
                 },
             )
 
+    def test_daytona_mode_deepseek_preset_resolves(self) -> None:
+        """Preset provider option should resolve to correct URL and env var."""
+        sandbox = SandboxConfig(mode=SandboxMode.DAYTONA,
+                                repo_url="https://github.com/org/repo.git", network_allowlist_enabled=False)
+        with patch("amelia.sandbox.daytona.DaytonaSandboxProvider") as mock_provider_cls, \
+             patch("amelia.sandbox.driver.ContainerDriver") as mock_driver_cls, \
+             patch.dict(os.environ, {"DAYTONA_API_KEY": "dk", "DEEPSEEK_API_KEY": "sk-ds"}, clear=True):
+            mock_driver_cls.return_value = MagicMock()
+            get_driver("api", model="deepseek-chat", sandbox_config=sandbox,
+                       profile_name="work", options={"provider": "deepseek"})
+            env = mock_provider_cls.call_args.kwargs["worker_env"]
+            assert env["LLM_PROXY_URL"] == "https://api.deepseek.com/v1"
+            assert env["OPENAI_API_KEY"] == "sk-ds"
+
     def test_daytona_mode_unsupported_provider_raises(self) -> None:
         """Unsupported LLM provider should raise ValueError."""
         sandbox = SandboxConfig(
@@ -325,7 +339,7 @@ class TestGetDriverDaytonaBranch:
         with patch("amelia.sandbox.daytona.DaytonaSandboxProvider"), \
              patch("amelia.sandbox.driver.ContainerDriver"), \
              patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}, clear=True), \
-             pytest.raises(ValueError, match="Unsupported LLM provider"):
+             pytest.raises(ValueError, match="Unsupported provider"):
             get_driver(
                 "api", model="test-model",
                 sandbox_config=sandbox, profile_name="work",
