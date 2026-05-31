@@ -298,6 +298,10 @@ class ApiDriver(DriverInterface):
     Attributes:
         model: The model identifier (e.g., 'minimax/minimax-m2').
         provider: The provider name (e.g., 'openrouter').
+        base_url: Optional base URL override for the provider's OpenAI-compatible
+            endpoint (required for custom, non-preset providers).
+        api_key_env_var: Optional name of the environment variable holding the API
+            key (required for custom, non-preset providers).
         cwd: Working directory for agentic execution.
     """
 
@@ -332,6 +336,8 @@ class ApiDriver(DriverInterface):
         model: str | None = None,
         cwd: str | None = None,
         provider: str = "openrouter",
+        base_url: str | None = None,
+        api_key_env_var: str | None = None,
     ):
         """Initialize the API driver.
 
@@ -339,9 +345,16 @@ class ApiDriver(DriverInterface):
             model: Model identifier for langchain (e.g., 'minimax/minimax-m2').
             cwd: Working directory for agentic execution. Required for execute_agentic().
             provider: Provider name (e.g., 'openrouter'). Defaults to 'openrouter'.
+            base_url: Optional base URL override for the provider's OpenAI-compatible
+                endpoint. Required for custom (non-preset) providers; ignored for the
+                bare back-compat path where provider is None.
+            api_key_env_var: Optional name of the environment variable holding the API
+                key. Required for custom (non-preset) providers; presets supply their own.
         """
         self.model = model or self.DEFAULT_MODEL
         self.provider = provider
+        self.base_url = base_url
+        self.api_key_env_var = api_key_env_var
         self.cwd = cwd
         self._usage: DriverUsage | None = None
 
@@ -399,7 +412,12 @@ class ApiDriver(DriverInterface):
             raise ValueError("Prompt cannot be empty")
 
         try:
-            chat_model = _create_chat_model(self.model, provider=self.provider)
+            chat_model = _create_chat_model(
+                self.model,
+                provider=self.provider,
+                base_url=self.base_url,
+                api_key_env_var=self.api_key_env_var,
+            )
             # Use FilesystemBackend for non-agentic generation - no shell execution needed
             backend = FilesystemBackend(root_dir=self.cwd or ".", virtual_mode=False)
 
@@ -576,7 +594,12 @@ class ApiDriver(DriverInterface):
         seen_message_ids: set[int] = set()
 
         try:
-            chat_model = _create_chat_model(self.model, provider=self.provider)
+            chat_model = _create_chat_model(
+                self.model,
+                provider=self.provider,
+                base_url=self.base_url,
+                api_key_env_var=self.api_key_env_var,
+            )
             # virtual_mode=True ensures paths like "docs/plans/..." resolve relative
             # to cwd (e.g., /project/docs/plans/...) rather than being treated as
             # absolute paths from filesystem root (e.g., /docs/plans/...)

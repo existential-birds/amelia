@@ -3,8 +3,9 @@
 from unittest.mock import patch
 
 import pytest
+from langchain_core.messages import AIMessage
 
-from amelia.drivers.api.deepagents import _create_chat_model
+from amelia.drivers.api.deepagents import ApiDriver, _create_chat_model
 
 
 class TestCreateChatModelBaseUrl:
@@ -57,3 +58,24 @@ class TestCreateChatModelBaseUrl:
         monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
         with pytest.raises(ValueError, match="DEEPSEEK_API_KEY.*deepseek"):
             _create_chat_model("deepseek-chat", provider="deepseek")
+
+
+@patch("amelia.drivers.api.deepagents._create_chat_model")
+async def test_apidriver_threads_provider_config_to_chat_model(
+    mock_ccm, monkeypatch, mock_deepagents_filesystem
+):
+    monkeypatch.setenv("VLLM_KEY", "k")
+    mock_deepagents_filesystem.agent_result["messages"] = [AIMessage(content="ok")]
+    driver = ApiDriver(
+        model="m",
+        provider="vllm",
+        base_url="http://localhost:8000/v1",
+        api_key_env_var="VLLM_KEY",
+    )
+    await driver.generate(prompt="hi")
+    mock_ccm.assert_called_with(
+        "m",
+        provider="vllm",
+        base_url="http://localhost:8000/v1",
+        api_key_env_var="VLLM_KEY",
+    )
