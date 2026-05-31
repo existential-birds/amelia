@@ -51,13 +51,23 @@ def test_custom_provider_requires_base_url():
 
 
 def test_custom_provider_rejects_blank_base_url():
-    with pytest.raises(ValueError, match="requires a non-empty base URL"):
+    with pytest.raises(ValueError, match="base_url must be a non-empty string"):
         resolve_provider("vllm", base_url="  ", api_key_env_var="VLLM_KEY")
 
 
 def test_custom_provider_rejects_blank_api_key_env_var():
-    with pytest.raises(ValueError, match="requires a non-empty API key environment"):
+    with pytest.raises(ValueError, match="api_key_env_var must be a non-empty string"):
         resolve_provider("vllm", base_url="http://localhost:8000/v1", api_key_env_var="")
+
+
+def test_overrides_are_stripped_of_surrounding_whitespace():
+    r = resolve_provider(
+        "vllm",
+        base_url="  http://localhost:8000/v1  ",
+        api_key_env_var="  VLLM_KEY  ",
+    )
+    assert r.base_url == "http://localhost:8000/v1"
+    assert r.api_key_env_var == "VLLM_KEY"
 
 
 def test_custom_provider_with_base_url_and_env_var_resolves():
