@@ -2,6 +2,8 @@
 
 from unittest.mock import patch
 
+import pytest
+
 from amelia.drivers.api.deepagents import _create_chat_model
 
 
@@ -28,3 +30,30 @@ class TestCreateChatModelBaseUrl:
     def test_non_openrouter_ignores_base_url(self, mock_init):
         _create_chat_model("gpt-4")
         mock_init.assert_called_once_with("gpt-4")
+
+    @patch("amelia.drivers.api.deepagents.init_chat_model")
+    def test_preset_provider_uses_registry_url_and_key(self, mock_init, monkeypatch):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds")
+        _create_chat_model("deepseek-chat", provider="deepseek")
+        _, kwargs = mock_init.call_args
+        assert kwargs["base_url"] == "https://api.deepseek.com/v1"
+        assert kwargs["api_key"] == "sk-ds"
+        assert kwargs["model_provider"] == "openai"
+
+    @patch("amelia.drivers.api.deepagents.init_chat_model")
+    def test_custom_provider_resolves(self, mock_init, monkeypatch):
+        monkeypatch.setenv("VLLM_KEY", "local-key")
+        _create_chat_model(
+            "my-model",
+            provider="vllm",
+            base_url="http://localhost:8000/v1",
+            api_key_env_var="VLLM_KEY",
+        )
+        _, kwargs = mock_init.call_args
+        assert kwargs["base_url"] == "http://localhost:8000/v1"
+        assert kwargs["api_key"] == "local-key"
+
+    def test_missing_key_env_var_raises_naming_provider_and_var(self, monkeypatch):
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+        with pytest.raises(ValueError, match="DEEPSEEK_API_KEY.*deepseek"):
+            _create_chat_model("deepseek-chat", provider="deepseek")

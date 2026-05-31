@@ -38,6 +38,7 @@ from amelia.drivers.base import (
     GenerateResult,
     SubmitToolDef,
 )
+from amelia.drivers.providers import resolve_provider
 from amelia.logging import log_claude_result, log_todos
 
 
@@ -206,21 +207,38 @@ def _create_chat_model(
     model: str,
     provider: str | None = None,
     base_url: str | None = None,
+    api_key_env_var: str | None = None,
 ) -> BaseChatModel:
-    """Create a LangChain chat model, handling provider configuration.
+    """Create a LangChain chat model for any OpenAI-compatible provider.
+
+    Resolves the provider (built-in preset or fully custom endpoint) via
+    :func:`amelia.drivers.providers.resolve_provider`, then routes the model
+    through ``init_chat_model(model_provider="openai", ...)`` with the
+    resolved base URL, API key, and default headers.
 
     Args:
-        model: Model identifier (e.g., 'minimax/minimax-m2').
-        provider: Optional provider name. If 'openrouter', configures OpenRouter API.
-        base_url: Optional base URL override. Used for proxy routing when running
-            in sandboxed environments. Only applies to OpenRouter provider.
+        model: Bare model identifier (e.g., 'minimax/minimax-m2',
+            'deepseek-chat'). Must NOT carry a ``provider:`` prefix —
+            langchain's model parser splits on ``:`` and would misparse it.
+        provider: Provider name. A built-in preset (openrouter, openai,
+            deepseek, groq, together, fireworks) or a custom name paired with
+            ``base_url`` + ``api_key_env_var``. When ``None``, the model is
+            passed bare to ``init_chat_model`` (legacy back-compat).
+        base_url: Overrides the preset base URL when given; required for a
+            custom (non-preset) provider. Also used for proxy routing in
+            sandboxed environments.
+        api_key_env_var: Name of the environment variable holding the API key;
+            required for a custom (non-preset) provider, ignored for presets.
 
     Returns:
         Configured BaseChatModel instance.
 
     Raises:
-        ValueError: If model contains 'openrouter:' prefix (use provider param instead).
-        ValueError: If OpenRouter is requested but OPENROUTER_API_KEY is not set.
+        ValueError: If ``model`` carries the legacy ``openrouter:`` prefix.
+        ValueError: If a custom provider omits ``base_url`` or
+            ``api_key_env_var``, or an unknown provider is supplied without
+            custom configuration (propagated from ``resolve_provider``).
+        ValueError: If the resolved API key environment variable is unset.
     """
     if model.startswith("openrouter:"):
         raise ValueError(
@@ -229,32 +247,26 @@ def _create_chat_model(
             f"(e.g., model='{model[len('openrouter:'):]}')."
         )
 
-    if provider == "openrouter":
-        api_key = os.environ.get("OPENROUTER_API_KEY")
-        if not api_key:
-            raise ValueError(
-                "OPENROUTER_API_KEY environment variable is required for OpenRouter models"
-            )
+    if provider is None:
+        return init_chat_model(model)
 
-        site_url = os.environ.get(
-            "OPENROUTER_SITE_URL", "https://github.com/existential-birds/amelia"
-        )
-        site_name = os.environ.get("OPENROUTER_SITE_NAME", "Amelia")
-
-        resolved_url = base_url or "https://openrouter.ai/api/v1"
-
-        return init_chat_model(
-            model=model,
-            model_provider="openai",
-            base_url=resolved_url,
-            api_key=api_key,
-            default_headers={
-                "HTTP-Referer": site_url,
-                "X-Title": site_name,
-            },
+    resolved = resolve_provider(
+        provider, base_url=base_url, api_key_env_var=api_key_env_var
+    )
+    api_key = os.environ.get(resolved.api_key_env_var)
+    if not api_key:
+        raise ValueError(
+            f"{resolved.api_key_env_var} environment variable is required "
+            f"for provider {provider!r}"
         )
 
-    return init_chat_model(model)
+    return init_chat_model(
+        model=model,
+        model_provider="openai",
+        base_url=resolved.base_url,
+        api_key=api_key,
+        default_headers=resolved.default_headers,
+    )
 
 
 def _extract_text_content(content: str | list[str | dict[str, Any]]) -> str:
