@@ -9,14 +9,14 @@ from amelia.drivers.api.deepagents import ApiDriver, _create_chat_model
 
 
 class TestCreateChatModelBaseUrl:
-    @patch("amelia.drivers.api.deepagents.init_chat_model")
+    @patch("amelia.drivers.api.chat_model.init_chat_model")
     def test_openrouter_uses_default_base_url(self, mock_init, monkeypatch):
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
         _create_chat_model("test-model", provider="openrouter")
         _, kwargs = mock_init.call_args
         assert kwargs["base_url"] == "https://openrouter.ai/api/v1"
 
-    @patch("amelia.drivers.api.deepagents.init_chat_model")
+    @patch("amelia.drivers.api.chat_model.init_chat_model")
     def test_openrouter_accepts_custom_base_url(self, mock_init, monkeypatch):
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
         _create_chat_model(
@@ -27,12 +27,7 @@ class TestCreateChatModelBaseUrl:
         _, kwargs = mock_init.call_args
         assert kwargs["base_url"] == "http://host.docker.internal:8430/proxy/v1"
 
-    @patch("amelia.drivers.api.deepagents.init_chat_model")
-    def test_non_openrouter_ignores_base_url(self, mock_init):
-        _create_chat_model("gpt-4")
-        mock_init.assert_called_once_with("gpt-4")
-
-    @patch("amelia.drivers.api.deepagents.init_chat_model")
+    @patch("amelia.drivers.api.chat_model.init_chat_model")
     def test_preset_provider_uses_registry_url_and_key(self, mock_init, monkeypatch):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds")
         _create_chat_model("deepseek-chat", provider="deepseek")
@@ -41,7 +36,7 @@ class TestCreateChatModelBaseUrl:
         assert kwargs["api_key"] == "sk-ds"
         assert kwargs["model_provider"] == "openai"
 
-    @patch("amelia.drivers.api.deepagents.init_chat_model")
+    @patch("amelia.drivers.api.chat_model.init_chat_model")
     def test_custom_provider_resolves(self, mock_init, monkeypatch):
         monkeypatch.setenv("VLLM_KEY", "local-key")
         _create_chat_model(

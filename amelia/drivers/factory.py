@@ -7,7 +7,11 @@ from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import DriverInterface
 from amelia.drivers.cli.claude import ClaudeCliDriver
 from amelia.drivers.cli.codex import CodexCliDriver
-from amelia.drivers.providers import resolve_provider
+from amelia.drivers.providers import (
+    OPENROUTER_DEFAULT_SITE_NAME,
+    OPENROUTER_DEFAULT_SITE_URL,
+    resolve_provider,
+)
 
 
 if TYPE_CHECKING:
@@ -79,10 +83,11 @@ def create_daytona_provider(
         "LLM_PROXY_URL": resolved.base_url,
         "OPENAI_API_KEY": llm_api_key,
         "OPENROUTER_SITE_URL": os.environ.get(
-            "OPENROUTER_SITE_URL",
-            "https://github.com/existential-birds/amelia",
+            "OPENROUTER_SITE_URL", OPENROUTER_DEFAULT_SITE_URL
         ),
-        "OPENROUTER_SITE_NAME": os.environ.get("OPENROUTER_SITE_NAME", "Amelia"),
+        "OPENROUTER_SITE_NAME": os.environ.get(
+            "OPENROUTER_SITE_NAME", OPENROUTER_DEFAULT_SITE_NAME
+        ),
     }
 
     provider = DaytonaSandboxProvider(

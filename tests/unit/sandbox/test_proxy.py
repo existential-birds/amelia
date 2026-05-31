@@ -8,7 +8,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from amelia.core.types import AgentConfig, DriverType, Profile
 from amelia.sandbox.proxy import PROXY_MAX_BODY_BYTES, ProviderConfig, create_proxy_router
+from amelia.server.main import resolve_proxy_provider
 
 
 @pytest.fixture
@@ -489,6 +491,82 @@ class TestProxyBodyLimitConfigurable:
         finally:
             monkeypatch.delenv("AMELIA_PROXY_MAX_BODY_MB", raising=False)
             importlib.reload(proxy_module)
+
+
+class _FakeProfileRepository:
+    """Stub repo that returns canned profiles, standing in for the DB boundary."""
+
+    def __init__(self, profiles: dict[str, "Profile"]) -> None:
+        self._profiles = profiles
+
+    async def get_profile(self, profile_id: str) -> "Profile | None":
+        return self._profiles.get(profile_id)
+
+
+def _profile_with_developer_options(name: str, options: dict[str, Any]) -> "Profile":
+    return Profile(
+        name=name,
+        repo_root="/tmp/repo",
+        agents={
+            "developer": AgentConfig(
+                driver=DriverType.API, model="some-model", options=options
+            )
+        },
+    )
+
+
+class TestResolveProxyProvider:
+    """``resolve_proxy_provider`` must support every preset and custom providers.
+
+    Regression guard: the proxy path previously hardcoded only openrouter/openai,
+    so non-openrouter presets and custom providers 404'd in container-sandbox mode.
+    """
+
+    async def test_non_openrouter_preset_resolves(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-test")
+        repo = _FakeProfileRepository(
+            {"ds": _profile_with_developer_options("ds", {"provider": "deepseek"})}
+        )
+
+        config = await resolve_proxy_provider("ds", repo)  # type: ignore[arg-type]
+
+        assert config is not None
+        assert config.base_url == "https://api.deepseek.com/v1"
+        assert config.api_key == "sk-deepseek-test"
+
+    async def test_custom_provider_resolves(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MY_LLM_KEY", "sk-custom-test")
+        repo = _FakeProfileRepository(
+            {
+                "custom": _profile_with_developer_options(
+                    "custom",
+                    {
+                        "provider": "my-llm",
+                        "base_url": "https://llm.example.com/v1",
+                        "api_key_env_var": "MY_LLM_KEY",
+                    },
+                )
+            }
+        )
+
+        config = await resolve_proxy_provider("custom", repo)  # type: ignore[arg-type]
+
+        assert config is not None
+        assert config.base_url == "https://llm.example.com/v1"
+        assert config.api_key == "sk-custom-test"
+
+    async def test_unknown_provider_resolves_to_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        repo = _FakeProfileRepository(
+            {"bad": _profile_with_developer_options("bad", {"provider": "nope"})}
+        )
+
+        assert await resolve_proxy_provider("bad", repo) is None  # type: ignore[arg-type]
 
 
 class TestProxyCleanup:

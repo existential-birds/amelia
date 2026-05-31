@@ -359,7 +359,7 @@ def _deepagents_mock_context(sandbox_class: str) -> Generator[MagicMock, None, N
 
     with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-api-key"}), \
          patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create_agent, \
-         patch("amelia.drivers.api.deepagents.init_chat_model") as mock_init_model, \
+         patch("amelia.drivers.api.chat_model.init_chat_model") as mock_init_model, \
          patch(f"amelia.drivers.api.deepagents.{sandbox_class}") as mock_backend_class:
 
         agent_result: dict[str, Any] = {"messages": []}
@@ -436,7 +436,7 @@ def mock_deepagents_both() -> Generator[MagicMock, None, None]:
 
     with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-api-key"}), \
          patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create_agent, \
-         patch("amelia.drivers.api.deepagents.init_chat_model") as mock_init_model, \
+         patch("amelia.drivers.api.chat_model.init_chat_model") as mock_init_model, \
          patch("amelia.drivers.api.deepagents.FilesystemBackend") as mock_fs_backend, \
          patch("amelia.drivers.api.deepagents.LocalSandbox") as mock_local_sandbox:
 

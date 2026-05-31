@@ -24,6 +24,16 @@ def test_base_url_override_wins_over_preset():
     assert r.base_url == "http://proxy.internal/v1"
 
 
+def test_api_key_env_var_override_wins_over_preset():
+    r = resolve_provider("openrouter", api_key_env_var="MY_CUSTOM_KEY")
+    assert r.api_key_env_var == "MY_CUSTOM_KEY"
+
+
+def test_api_key_env_var_defaults_to_preset_when_omitted():
+    r = resolve_provider("openrouter")
+    assert r.api_key_env_var == "OPENROUTER_API_KEY"
+
+
 def test_custom_provider_requires_base_url():
     with pytest.raises(ValueError, match="requires a base URL"):
         resolve_provider("vllm", api_key_env_var="VLLM_KEY")

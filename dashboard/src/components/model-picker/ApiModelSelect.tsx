@@ -41,7 +41,8 @@ export function ApiModelSelect({ agentKey, value, onChange, error, className }: 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [manualModelId, setManualModelId] = useState(value);
   const [isLookingUp, setIsLookingUp] = useState(false);
-  const [compatibilityWarning, setCompatibilityWarning] = useState<string | null>(null);
+  const [requirementsWarning, setRequirementsWarning] = useState<string | null>(null);
+  const [unverifiedWarning, setUnverifiedWarning] = useState<string | null>(null);
 
   // Eagerly fetch models on mount (idempotent — fetchModels checks models.length and lastFetched, skips if already loaded)
   useEffect(() => {
@@ -66,16 +67,16 @@ export function ApiModelSelect({ agentKey, value, onChange, error, className }: 
   // Whether we have a fallback item for a value not yet in the store (e.g. during loading)
   const valueNotYetInStore = value && !displayModels.some((m) => m.id === value);
 
-  const updateCompatibilityWarning = useCallback(
+  const updateRequirementsWarning = useCallback(
     (model: ModelInfo | undefined) => {
       const requirements = AGENT_MODEL_REQUIREMENTS[agentKey];
       if (!requirements || !model) {
-        setCompatibilityWarning(null);
+        setRequirementsWarning(null);
         return;
       }
 
       const matchesRequirements = filterModelsByRequirements([model], requirements).length > 0;
-      setCompatibilityWarning(
+      setRequirementsWarning(
         matchesRequirements ? null : `May not meet ${agentKey} requirements`
       );
     },
@@ -84,8 +85,11 @@ export function ApiModelSelect({ agentKey, value, onChange, error, className }: 
 
   useEffect(() => {
     const selectedModel = models.find((model) => model.id === value);
-    updateCompatibilityWarning(selectedModel);
-  }, [models, value, updateCompatibilityWarning]);
+    updateRequirementsWarning(selectedModel);
+    if (selectedModel) {
+      setUnverifiedWarning(null);
+    }
+  }, [models, value, updateRequirementsWarning]);
 
   const handleSelect = (modelId: string) => {
     if (!modelId) return;
@@ -109,22 +113,24 @@ export function ApiModelSelect({ agentKey, value, onChange, error, className }: 
     }
 
     setIsLookingUp(true);
-    setCompatibilityWarning(null);
+    setUnverifiedWarning(null);
 
     try {
       const model = await lookupModelById(modelId);
       addRecentModel(model.id);
       onChange(model.id);
       setManualModelId(model.id);
-      updateCompatibilityWarning(model);
-    } catch {
-      // The store cannot distinguish a 404 from a transport failure, so any
-      // lookup failure accepts the typed ID with a non-blocking warning. A
-      // genuinely invalid model still fails fast at run time on the backend.
+      updateRequirementsWarning(model);
+    } catch (error) {
+      console.error(`Model lookup failed for "${modelId}":`, error);
+      // Any verification failure — 404, network, or timeout — still accepts the
+      // typed ID with a non-blocking warning; a genuinely invalid model fails
+      // fast at run time on the backend.
       addRecentModel(modelId);
       onChange(modelId);
       setManualModelId(modelId);
-      setCompatibilityWarning(
+      setRequirementsWarning(null);
+      setUnverifiedWarning(
         "Couldn't verify this model — it may not exist or support tools"
       );
     } finally {
@@ -208,10 +214,10 @@ export function ApiModelSelect({ agentKey, value, onChange, error, className }: 
         </Button>
       </div>
 
-      {compatibilityWarning && (
+      {(unverifiedWarning ?? requirementsWarning) && (
         <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-          <span>{compatibilityWarning}</span>
+          <span>{unverifiedWarning ?? requirementsWarning}</span>
         </p>
       )}
 

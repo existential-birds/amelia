@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { useState } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiModelSelect } from '../ApiModelSelect';
@@ -6,6 +7,28 @@ import { useModelsStore } from '@/store/useModelsStore';
 import { useRecentModels } from '@/hooks/useRecentModels';
 import { makeMockModelsStore } from '@/test/mocks/modelsStore';
 import type { ModelInfo } from '../types';
+
+function ControlledApiModelSelect({
+  agentKey,
+  initialValue,
+  onChange,
+}: {
+  agentKey: string;
+  initialValue: string;
+  onChange: (modelId: string) => void;
+}) {
+  const [value, setValue] = useState(initialValue);
+  return (
+    <ApiModelSelect
+      agentKey={agentKey}
+      value={value}
+      onChange={(modelId) => {
+        setValue(modelId);
+        onChange(modelId);
+      }}
+    />
+  );
+}
 
 // Mock the store
 vi.mock('@/store/useModelsStore');
@@ -232,22 +255,27 @@ describe('ApiModelSelect', () => {
     });
   });
 
-  it('accepts a typed model id even when lookup fails, with a non-blocking warning', async () => {
+  it('accepts a typed model id even when lookup fails, and the warning survives the value round-trip', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     mockLookupModelById.mockRejectedValue(new Error('Model not found'));
 
-    render(<ApiModelSelect agentKey="architect" value="" onChange={onChange} />);
+    render(
+      <ControlledApiModelSelect agentKey="architect" initialValue="" onChange={onChange} />
+    );
 
     await user.type(screen.getByPlaceholderText(/type any model id/i), 'unknown/not-real');
     await user.click(screen.getByRole('button', { name: /use model code/i }));
 
-    await waitFor(() => {
-      expect(onChange).toHaveBeenCalledWith('unknown/not-real');
-      expect(addRecentModel).toHaveBeenCalledWith('unknown/not-real');
-      expect(screen.getByText(/couldn't verify/i)).toBeInTheDocument();
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    });
+    // onChange round-trips the typed id into `value`, which the trigger reflects.
+    await screen.findByText('unknown/not-real');
+    expect(onChange).toHaveBeenCalledWith('unknown/not-real');
+    expect(addRecentModel).toHaveBeenCalledWith('unknown/not-real');
+
+    // After the round-trip re-runs the component's value effect, the unverified
+    // warning must still be present, not clobbered to null.
+    expect(screen.getByText(/couldn't verify/i)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('warns when a resolved model does not meet agent requirements but still selects it', async () => {

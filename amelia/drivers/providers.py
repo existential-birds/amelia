@@ -17,8 +17,8 @@ from dataclasses import dataclass
 
 
 # Default OpenRouter site-attribution headers, overridable via env vars.
-_OPENROUTER_DEFAULT_SITE_URL = "https://github.com/existential-birds/amelia"
-_OPENROUTER_DEFAULT_SITE_NAME = "Amelia"
+OPENROUTER_DEFAULT_SITE_URL = "https://github.com/existential-birds/amelia"
+OPENROUTER_DEFAULT_SITE_NAME = "Amelia"
 
 
 @dataclass(frozen=True)
@@ -71,9 +71,9 @@ def _openrouter_site_headers() -> dict[str, str]:
     """Build OpenRouter site-attribution headers from env (with defaults)."""
     return {
         "HTTP-Referer": os.environ.get(
-            "OPENROUTER_SITE_URL", _OPENROUTER_DEFAULT_SITE_URL
+            "OPENROUTER_SITE_URL", OPENROUTER_DEFAULT_SITE_URL
         ),
-        "X-Title": os.environ.get("OPENROUTER_SITE_NAME", _OPENROUTER_DEFAULT_SITE_NAME),
+        "X-Title": os.environ.get("OPENROUTER_SITE_NAME", OPENROUTER_DEFAULT_SITE_NAME),
     }
 
 
@@ -90,8 +90,8 @@ def resolve_provider(
             custom provider name.
         base_url: Overrides the preset base URL when given; required for a
             custom (non-preset) provider.
-        api_key_env_var: Required for a custom provider; ignored for presets
-            (the preset's own env var is used).
+        api_key_env_var: Overrides the preset's key env var when given;
+            required for a custom (non-preset) provider.
 
     Returns:
         The resolved provider configuration.
@@ -106,7 +106,7 @@ def resolve_provider(
         default_headers = _openrouter_site_headers() if provider == "openrouter" else {}
         return ResolvedProvider(
             base_url=base_url or preset.base_url,
-            api_key_env_var=preset.api_key_env_var,
+            api_key_env_var=api_key_env_var or preset.api_key_env_var,
             default_headers=default_headers,
         )
 

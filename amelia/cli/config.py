@@ -339,6 +339,13 @@ def profile_create(
         )
 
     # Provider configuration applies only to the api driver.
+    if driver != "api" and (
+        provider is not None or base_url is not None or api_key_env_var is not None
+    ):
+        raise typer.BadParameter(
+            "--provider, --base-url, and --api-key-env-var apply only to the 'api' driver."
+        )
+
     agent_options: dict[str, Any] = {}
     if driver == "api":
         if provider is None:
@@ -352,7 +359,12 @@ def profile_create(
                     base_url = typer.prompt("Base URL", show_default=False)
                 if api_key_env_var is None:
                     api_key_env_var = typer.prompt("API key env var", show_default=False)
-        agent_options = {"provider": provider or "openrouter"}
+        resolved_provider = provider or "openrouter"
+        if resolved_provider not in PROVIDER_PRESETS and (base_url is None or api_key_env_var is None):
+            raise typer.BadParameter(
+                f"Custom provider '{resolved_provider}' requires --base-url and --api-key-env-var."
+            )
+        agent_options = {"provider": resolved_provider}
         if base_url is not None:
             agent_options["base_url"] = base_url
         if api_key_env_var is not None:
