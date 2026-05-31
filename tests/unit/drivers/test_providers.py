@@ -12,6 +12,7 @@ def test_preset_resolves_base_url_and_env_var():
 
 def test_openrouter_preset_carries_site_headers(monkeypatch):
     monkeypatch.delenv("OPENROUTER_SITE_URL", raising=False)
+    monkeypatch.delenv("OPENROUTER_SITE_NAME", raising=False)
     r = resolve_provider("openrouter")
     assert r.base_url == "https://openrouter.ai/api/v1"
     assert r.api_key_env_var == "OPENROUTER_API_KEY"
@@ -34,9 +35,29 @@ def test_api_key_env_var_defaults_to_preset_when_omitted():
     assert r.api_key_env_var == "OPENROUTER_API_KEY"
 
 
+def test_preset_rejects_blank_base_url_override():
+    with pytest.raises(ValueError, match="base_url must be a non-empty string"):
+        resolve_provider("openrouter", base_url="   ")
+
+
+def test_preset_rejects_blank_api_key_env_var_override():
+    with pytest.raises(ValueError, match="api_key_env_var must be a non-empty string"):
+        resolve_provider("openrouter", api_key_env_var="")
+
+
 def test_custom_provider_requires_base_url():
     with pytest.raises(ValueError, match="requires a base URL"):
         resolve_provider("vllm", api_key_env_var="VLLM_KEY")
+
+
+def test_custom_provider_rejects_blank_base_url():
+    with pytest.raises(ValueError, match="requires a non-empty base URL"):
+        resolve_provider("vllm", base_url="  ", api_key_env_var="VLLM_KEY")
+
+
+def test_custom_provider_rejects_blank_api_key_env_var():
+    with pytest.raises(ValueError, match="requires a non-empty API key environment"):
+        resolve_provider("vllm", base_url="http://localhost:8000/v1", api_key_env_var="")
 
 
 def test_custom_provider_with_base_url_and_env_var_resolves():

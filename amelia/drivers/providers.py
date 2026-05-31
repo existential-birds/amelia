@@ -103,10 +103,20 @@ def resolve_provider(
     """
     preset = PROVIDER_PRESETS.get(provider)
     if preset is not None:
+        if base_url is not None and not base_url.strip():
+            raise ValueError("base_url must be a non-empty string when provided.")
+        if api_key_env_var is not None and not api_key_env_var.strip():
+            raise ValueError(
+                "api_key_env_var must be a non-empty string when provided."
+            )
         default_headers = _openrouter_site_headers() if provider == "openrouter" else {}
         return ResolvedProvider(
-            base_url=base_url or preset.base_url,
-            api_key_env_var=api_key_env_var or preset.api_key_env_var,
+            base_url=base_url if base_url is not None else preset.base_url,
+            api_key_env_var=(
+                api_key_env_var
+                if api_key_env_var is not None
+                else preset.api_key_env_var
+            ),
             default_headers=default_headers,
         )
 
@@ -126,6 +136,16 @@ def resolve_provider(
         raise ValueError(
             f"Custom provider {provider!r} requires an API key environment "
             "variable (pass api_key_env_var)."
+        )
+    if not base_url.strip():
+        raise ValueError(
+            f"Custom provider {provider!r} requires a non-empty base URL "
+            "(pass base_url)."
+        )
+    if not api_key_env_var.strip():
+        raise ValueError(
+            f"Custom provider {provider!r} requires a non-empty API key "
+            "environment variable (pass api_key_env_var)."
         )
 
     return ResolvedProvider(
