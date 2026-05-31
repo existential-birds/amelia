@@ -7,6 +7,11 @@ from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import DriverInterface
 from amelia.drivers.cli.claude import ClaudeCliDriver
 from amelia.drivers.cli.codex import CodexCliDriver
+from amelia.drivers.providers import (
+    OPENROUTER_DEFAULT_SITE_NAME,
+    OPENROUTER_DEFAULT_SITE_URL,
+    resolve_provider,
+)
 
 
 if TYPE_CHECKING:
@@ -61,38 +66,28 @@ def create_daytona_provider(
     # so the worker can call the LLM API from within the sandbox.
     llm_provider = (options or {}).get("provider", "openrouter")
 
-    provider_registry: dict[str, str] = {
-        "openrouter": "https://openrouter.ai/api/v1",
-        "openai": "https://api.openai.com/v1",
-    }
-    api_key_env_vars: dict[str, str] = {
-        "openrouter": "OPENROUTER_API_KEY",
-        "openai": "OPENAI_API_KEY",
-    }
+    resolved = resolve_provider(
+        llm_provider,
+        base_url=(options or {}).get("base_url"),
+        api_key_env_var=(options or {}).get("api_key_env_var"),
+    )
 
-    llm_base_url = provider_registry.get(llm_provider)
-    llm_env_var = api_key_env_vars.get(llm_provider)
-    if llm_base_url is None or llm_env_var is None:
-        raise ValueError(
-            f"Unsupported LLM provider for Daytona sandbox: {llm_provider!r}. "
-            f"Supported: {', '.join(sorted(provider_registry))}."
-        )
-
-    llm_api_key = os.environ.get(llm_env_var, "")
+    llm_api_key = os.environ.get(resolved.api_key_env_var, "")
     if not llm_api_key:
         raise ValueError(
-            f"{llm_env_var} environment variable is required for "
+            f"{resolved.api_key_env_var} environment variable is required for "
             f"Daytona sandbox with provider {llm_provider!r}"
         )
 
     worker_env: dict[str, str] = {
-        "LLM_PROXY_URL": llm_base_url,
+        "LLM_PROXY_URL": resolved.base_url,
         "OPENAI_API_KEY": llm_api_key,
         "OPENROUTER_SITE_URL": os.environ.get(
-            "OPENROUTER_SITE_URL",
-            "https://github.com/existential-birds/amelia",
+            "OPENROUTER_SITE_URL", OPENROUTER_DEFAULT_SITE_URL
         ),
-        "OPENROUTER_SITE_NAME": os.environ.get("OPENROUTER_SITE_NAME", "Amelia"),
+        "OPENROUTER_SITE_NAME": os.environ.get(
+            "OPENROUTER_SITE_NAME", OPENROUTER_DEFAULT_SITE_NAME
+        ),
     }
 
     provider = DaytonaSandboxProvider(
@@ -191,7 +186,13 @@ def get_driver(
         approval_mode = (options or {}).get("approval_mode", "full-auto")
         return CodexCliDriver(model=model, cwd=cwd, approval_mode=approval_mode)
     elif driver_key == "api":
-        return ApiDriver(provider="openrouter", model=model)
+        opts = options or {}
+        return ApiDriver(
+            provider=opts.get("provider", "openrouter"),
+            model=model,
+            base_url=opts.get("base_url"),
+            api_key_env_var=opts.get("api_key_env_var"),
+        )
     else:
         raise ValueError(
             f"Unknown driver key: {driver_key!r}. "

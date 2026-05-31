@@ -56,6 +56,7 @@ from amelia.drivers.factory import (
     cleanup_driver_session,
     get_driver as factory_get_driver,
 )
+from amelia.drivers.providers import resolve_provider
 from amelia.knowledge.embeddings import EmbeddingClient
 from amelia.knowledge.ingestion import IngestionPipeline
 from amelia.knowledge.repository import KnowledgeRepository
@@ -329,6 +330,43 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     clear_config()
 
 
+async def resolve_proxy_provider(
+    profile_name: str, profile_repo: ProfileRepository
+) -> ProviderConfig | None:
+    """Resolve the sandbox proxy upstream config from a profile name.
+
+    Looks up the profile, reads the developer agent's provider settings, and
+    returns the upstream URL and API key. Only OpenAI-compatible providers
+    (``/chat/completions``) are supported; Anthropic uses ``/messages`` with
+    different auth headers. Unknown or misconfigured providers resolve to
+    ``None`` so the proxy returns a 404 rather than forwarding blindly.
+    """
+    profile = await profile_repo.get_profile(profile_name)
+    if profile is None:
+        return None
+
+    try:
+        agent_config = profile.get_agent_config("developer")
+    except ValueError:
+        return None
+
+    provider = agent_config.options.get("provider", "openrouter")
+    try:
+        resolved = resolve_provider(
+            provider,
+            base_url=agent_config.options.get("base_url"),
+            api_key_env_var=agent_config.options.get("api_key_env_var"),
+        )
+    except ValueError:
+        return None
+
+    api_key = os.environ.get(resolved.api_key_env_var, "")
+    if not api_key:
+        return None
+
+    return ProviderConfig(base_url=resolved.base_url, api_key=api_key)
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -440,46 +478,7 @@ def create_app() -> FastAPI:
 
     # Mount sandbox proxy routes
     async def _resolve_provider(profile_name: str) -> ProviderConfig | None:
-        """Resolve LLM provider config from profile name.
-
-        Looks up the profile in the database, finds the developer agent's
-        provider setting, and returns the corresponding upstream URL and API key.
-        """
-        profile_repo = get_profile_repository()
-        profile = await profile_repo.get_profile(profile_name)
-        if profile is None:
-            return None
-
-        # Use developer agent config to determine provider
-        try:
-            agent_config = profile.get_agent_config("developer")
-        except ValueError:
-            return None
-
-        provider = agent_config.options.get("provider", "openrouter")
-
-        # Map provider to upstream config
-        # NOTE: Only OpenAI-compatible providers (using /chat/completions endpoint)
-        # are supported. Anthropic uses /messages and requires different auth headers.
-        provider_registry: dict[str, str] = {
-            "openrouter": "https://openrouter.ai/api/v1",
-            "openai": "https://api.openai.com/v1",
-        }
-        api_key_env_vars: dict[str, str] = {
-            "openrouter": "OPENROUTER_API_KEY",
-            "openai": "OPENAI_API_KEY",
-        }
-
-        base_url = provider_registry.get(provider)
-        env_var = api_key_env_vars.get(provider)
-        if base_url is None or env_var is None:
-            return None
-
-        api_key = os.environ.get(env_var, "")
-        if not api_key:
-            return None
-
-        return ProviderConfig(base_url=base_url, api_key=api_key)
+        return await resolve_proxy_provider(profile_name, get_profile_repository())
 
     # Token registry: maps proxy tokens to container names.
     # Populated when sandbox providers register tokens via register_proxy_token().

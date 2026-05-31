@@ -22,7 +22,7 @@ class TestApiDriverTokenTrackingIntegration:
     def mock_http_boundary(self) -> Generator[dict[str, MagicMock], None, None]:
         """Mock at the HTTP boundary - the LangChain model layer."""
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}), \
-             patch("amelia.drivers.api.deepagents.init_chat_model") as mock_init, \
+             patch("amelia.drivers.api.chat_model.init_chat_model") as mock_init, \
              patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create:
 
             # Create mock chat model

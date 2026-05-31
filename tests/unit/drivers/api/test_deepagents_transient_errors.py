@@ -23,7 +23,7 @@ def mock_create_deep_agent() -> Generator[MagicMock, None, None]:
     with (
         patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}),
         patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create,
-        patch("amelia.drivers.api.deepagents.init_chat_model"),
+        patch("amelia.drivers.api.chat_model.init_chat_model"),
         patch("amelia.drivers.api.deepagents.LocalSandbox"),
     ):
         yield mock_create

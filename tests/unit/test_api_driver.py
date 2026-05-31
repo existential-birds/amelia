@@ -174,7 +174,10 @@ class TestGenerate:
             mock_create.return_value = MagicMock()
             await driver.generate(prompt="test")
 
-            mock_create.assert_called_once_with("test/model", provider="openrouter")
+            mock_create.assert_called_once_with(
+                "test/model", provider="openrouter",
+                base_url=None, api_key_env_var=None,
+            )
 
 
 class TestExecuteAgentic:
@@ -202,7 +205,10 @@ class TestExecuteAgentic:
             async for _ in driver.execute_agentic(prompt="test", cwd="/test"):
                 pass
 
-            mock_create.assert_called_once_with("test/model", provider="openrouter")
+            mock_create.assert_called_once_with(
+                "test/model", provider="openrouter",
+                base_url=None, api_key_env_var=None,
+            )
 
     async def test_yields_agentic_messages_from_stream(
         self, mock_deepagents_filesystem: MagicMock
@@ -240,7 +246,10 @@ class TestCreateChatModel:
     def test_openrouter_prefix_raises_error(self) -> None:
         """Should raise ValueError for deprecated openrouter: prefix."""
         with pytest.raises(ValueError, match="no longer supported"):
-            _create_chat_model("openrouter:anthropic/claude-sonnet-4-20250514")
+            _create_chat_model(
+                "openrouter:anthropic/claude-sonnet-4-20250514",
+                provider="openrouter",
+            )
 
     def test_openrouter_provider_uses_custom_attribution(self) -> None:
         """Should use custom attribution headers from environment."""
@@ -250,7 +259,7 @@ class TestCreateChatModel:
                 "OPENROUTER_SITE_URL": "https://example.com",
                 "OPENROUTER_SITE_NAME": "CustomApp",
             }),
-            patch("amelia.drivers.api.deepagents.init_chat_model") as mock_init,
+            patch("amelia.drivers.api.chat_model.init_chat_model") as mock_init,
         ):
             mock_init.return_value = MagicMock()
 
@@ -268,20 +277,11 @@ class TestCreateChatModel:
         ):
             _create_chat_model("test/model", provider="openrouter")
 
-    def test_non_openrouter_model_uses_default(self) -> None:
-        """Should use default init_chat_model for non-openrouter models."""
-        with patch("amelia.drivers.api.deepagents.init_chat_model") as mock_init:
-            mock_init.return_value = MagicMock()
-
-            _create_chat_model("gpt-4")
-
-            mock_init.assert_called_once_with("gpt-4")
-
     def test_openrouter_provider_without_prefix(self) -> None:
         """Should configure OpenRouter when provider param is 'openrouter'."""
         with (
             patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-api-key"}),
-            patch("amelia.drivers.api.deepagents.init_chat_model") as mock_init,
+            patch("amelia.drivers.api.chat_model.init_chat_model") as mock_init,
         ):
             mock_init.return_value = MagicMock()
 

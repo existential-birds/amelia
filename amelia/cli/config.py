@@ -6,13 +6,14 @@ Provides commands for managing profiles and server settings through the CLI.
 import asyncio
 import os
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from amelia.core.types import REQUIRED_AGENTS, AgentConfig, DriverType, Profile, TrackerType
+from amelia.drivers.providers import PROVIDER_PRESETS
 from amelia.server.config import ServerConfig
 from amelia.server.database import (
     Database,
@@ -147,18 +148,28 @@ def _validate_tracker(value: str) -> TrackerType:
     return TrackerType(value)
 
 
-def _build_default_agents(driver: DriverType, model: str) -> dict[str, AgentConfig]:
+def _build_default_agents(
+    driver: DriverType,
+    model: str,
+    options: dict[str, Any] | None = None,
+) -> dict[str, AgentConfig]:
     """Build default agents dict for a profile.
 
     Args:
         driver: Driver to use for all agents (converted to DriverType enum).
         model: Model to use for all agents.
+        options: Provider options (e.g. ``provider``/``base_url``/``api_key_env_var``)
+            applied to every agent. Non-api drivers pass ``None``, which stores an
+            empty options dict, preserving prior behavior.
 
     Returns:
         Dict mapping agent names to AgentConfig.
     """
     driver_type = DriverType(driver)
-    return {name: AgentConfig(driver=driver_type, model=model) for name in REQUIRED_AGENTS}
+    return {
+        name: AgentConfig(driver=driver_type, model=model, options=options or {})
+        for name in REQUIRED_AGENTS
+    }
 
 
 # =============================================================================
@@ -279,6 +290,18 @@ def profile_create(
         str | None,
         typer.Option("--repo-root", "-w", help="Repository root path"),
     ] = None,
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", help="LLM provider for the api driver (e.g. openrouter, deepseek)"),
+    ] = None,
+    base_url: Annotated[
+        str | None,
+        typer.Option("--base-url", help="Custom OpenAI-compatible base URL (custom providers)"),
+    ] = None,
+    api_key_env_var: Annotated[
+        str | None,
+        typer.Option("--api-key-env-var", help="Env var holding the API key (custom providers)"),
+    ] = None,
     activate: Annotated[
         bool,
         typer.Option("--activate", "-a", help="Set as active profile"),
@@ -315,6 +338,38 @@ def profile_create(
             show_default=True,
         )
 
+    # Provider configuration applies only to the api driver.
+    if driver != "api" and (
+        provider is not None or base_url is not None or api_key_env_var is not None
+    ):
+        raise typer.BadParameter(
+            "--provider, --base-url, and --api-key-env-var apply only to the 'api' driver."
+        )
+
+    agent_options: dict[str, Any] = {}
+    if driver == "api":
+        if provider is None:
+            provider = typer.prompt(
+                "Provider",
+                default="openrouter",
+                show_default=True,
+            )
+            if provider not in PROVIDER_PRESETS:
+                if base_url is None:
+                    base_url = typer.prompt("Base URL", show_default=False)
+                if api_key_env_var is None:
+                    api_key_env_var = typer.prompt("API key env var", show_default=False)
+        resolved_provider = provider or "openrouter"
+        if resolved_provider not in PROVIDER_PRESETS and (base_url is None or api_key_env_var is None):
+            raise typer.BadParameter(
+                f"Custom provider '{resolved_provider}' requires --base-url and --api-key-env-var."
+            )
+        agent_options = {"provider": resolved_provider}
+        if base_url is not None:
+            agent_options["base_url"] = base_url
+        if api_key_env_var is not None:
+            agent_options["api_key_env_var"] = api_key_env_var
+
     async def _run() -> None:
         db, repo = await _get_profile_repository()
         try:
@@ -333,7 +388,7 @@ def profile_create(
             validated_tracker = _validate_tracker(tracker)
 
             # Build default agents configuration
-            agents = _build_default_agents(validated_driver, model)
+            agents = _build_default_agents(validated_driver, model, agent_options)
 
             profile = Profile(
                 name=name,

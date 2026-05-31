@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import {
   Select,
@@ -41,8 +41,8 @@ export function ApiModelSelect({ agentKey, value, onChange, error, className }: 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [manualModelId, setManualModelId] = useState(value);
   const [isLookingUp, setIsLookingUp] = useState(false);
-  const [lookupError, setLookupError] = useState<string | null>(null);
-  const [compatibilityWarning, setCompatibilityWarning] = useState<string | null>(null);
+  const [requirementsWarning, setRequirementsWarning] = useState<string | null>(null);
+  const [unverifiedWarning, setUnverifiedWarning] = useState<string | null>(null);
 
   // Eagerly fetch models on mount (idempotent — fetchModels checks models.length and lastFetched, skips if already loaded)
   useEffect(() => {
@@ -67,23 +67,29 @@ export function ApiModelSelect({ agentKey, value, onChange, error, className }: 
   // Whether we have a fallback item for a value not yet in the store (e.g. during loading)
   const valueNotYetInStore = value && !displayModels.some((m) => m.id === value);
 
-  const updateCompatibilityWarning = (model: ModelInfo | undefined) => {
-    const requirements = AGENT_MODEL_REQUIREMENTS[agentKey];
-    if (!requirements || !model) {
-      setCompatibilityWarning(null);
-      return;
-    }
+  const updateRequirementsWarning = useCallback(
+    (model: ModelInfo | undefined) => {
+      const requirements = AGENT_MODEL_REQUIREMENTS[agentKey];
+      if (!requirements || !model) {
+        setRequirementsWarning(null);
+        return;
+      }
 
-    const matchesRequirements = filterModelsByRequirements([model], requirements).length > 0;
-    setCompatibilityWarning(
-      matchesRequirements ? null : `May not meet ${agentKey} requirements`
-    );
-  };
+      const matchesRequirements = filterModelsByRequirements([model], requirements).length > 0;
+      setRequirementsWarning(
+        matchesRequirements ? null : `May not meet ${agentKey} requirements`
+      );
+    },
+    [agentKey]
+  );
 
   useEffect(() => {
     const selectedModel = models.find((model) => model.id === value);
-    updateCompatibilityWarning(selectedModel);
-  }, [agentKey, models, value]);
+    updateRequirementsWarning(selectedModel);
+    if (selectedModel) {
+      setUnverifiedWarning(null);
+    }
+  }, [models, value, updateRequirementsWarning]);
 
   const handleSelect = (modelId: string) => {
     if (!modelId) return;
@@ -107,17 +113,25 @@ export function ApiModelSelect({ agentKey, value, onChange, error, className }: 
     }
 
     setIsLookingUp(true);
-    setLookupError(null);
+    setUnverifiedWarning(null);
 
     try {
       const model = await lookupModelById(modelId);
       addRecentModel(model.id);
       onChange(model.id);
       setManualModelId(model.id);
-      updateCompatibilityWarning(model);
-    } catch (lookupFailure) {
-      setLookupError(
-        lookupFailure instanceof Error ? lookupFailure.message : 'Failed to look up model'
+      updateRequirementsWarning(model);
+    } catch (error) {
+      console.error(`Model lookup failed for "${modelId}":`, error);
+      // Any verification failure — 404, network, or timeout — still accepts the
+      // typed ID with a non-blocking warning; a genuinely invalid model fails
+      // fast at run time on the backend.
+      addRecentModel(modelId);
+      onChange(modelId);
+      setManualModelId(modelId);
+      setRequirementsWarning(null);
+      setUnverifiedWarning(
+        "Couldn't verify this model — it may not exist or support tools"
       );
     } finally {
       setIsLookingUp(false);
@@ -181,13 +195,9 @@ export function ApiModelSelect({ agentKey, value, onChange, error, className }: 
           value={manualModelId}
           onChange={(event) => {
             setManualModelId(event.target.value);
-            if (lookupError) {
-              setLookupError(null);
-            }
           }}
           onKeyDown={handleManualKeyDown}
-          placeholder="Type OpenRouter model ID"
-          aria-invalid={lookupError ? 'true' : undefined}
+          placeholder="Type any model ID"
           className="h-8 text-xs sm:w-[180px]"
         />
         <Button
@@ -204,16 +214,10 @@ export function ApiModelSelect({ agentKey, value, onChange, error, className }: 
         </Button>
       </div>
 
-      {lookupError && (
-        <p className="text-xs text-destructive" role="alert">
-          {lookupError}
-        </p>
-      )}
-
-      {!lookupError && compatibilityWarning && (
+      {(unverifiedWarning ?? requirementsWarning) && (
         <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-          <span>{compatibilityWarning}</span>
+          <span>{unverifiedWarning ?? requirementsWarning}</span>
         </p>
       )}
 

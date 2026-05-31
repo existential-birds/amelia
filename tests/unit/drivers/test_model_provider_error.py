@@ -61,7 +61,7 @@ class TestIsModelProviderError:
 
     def test_is_model_provider_error_with_custom_env_pattern(self) -> None:
         """Custom patterns via AMELIA_PROVIDER_ERROR_PATTERNS should be detected."""
-        from amelia.drivers.api.deepagents import _get_provider_error_patterns
+        from amelia.drivers.api.chat_model import _get_provider_error_patterns
 
         with patch.dict(os.environ, {"AMELIA_PROVIDER_ERROR_PATTERNS": "custom error,another pattern"}):
             # Clear the LRU cache so the function re-reads the environment variable
