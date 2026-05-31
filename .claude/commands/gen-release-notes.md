@@ -165,7 +165,36 @@ Generate a `CHANGELOG.md` entry using this exact format:
 
 1. Read the current `CHANGELOG.md`
 2. Insert new version after the `## [Unreleased]` section
-3. Add version comparison link at the bottom of the file
+3. Update the reference-link footer at the bottom of the file (this drives release-to-release navigation and MUST be kept in sync):
+
+   First, find the real previous tag — the highest existing tag *below* the new version. Patch releases count, so this may not be the second-newest minor:
+
+   ```bash
+   # Highest existing tag below the new version (e.g. v0.20.1, not v0.20.0)
+   git tag --sort=-version:refname | head
+   PREV_TAG="<highest tag below vX.Y.Z>"
+   ```
+
+   Then make BOTH of these footer edits, preserving the existing URL format exactly (base URL `https://github.com/existential-birds/amelia`):
+
+   - **Repoint `[Unreleased]`** to compare from the NEW version tag:
+
+     ```text
+     [Unreleased]: https://github.com/existential-birds/amelia/compare/vX.Y.Z...HEAD
+     ```
+
+   - **Add a new `[X.Y.Z]` line** comparing from the previous tag (place it above the prior version's line, newest-first):
+
+     ```text
+     [X.Y.Z]: https://github.com/existential-birds/amelia/compare/v<previous>...vX.Y.Z
+     ```
+
+   Example: releasing `v0.21.0` when `v0.20.1` is the highest existing tag below it yields:
+
+   ```text
+   [Unreleased]: https://github.com/existential-birds/amelia/compare/v0.21.0...HEAD
+   [0.21.0]: https://github.com/existential-birds/amelia/compare/v0.20.1...v0.21.0
+   ```
 
 ## Step 6: Update Version Files
 
