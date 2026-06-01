@@ -36,13 +36,8 @@ import { parseErrorDetail } from './errors';
 import { API_BASE_URL, createTimeoutSignal } from './utils';
 
 /**
- * Wraps fetch with timeout support.
- *
- * @param url - The URL to fetch.
- * @param options - Fetch options (method, headers, body, etc.).
- * @param abortSignal - Optional AbortSignal to cancel the request externally.
- * @returns The fetch Response.
- * @throws {ApiError} When the request times out or fails.
+ * Wraps fetch with a timeout, optionally combined with an external abort
+ * signal. Throws {@link ApiError} with a TIMEOUT or ABORTED code on abort.
  */
 async function fetchWithTimeout(
   url: string,
@@ -71,25 +66,10 @@ async function fetchWithTimeout(
 }
 
 /**
- * Custom error class for API-related errors.
- *
- * Extends the standard Error class to include additional context about API failures,
- * including error codes, HTTP status codes, and optional error details.
- *
- * @example
- * ```typescript
- * throw new ApiError('Resource not found', 'NOT_FOUND', 404);
- * ```
+ * Error for API failures, carrying a machine-readable `code`, HTTP `status`,
+ * and optional `details` alongside the message.
  */
 class ApiError extends Error {
-  /**
-   * Creates a new ApiError instance.
-   *
-   * @param message - Human-readable error message.
-   * @param code - Machine-readable error code (e.g., 'NOT_FOUND', 'VALIDATION_ERROR').
-   * @param status - HTTP status code associated with the error.
-   * @param details - Optional additional error details or metadata.
-   */
   constructor(
     message: string,
     public code: string,

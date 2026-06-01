@@ -1,6 +1,3 @@
-/**
- * @fileoverview Success rate badge with color-coded thresholds.
- */
 import { cn } from '@/lib/utils';
 
 interface SuccessRateBadgeProps {
@@ -11,15 +8,8 @@ interface SuccessRateBadgeProps {
 }
 
 /**
- * Displays a success rate percentage with color-coded feedback.
- *
- * Color thresholds:
- * - Green (>= 90%): High reliability
- * - Yellow (70-89%): Moderate reliability
- * - Red (< 70%): Low reliability
- *
- * @param props - Component props
- * @returns Colored percentage badge
+ * Displays a success rate as a percentage, colored green/yellow/red by the
+ * reliability thresholds applied below.
  */
 export function SuccessRateBadge({ rate, className }: SuccessRateBadgeProps) {
   const percentage = Math.round(rate * 100);

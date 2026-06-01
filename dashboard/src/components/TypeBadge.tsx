@@ -1,6 +1,3 @@
-/**
- * @fileoverview Type badge component for pipeline type display.
- */
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 

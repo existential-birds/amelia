@@ -23,9 +23,7 @@ import { PR_FIX_COLORS } from '@/utils/chart-colors';
 import type { PRAutoFixMetricsResponse } from '@/types';
 
 interface PRFixMetricsTabProps {
-  /** Metrics response data from the API. */
   metrics: PRAutoFixMetricsResponse;
-  /** Current date preset for filtering. */
   preset: string;
 }
 

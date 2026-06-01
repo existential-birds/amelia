@@ -1,6 +1,3 @@
-/**
- * @fileoverview Status badge component for workflow states.
- */
 import { cva } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 import type { WorkflowStatus } from '@/types';
@@ -25,11 +22,6 @@ const statusBadgeVariants = cva(
   }
 );
 
-/**
- * Props for the StatusBadge component.
- * @property status - Current workflow status
- * @property className - Optional additional CSS classes
- */
 interface StatusBadgeProps {
   status: WorkflowStatus;
   className?: string;
@@ -59,18 +51,8 @@ const statusMapping: Record<WorkflowStatus, IndicatorStatus> = {
 };
 
 /**
- * Displays a color-coded badge indicating workflow status.
- *
- * Shows a pulsing indicator for running status. Includes proper
- * ARIA attributes for accessibility.
- *
- * @param props - Component props
- * @returns The status badge UI
- *
- * @example
- * ```tsx
- * <StatusBadge status="in_progress" />
- * ```
+ * Color-coded workflow status badge with a pulsing indicator for the running
+ * state and ARIA status attributes.
  */
 export function StatusBadge({ status, className }: StatusBadgeProps) {
   const indicatorStatus = statusMapping[status];

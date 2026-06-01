@@ -10,13 +10,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { TypeBadge } from '@/components/TypeBadge';
 import type { WorkflowSummary, WorkflowStatus, WorkflowEvent } from '@/types';
 
-/**
- * Props for the JobQueueItem component.
- * @property workflow - Workflow data to display
- * @property selected - Whether this item is currently selected
- * @property onSelect - Callback when item is clicked/activated
- * @property className - Optional additional CSS classes
- */
 interface JobQueueItemProps {
   workflow: Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_path' | 'status'> & {
     pipeline_type?: string | null;
@@ -85,19 +78,9 @@ function getRepoName(path: string): string {
 }
 
 /**
- * Renders a single workflow item in the job queue.
- *
- * Industrial card design with:
- * - Colored status rail on left edge
- * - Issue ID as primary identifier
- * - Repository name (extracted from worktree path)
- * - Compact status dot with label
- * - Plan validation error indicator (red dot on error)
- *
- * Supports keyboard navigation and visual selection state.
- *
- * @param props - Component props
- * @returns The job queue item UI
+ * A single selectable workflow item in the job queue. Shows a colored status
+ * rail, issue ID, repo name, status dot, and a plan-validation error indicator
+ * driven by live workflow-event updates.
  */
 export function JobQueueItem({ workflow, selected, onSelect, className }: JobQueueItemProps) {
   const handleClick = () => onSelect(workflow.id);

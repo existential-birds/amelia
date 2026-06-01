@@ -3,11 +3,7 @@
  */
 
 /**
- * Extract title from markdown H1 heading.
- * Strips "Design" suffix from the title.
- *
- * @param markdown - Markdown content to parse.
- * @returns Extracted title, or "Untitled" if no H1 found.
+ * Extract a title from a markdown H1, stripping a trailing document-type word.
  *
  * @example
  * extractTitle('# Queue Workflows Design\n\n## Problem')
@@ -23,10 +19,7 @@ export function extractTitle(markdown: string): string {
 }
 
 /**
- * Extract title from filename, stripping date prefix and extension.
- *
- * @param filename - Filename to parse (e.g., '2026-01-09-queue-workflows-design.md').
- * @returns Title portion of filename.
+ * Extract a title from a filename, stripping the date prefix and extension.
  *
  * @example
  * extractTitleFromFilename('2026-01-09-queue-workflows-design.md')
@@ -42,8 +35,6 @@ export function extractTitleFromFilename(filename: string): string {
 
 /**
  * Generate a timestamp-based design document ID.
- *
- * @returns ID in format 'design-YYYYMMDDHHmmss'.
  *
  * @example
  * generateDesignId()
@@ -62,10 +53,7 @@ export function generateDesignId(): string {
 }
 
 /**
- * Build a description reference string for a design document.
- *
- * @param filename - The design document filename.
- * @returns Reference string pointing to the design document in docs/plans/.
+ * Build a task description that references a design document under docs/plans/.
  *
  * @example
  * buildDescriptionReference('2026-01-09-queue-workflows-design.md')
