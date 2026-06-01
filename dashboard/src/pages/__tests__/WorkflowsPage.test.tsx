@@ -68,12 +68,8 @@ function renderPage(
 
 describe('WorkflowsPage pending workflow actions', () => {
   beforeEach(() => {
+    // renderPage() configures the useLoaderData mock per test; just reset here.
     vi.resetAllMocks();
-    vi.mocked(useLoaderData).mockReturnValue({
-      workflows: [],
-      detail: null,
-      detailError: null,
-    });
   });
 
   it('should show Start button for pending workflows', async () => {

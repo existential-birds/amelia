@@ -5,6 +5,7 @@ import { useBrainstormStore } from '../store/brainstormStore';
 import type { WebSocketMessage, WorkflowEvent, BrainstormMessage } from '../types';
 import type { AskUserQuestionItem, BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
 import * as Toast from '../components/Toast';
+import { logger } from '../lib/logger';
 
 /**
  * Zod schemas intentionally duplicate TypeScript types for runtime validation.
@@ -70,7 +71,7 @@ const toolCallSchema = z.object({
 function validateText(data: unknown): string | undefined {
   const result = optionalTextSchema.safeParse(data);
   if (!result.success) {
-    console.warn('Text validation failed:', result.error.format(), { data });
+    logger.warn('Text validation failed', { error: result.error.format(), data });
   }
   return result.success ? result.data : undefined;
 }
@@ -81,7 +82,7 @@ function validateText(data: unknown): string | undefined {
 function validateMessageUsage(data: unknown): MessageUsage | undefined {
   const result = messageUsageSchema.safeParse(data);
   if (!result.success) {
-    console.warn('MessageUsage validation failed:', result.error.format(), { data });
+    logger.warn('MessageUsage validation failed', { error: result.error.format(), data });
   }
   return result.success ? result.data : undefined;
 }
@@ -92,7 +93,7 @@ function validateMessageUsage(data: unknown): MessageUsage | undefined {
 function validateSessionUsageSummary(data: unknown): SessionUsageSummary | undefined {
   const result = sessionUsageSummarySchema.safeParse(data);
   if (!result.success) {
-    console.warn('SessionUsageSummary validation failed:', result.error.format(), { data });
+    logger.warn('SessionUsageSummary validation failed', { error: result.error.format(), data });
   }
   return result.success ? result.data : undefined;
 }
@@ -103,7 +104,7 @@ function validateSessionUsageSummary(data: unknown): SessionUsageSummary | undef
 function validateBrainstormArtifact(data: unknown): BrainstormArtifact | undefined {
   const result = brainstormArtifactSchema.safeParse(data);
   if (!result.success) {
-    console.warn('BrainstormArtifact validation failed:', result.error.format(), { data });
+    logger.warn('BrainstormArtifact validation failed', { error: result.error.format(), data });
   }
   return result.success ? result.data : undefined;
 }
@@ -114,7 +115,7 @@ function validateBrainstormArtifact(data: unknown): BrainstormArtifact | undefin
 function validateToolCall(data: unknown): Pick<ToolCall, 'tool_call_id' | 'tool_name' | 'input'> | undefined {
   const result = toolCallSchema.safeParse(data);
   if (!result.success) {
-    console.warn('ToolCall validation failed:', result.error.format(), { data });
+    logger.warn('ToolCall validation failed', { error: result.error.format(), data });
   }
   return result.success ? result.data : undefined;
 }
@@ -269,7 +270,7 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
             ),
           }));
         } else {
-          console.warn('tool_result dropped: tool_call_id validation failed', { data: msg.data });
+          logger.warn('tool_result dropped: tool_call_id validation failed', { data: msg.data });
         }
       }
       break;
@@ -281,7 +282,7 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
         const questions = result.success ? result.data : undefined;
         const text = validateText(msg.data.text);
         if (!result.success && msg.data.questions !== undefined) {
-          console.error('AskUserQuestions validation failed:', result.error.format(), { data: msg.data.questions });
+          logger.error('AskUserQuestions validation failed', result.error, { data: msg.data.questions });
           Toast.error('Invalid question format received from server');
           break;
         }
@@ -353,7 +354,7 @@ export function useWebSocket() {
 
       // Detect sequence gaps
       if (lastSequence !== undefined && event.sequence !== lastSequence + 1) {
-        console.warn('Sequence gap detected', {
+        logger.warn('Sequence gap detected', {
           workflow_id: workflowId,
           expected: lastSequence + 1,
           received: event.sequence,
@@ -425,7 +426,7 @@ export function useWebSocket() {
 
     // Connection opened
     ws.onopen = () => {
-      console.log('WebSocket connected');
+      logger.info('WebSocket connected');
       setConnected(true);
       reconnectAttemptRef.current = 0; // Reset reconnect counter
 
@@ -448,11 +449,11 @@ export function useWebSocket() {
             break;
 
           case 'backfill_complete':
-            console.log('Backfill complete', message.count);
+            logger.info('Backfill complete', { count: message.count });
             break;
 
           case 'backfill_expired':
-            console.warn('Backfill expired:', message.message);
+            logger.warn('Backfill expired', { message: message.message });
             setLastEventId(null);
             break;
 
@@ -461,16 +462,16 @@ export function useWebSocket() {
             break;
 
           default:
-            console.warn('Unknown WebSocket message type:', message);
+            logger.warn('Unknown WebSocket message type', { message });
         }
       } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
+        logger.error('Error parsing WebSocket message', error);
       }
     };
 
     // Connection closed
     ws.onclose = (event) => {
-      console.log('WebSocket disconnected', event.code, event.reason);
+      logger.info('WebSocket disconnected', { code: event.code, reason: event.reason });
       setConnected(false);
       wsRef.current = null;
 
@@ -485,7 +486,7 @@ export function useWebSocket() {
 
     // Error occurred
     ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      logger.error('WebSocket error', error);
       setConnected(false, 'WebSocket error');
     };
   }, [handleEvent, scheduleReconnect, setConnected, setLastEventId]);
