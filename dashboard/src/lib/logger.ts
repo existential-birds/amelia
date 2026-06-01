@@ -11,11 +11,7 @@
  */
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-/**
- * Context object for structured logging.
- * Allows arbitrary key-value pairs for contextual data that will be serialized to JSON.
- * @property [key: string] - Arbitrary context properties
- */
+/** Arbitrary key-value context serialized to JSON alongside a log message. */
 interface LogContext {
   [key: string]: unknown;
 }
@@ -75,33 +71,21 @@ function formatMessage(level: LogLevel, message: string, context?: LogContext): 
  * ```
  */
 export const logger = {
-  /**
-   * Logs a debug message. Only emitted in development mode.
-   * @param message - The debug message to log
-   * @param context - Optional structured context data
-   */
+  /** Only emitted in development. */
   debug(message: string, context?: LogContext): void {
     if (shouldLog('debug')) {
       console.debug(formatMessage('debug', message, context));
     }
   },
 
-  /**
-   * Logs an info message. Only emitted in development mode.
-   * @param message - The info message to log
-   * @param context - Optional structured context data
-   */
+  /** Only emitted in development. */
   info(message: string, context?: LogContext): void {
     if (shouldLog('info')) {
       console.info(formatMessage('info', message, context));
     }
   },
 
-  /**
-   * Logs a warning message. Emitted in both development and production.
-   * @param message - The warning message to log
-   * @param context - Optional structured context data
-   */
+  /** Emitted in both development and production. */
   warn(message: string, context?: LogContext): void {
     if (shouldLog('warn')) {
       console.warn(formatMessage('warn', message, context));
@@ -109,10 +93,8 @@ export const logger = {
   },
 
   /**
-   * Logs an error message with optional error object. Emitted in both development and production.
-   * @param message - The error message to log
-   * @param error - Optional error object or value to include in context
-   * @param context - Optional additional structured context data
+   * Emitted in both development and production. An Error in `error` contributes
+   * its message and stack to the logged context.
    */
   error(message: string, error?: unknown, context?: LogContext): void {
     if (shouldLog('error')) {

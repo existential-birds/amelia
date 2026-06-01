@@ -148,12 +148,8 @@ export function PlanImportSection({
     api.listFiles(planOutputDir, '*.md', worktreePath)
       .then((res) => {
         setFiles(res.files);
-        if (res.files.length === 0) {
-          console.warn(`No .md files found in ${planOutputDir}`);
-        }
       })
       .catch((err) => {
-        console.error('Failed to list plan files:', err);
         setFiles([]);
 
         // Show helpful error message to user

@@ -1,8 +1,8 @@
-import { useState, useCallback, useRef, useEffect } from "react";
-import { cn, copyToClipboard } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { Copy, Check, Clock } from "lucide-react";
 import type { MessageUsage } from "@/types/api";
 import { Button } from "@/components/ui/button";
+import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import {
   Tooltip,
   TooltipContent,
@@ -78,29 +78,7 @@ export function MessageMetadata({
   usage,
   className,
 }: MessageMetadataProps) {
-  const [copied, setCopied] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleCopy = useCallback(async () => {
-    const success = await copyToClipboard(content);
-    if (success) {
-      setCopied(true);
-      // Clear any existing timeout
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      timeoutRef.current = setTimeout(() => setCopied(false), 2000);
-    }
-  }, [content]);
-
-  // Clean up timeout on unmount to prevent memory leak
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
+  const { copied, handleCopy } = useCopyFeedback(content);
 
   return (
     <div

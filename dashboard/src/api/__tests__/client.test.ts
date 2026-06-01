@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { api } from '../client';
+import { api, ApiError } from '../client';
 import type { GitHubIssuesResponse } from '@/types';
 import { createMockWorkflowSummary, createMockWorkflowDetail } from '@/__tests__/fixtures';
 
@@ -75,6 +75,88 @@ describe('API Client', () => {
       mockFetchError(404, 'Workflow not found', 'NOT_FOUND');
 
       await expect(api.getWorkflow('wf-999')).rejects.toThrow('Workflow not found');
+    });
+  });
+
+  describe('createWorkflow', () => {
+    it('creates workflow with required fields', async () => {
+      const mockResponse = {
+        id: 'wf-abc123',
+        status: 'pending',
+        message: 'Workflow created for issue TASK-001',
+      };
+      mockFetchSuccess(mockResponse);
+
+      const result = await api.createWorkflow({
+        issue_id: 'TASK-001',
+        worktree_path: '/Users/me/projects/repo',
+        task_title: 'Add logout button',
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            issue_id: 'TASK-001',
+            worktree_path: '/Users/me/projects/repo',
+            task_title: 'Add logout button',
+          }),
+        })
+      );
+      expect(result).toEqual(mockResponse);
+    });
+
+    it('creates workflow with all fields', async () => {
+      mockFetchSuccess({ id: 'wf-abc123', status: 'pending', message: 'Workflow created' });
+
+      await api.createWorkflow({
+        issue_id: 'TASK-001',
+        worktree_path: '/Users/me/projects/repo',
+        profile: 'noop-local',
+        task_title: 'Add logout button',
+        task_description: 'Add a logout button to the navbar',
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            issue_id: 'TASK-001',
+            worktree_path: '/Users/me/projects/repo',
+            profile: 'noop-local',
+            task_title: 'Add logout button',
+            task_description: 'Add a logout button to the navbar',
+          }),
+        })
+      );
+    });
+
+    it('throws ApiError on 400 validation error', async () => {
+      mockFetchError(400, 'Invalid worktree path', 'VALIDATION_ERROR');
+
+      await expect(
+        api.createWorkflow({
+          issue_id: 'TASK-001',
+          worktree_path: 'not-absolute',
+          task_title: 'Test',
+        })
+      ).rejects.toThrow(ApiError);
+    });
+
+    it('throws ApiError on 409 conflict', async () => {
+      mockFetchError(409, 'Worktree already has an active workflow', 'WORKTREE_IN_USE');
+
+      await expect(
+        api.createWorkflow({
+          issue_id: 'TASK-001',
+          worktree_path: '/Users/me/projects/repo',
+          task_title: 'Test',
+        })
+      ).rejects.toThrow(ApiError);
     });
   });
 

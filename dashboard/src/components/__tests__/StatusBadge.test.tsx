@@ -61,4 +61,17 @@ describe('StatusBadge other statuses', () => {
     const indicator = badge.querySelector('span');
     expect(indicator?.className).toMatch(/animate-pulse/);
   });
+
+  it('should have correct aria-label for running status', () => {
+    render(<StatusBadge status="in_progress" />);
+    expect(screen.getByRole('status')).toHaveAttribute(
+      'aria-label',
+      'Workflow status: running'
+    );
+  });
+
+  it('should have data-status attribute for running', () => {
+    render(<StatusBadge status="in_progress" />);
+    expect(screen.getByRole('status')).toHaveAttribute('data-status', 'running');
+  });
 });

@@ -1,6 +1,7 @@
 /**
  * @fileoverview Tests for ProfileSelect component.
  */
+import type { ComponentProps } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { ProfileSelect } from '../ProfileSelect';
@@ -17,6 +18,18 @@ describe('ProfileSelect', () => {
     value: '',
     onChange: vi.fn(),
   };
+
+  /**
+   * Render ProfileSelect and wait until the initial getProfiles fetch fires,
+   * so tests start from a settled (loaded or errored) state.
+   */
+  async function renderReady(props: Partial<ComponentProps<typeof ProfileSelect>> = {}) {
+    const result = render(<ProfileSelect {...defaultProps} {...props} />);
+    await waitFor(() => {
+      expect(getProfiles).toHaveBeenCalled();
+    });
+    return result;
+  }
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -37,12 +50,7 @@ describe('ProfileSelect', () => {
 
   describe('rendering', () => {
     it('renders profiles after loading', async () => {
-      render(<ProfileSelect {...defaultProps} />);
-
-      // Wait for loading to complete
-      await waitFor(() => {
-        expect(getProfiles).toHaveBeenCalled();
-      });
+      await renderReady();
 
       // Open the select dropdown
       fireEvent.click(screen.getByRole('combobox'));
@@ -55,11 +63,7 @@ describe('ProfileSelect', () => {
     });
 
     it('shows tracker type as secondary info', async () => {
-      render(<ProfileSelect {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(getProfiles).toHaveBeenCalled();
-      });
+      await renderReady();
 
       fireEvent.click(screen.getByRole('combobox'));
 
@@ -70,11 +74,7 @@ describe('ProfileSelect', () => {
     });
 
     it('shows active indicator for active profile', async () => {
-      render(<ProfileSelect {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(getProfiles).toHaveBeenCalled();
-      });
+      await renderReady();
 
       fireEvent.click(screen.getByRole('combobox'));
 
@@ -84,11 +84,7 @@ describe('ProfileSelect', () => {
     });
 
     it('renders "None" option for clearing selection', async () => {
-      render(<ProfileSelect {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(getProfiles).toHaveBeenCalled();
-      });
+      await renderReady();
 
       fireEvent.click(screen.getByRole('combobox'));
 
@@ -104,11 +100,7 @@ describe('ProfileSelect', () => {
     it('calls onChange when profile selected', async () => {
       const onChange = vi.fn();
 
-      render(<ProfileSelect {...defaultProps} onChange={onChange} />);
-
-      await waitFor(() => {
-        expect(getProfiles).toHaveBeenCalled();
-      });
+      await renderReady({ onChange });
 
       fireEvent.click(screen.getByRole('combobox'));
 
@@ -126,11 +118,7 @@ describe('ProfileSelect', () => {
     it('calls onChange with empty string when "None" selected', async () => {
       const onChange = vi.fn();
 
-      render(<ProfileSelect {...defaultProps} value="work" onChange={onChange} />);
-
-      await waitFor(() => {
-        expect(getProfiles).toHaveBeenCalled();
-      });
+      await renderReady({ value: 'work', onChange });
 
       fireEvent.click(screen.getByRole('combobox'));
 
@@ -152,11 +140,7 @@ describe('ProfileSelect', () => {
     });
 
     it('displays selected profile value', async () => {
-      render(<ProfileSelect {...defaultProps} value="work" />);
-
-      await waitFor(() => {
-        expect(getProfiles).toHaveBeenCalled();
-      });
+      await renderReady({ value: 'work' });
 
       // The combobox should display the selected profile
       await waitFor(() => {
@@ -167,11 +151,7 @@ describe('ProfileSelect', () => {
 
   describe('error handling', () => {
     it('shows error message when provided', async () => {
-      render(<ProfileSelect {...defaultProps} error="Profile is required" />);
-
-      await waitFor(() => {
-        expect(getProfiles).toHaveBeenCalled();
-      });
+      await renderReady({ error: 'Profile is required' });
 
       expect(screen.getByText('Profile is required')).toBeInTheDocument();
     });
@@ -181,11 +161,7 @@ describe('ProfileSelect', () => {
       vi.mocked(getProfiles).mockRejectedValue(new Error('Network error'));
 
       try {
-        render(<ProfileSelect {...defaultProps} />);
-
-        await waitFor(() => {
-          expect(getProfiles).toHaveBeenCalled();
-        });
+        await renderReady();
 
         // Wait for the error to be processed - the component should still be functional
         await waitFor(() => {
@@ -210,7 +186,7 @@ describe('ProfileSelect', () => {
       vi.mocked(getProfiles).mockRejectedValueOnce(new Error('Network error'));
 
       try {
-        render(<ProfileSelect {...defaultProps} />);
+        await renderReady();
 
         // Wait for error state
         await waitFor(() => {
@@ -250,11 +226,7 @@ describe('ProfileSelect', () => {
 
   describe('accessibility', () => {
     it('has proper label association', async () => {
-      render(<ProfileSelect {...defaultProps} id="test-profile" />);
-
-      await waitFor(() => {
-        expect(getProfiles).toHaveBeenCalled();
-      });
+      await renderReady({ id: 'test-profile' });
 
       const combobox = screen.getByRole('combobox');
       expect(combobox).toHaveAttribute('id', 'test-profile');
@@ -264,22 +236,14 @@ describe('ProfileSelect', () => {
     });
 
     it('shows aria-invalid when error present', async () => {
-      render(<ProfileSelect {...defaultProps} error="Invalid selection" />);
-
-      await waitFor(() => {
-        expect(getProfiles).toHaveBeenCalled();
-      });
+      await renderReady({ error: 'Invalid selection' });
 
       const combobox = screen.getByRole('combobox');
       expect(combobox).toHaveAttribute('aria-invalid', 'true');
     });
 
     it('disables select when disabled prop is true', async () => {
-      render(<ProfileSelect {...defaultProps} disabled />);
-
-      await waitFor(() => {
-        expect(getProfiles).toHaveBeenCalled();
-      });
+      await renderReady({ disabled: true });
 
       const combobox = screen.getByRole('combobox');
       expect(combobox).toBeDisabled();

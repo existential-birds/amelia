@@ -1,6 +1,3 @@
-/**
- * @fileoverview Sparkline component for inline trend visualization.
- */
 import { cn } from '@/lib/utils';
 
 interface SparklineProps {
@@ -15,9 +12,6 @@ interface SparklineProps {
 /**
  * Renders a small inline line chart (sparkline) for trend visualization.
  * Fixed height of 24px, width scales with container or defaults to 80px.
- *
- * @param props - Component props
- * @returns SVG sparkline visualization
  */
 export function Sparkline({ data, color, className }: SparklineProps) {
   const width = Math.max(data.length * 2, 80);

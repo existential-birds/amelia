@@ -5,13 +5,10 @@ import type {
   SessionStatus,
 } from "@/types/api";
 import { parseErrorDetail } from './errors';
+import { createTimeoutSignal } from './utils';
 
 const API_BASE_URL = "/api/brainstorm";
 const DEFAULT_TIMEOUT_MS = 30000;
-
-function createTimeoutSignal(timeoutMs: number = DEFAULT_TIMEOUT_MS): AbortSignal {
-  return AbortSignal.timeout(timeoutMs);
-}
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {

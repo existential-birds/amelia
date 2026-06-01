@@ -13,13 +13,9 @@ import { cn } from '@/lib/utils';
 import type { ClassificationRecord } from '@/types';
 
 interface ClassificationAuditLogProps {
-  /** Current date preset for filtering. */
   preset: string;
 }
 
-/**
- * Format an ISO date string for display.
- */
 function formatDate(iso: string): string {
   const date = new Date(iso);
   return date.toLocaleDateString('en-US', {
@@ -30,9 +26,6 @@ function formatDate(iso: string): string {
   });
 }
 
-/**
- * Truncate a prompt hash for display.
- */
 function truncateHash(hash: string | null): string {
   if (!hash) return '--';
   return hash.slice(0, 8);

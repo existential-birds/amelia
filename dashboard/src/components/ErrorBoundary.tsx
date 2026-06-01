@@ -10,15 +10,8 @@ import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 /**
- * Root error boundary component for handling router-level errors.
- *
- * Displays user-friendly error pages for:
- * - HTTP error responses (404, 500, etc.) with status and message
- * - JavaScript runtime errors with stack trace in development mode
- *
- * Provides navigation options to recover from errors.
- *
- * @returns Error UI with recovery options (reload, go home, go back)
+ * Renders a recovery UI for both HTTP error responses (404, 500, …) and
+ * JavaScript runtime errors, the latter with a stack trace in development.
  */
 export function RootErrorBoundary() {
   const error = useRouteError();
