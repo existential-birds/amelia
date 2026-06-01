@@ -64,6 +64,7 @@ describe('ApprovalControls', () => {
   it('hides buttons when not pending', () => {
     renderWithRouter('wf-001', 'Test', 'approved');
     expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /reject/i })).not.toBeInTheDocument();
   });
 
   it('should render Replan button when status is pending', () => {
