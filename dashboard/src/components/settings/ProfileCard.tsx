@@ -2,7 +2,8 @@
  * @fileoverview Card component displaying a profile with agent configuration summary.
  *
  * Shows primary agent configuration at a glance with visual indicators for
- * driver type and model tier. Supports activation, editing, and deletion.
+ * driver type and model tier. Card body navigates to configuration; an
+ * always-visible star toggles activation and a trash button deletes.
  */
 import { forwardRef } from 'react';
 import { cn } from '@/lib/utils';
@@ -11,7 +12,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  Pencil,
   Trash2,
   Star,
   Folder,
@@ -33,7 +33,7 @@ import type { Profile } from '@/api/settings';
 
 interface ProfileCardProps {
   profile: Profile;
-  onEdit: (profile: Profile) => void;
+  onConfigure: (profile: Profile) => void;
   onDelete: (profile: Profile) => void;
   onActivate: (profile: Profile) => void;
 }
@@ -83,7 +83,7 @@ const formatModel = (model: string): string => {
 };
 
 export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
-  function ProfileCard({ profile, onEdit, onDelete, onActivate }, ref) {
+  function ProfileCard({ profile, onConfigure, onDelete, onActivate }, ref) {
   // Get primary agents configuration
   const primaryAgents = PRIMARY_AGENT_KEYS;
   const agentConfigs = primaryAgents.map(key => ({
@@ -106,17 +106,15 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
   const DriverIcon = getDriverIcon(primaryDriver);
 
   const handleCardClick = () => {
-    if (!profile.is_active) {
-      onActivate(profile);
-    }
+    onConfigure(profile);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.key === 'Enter' || e.key === ' ') && !profile.is_active) {
+    if (e.key === 'Enter' || e.key === ' ') {
       if (e.key === ' ') {
         e.preventDefault();
       }
-      onActivate(profile);
+      onConfigure(profile);
     }
   };
 
@@ -135,8 +133,7 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
         onKeyDown={handleKeyDown}
         tabIndex={0}
         role="button"
-        aria-pressed={profile.is_active}
-        aria-label={`${profile.is_active ? 'Active profile' : 'Activate profile'} ${profile.id}`}
+        aria-label={`Configure profile ${profile.id}`}
         className={cn(
           'group relative cursor-pointer overflow-hidden transition-all duration-200',
           'hover:translate-y-[-2px] hover:shadow-lg hover:shadow-primary/5',
@@ -162,19 +159,27 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-              aria-label={`Edit profile ${profile.id}`}
+              className="h-8 w-8"
+              aria-label={`Set ${profile.id} active`}
+              aria-pressed={profile.is_active}
               onClick={(e) => {
                 e.stopPropagation();
-                onEdit(profile);
+                onActivate(profile);
               }}
             >
-              <Pencil className="h-4 w-4" />
+              <Star
+                className={cn(
+                  'h-4 w-4',
+                  profile.is_active
+                    ? 'fill-primary text-primary'
+                    : 'text-muted-foreground'
+                )}
+              />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive transition-all"
               aria-label={`Delete profile ${profile.id}`}
               onClick={(e) => {
                 e.stopPropagation();

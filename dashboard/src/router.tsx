@@ -8,7 +8,7 @@ import { RootErrorBoundary } from '@/components/ErrorBoundary';
 import { workflowsLoader, workflowDetailLoader, historyLoader } from '@/loaders/workflows';
 import { promptsLoader } from '@/loaders/prompts';
 import { analyticsLoader, knowledgeLoader } from '@/loaders';
-import { profilesLoader, serverSettingsLoader } from '@/loaders/settings';
+import { profilesLoader, profileDetailLoader, serverSettingsLoader } from '@/loaders/settings';
 import { approveAction, rejectAction, cancelAction, replanAction } from '@/actions/workflows';
 
 /**
@@ -165,6 +165,22 @@ export const router = createBrowserRouter([
             loader: profilesLoader,
             lazy: async () => {
               const { default: Component } = await import('@/pages/SettingsProfilesPage');
+              return { Component };
+            },
+          },
+          {
+            path: 'profiles/new',
+            loader: profileDetailLoader,
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/ProfileDetailPage');
+              return { Component };
+            },
+          },
+          {
+            path: 'profiles/:id',
+            loader: profileDetailLoader,
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/ProfileDetailPage');
               return { Component };
             },
           },
