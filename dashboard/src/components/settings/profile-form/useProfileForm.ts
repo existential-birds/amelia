@@ -8,9 +8,9 @@
  * create/update field sets. The only structural change from the modal is that
  * the eleven flat `sandbox_*` fields are grouped under `formData.sandbox`.
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { z } from 'zod';
-import { AGENT_DEFINITIONS } from '@/lib/constants';
+import { AGENT_DEFINITIONS, getModelsForDriver } from '@/lib/constants';
 import type {
   Profile,
   ProfileCreate,
@@ -28,27 +28,6 @@ import type {
 const PRIMARY_AGENTS = AGENT_DEFINITIONS.filter((a) => a.category === 'primary');
 const UTILITY_AGENTS = AGENT_DEFINITIONS.filter((a) => a.category === 'utility');
 const ALL_AGENT_KEYS = AGENT_DEFINITIONS.map((a) => a.key);
-
-/** Default models (Claude CLI) */
-const CLAUDE_MODELS = ['opus', 'sonnet', 'haiku'] as const;
-
-/** Default models (Codex CLI) */
-const CODEX_MODELS = [
-  'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2',
-  'gpt-5.1-codex-max', 'gpt-5.1-codex-mini',
-  'gpt-5.1-codex', 'gpt-5.1', 'gpt-5-codex', 'gpt-5-codex-mini', 'gpt-5',
-] as const;
-
-/** Model options by driver - API models fetched dynamically via ApiModelSelect */
-const MODEL_OPTIONS_BY_DRIVER: Record<string, readonly string[]> = {
-  claude: CLAUDE_MODELS,
-  codex: CODEX_MODELS,
-};
-
-/** Get available models for a driver, with fallback */
-const getModelsForDriver = (driver: string): readonly string[] => {
-  return MODEL_OPTIONS_BY_DRIVER[driver] ?? CLAUDE_MODELS;
-};
 
 /** Build default agent configuration */
 const buildDefaultAgents = (): Record<string, AgentFormData> => {
@@ -110,7 +89,8 @@ const profileFormSchema = z.object({
     .regex(
       /^[a-zA-Z0-9_-]+$/,
       'Only letters, numbers, underscores, and hyphens allowed'
-    ),
+    )
+    .refine((v) => v !== 'new', { message: "'new' is a reserved name" }),
   tracker: z.string(),
   repo_root: z
     .string()
@@ -128,7 +108,7 @@ const profileFormSchema = z.object({
 });
 
 /** Fields that accept string values and can be validated individually */
-type ValidatableField = 'id' | 'repo_root';
+export type ValidatableField = 'id' | 'repo_root';
 
 /** Validate individual field using Zod schema */
 const validateField = (field: ValidatableField, value: string): string | null => {
@@ -217,16 +197,97 @@ export interface UseProfileForm {
     model: string,
     targets: 'all' | 'primary' | 'utility'
   ) => void;
-  setSandboxField: (
-    key: keyof SandboxFormData,
-    value: string | number | boolean | string[]
-  ) => void;
+  setSandboxField: <K extends keyof SandboxFormData>(key: K, value: SandboxFormData[K]) => void;
   setHosts: (hosts: string[]) => void;
   setPrAutofix: (config: PRAutoFixConfig | null) => void;
   handleBlur: (field: ValidatableField, value: string) => void;
   validate: () => boolean;
+  markSaved: () => void;
   toCreatePayload: () => ProfileCreate;
   toUpdatePayload: () => ProfileUpdate;
+}
+
+/**
+ * Structural equality for ProfileFormData that avoids JSON.stringify pitfalls:
+ * key-insertion-order sensitivity, undefined-vs-missing differences, and
+ * spurious array-reorder false positives on network_allowed_hosts /
+ * ignore_authors.
+ */
+function isProfileFormDataEqual(a: ProfileFormData, b: ProfileFormData): boolean {
+  // Scalar top-level fields.
+  if (
+    a.id !== b.id ||
+    a.tracker !== b.tracker ||
+    a.repo_root !== b.repo_root ||
+    a.plan_output_dir !== b.plan_output_dir ||
+    a.plan_path_pattern !== b.plan_path_pattern
+  ) {
+    return false;
+  }
+
+  // agents: Record<string, {driver, model}>
+  const aKeys = Object.keys(a.agents);
+  const bKeys = Object.keys(b.agents);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    const aAgent = a.agents[key];
+    const bAgent = b.agents[key];
+    if (!aAgent || !bAgent || aAgent.driver !== bAgent.driver || aAgent.model !== bAgent.model) {
+      return false;
+    }
+  }
+
+  // sandbox
+  const as = a.sandbox;
+  const bs = b.sandbox;
+  if (
+    as.mode !== bs.mode ||
+    as.image !== bs.image ||
+    as.network_allowlist_enabled !== bs.network_allowlist_enabled ||
+    as.repo_url !== bs.repo_url ||
+    as.daytona_api_url !== bs.daytona_api_url ||
+    as.daytona_target !== bs.daytona_target ||
+    as.daytona_cpu !== bs.daytona_cpu ||
+    as.daytona_memory !== bs.daytona_memory ||
+    as.daytona_disk !== bs.daytona_disk ||
+    as.daytona_image !== bs.daytona_image
+  ) {
+    return false;
+  }
+  if (
+    as.network_allowed_hosts.length !== bs.network_allowed_hosts.length ||
+    as.network_allowed_hosts.some((h, i) => h !== bs.network_allowed_hosts[i])
+  ) {
+    return false;
+  }
+
+  // pr_autofix
+  if (a.pr_autofix === null && b.pr_autofix === null) return true;
+  if (a.pr_autofix === null || b.pr_autofix === null) return false;
+  const ap = a.pr_autofix;
+  const bp = b.pr_autofix;
+  if (
+    ap.aggressiveness !== bp.aggressiveness ||
+    ap.poll_interval !== bp.poll_interval ||
+    ap.auto_resolve !== bp.auto_resolve ||
+    ap.resolve_no_changes !== bp.resolve_no_changes ||
+    ap.max_iterations !== bp.max_iterations ||
+    ap.commit_prefix !== bp.commit_prefix ||
+    ap.confidence_threshold !== bp.confidence_threshold ||
+    ap.post_push_cooldown_seconds !== bp.post_push_cooldown_seconds ||
+    ap.max_cooldown_seconds !== bp.max_cooldown_seconds ||
+    ap.poll_label !== bp.poll_label
+  ) {
+    return false;
+  }
+  if (
+    ap.ignore_authors.length !== bp.ignore_authors.length ||
+    ap.ignore_authors.some((author, i) => author !== bp.ignore_authors[i])
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -245,12 +306,13 @@ export function useProfileForm(profile: Profile | null): UseProfileForm {
   const [formData, setFormData] = useState<ProfileFormData>(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Snapshot of the original state for dirty comparison.
-  const originalFormDataRef = useRef<ProfileFormData>(initial);
+  // Snapshot of the saved state for dirty comparison. Stored as state so that
+  // markSaved() updating it triggers isDirty to recompute.
+  const [savedSnapshot, setSavedSnapshot] = useState<ProfileFormData>(initial);
 
   const isDirty = useMemo(
-    () => JSON.stringify(formData) !== JSON.stringify(originalFormDataRef.current),
-    [formData]
+    () => !isProfileFormDataEqual(formData, savedSnapshot),
+    [formData, savedSnapshot]
   );
 
   const setField = useCallback(
@@ -315,7 +377,7 @@ export function useProfileForm(profile: Profile | null): UseProfileForm {
   );
 
   const setSandboxField = useCallback(
-    (key: keyof SandboxFormData, value: string | number | boolean | string[]) => {
+    <K extends keyof SandboxFormData>(key: K, value: SandboxFormData[K]) => {
       setFormData((prev) => ({
         ...prev,
         sandbox: { ...prev.sandbox, [key]: value },
@@ -347,6 +409,13 @@ export function useProfileForm(profile: Profile | null): UseProfileForm {
     const error = validateField(field, value);
     if (error) {
       setErrors((prev) => ({ ...prev, [field]: error }));
+    } else {
+      setErrors((prev) => {
+        if (!prev[field]) return prev;
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
     }
   }, []);
 
@@ -444,6 +513,11 @@ export function useProfileForm(profile: Profile | null): UseProfileForm {
     [formData, formAgentsToApi, formSandboxToApi]
   );
 
+  // Re-snapshot the saved state so isDirty resets to false after a successful save.
+  const markSaved = useCallback(() => {
+    setSavedSnapshot(formData);
+  }, [formData]);
+
   const sectionErrors = useMemo(() => computeSectionErrors(errors), [errors]);
 
   return {
@@ -460,6 +534,7 @@ export function useProfileForm(profile: Profile | null): UseProfileForm {
     setPrAutofix,
     handleBlur,
     validate,
+    markSaved,
     toCreatePayload,
     toUpdatePayload,
   };

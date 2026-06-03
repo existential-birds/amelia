@@ -1,3 +1,6 @@
+/**
+ * @fileoverview Chip-style input for entering and managing a list of allowed hostnames.
+ */
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

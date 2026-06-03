@@ -68,7 +68,7 @@ describe('ProfileDetailPage shell', () => {
   });
 
   it('shows create UI when profile is null', async () => {
-    renderPage(null, '/settings/profiles/new');
+    renderPage(null, '/settings/profiles/~new');
     expect(await screen.findByRole('button', { name: /create profile/i })).toBeInTheDocument();
   });
 
@@ -116,7 +116,7 @@ describe('ProfileDetailPage save flow', () => {
 
   it('creates from /new with the typed name + repo', async () => {
     const user = userEvent.setup();
-    renderPage(null, '/settings/profiles/new');
+    renderPage(null, '/settings/profiles/~new');
 
     await user.type(
       await screen.findByRole('textbox', { name: /profile name/i }),
@@ -138,7 +138,7 @@ describe('ProfileDetailPage save flow', () => {
 
   it('does not call the API when repo_root is empty', async () => {
     const user = userEvent.setup();
-    renderPage(null, '/settings/profiles/new');
+    renderPage(null, '/settings/profiles/~new');
 
     await user.type(
       await screen.findByRole('textbox', { name: /profile name/i }),
@@ -153,7 +153,7 @@ describe('ProfileDetailPage save flow', () => {
 
   it('marks the section rail when save fails validation', async () => {
     const user = userEvent.setup();
-    renderPage(null, '/settings/profiles/new');
+    renderPage(null, '/settings/profiles/~new');
 
     await user.type(
       await screen.findByRole('textbox', { name: /profile name/i }),
@@ -191,7 +191,7 @@ describe('ProfileDetailPage save flow', () => {
 
   it('shows an inline absolute-path error on blur', async () => {
     const user = userEvent.setup();
-    renderPage(null, '/settings/profiles/new');
+    renderPage(null, '/settings/profiles/~new');
 
     const repo = await screen.findByRole('textbox', { name: /repository root/i });
     await user.type(repo, 'my-repo');

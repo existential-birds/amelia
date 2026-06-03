@@ -20,6 +20,31 @@ import packageJson from '../../package.json';
 /** Current application version from package.json. */
 export const APP_VERSION = packageJson.version;
 
+// =============================================================================
+// Driver Model Lists
+// =============================================================================
+
+/** Default models (Claude CLI) */
+export const CLAUDE_MODELS = ['opus', 'sonnet', 'haiku'] as const;
+
+/** Default models (Codex CLI) */
+export const CODEX_MODELS = [
+  'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2',
+  'gpt-5.1-codex-max', 'gpt-5.1-codex-mini',
+  'gpt-5.1-codex', 'gpt-5.1', 'gpt-5-codex', 'gpt-5-codex-mini', 'gpt-5',
+] as const;
+
+/** Model options by driver - API models fetched dynamically via ApiModelSelect */
+export const MODEL_OPTIONS_BY_DRIVER: Record<string, readonly string[]> = {
+  claude: CLAUDE_MODELS,
+  codex: CODEX_MODELS,
+};
+
+/** Get available models for a driver, with fallback to CLAUDE_MODELS */
+export const getModelsForDriver = (driver: string): readonly string[] => {
+  return MODEL_OPTIONS_BY_DRIVER[driver] ?? CLAUDE_MODELS;
+};
+
 /**
  * Agent capability requirements for model filtering.
  */

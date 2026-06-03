@@ -189,7 +189,7 @@ describe('SettingsProfilesPage', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /create profile/i }));
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/profiles/new');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/profiles/~new');
   });
 
   it('navigates to /new from the empty-state CTA', async () => {
@@ -202,7 +202,7 @@ describe('SettingsProfilesPage', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /Create Your First Profile/i }));
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/profiles/new');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/profiles/~new');
   });
 
   it('displays driver badges with correct colors', async () => {

@@ -223,6 +223,9 @@ export default function SettingsProfilesPage() {
   });
 
   const handleConfigure = (profile: Profile) => {
+    if (profile.id === '~new') {
+      return; // '~new' is the reserved create-route sentinel; skip navigation
+    }
     navigate(`/settings/profiles/${profile.id}`);
   };
 
@@ -254,7 +257,7 @@ export default function SettingsProfilesPage() {
   };
 
   const handleCreateClick = () => {
-    navigate('/settings/profiles/new');
+    navigate('/settings/profiles/~new');
   };
 
   const handleClearFilters = () => {

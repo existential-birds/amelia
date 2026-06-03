@@ -10,6 +10,7 @@
  * is the Daytona resources grid (now `grid-cols-1 sm:grid-cols-3` so labels never
  * wrap on narrow viewports) and importing the extracted HostChipInput.
  */
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -25,6 +26,18 @@ interface SandboxSectionProps {
 }
 
 export function SandboxSection({ sandbox, errors, onField, onHosts }: SandboxSectionProps) {
+  // Local string state lets the user clear or partially type a number without
+  // immediately snapping to the default. The parent form state is updated with
+  // a validated number only on blur.
+  const [cpuStr, setCpuStr] = useState(String(sandbox.daytona_cpu));
+  const [memStr, setMemStr] = useState(String(sandbox.daytona_memory));
+  const [diskStr, setDiskStr] = useState(String(sandbox.daytona_disk));
+
+  // Sync local strings when the parent value changes from outside (e.g. profile switch).
+  useEffect(() => { setCpuStr(String(sandbox.daytona_cpu)); }, [sandbox.daytona_cpu]);
+  useEffect(() => { setMemStr(String(sandbox.daytona_memory)); }, [sandbox.daytona_memory]);
+  useEffect(() => { setDiskStr(String(sandbox.daytona_disk)); }, [sandbox.daytona_disk]);
+
   return (
     <div className="space-y-4">
       {/* Sandbox Mode */}
@@ -172,8 +185,14 @@ export function SandboxSection({ sandbox, errors, onField, onHosts }: SandboxSec
                 <Label className="text-xs text-muted-foreground">CPU Cores</Label>
                 <Input
                   type="number" min={1} max={16}
-                  value={sandbox.daytona_cpu}
-                  onChange={(e) => onField('daytona_cpu', parseInt(e.target.value) || 2)}
+                  value={cpuStr}
+                  onChange={(e) => setCpuStr(e.target.value)}
+                  onBlur={() => {
+                    const n = parseInt(cpuStr);
+                    const v = (isNaN(n) || n < 1) ? 2 : n;
+                    setCpuStr(String(v));
+                    onField('daytona_cpu', v);
+                  }}
                   className="bg-background/50"
                 />
               </div>
@@ -181,8 +200,14 @@ export function SandboxSection({ sandbox, errors, onField, onHosts }: SandboxSec
                 <Label className="text-xs text-muted-foreground">Memory (GB)</Label>
                 <Input
                   type="number" min={1} max={64}
-                  value={sandbox.daytona_memory}
-                  onChange={(e) => onField('daytona_memory', parseInt(e.target.value) || 4)}
+                  value={memStr}
+                  onChange={(e) => setMemStr(e.target.value)}
+                  onBlur={() => {
+                    const n = parseInt(memStr);
+                    const v = (isNaN(n) || n < 1) ? 4 : n;
+                    setMemStr(String(v));
+                    onField('daytona_memory', v);
+                  }}
                   className="bg-background/50"
                 />
               </div>
@@ -190,8 +215,14 @@ export function SandboxSection({ sandbox, errors, onField, onHosts }: SandboxSec
                 <Label className="text-xs text-muted-foreground">Disk (GB)</Label>
                 <Input
                   type="number" min={1} max={100}
-                  value={sandbox.daytona_disk}
-                  onChange={(e) => onField('daytona_disk', parseInt(e.target.value) || 10)}
+                  value={diskStr}
+                  onChange={(e) => setDiskStr(e.target.value)}
+                  onBlur={() => {
+                    const n = parseInt(diskStr);
+                    const v = (isNaN(n) || n < 1) ? 10 : n;
+                    setDiskStr(String(v));
+                    onField('daytona_disk', v);
+                  }}
                   className="bg-background/50"
                 />
               </div>

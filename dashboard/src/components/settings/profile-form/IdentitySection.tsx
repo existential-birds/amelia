@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import type { ProfileFormData } from './types';
+import type { ValidatableField } from './useProfileForm';
 
 const TRACKER_OPTIONS = [
   { value: 'noop', label: 'None' },
@@ -22,7 +23,7 @@ interface IdentitySectionProps {
   errors: Record<string, string>;
   isEditMode: boolean;
   onField: (key: keyof ProfileFormData, value: string) => void;
-  onBlur: (field: string) => void;
+  onBlur: (field: ValidatableField) => void;
 }
 
 export function IdentitySection({ formData, errors, isEditMode, onField, onBlur }: IdentitySectionProps) {

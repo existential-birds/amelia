@@ -1,14 +1,14 @@
 /**
  * @fileoverview Profile detail page — full-width profile configuration.
  *
- * Shared by `/settings/profiles/new` (create) and `/settings/profiles/:id`
+ * Shared by `/settings/profiles/~new` (create) and `/settings/profiles/:id`
  * (edit). Owns a `useProfileForm` hook and composes the four configuration
  * sections behind a `SectionRail`. A `useBlocker`-based dirty guard intercepts
  * in-app navigation away from an unsaved form and resolves it through the app's
  * `AlertDialog`; a `beforeunload` handler covers hard reload / tab-close with
  * the browser's native prompt (a custom dialog is impossible there by design).
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useBlocker, useLoaderData, useNavigate } from 'react-router-dom';
 import { Cpu, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -56,6 +56,9 @@ export default function ProfileDetailPage() {
   // Set when a Save attempt fails validation; the effect below jumps to the
   // first section with an error once `sectionErrors` has refreshed.
   const [jumpToError, setJumpToError] = useState(false);
+  // Set after a successful save so we navigate only after isDirty has settled
+  // to false (markSaved flushes via state, not synchronously).
+  const [navigateAfterSave, setNavigateAfterSave] = useState(false);
 
   useEffect(() => {
     if (!jumpToError) return;
@@ -64,18 +67,24 @@ export default function ProfileDetailPage() {
     setJumpToError(false);
   }, [jumpToError, form.sectionErrors]);
 
-  // Set right before the post-save navigation so the blocker lets it through:
-  // the form is still technically dirty (the hook keeps no post-save snapshot),
-  // but a successful save is an intentional, confirmed exit.
-  const justSavedRef = useRef(false);
-
   // Intercept in-app navigation away from a dirty form.
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
-      form.isDirty &&
-      !justSavedRef.current &&
-      currentLocation.pathname !== nextLocation.pathname
+      form.isDirty && currentLocation.pathname !== nextLocation.pathname
   );
+
+  // Navigate to the list after a successful save. markSaved() clears isDirty,
+  // but react-router can keep the previous (dirty) blocker predicate for one
+  // render, so the post-save navigate() may still be intercepted — release it
+  // through proceed() if that happens.
+  useEffect(() => {
+    if (!navigateAfterSave) return;
+    if (blocker.state === 'blocked') {
+      blocker.proceed();
+    } else if (!form.isDirty) {
+      navigate('/settings/profiles');
+    }
+  }, [navigateAfterSave, form.isDirty, blocker, navigate]);
 
   // Hard reload / tab-close can only trigger the browser's native prompt.
   useEffect(() => {
@@ -115,8 +124,8 @@ export default function ProfileDetailPage() {
         await createProfile(form.toCreatePayload());
         toast.success('Profile created');
       }
-      justSavedRef.current = true;
-      navigate('/settings/profiles');
+      form.markSaved();
+      setNavigateAfterSave(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save profile');
     } finally {
@@ -184,7 +193,7 @@ export default function ProfileDetailPage() {
               errors={form.errors}
               isEditMode={isEditMode}
               onField={form.setField}
-              onBlur={(field) => form.handleBlur(field as 'id' | 'repo_root', form.formData[field as 'id' | 'repo_root'])}
+              onBlur={(field) => form.handleBlur(field, form.formData[field])}
             />
           )}
           {activeSection === 'agents' && (

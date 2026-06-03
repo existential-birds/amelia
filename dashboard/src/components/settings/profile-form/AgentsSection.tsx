@@ -14,7 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Badge } from '@/components/ui/badge';
 import { ChevronDown, Copy, Check, Code2, Wand2, Terminal, Cloud } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { AGENT_DEFINITIONS, type AgentDefinition } from '@/lib/constants';
+import { AGENT_DEFINITIONS, getModelsForDriver, type AgentDefinition } from '@/lib/constants';
 import { ApiModelSelect } from '@/components/model-picker';
 import type { AgentFormData } from './types';
 
@@ -27,22 +27,6 @@ const DRIVER_OPTIONS = [
   { value: 'api', label: 'OpenRouter API', icon: Cloud },
 ];
 
-/** Default models (Claude CLI) */
-const CLAUDE_MODELS = ['opus', 'sonnet', 'haiku'] as const;
-
-/** Default models (Codex CLI) */
-const CODEX_MODELS = [
-  'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2',
-  'gpt-5.1-codex-max', 'gpt-5.1-codex-mini',
-  'gpt-5.1-codex', 'gpt-5.1', 'gpt-5-codex', 'gpt-5-codex-mini', 'gpt-5',
-] as const;
-
-/** Model options by driver - API models fetched dynamically via ApiModelSelect */
-const MODEL_OPTIONS_BY_DRIVER: Record<string, readonly string[]> = {
-  claude: CLAUDE_MODELS,
-  codex: CODEX_MODELS,
-};
-
 /** Agent-specific colors matching canvas node styling */
 const AGENT_COLORS: Record<string, { line: string; icon: string }> = {
   architect: { line: 'bg-agent-architect', icon: 'text-agent-architect' },
@@ -52,11 +36,6 @@ const AGENT_COLORS: Record<string, { line: string; icon: string }> = {
   task_reviewer: { line: 'bg-muted-foreground/40', icon: 'text-muted-foreground' },
   evaluator: { line: 'bg-muted-foreground/40', icon: 'text-muted-foreground' },
   brainstormer: { line: 'bg-muted-foreground/40', icon: 'text-muted-foreground' },
-};
-
-/** Get available models for a driver, with fallback */
-const getModelsForDriver = (driver: string): readonly string[] => {
-  return MODEL_OPTIONS_BY_DRIVER[driver] ?? CLAUDE_MODELS;
 };
 
 // =============================================================================

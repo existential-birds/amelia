@@ -169,8 +169,9 @@ export const router = createBrowserRouter([
             },
           },
           {
-            path: 'profiles/new',
+            path: 'profiles/~new',
             loader: profileDetailLoader,
+            errorElement: <RootErrorBoundary />,
             lazy: async () => {
               const { default: Component } = await import('@/pages/ProfileDetailPage');
               return { Component };
@@ -179,6 +180,7 @@ export const router = createBrowserRouter([
           {
             path: 'profiles/:id',
             loader: profileDetailLoader,
+            errorElement: <RootErrorBoundary />,
             lazy: async () => {
               const { default: Component } = await import('@/pages/ProfileDetailPage');
               return { Component };

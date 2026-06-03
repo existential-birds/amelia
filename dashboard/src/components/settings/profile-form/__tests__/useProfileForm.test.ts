@@ -45,4 +45,12 @@ describe('useProfileForm', () => {
     act(() => result.current.setField('repo_root', '/changed'));
     expect(result.current.isDirty).toBe(true);
   });
+
+  it('markSaved() resets isDirty to false', () => {
+    const { result } = renderHook(() => useProfileForm(createMockProfile()));
+    act(() => result.current.setField('repo_root', '/changed'));
+    expect(result.current.isDirty).toBe(true);
+    act(() => result.current.markSaved());
+    expect(result.current.isDirty).toBe(false);
+  });
 });
