@@ -9,6 +9,8 @@ import SettingsProfilesPage from '../SettingsProfilesPage';
 import * as settingsApi from '../../api/settings';
 import * as toast from '../../components/Toast';
 
+const navigateSpy = vi.fn();
+
 // Mock React Router
 vi.mock('react-router-dom', async (importOriginal) => {
   const mod = await importOriginal<typeof import('react-router-dom')>();
@@ -16,6 +18,7 @@ vi.mock('react-router-dom', async (importOriginal) => {
     ...mod,
     useLoaderData: vi.fn(),
     useRevalidator: () => ({ revalidate: vi.fn(), state: 'idle' }),
+    useNavigate: () => navigateSpy,
   };
 });
 
@@ -165,6 +168,43 @@ describe('SettingsProfilesPage', () => {
     expect(screen.getByRole('button', { name: /create profile/i })).toBeInTheDocument();
   });
 
+  it('navigates to the detail page when a card body is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <SettingsProfilesPage />
+      </MemoryRouter>
+    );
+
+    await user.click(await screen.findByText('prod'));
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/profiles/prod');
+  });
+
+  it('navigates to /new from Create Profile', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <SettingsProfilesPage />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole('button', { name: /create profile/i }));
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/profiles/~new');
+  });
+
+  it('navigates to /new from the empty-state CTA', async () => {
+    vi.mocked(useLoaderData).mockReturnValue({ profiles: [] });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <SettingsProfilesPage />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole('button', { name: /Create Your First Profile/i }));
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/profiles/~new');
+  });
+
   it('displays driver badges with correct colors', async () => {
     render(
       <MemoryRouter>
@@ -196,7 +236,7 @@ describe('SettingsProfilesPage actions', () => {
     vi.mocked(useLoaderData).mockReturnValue({ profiles: mockProfiles });
   });
 
-  it('calls activateProfile when clicking inactive profile card', async () => {
+  it('activates from the card star', async () => {
     const user = userEvent.setup();
     const prodProfile = mockProfiles[1];
     if (!prodProfile) throw new Error('Test setup error: prodProfile not found');
@@ -208,9 +248,9 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Click on the prod profile card (inactive) to activate it
-    const prodCard = screen.getByRole('button', { name: /activate profile prod/i });
-    await user.click(prodCard);
+    // Click the always-visible star on the prod card (inactive) to activate it
+    const star = screen.getByRole('button', { name: /set prod active/i });
+    await user.click(star);
 
     await waitFor(() => {
       expect(settingsApi.activateProfile).toHaveBeenCalledWith('prod');
@@ -272,9 +312,9 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Click on the prod profile card (inactive) to try activating it
-    const prodCard = screen.getByRole('button', { name: /activate profile prod/i });
-    await user.click(prodCard);
+    // Click the star on the prod card (inactive) to try activating it
+    const star = screen.getByRole('button', { name: /set prod active/i });
+    await user.click(star);
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Failed to activate profile');
