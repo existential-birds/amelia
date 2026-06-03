@@ -62,7 +62,7 @@ describe('AgentsSection', () => {
       />
     );
     // The architect driver select is the first combobox.
-    const driverSelect = screen.getAllByRole('combobox')[0];
+    const driverSelect = screen.getAllByRole('combobox')[0]!; // Safe: AgentsSection always renders driver selects
     await user.click(driverSelect);
     await user.click(screen.getByRole('option', { name: /codex/i }));
     expect(onAgentChange).toHaveBeenCalledWith('architect', 'driver', 'codex');
