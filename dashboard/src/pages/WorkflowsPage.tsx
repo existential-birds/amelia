@@ -33,10 +33,6 @@ import type { workflowsLoader } from '@/loaders/workflows';
  * - Top: Workflow header (full width)
  * - Bottom: Job queue
  *
- * The active workflow is determined by priority:
- * 1. Running workflow (status === 'in_progress')
- * 2. Most recently started completed workflow
- *
  * Selection is managed via URL:
  * - /workflows - shows active workflow
  * - /workflows/:id - shows specific workflow
