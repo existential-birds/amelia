@@ -76,9 +76,9 @@ function AgentRow({ agent, config, error, onChange }: AgentRowProps) {
   const colors = AGENT_COLORS[agent.key] ?? { line: 'bg-muted-foreground/40', icon: 'text-muted-foreground' };
 
   return (
-    <div className="group grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-md border border-border/40 bg-card/30 px-3 py-2 transition-all duration-200 hover:border-border/60 hover:bg-card/50">
+    <div className="group grid grid-cols-[1fr_auto_auto] items-start gap-2 rounded-md border border-border/40 bg-card/30 px-3 py-2 transition-all duration-200 hover:border-border/60 hover:bg-card/50">
       {/* Agent icon + name */}
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-h-7 min-w-0 items-center gap-2">
         <div className={cn('h-6 w-0.5 shrink-0 rounded-full', colors.line)} />
         <Icon className={cn('h-4 w-4 shrink-0', colors.icon)} />
         <span className="truncate font-heading text-sm font-medium tracking-wide">{agent.label}</span>
