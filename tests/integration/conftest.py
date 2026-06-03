@@ -635,6 +635,20 @@ DATABASE_URL = os.environ.get(
 )
 
 
+@pytest.fixture(autouse=True)
+def _align_app_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the in-process app config at the integration test database.
+
+    ``ServerConfig`` reads its connection string from ``AMELIA_DATABASE_URL``
+    (env_prefix ``AMELIA_``), but CI only exports ``DATABASE_URL``. Integration
+    tests that boot the real app (e.g. the ``server`` / ``server_with_real_db``
+    fixtures, which run the FastAPI lifespan) would otherwise fall back to the
+    ``localhost:5434/amelia`` default and fail to connect. Aligning the two
+    ensures the booted app and the direct ``test_db`` fixtures share one DB.
+    """
+    monkeypatch.setenv("AMELIA_DATABASE_URL", DATABASE_URL)
+
+
 @pytest.fixture
 async def test_db() -> AsyncGenerator[Database, None]:
     """Create and initialize test database with PostgreSQL."""

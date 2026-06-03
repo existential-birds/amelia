@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getActiveWorkflow, getMostRecentCompleted, formatTokens, formatCost, formatDuration } from '../workflow';
+import { getActiveWorkflow, formatTokens, formatCost, formatDuration } from '../workflow';
 import { createMockWorkflowSummary } from '@/__tests__/fixtures';
 
 describe('getActiveWorkflow', () => {
@@ -12,13 +12,12 @@ describe('getActiveWorkflow', () => {
     expect(getActiveWorkflow(workflows)?.id).toBe('2');
   });
 
-  it('should return most recent completed workflow when no running', () => {
+  it('should return null when only completed workflows exist', () => {
     const workflows = [
       createMockWorkflowSummary({ id: '1', status: 'completed', started_at: '2025-01-01T00:00:00Z' }),
       createMockWorkflowSummary({ id: '2', status: 'completed', started_at: '2025-01-03T00:00:00Z' }),
-      createMockWorkflowSummary({ id: '3', status: 'completed', started_at: '2025-01-02T00:00:00Z' }),
     ];
-    expect(getActiveWorkflow(workflows)?.id).toBe('2');
+    expect(getActiveWorkflow(workflows)).toBeNull();
   });
 
   it('should return null when no workflows exist', () => {
@@ -31,15 +30,6 @@ describe('getActiveWorkflow', () => {
       createMockWorkflowSummary({ id: '2', status: 'in_progress', started_at: '2025-01-01T00:00:00Z' }),
     ];
     expect(getActiveWorkflow(workflows)?.id).toBe('2');
-  });
-
-  it('should sort completed by started_at descending', () => {
-    const workflows = [
-      createMockWorkflowSummary({ id: 'oldest', status: 'completed', started_at: '2024-01-01T00:00:00Z' }),
-      createMockWorkflowSummary({ id: 'newest', status: 'completed', started_at: '2025-06-01T00:00:00Z' }),
-      createMockWorkflowSummary({ id: 'middle', status: 'completed', started_at: '2025-03-01T00:00:00Z' }),
-    ];
-    expect(getActiveWorkflow(workflows)?.id).toBe('newest');
   });
 
   it('should return blocked workflow when no running exists', () => {
@@ -64,17 +54,6 @@ describe('getActiveWorkflow', () => {
       createMockWorkflowSummary({ id: '2', status: 'blocked', started_at: '2025-01-01T00:00:00Z' }),
     ];
     expect(getActiveWorkflow(workflows)?.id).toBe('2');
-  });
-
-  it('should handle null started_at in completed workflows', () => {
-    const workflows = [
-      createMockWorkflowSummary({ id: '1', status: 'completed', started_at: null }),
-      createMockWorkflowSummary({ id: '2', status: 'completed', started_at: '2025-01-01T00:00:00Z' }),
-      createMockWorkflowSummary({ id: '3', status: 'completed', started_at: null }),
-    ];
-    // Should not throw, should return one of them
-    const result = getActiveWorkflow(workflows);
-    expect(result).not.toBeNull();
   });
 
   it('should return most recently started running workflow when multiple are in progress', () => {
@@ -106,48 +85,6 @@ describe('getActiveWorkflow', () => {
     ];
     // Should select the most recent running workflow (running-oldest), not the first in array
     expect(getActiveWorkflow(workflows)?.id).toBe('running-oldest');
-  });
-});
-
-describe('getMostRecentCompleted', () => {
-  it('should return the most recently completed workflow', () => {
-    const workflows = [
-      createMockWorkflowSummary({ id: 'oldest', status: 'completed', started_at: '2025-01-01T00:00:00Z' }),
-      createMockWorkflowSummary({ id: 'newest', status: 'completed', started_at: '2025-01-03T00:00:00Z' }),
-      createMockWorkflowSummary({ id: 'middle', status: 'completed', started_at: '2025-01-02T00:00:00Z' }),
-    ];
-    expect(getMostRecentCompleted(workflows)?.id).toBe('newest');
-  });
-
-  it('should return null when no completed workflows exist', () => {
-    const workflows = [
-      createMockWorkflowSummary({ id: '1', status: 'in_progress' }),
-      createMockWorkflowSummary({ id: '2', status: 'blocked' }),
-    ];
-    expect(getMostRecentCompleted(workflows)).toBeNull();
-  });
-
-  it('should return null for empty array', () => {
-    expect(getMostRecentCompleted([])).toBeNull();
-  });
-
-  it('should ignore non-completed workflows', () => {
-    const workflows = [
-      createMockWorkflowSummary({ id: 'completed', status: 'completed', started_at: '2025-01-01T00:00:00Z' }),
-      createMockWorkflowSummary({ id: 'running', status: 'in_progress', started_at: '2025-01-03T00:00:00Z' }),
-      createMockWorkflowSummary({ id: 'failed', status: 'failed', started_at: '2025-01-02T00:00:00Z' }),
-    ];
-    expect(getMostRecentCompleted(workflows)?.id).toBe('completed');
-  });
-
-  it('should handle workflows with null started_at', () => {
-    const workflows = [
-      createMockWorkflowSummary({ id: '1', status: 'completed', started_at: null }),
-      createMockWorkflowSummary({ id: '2', status: 'completed', started_at: '2025-01-01T00:00:00Z' }),
-    ];
-    // Should return one of them without throwing
-    const result = getMostRecentCompleted(workflows);
-    expect(result).not.toBeNull();
   });
 });
 
