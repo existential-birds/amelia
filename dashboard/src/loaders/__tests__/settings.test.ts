@@ -33,4 +33,11 @@ describe('profileDetailLoader', () => {
     await expect(profileDetailLoader(args({}))).resolves.toEqual({ profile: null });
     expect(getProfile).not.toHaveBeenCalled();
   });
+
+  it('propagates fetch failures for an existing id instead of falling back to create mode', async () => {
+    const error = new Error('not found');
+    vi.mocked(getProfile).mockRejectedValue(error);
+    await expect(profileDetailLoader(args({ id: 'dev' }))).rejects.toThrow('not found');
+    expect(getProfile).toHaveBeenCalledWith('dev');
+  });
 });

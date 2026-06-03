@@ -37,12 +37,14 @@ export async function profilesLoader(): Promise<ProfilesLoaderData> {
  * Loader for the profile detail page (`/settings/profiles/:id` and
  * `/settings/profiles/~new`).
  *
- * Fetches a single profile by id. When no id is present (create mode), or when
- * the API request fails, returns `{ profile: null }` so the page can render a
- * graceful empty/error state rather than tearing down the route entirely.
+ * Fetches a single profile by id. When no id is present, returns
+ * `{ profile: null }` for create mode. When an id is requested but the fetch
+ * fails, the error propagates to the route's error boundary instead of
+ * silently rendering create mode.
  *
  * @param args - React Router loader arguments containing route params.
- * @returns Object containing the profile, or `null` in create mode or on error.
+ * @returns Object containing the profile, or `null` in create mode.
+ * @throws {Error} When an id is requested but the API request fails.
  * @example
  * ```typescript
  * const { profile } = await profileDetailLoader({ params: { id: 'work' }, request });
@@ -54,12 +56,7 @@ export async function profileDetailLoader({
   if (!params.id) {
     return { profile: null };
   }
-  try {
-    return { profile: await getProfile(params.id) };
-  } catch (err) {
-    console.warn('profileDetailLoader: failed to fetch profile', params.id, err);
-    return { profile: null };
-  }
+  return { profile: await getProfile(params.id) };
 }
 
 /**

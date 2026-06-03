@@ -43,10 +43,13 @@ export function SectionRail({ sections, active, onSelect, errorSections }: Secti
           >
             {label}
             {hasError && (
-              <span
-                aria-hidden="true"
-                className="h-1.5 w-1.5 rounded-full bg-destructive md:ml-auto"
-              />
+              <>
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 rounded-full bg-destructive md:ml-auto"
+                />
+                <span className="sr-only">(has errors)</span>
+              </>
             )}
           </button>
         );

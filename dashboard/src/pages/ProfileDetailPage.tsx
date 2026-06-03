@@ -9,7 +9,7 @@
  * the browser's native prompt (a custom dialog is impossible there by design).
  */
 import { useEffect, useState } from 'react';
-import { useBlocker, useLoaderData, useNavigate } from 'react-router-dom';
+import { useBlocker, useLoaderData, useNavigate, useRevalidator } from 'react-router-dom';
 import { Cpu, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -50,6 +50,7 @@ export default function ProfileDetailPage() {
   const isEditMode = profile !== null;
   const form = useProfileForm(profile);
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
 
   const [activeSection, setActiveSection] = useState<SectionId>('identity');
   const [isSaving, setIsSaving] = useState(false);
@@ -102,6 +103,7 @@ export default function ProfileDetailPage() {
     try {
       await activateProfile(profile.id);
       toast.success(`Profile "${profile.id}" is now active`);
+      revalidator.revalidate();
     } catch {
       toast.error('Failed to activate profile');
     }
