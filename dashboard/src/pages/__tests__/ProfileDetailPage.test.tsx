@@ -204,3 +204,44 @@ describe('ProfileDetailPage save flow', () => {
     );
   });
 });
+
+describe('ProfileDetailPage dirty-change guard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useModelsStore).mockImplementation(makeMockModelsStore());
+  });
+
+  it('prompts before leaving with unsaved changes and stays on cancel', async () => {
+    const user = userEvent.setup();
+    renderPage(createMockProfile({ id: 'dev', repo_root: '/r' }), '/settings/profiles/dev');
+
+    const repo = await screen.findByRole('textbox', { name: /repository root/i });
+    await user.type(repo, 'X'); // dirty
+    await user.click(screen.getByRole('button', { name: /cancel/i })); // attempts nav to list
+
+    expect(await screen.findByText(/unsaved changes/i)).toBeInTheDocument(); // in-app AlertDialog
+    await user.click(screen.getByRole('button', { name: /keep editing/i }));
+    expect(screen.queryByText('LIST')).not.toBeInTheDocument(); // stayed
+  });
+
+  it('discards and navigates when Discard is chosen', async () => {
+    const user = userEvent.setup();
+    renderPage(createMockProfile({ id: 'dev', repo_root: '/r' }), '/settings/profiles/dev');
+
+    const repo = await screen.findByRole('textbox', { name: /repository root/i });
+    await user.type(repo, 'X'); // dirty
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+
+    expect(await screen.findByText(/unsaved changes/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /discard/i }));
+    expect(await screen.findByText('LIST')).toBeInTheDocument(); // navigated
+  });
+
+  it('does not prompt when the form is clean', async () => {
+    const user = userEvent.setup();
+    renderPage(createMockProfile({ id: 'dev' }), '/settings/profiles/dev');
+
+    await user.click(await screen.findByRole('button', { name: /cancel/i }));
+    expect(await screen.findByText('LIST')).toBeInTheDocument(); // navigated, no prompt
+  });
+});

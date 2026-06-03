@@ -3,14 +3,25 @@
  *
  * Shared by `/settings/profiles/new` (create) and `/settings/profiles/:id`
  * (edit). Owns a `useProfileForm` hook and composes the four configuration
- * sections behind a `SectionRail`. The save flow, navigation, and the
- * dirty-change guard are wired in later tasks; here the Save button validates
- * only, keeping the shell (header, rail, sections, set-active) in place.
+ * sections behind a `SectionRail`. A `useBlocker`-based dirty guard intercepts
+ * in-app navigation away from an unsaved form and resolves it through the app's
+ * `AlertDialog`; a `beforeunload` handler covers hard reload / tab-close with
+ * the browser's native prompt (a custom dialog is impossible there by design).
  */
-import { useEffect, useState } from 'react';
-import { useLoaderData, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useBlocker, useLoaderData, useNavigate } from 'react-router-dom';
 import { Cpu, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useProfileForm } from '@/components/settings/profile-form/useProfileForm';
 import { IdentitySection } from '@/components/settings/profile-form/IdentitySection';
 import { AgentsSection } from '@/components/settings/profile-form/AgentsSection';
@@ -53,6 +64,30 @@ export default function ProfileDetailPage() {
     setJumpToError(false);
   }, [jumpToError, form.sectionErrors]);
 
+  // Set right before the post-save navigation so the blocker lets it through:
+  // the form is still technically dirty (the hook keeps no post-save snapshot),
+  // but a successful save is an intentional, confirmed exit.
+  const justSavedRef = useRef(false);
+
+  // Intercept in-app navigation away from a dirty form.
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      form.isDirty &&
+      !justSavedRef.current &&
+      currentLocation.pathname !== nextLocation.pathname
+  );
+
+  // Hard reload / tab-close can only trigger the browser's native prompt.
+  useEffect(() => {
+    if (!form.isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [form.isDirty]);
+
   const handleActivate = async () => {
     if (!profile) return;
     try {
@@ -80,6 +115,7 @@ export default function ProfileDetailPage() {
         await createProfile(form.toCreatePayload());
         toast.success('Profile created');
       }
+      justSavedRef.current = true;
       navigate('/settings/profiles');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save profile');
@@ -112,7 +148,11 @@ export default function ProfileDetailPage() {
               {profile.is_active ? 'Active' : 'Set active'}
             </Button>
           )}
-          <Button type="button" variant="outline">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate('/settings/profiles')}
+          >
             Cancel
           </Button>
           <Button
@@ -168,6 +208,26 @@ export default function ProfileDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Unsaved-changes guard for in-app navigation */}
+      <AlertDialog open={blocker.state === 'blocked'}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard your edits?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. If you leave this page, your edits will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => blocker.reset?.()}>
+              Keep editing
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => blocker.proceed?.()}>
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
