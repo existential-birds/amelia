@@ -7,8 +7,8 @@
  * dirty-change guard are wired in later tasks; here the Save button validates
  * only, keeping the shell (header, rail, sections, set-active) in place.
  */
-import { useState } from 'react';
-import { useLoaderData } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLoaderData, useNavigate } from 'react-router-dom';
 import { Cpu, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProfileForm } from '@/components/settings/profile-form/useProfileForm';
@@ -18,7 +18,7 @@ import { SandboxSection } from '@/components/settings/profile-form/SandboxSectio
 import { AutoFixSection } from '@/components/settings/profile-form/AutoFixSection';
 import { SectionRail } from '@/components/settings/profile-form/SectionRail';
 import type { SectionId } from '@/components/settings/profile-form/types';
-import { activateProfile } from '@/api/settings';
+import { activateProfile, createProfile, updateProfile } from '@/api/settings';
 import { profileDetailLoader } from '@/loaders';
 import * as toast from '@/components/Toast';
 
@@ -38,8 +38,20 @@ export default function ProfileDetailPage() {
   const { profile } = useLoaderData<typeof profileDetailLoader>();
   const isEditMode = profile !== null;
   const form = useProfileForm(profile);
+  const navigate = useNavigate();
 
   const [activeSection, setActiveSection] = useState<SectionId>('identity');
+  const [isSaving, setIsSaving] = useState(false);
+  // Set when a Save attempt fails validation; the effect below jumps to the
+  // first section with an error once `sectionErrors` has refreshed.
+  const [jumpToError, setJumpToError] = useState(false);
+
+  useEffect(() => {
+    if (!jumpToError) return;
+    const firstErrorSection = SECTIONS.find((s) => form.sectionErrors[s.id]);
+    if (firstErrorSection) setActiveSection(firstErrorSection.id);
+    setJumpToError(false);
+  }, [jumpToError, form.sectionErrors]);
 
   const handleActivate = async () => {
     if (!profile) return;
@@ -51,9 +63,29 @@ export default function ProfileDetailPage() {
     }
   };
 
-  // Save flow (API call + navigation) is wired in Task 9; validate only for now.
-  const handleSave = () => {
-    form.validate();
+  const handleSave = async () => {
+    // On validation failure, surface the rail error flags and jump to the first
+    // section with an error — never touch the API.
+    if (!form.validate()) {
+      setJumpToError(true);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      if (isEditMode) {
+        await updateProfile(profile.id, form.toUpdatePayload());
+        toast.success('Profile updated');
+      } else {
+        await createProfile(form.toCreatePayload());
+        toast.success('Profile created');
+      }
+      navigate('/settings/profiles');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save profile');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -83,7 +115,12 @@ export default function ProfileDetailPage() {
           <Button type="button" variant="outline">
             Cancel
           </Button>
-          <Button type="button" onClick={handleSave} className="min-w-[120px]">
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="min-w-[120px]"
+          >
             {isEditMode ? 'Save Changes' : 'Create Profile'}
           </Button>
         </div>
