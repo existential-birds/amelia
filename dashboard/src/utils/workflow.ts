@@ -76,7 +76,6 @@ function sortByStartTimeDesc(a: WorkflowSummary, b: WorkflowSummary): number {
  * 1. Most recently started running workflow (status === 'in_progress')
  * 2. Most recently started blocked workflow (status === 'blocked')
  * 3. Most recently created pending workflow
- * 4. Most recently started completed workflow
  *
  * @param workflows - List of workflow summaries
  * @returns The active workflow or null if none exist
@@ -100,29 +99,7 @@ export function getActiveWorkflow(workflows: WorkflowSummary[]): WorkflowSummary
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   if (pending[0]) return pending[0];
 
-  // Priority 4: Most recently started completed workflow
-  const completed = workflows
-    .filter(w => w.status === 'completed')
-    .sort(sortByStartTimeDesc);
-
-  return completed[0] ?? null;
-}
-
-/**
- * Gets the most recently completed workflow from a list.
- *
- * Used to keep a completed workflow visible in the active workflows view
- * so the canvas doesn't immediately clear when a workflow finishes.
- *
- * @param workflows - List of workflow summaries (typically from history)
- * @returns The most recently completed workflow or null if none exist
- */
-export function getMostRecentCompleted(workflows: WorkflowSummary[]): WorkflowSummary | null {
-  const completed = workflows
-    .filter(w => w.status === 'completed')
-    .sort(sortByStartTimeDesc);
-
-  return completed[0] ?? null;
+  return null;
 }
 
 /**
