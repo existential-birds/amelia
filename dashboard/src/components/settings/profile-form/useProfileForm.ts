@@ -3,7 +3,7 @@
  *
  * Owns nested form state, validation, dirty tracking, and the API-payload
  * builders. The payload builders (`toCreatePayload`/`toUpdatePayload`) reproduce
- * the old `ProfileEditModal` payloads byte-for-byte — including the
+ * the old profile modal's payloads byte-for-byte — including the
  * network-only-in-container and daytona-only-in-daytona omission logic, and the
  * create/update field sets. The only structural change from the modal is that
  * the eleven flat `sandbox_*` fields are grouped under `formData.sandbox`.

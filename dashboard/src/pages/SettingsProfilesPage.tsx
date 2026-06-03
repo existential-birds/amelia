@@ -7,7 +7,7 @@
  * - Responsive layout for mobile devices
  */
 import { useState } from 'react';
-import { useLoaderData, useRevalidator } from 'react-router-dom';
+import { useLoaderData, useRevalidator, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,7 +35,6 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { ProfileCard } from '@/components/settings/ProfileCard';
-import { ProfileEditModal } from '@/components/settings/ProfileEditModal';
 import { deleteProfile, activateProfile } from '@/api/settings';
 import type { Profile } from '@/api/settings';
 import * as toast from '@/components/Toast';
@@ -181,11 +180,10 @@ function NoResults({ onClearFilters }: { onClearFilters: () => void }) {
 export default function SettingsProfilesPage() {
   const { profiles } = useLoaderData() as LoaderData;
   const { revalidate } = useRevalidator();
+  const navigate = useNavigate();
 
   const [search, setSearch] = useState('');
   const [driverFilter, setDriverFilter] = useState<DriverFilter>('all');
-  const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [deletingProfile, setDeletingProfile] = useState<Profile | null>(null);
 
   /**
@@ -224,9 +222,8 @@ export default function SettingsProfilesPage() {
     return a.id.localeCompare(b.id);
   });
 
-  const handleEdit = (profile: Profile) => {
-    setEditingProfile(profile);
-    setIsModalOpen(true);
+  const handleConfigure = (profile: Profile) => {
+    navigate(`/settings/profiles/${profile.id}`);
   };
 
   const handleDeleteRequest = (profile: Profile) => {
@@ -257,8 +254,7 @@ export default function SettingsProfilesPage() {
   };
 
   const handleCreateClick = () => {
-    setEditingProfile(null);
-    setIsModalOpen(true);
+    navigate('/settings/profiles/new');
   };
 
   const handleClearFilters = () => {
@@ -271,12 +267,6 @@ export default function SettingsProfilesPage() {
     return (
       <div className="container mx-auto py-6 px-4">
         <EmptyState onCreateClick={handleCreateClick} />
-        <ProfileEditModal
-          open={isModalOpen}
-          onOpenChange={setIsModalOpen}
-          profile={editingProfile}
-          onSaved={revalidate}
-        />
       </div>
     );
   }
@@ -345,7 +335,7 @@ export default function SettingsProfilesPage() {
               <ProfileCard
                 key={profile.id}
                 profile={profile}
-                onEdit={handleEdit}
+                onConfigure={handleConfigure}
                 onDelete={handleDeleteRequest}
                 onActivate={handleActivate}
               />
@@ -353,14 +343,6 @@ export default function SettingsProfilesPage() {
           </AnimatePresence>
         </div>
       )}
-
-      {/* Edit Modal */}
-      <ProfileEditModal
-        open={isModalOpen}
-        onOpenChange={setIsModalOpen}
-        profile={editingProfile}
-        onSaved={revalidate}
-      />
 
       {/* Delete Confirmation */}
       <AlertDialog open={deletingProfile !== null} onOpenChange={(open) => !open && setDeletingProfile(null)}>
