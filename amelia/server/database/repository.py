@@ -19,15 +19,6 @@ from amelia.server.models.state import (
 from amelia.server.models.tokens import TokenSummary, TokenUsage
 
 
-# Precedence for concurrent terminal-vs-terminal race resolution. COMPLETED is the
-# highest-ranked terminal because it reflects real side effects and must never be
-# lost (#604): a completion always overrides a concurrent cancellation. This is NOT
-# a transition map and must not be used to bypass validate_transition for
-# non-terminal sources; it only governs which terminal wins when the locked row is
-# already terminal.
-_TERMINAL_RANK = {WorkflowStatus.CANCELLED: 1, WorkflowStatus.COMPLETED: 2}
-
-
 class WorkflowRepository:
     """Repository for workflow CRUD operations.
 
@@ -229,13 +220,11 @@ class WorkflowRepository:
         Atomic: reads the current status under a ``SELECT … FOR UPDATE`` row lock
         inside a transaction, so concurrent transitions can never corrupt the row.
 
-        Terminal precedence (#604): when the locked row is already terminal, the
-        new status is applied only if it is a strictly-higher-ranked terminal
-        (COMPLETED rank 2 > CANCELLED rank 1) — so a completion overrides a
-        concurrent cancellation. Any other transition against a terminal row (a
-        duplicate terminal, a lower-ranked terminal, or any non-terminal target)
-        is absorbed as a no-op. Non-terminal source rows go through the usual
-        ``validate_transition`` state-machine check.
+        Terminal precedence (#604): a completion overrides a concurrent
+        cancellation (``CANCELLED`` → ``COMPLETED``). A terminal row is otherwise
+        immutable — any other transition against it (a duplicate terminal or a
+        non-terminal target) is absorbed as a no-op. Non-terminal source rows go
+        through the usual ``validate_transition`` state-machine check.
 
         Args:
             workflow_id: Workflow to update.
@@ -256,13 +245,13 @@ class WorkflowRepository:
 
             current = WorkflowStatus(row["status"])
 
-            if current in _TERMINAL_RANK:
-                # Terminal source: only a strictly-higher-ranked terminal overrides;
-                # everything else is absorbed as a no-op.
-                if _TERMINAL_RANK.get(new_status, 0) <= _TERMINAL_RANK[current]:
-                    return
+            # Resolve against the locked status, in priority order:
+            if current == WorkflowStatus.CANCELLED and new_status == WorkflowStatus.COMPLETED:
+                pass  # a completion overrides a concurrent cancellation (#604) — apply it
+            elif current in (WorkflowStatus.COMPLETED, WorkflowStatus.CANCELLED):
+                return  # terminal row is otherwise immutable — absorb as a no-op
             else:
-                validate_transition(current, new_status)
+                validate_transition(current, new_status)  # non-terminal: state machine rules
 
             # Set completed_at for terminal states
             completed_at = None
