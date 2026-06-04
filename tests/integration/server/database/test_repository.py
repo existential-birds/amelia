@@ -7,10 +7,12 @@ from uuid import uuid4
 import pytest
 
 from amelia.server.database.repository import WorkflowRepository
+from amelia.server.exceptions import WorkflowNotFoundError
 from amelia.server.models import EventType
 from amelia.server.models.events import EventLevel, WorkflowEvent
 from amelia.server.models.state import (
     InvalidStateTransitionError,
+    PlanCache,
     ServerExecutionState,
     WorkflowStatus,
 )
@@ -591,6 +593,23 @@ class TestWorkflowRepository:
 
         with pytest.raises(WorkflowNotFoundError):
             await repository.update_plan_cache(uuid4(), plan_cache)
+
+    async def test_update_plan_cache_persists(self, repository) -> None:
+        """update_plan_cache writes the cache for an existing workflow."""
+        state = ServerExecutionState(
+            id=uuid4(), issue_id="ISSUE-PC", worktree_path="/p",
+        )
+        await repository.create(state)
+
+        await repository.update_plan_cache(state.id, PlanCache(goal="cache me"))
+
+        final = await repository.get(state.id)
+        assert final.plan_cache is not None
+
+    async def test_update_plan_cache_missing_workflow_raises(self, repository) -> None:
+        """update_plan_cache raises WorkflowNotFoundError for an unknown id (never a silent no-op)."""
+        with pytest.raises(WorkflowNotFoundError):
+            await repository.update_plan_cache(uuid4(), PlanCache(goal="cache me"))
 
     async def test_create_workflow_writes_new_columns(self, repository) -> None:
         """create() dual-writes to new columns (workflow_type, profile_id, plan_cache)."""

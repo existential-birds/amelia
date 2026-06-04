@@ -301,17 +301,12 @@ class WorkflowRepository:
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist.
         """
-        result = await self._db.fetch_one(
-            "SELECT id FROM workflows WHERE id = $1",
-            workflow_id,
-        )
-        if result is None:
-            raise WorkflowNotFoundError(workflow_id)
-
-        await self._db.execute(
+        rows_affected = await self._db.execute(
             "UPDATE workflows SET plan_cache = $1 WHERE id = $2",
             plan_cache.model_dump(), workflow_id,
         )
+        if rows_affected == 0:
+            raise WorkflowNotFoundError(workflow_id)
 
     async def list_active(
         self, worktree_path: str | None = None
