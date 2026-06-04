@@ -19,6 +19,15 @@ from amelia.server.models.state import (
 from amelia.server.models.tokens import TokenSummary, TokenUsage
 
 
+# Precedence for concurrent terminal-vs-terminal race resolution. COMPLETED is the
+# highest-ranked terminal because it reflects real side effects and must never be
+# lost (#604): a completion always overrides a concurrent cancellation. This is NOT
+# a transition map and must not be used to bypass validate_transition for
+# non-terminal sources; it only governs which terminal wins when the locked row is
+# already terminal.
+_TERMINAL_RANK = {WorkflowStatus.CANCELLED: 1, WorkflowStatus.COMPLETED: 2}
+
+
 class WorkflowRepository:
     """Repository for workflow CRUD operations.
 
@@ -217,6 +226,17 @@ class WorkflowRepository:
     ) -> None:
         """Update workflow status with state machine validation.
 
+        Atomic: reads the current status under a ``SELECT … FOR UPDATE`` row lock
+        inside a transaction, so concurrent transitions can never corrupt the row.
+
+        Terminal precedence (#604): when the locked row is already terminal, the
+        new status is applied only if it is a strictly-higher-ranked terminal
+        (COMPLETED rank 2 > CANCELLED rank 1) — so a completion overrides a
+        concurrent cancellation. Any other transition against a terminal row (a
+        duplicate terminal, a lower-ranked terminal, or any non-terminal target)
+        is absorbed as a no-op. Non-terminal source rows go through the usual
+        ``validate_transition`` state-machine check.
+
         Args:
             workflow_id: Workflow to update.
             new_status: Target status.
@@ -224,32 +244,44 @@ class WorkflowRepository:
 
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist.
-            InvalidStateTransitionError: If transition is invalid.
+            InvalidStateTransitionError: If a non-terminal transition is invalid.
         """
-        workflow = await self.get(workflow_id)
-        if workflow is None:
-            raise WorkflowNotFoundError(workflow_id)
+        async with self._db.transaction() as conn:
+            row = await conn.fetchrow(
+                "SELECT status FROM workflows WHERE id = $1 FOR UPDATE",
+                workflow_id,
+            )
+            if row is None:
+                raise WorkflowNotFoundError(workflow_id)
 
-        validate_transition(workflow.workflow_status, new_status)
+            current = WorkflowStatus(row["status"])
 
-        # Set completed_at for terminal states
-        completed_at = None
-        if new_status in (WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED):
-            completed_at = datetime.now(UTC)
+            if current in _TERMINAL_RANK:
+                # Terminal source: only a strictly-higher-ranked terminal overrides;
+                # everything else is absorbed as a no-op.
+                if _TERMINAL_RANK.get(new_status, 0) <= _TERMINAL_RANK[current]:
+                    return
+            else:
+                validate_transition(current, new_status)
 
-        await self._db.execute(
-            """
-            UPDATE workflows SET
-                status = $1,
-                completed_at = $2,
-                failure_reason = $3
-            WHERE id = $4
-            """,
-            new_status,
-            completed_at,
-            failure_reason,
-            workflow_id,
-        )
+            # Set completed_at for terminal states
+            completed_at = None
+            if new_status in (WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED):
+                completed_at = datetime.now(UTC)
+
+            await conn.execute(
+                """
+                UPDATE workflows SET
+                    status = $1,
+                    completed_at = $2,
+                    failure_reason = $3
+                WHERE id = $4
+                """,
+                new_status,
+                completed_at,
+                failure_reason,
+                workflow_id,
+            )
 
     async def update_plan_cache(
         self,

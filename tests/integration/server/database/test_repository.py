@@ -1,5 +1,6 @@
 """Tests for WorkflowRepository."""
 
+import asyncio
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -11,6 +12,7 @@ from amelia.server.models.events import EventLevel, WorkflowEvent
 from amelia.server.models.state import (
     InvalidStateTransitionError,
     ServerExecutionState,
+    WorkflowStatus,
 )
 
 
@@ -183,6 +185,87 @@ class TestWorkflowRepository:
         retrieved = await repository.get(state.id)
         assert retrieved.workflow_status == "failed"
         assert retrieved.failure_reason == "Something went wrong"
+
+    async def test_set_status_noop_on_terminal_workflow(self, repository) -> None:
+        """A completed row absorbs a lower-precedence transition as a no-op."""
+        state = ServerExecutionState(
+            id=uuid4(), issue_id="ISSUE-DONE",
+            worktree_path="/p", workflow_status="in_progress",
+        )
+        await repository.create(state)
+        await repository.set_status(state.id, "completed")
+        snapshot = await repository.get(state.id)
+
+        # cancelled (rank 1) cannot override completed (rank 2): no-op.
+        await repository.set_status(state.id, "cancelled")
+
+        final = await repository.get(state.id)
+        assert final.workflow_status == WorkflowStatus.COMPLETED
+        assert final.completed_at == snapshot.completed_at
+
+    async def test_set_status_completion_overrides_cancellation(self, repository) -> None:
+        """COMPLETED (rank 2) overrides a CANCELLED (rank 1) row (terminal precedence)."""
+        state = ServerExecutionState(
+            id=uuid4(), issue_id="ISSUE-OVERRIDE",
+            worktree_path="/p", workflow_status="in_progress",
+        )
+        await repository.create(state)
+        await repository.set_status(state.id, "cancelled")
+
+        # Pre-fix this raises InvalidStateTransitionError; post-fix completion wins.
+        await repository.set_status(state.id, "completed")
+
+        final = await repository.get(state.id)
+        assert final.workflow_status == WorkflowStatus.COMPLETED
+        assert final.completed_at is not None
+
+    async def test_set_status_concurrent_complete_vs_cancel(self, repository) -> None:
+        """Concurrent complete+cancel on one workflow always resolves to completed.
+
+        Pre-fix (non-atomic read+validate+write) the last UPDATE wins, so the row
+        can silently end 'cancelled', losing the completion. Atomic FOR UPDATE +
+        terminal precedence (COMPLETED rank 2 > CANCELLED rank 1) make 'completed'
+        win regardless of lock order. Neither call raises (cancel from in_progress
+        is legal; the losing call is absorbed/overridden).
+        """
+        for _ in range(20):
+            state = ServerExecutionState(
+                id=uuid4(), issue_id="ISSUE-RACE",
+                worktree_path="/p", workflow_status="in_progress",
+            )
+            await repository.create(state)
+
+            await asyncio.gather(
+                repository.set_status(state.id, "completed"),
+                repository.set_status(state.id, "cancelled"),
+            )
+
+            final = await repository.get(state.id)
+            assert final.workflow_status == WorkflowStatus.COMPLETED
+            assert final.completed_at is not None
+
+    async def test_set_status_concurrent_cancel_vs_blocked(self, repository) -> None:
+        """Concurrent cancel+block always resolves to cancelled, never raises.
+
+        If cancel locks first the row is terminal and absorbs the block (rank 0);
+        if block locks first, cancel is a legal BLOCKED->CANCELLED transition.
+        Either lock order -> cancelled, deterministically (spec should-have #5,
+        the 'ideally cancel-vs-blocked' shape).
+        """
+        for _ in range(20):
+            state = ServerExecutionState(
+                id=uuid4(), issue_id="ISSUE-RACE-CB",
+                worktree_path="/p", workflow_status="in_progress",
+            )
+            await repository.create(state)
+
+            await asyncio.gather(
+                repository.set_status(state.id, "cancelled"),
+                repository.set_status(state.id, "blocked"),
+            )
+
+            final = await repository.get(state.id)
+            assert final.workflow_status == WorkflowStatus.CANCELLED
 
     async def test_list_active_workflows(self, repository) -> None:
         """Can list all active workflows."""
