@@ -223,6 +223,16 @@ class Database:
             asyncpg.Connection: The connection with an active transaction.
 
         Commits on success, rolls back on exception.
+
+        Isolation level: asyncpg defaults to **Read Committed** (PostgreSQL's
+        default).  The ``set_status`` override logic in the repository layer
+        depends on this level — it relies on ``SELECT … FOR UPDATE`` acquiring
+        a row lock without the non-repeatable-read protection that Repeatable
+        Read / Serializable would add, and the CANCELLED→COMPLETED precedence
+        rule is designed around that behaviour.  Do not change the isolation
+        level here without auditing ``repository.set_status`` first.
         """
+        # Isolation is intentionally left at asyncpg's default (Read Committed).
+        # See the docstring above before changing this.
         async with self.pool.acquire() as conn, conn.transaction():
             yield conn

@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import asyncpg
+from loguru import logger
 
 from amelia.server.database.connection import Database, in_clause_placeholders
 from amelia.server.exceptions import WorkflowNotFoundError
@@ -221,10 +222,20 @@ class WorkflowRepository:
         inside a transaction, so concurrent transitions can never corrupt the row.
 
         Terminal precedence (#604): a completion overrides a concurrent
-        cancellation (``CANCELLED`` → ``COMPLETED``). A terminal row is otherwise
-        immutable — any other transition against it (a duplicate terminal or a
-        non-terminal target) is absorbed as a no-op. Non-terminal source rows go
-        through the usual ``validate_transition`` state-machine check.
+        cancellation (``CANCELLED`` → ``COMPLETED``). An immutable terminal row
+        (``COMPLETED`` or ``CANCELLED``) is otherwise frozen — any other
+        transition against it is absorbed as a no-op. ``FAILED`` is *not*
+        immutable: ``VALID_TRANSITIONS[FAILED] = {IN_PROGRESS}`` (resumable via
+        recovery — see the orchestrator resume path), so ``FAILED`` rows and all
+        non-terminal source rows go through the usual ``validate_transition``
+        state-machine check (a duplicate ``FAILED`` therefore raises rather than
+        being absorbed).
+
+        Silent absorption note: if the row is already in an immutable terminal
+        state and the caller supplies a ``failure_reason`` that will be dropped by
+        the no-op, a ``WARNING`` is emitted so the lost diagnostic is visible in
+        logs; no exception is raised. Callers that must guarantee failure
+        diagnostics are persisted should check the current status first.
 
         Args:
             workflow_id: Workflow to update.
@@ -249,7 +260,17 @@ class WorkflowRepository:
             if current == WorkflowStatus.CANCELLED and new_status == WorkflowStatus.COMPLETED:
                 pass  # a completion overrides a concurrent cancellation (#604) — apply it
             elif current in (WorkflowStatus.COMPLETED, WorkflowStatus.CANCELLED):
-                return  # terminal row is otherwise immutable — absorb as a no-op
+                # Terminal row is otherwise immutable — absorb as a no-op. Surface
+                # any diagnostic that the no-op would silently discard.
+                if failure_reason is not None:
+                    logger.warning(
+                        "status update absorbed (workflow already terminal); failure_reason dropped",
+                        workflow_id=workflow_id,
+                        current_status=current,
+                        new_status=new_status,
+                        failure_reason=failure_reason,
+                    )
+                return
             else:
                 validate_transition(current, new_status)  # non-terminal: state machine rules
 
