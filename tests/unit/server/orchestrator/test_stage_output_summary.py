@@ -6,6 +6,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from amelia.server.orchestrator.event_emitter import summarize_stage_output
+
+# TestEmissionPathsSummarize still exercises the orchestrator/old path via
+# _summarize_stage_output; Task 2 migrates those calls. Keep the alias resolving.
 from amelia.server.orchestrator.service import _summarize_stage_output
 
 
@@ -14,24 +18,24 @@ if TYPE_CHECKING:
 
 
 class TestSummarizeStageOutput:
-    """Tests for the _summarize_stage_output helper."""
+    """Tests for the summarize_stage_output helper."""
 
     def test_none_output_returns_none(self) -> None:
-        assert _summarize_stage_output(None) is None
+        assert summarize_stage_output(None) is None
 
     def test_empty_dict_returns_empty_dict(self) -> None:
-        assert _summarize_stage_output({}) == {}
+        assert summarize_stage_output({}) == {}
 
     def test_tool_calls_replaced_with_count(self) -> None:
         output = {"tool_calls": [{"id": "1"}, {"id": "2"}, {"id": "3"}]}
-        result = _summarize_stage_output(output)
+        result = summarize_stage_output(output)
         assert result is not None
         assert "tool_calls" not in result
         assert result["tool_calls_count"] == 3
 
     def test_tool_results_replaced_with_count(self) -> None:
         output = {"tool_results": [{"output": "a"}, {"output": "b"}]}
-        result = _summarize_stage_output(output)
+        result = summarize_stage_output(output)
         assert result is not None
         assert "tool_results" not in result
         assert result["tool_results_count"] == 2
@@ -39,7 +43,7 @@ class TestSummarizeStageOutput:
     def test_long_strings_truncated(self) -> None:
         long_string = "x" * 600
         output = {"final_response": long_string}
-        result = _summarize_stage_output(output)
+        result = summarize_stage_output(output)
         assert result is not None
         assert len(result["final_response"]) < len(long_string)
         assert result["final_response"].endswith("… [truncated]")
@@ -47,13 +51,13 @@ class TestSummarizeStageOutput:
 
     def test_short_strings_preserved(self) -> None:
         output = {"final_response": "short answer"}
-        result = _summarize_stage_output(output)
+        result = summarize_stage_output(output)
         assert result is not None
         assert result["final_response"] == "short answer"
 
     def test_string_at_boundary_preserved(self) -> None:
         output = {"msg": "x" * 500}
-        result = _summarize_stage_output(output)
+        result = summarize_stage_output(output)
         assert result is not None
         assert result["msg"] == "x" * 500
 
@@ -64,7 +68,7 @@ class TestSummarizeStageOutput:
             "is_approved": True,
             "error": None,
         }
-        result = _summarize_stage_output(output)
+        result = summarize_stage_output(output)
         assert result == output
 
     def test_developer_node_realistic_output(self) -> None:
@@ -76,7 +80,7 @@ class TestSummarizeStageOutput:
             "tool_calls": [{"id": str(i)} for i in range(163_000)],
             "tool_results": [{"output": f"result-{i}"} for i in range(163_000)],
         }
-        result = _summarize_stage_output(output)
+        result = summarize_stage_output(output)
         assert result is not None
         assert result["agentic_status"] == "completed"
         assert result["error"] is None
@@ -94,7 +98,7 @@ class TestSummarizeStageOutput:
             "tool_calls": [{"id": "1"}],
             "tool_results": [{"output": "r1"}],
         }
-        result = _summarize_stage_output(output)
+        result = summarize_stage_output(output)
         assert result is not None
         assert result["plan_markdown"].endswith("… [truncated]")
         assert result["architect_error"] is None
@@ -109,7 +113,7 @@ class TestSummarizeStageOutput:
                 "short_field": "short",
             },
         }
-        result = _summarize_stage_output(output)
+        result = summarize_stage_output(output)
         assert result is not None
         assert result["metadata"]["description"].endswith("… [truncated]")
         assert len(result["metadata"]["description"]) == 500 + len("… [truncated]")
@@ -120,7 +124,7 @@ class TestSummarizeStageOutput:
         output = {
             "messages": ["x" * 600, "short", "y" * 700],
         }
-        result = _summarize_stage_output(output)
+        result = summarize_stage_output(output)
         assert result is not None
         assert result["messages"][0].endswith("… [truncated]")
         assert result["messages"][1] == "short"
@@ -135,7 +139,7 @@ class TestSummarizeStageOutput:
                 },
             },
         }
-        result = _summarize_stage_output(output)
+        result = summarize_stage_output(output)
         assert result is not None
         assert result["level1"]["level2"]["level3"][0].endswith("… [truncated]")
         assert result["level1"]["level2"]["level3"][1]["level4"].endswith("… [truncated]")
@@ -148,7 +152,7 @@ class TestSummarizeStageOutput:
                 {"content": "short", "id": "2"},
             ],
         }
-        result = _summarize_stage_output(output)
+        result = summarize_stage_output(output)
         assert result is not None
         assert result["results"][0]["content"].endswith("… [truncated]")
         assert result["results"][0]["id"] == "1"

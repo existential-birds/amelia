@@ -122,18 +122,13 @@ class TestStreamModeTaskEvents:
         self, mock_repository, mock_event_bus
     ):
         """Interrupts in updates mode should still be detected."""
-        from amelia.server.orchestrator.service import OrchestratorService
-
-        service = OrchestratorService(
-            repository=mock_repository,
-            event_bus=mock_event_bus,
-        )
+        from amelia.server.orchestrator.event_emitter import is_interrupt_chunk
 
         # Simulate interrupt chunk
         chunk = ("updates", {"__interrupt__": ({"value": "test"},)})
 
         # The interrupt should be detected
-        is_interrupt = service._is_interrupt_chunk(chunk)
+        is_interrupt = is_interrupt_chunk(chunk)
         assert is_interrupt is True
 
     @pytest.mark.asyncio
@@ -141,20 +136,15 @@ class TestStreamModeTaskEvents:
         self, mock_repository, mock_event_bus
     ):
         """Regular updates should not be flagged as interrupts."""
-        from amelia.server.orchestrator.service import OrchestratorService
-
-        service = OrchestratorService(
-            repository=mock_repository,
-            event_bus=mock_event_bus,
-        )
+        from amelia.server.orchestrator.event_emitter import is_interrupt_chunk
 
         # Regular update chunk
         chunk = ("updates", {"architect_node": {"goal": "Test"}})
-        assert service._is_interrupt_chunk(chunk) is False
+        assert is_interrupt_chunk(chunk) is False
 
         # Tasks chunk
         chunk = ("tasks", {"id": "t1", "name": "architect_node"})
-        assert service._is_interrupt_chunk(chunk) is False
+        assert is_interrupt_chunk(chunk) is False
 
 
 class TestTaskStartedEvents:

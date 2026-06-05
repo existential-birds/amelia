@@ -52,18 +52,18 @@ from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.requests import BatchStartRequest, CreateWorkflowRequest
 from amelia.server.models.responses import BatchStartResponse
 from amelia.server.models.state import PlanCache, WorkflowStatus, WorkflowType
+from amelia.server.orchestrator.event_emitter import (
+    STAGE_NODES,
+    is_interrupt_chunk,
+    summarize_stage_output,
+)
 from amelia.trackers.factory import create_tracker
 
 
-# Nodes that emit stage events
-STAGE_NODES: frozenset[str] = frozenset({
-    "architect_node",
-    "plan_validator_node",
-    "human_approval_node",
-    "developer_node",
-    "reviewer_node",
-    "evaluation_node",
-})
+# Back-compat alias for the orchestrator/old emission path. Task 2 migrates the
+# remaining internal caller (and TestEmissionPathsSummarize) off this name.
+_summarize_stage_output = summarize_stage_output
+
 
 # Exceptions that warrant retry
 TRANSIENT_EXCEPTIONS: tuple[type[Exception], ...] = (
@@ -74,56 +74,6 @@ TRANSIENT_EXCEPTIONS: tuple[type[Exception], ...] = (
     httpx.TransportError,
     openai.APIConnectionError,
 )
-
-
-# Truncate strings in workflow summaries to ~500 chars: long enough to be useful
-# for debugging, short enough to avoid bloating PostgreSQL JSONB storage.
-_MAX_SUMMARY_STRING_LENGTH = 500
-
-
-def _truncate_nested(value: Any) -> Any:
-    """Recursively truncate long strings in nested structures.
-
-    Args:
-        value: Any value that may contain nested strings.
-
-    Returns:
-        A copy with all long strings truncated.
-    """
-    if isinstance(value, str):
-        if len(value) > _MAX_SUMMARY_STRING_LENGTH:
-            return value[:_MAX_SUMMARY_STRING_LENGTH] + "… [truncated]"
-        return value
-    if isinstance(value, dict):
-        return {k: _truncate_nested(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_truncate_nested(item) for item in value]
-    return value
-
-
-def _summarize_stage_output(output: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Summarize node output for STAGE_COMPLETED events.
-
-    Replaces large lists (tool_calls, tool_results) with counts and truncates
-    long strings (including in nested structures) to avoid exceeding PostgreSQL's
-    JSONB size limit.
-
-    Args:
-        output: Raw node output dictionary.
-
-    Returns:
-        A summarized copy of the output, or None if input is None.
-    """
-    if output is None:
-        return None
-
-    result: dict[str, Any] = {}
-    for key, value in output.items():
-        if key in ("tool_calls", "tool_results") and isinstance(value, list):
-            result[f"{key}_count"] = len(value)
-        else:
-            result[key] = _truncate_nested(value)
-    return result
 
 
 async def get_git_head(cwd: str | None) -> str | None:
@@ -1274,7 +1224,7 @@ class OrchestratorService:
             # Combined mode returns (mode, data) tuples
             # Cast for type checker - astream with list mode returns tuples
             chunk_tuple = cast(tuple[str, Any], chunk)
-            if self._is_interrupt_chunk(chunk_tuple):
+            if is_interrupt_chunk(chunk_tuple):
                 was_interrupted = True
                 _mode, _data = chunk_tuple
                 # Sync plan from LangGraph checkpoint to ServerExecutionState
@@ -1509,7 +1459,7 @@ class OrchestratorService:
                     chunk_tuple = cast(tuple[str, Any], chunk)
                     # No interrupt handling - review graph runs autonomously
                     # But we still need to check for unexpected interrupts
-                    if self._is_interrupt_chunk(chunk_tuple):
+                    if is_interrupt_chunk(chunk_tuple):
                         mode, data = chunk_tuple
                         logger.warning(
                             "Unexpected interrupt in review workflow",
@@ -1759,7 +1709,7 @@ class OrchestratorService:
                         # Cast for type checker - astream with list mode returns tuples
                         chunk_tuple = cast(tuple[str, Any], chunk)
                         # In agentic mode, no interrupts expected after initial approval
-                        if self._is_interrupt_chunk(chunk_tuple):
+                        if is_interrupt_chunk(chunk_tuple):
                             _, data = chunk_tuple
                             state = await graph.aget_state(config)
                             next_nodes = state.next if state else []
@@ -2039,29 +1989,10 @@ class OrchestratorService:
         if mode == "tasks":
             await self._handle_tasks_event(workflow_id, data)
         elif mode == "updates":
-            # Interrupts handled by caller via _is_interrupt_chunk check
+            # Interrupts handled by caller via is_interrupt_chunk check
             if "__interrupt__" in data:
                 return
             await self._handle_stream_chunk(workflow_id, data)
-
-    def _is_interrupt_chunk(self, chunk: tuple[str, Any] | dict[str, Any]) -> bool:
-        """Check if a stream chunk represents an interrupt.
-
-        Works with both combined mode (tuple) and single mode (dict).
-
-        Args:
-            chunk: Stream chunk from astream().
-
-        Returns:
-            True if this chunk contains an interrupt signal.
-        """
-        if isinstance(chunk, tuple):
-            mode, data = chunk
-            if mode == "updates" and isinstance(data, dict):
-                return "__interrupt__" in data
-            return False
-        # Single mode (dict)
-        return "__interrupt__" in chunk
 
     async def _emit_agent_messages(
         self,
@@ -2411,7 +2342,7 @@ class OrchestratorService:
                 stream_mode=["updates", "tasks"],
             ):
                 chunk_tuple = cast(tuple[str, Any], chunk)
-                if self._is_interrupt_chunk(chunk_tuple):
+                if is_interrupt_chunk(chunk_tuple):
                     was_interrupted = True
                     mode, data = chunk_tuple
                     interrupt_data = (
