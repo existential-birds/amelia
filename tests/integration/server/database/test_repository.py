@@ -390,6 +390,8 @@ class TestWorkflowRepository:
         Sequence:
           1. Tx-A: BEGIN, SELECT … FOR UPDATE (acquires lock), signals B.
           2. Tx-B: BEGIN, SELECT … FOR UPDATE (blocks on lock held by A).
+          2a. Test verifies via pg_stat_activity that Tx-B is genuinely
+              blocked on the lock before releasing Tx-A.
           3. Tx-A: UPDATE status='completed', COMMIT (releases lock).
           4. Tx-B: unblocks, reads status='completed' (terminal), no-ops, COMMIT.
           5. Final row must be 'completed'.
@@ -432,13 +434,41 @@ class TestWorkflowRepository:
             # status='completed' and silently no-ops (terminal absorption).
             await repository.set_status(state.id, "cancelled")
 
-        # Run both tasks concurrently; release Tx-A after a brief yield so
-        # Tx-B has had a chance to issue its own FOR UPDATE and queue behind A.
+        async def wait_until_tx_b_blocks_on_lock() -> None:
+            """Poll pg_stat_activity until a backend is blocked on a row lock.
+
+            Proves Tx-B has actually issued its FOR UPDATE and is waiting on the
+            lock held by Tx-A — not merely that Tx-A committed first. Without
+            this, proceed.set() could release Tx-A before Tx-B ever contends,
+            and the test would no-op via terminal absorption without exercising
+            the blocking path. Fails loudly if Tx-B never reaches its lock wait.
+            """
+            async with repository.db.pool.acquire() as conn:
+                for _ in range(200):  # ~2s at 10ms intervals
+                    blocked = await conn.fetchval(
+                        """
+                        SELECT count(*) FROM pg_stat_activity
+                        WHERE wait_event_type = 'Lock'
+                          AND state = 'active'
+                          AND query ILIKE '%FOR UPDATE%'
+                          AND pid <> pg_backend_pid()
+                        """,
+                    )
+                    if blocked:
+                        return
+                    await asyncio.sleep(0.01)
+            raise AssertionError(
+                "Tx-B never blocked on the row lock; "
+                "the FOR UPDATE contention path was not exercised."
+            )
+
         async def orchestrate() -> None:
             task_a = asyncio.create_task(tx_a_hold_then_complete())
             task_b = asyncio.create_task(tx_b_attempt_cancel())
-            await lock_held.wait()   # A has the lock; B is now blocking on it
-            proceed.set()            # release A → it commits → B unblocks
+            await lock_held.wait()             # A has the lock
+            await wait_until_tx_b_blocks_on_lock()  # B is provably blocked on it
+            assert not task_b.done()           # B is still waiting, not no-op'd
+            proceed.set()                      # release A → commits → B unblocks
             await asyncio.gather(task_a, task_b)
 
         await orchestrate()

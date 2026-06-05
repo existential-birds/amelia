@@ -268,7 +268,7 @@ class WorkflowRepository:
                         workflow_id=workflow_id,
                         current_status=current,
                         new_status=new_status,
-                        failure_reason=failure_reason,
+                        has_failure_reason=True,
                     )
                 return
             else:
