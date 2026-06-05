@@ -1,16 +1,20 @@
 """Tests for WorkflowRepository."""
 
+import asyncio
 from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
 
 from amelia.server.database.repository import WorkflowRepository
+from amelia.server.exceptions import WorkflowNotFoundError
 from amelia.server.models import EventType
 from amelia.server.models.events import EventLevel, WorkflowEvent
 from amelia.server.models.state import (
     InvalidStateTransitionError,
+    PlanCache,
     ServerExecutionState,
+    WorkflowStatus,
 )
 
 
@@ -183,6 +187,294 @@ class TestWorkflowRepository:
         retrieved = await repository.get(state.id)
         assert retrieved.workflow_status == "failed"
         assert retrieved.failure_reason == "Something went wrong"
+
+    async def test_set_status_failed_workflow_persists_failure_reason(
+        self, repository
+    ) -> None:
+        """set_status(in_progress→FAILED, failure_reason=...) persists reason and timestamp.
+
+        Pins the contract exercised by service.py lines 1376, 1414, 1801, 1830, 1871.
+        The failure_reason must be written to the DB row and completed_at must be set.
+        """
+        state = ServerExecutionState(
+            id=uuid4(),
+            issue_id="ISSUE-FAIL",
+            worktree_path="/path/to/repo",
+            workflow_status="in_progress",
+        )
+        await repository.create(state)
+
+        await repository.set_status(
+            state.id,
+            WorkflowStatus.FAILED,
+            failure_reason="Failed after 3 attempts: ConnectionError",
+        )
+
+        retrieved = await repository.get(state.id)
+        assert retrieved.workflow_status == WorkflowStatus.FAILED
+        assert retrieved.failure_reason == "Failed after 3 attempts: ConnectionError"
+        assert retrieved.completed_at is not None
+
+    async def test_set_status_already_failed_workflow_raises(self, repository) -> None:
+        """set_status(already-FAILED, FAILED, failure_reason=...) raises InvalidStateTransitionError.
+
+        FAILED is not in the COMPLETED/CANCELLED terminal-absorption guard, so a
+        duplicate FAILED call goes through validate_transition(FAILED, FAILED) and
+        is rejected — the state machine forbids it (VALID_TRANSITIONS[FAILED] = {IN_PROGRESS}).
+        Pins the contract as "state-machine error", not "log-the-drop" or "silent noop".
+        """
+        state = ServerExecutionState(
+            id=uuid4(),
+            issue_id="ISSUE-ALREADY-FAILED",
+            worktree_path="/path/to/repo",
+            workflow_status="in_progress",
+        )
+        await repository.create(state)
+        await repository.set_status(
+            state.id,
+            WorkflowStatus.FAILED,
+            failure_reason="first failure",
+        )
+
+        with pytest.raises(InvalidStateTransitionError):
+            await repository.set_status(
+                state.id,
+                WorkflowStatus.FAILED,
+                failure_reason="second failure attempt",
+            )
+
+        # Row must be unchanged — first failure_reason is preserved
+        final = await repository.get(state.id)
+        assert final.workflow_status == WorkflowStatus.FAILED
+        assert final.failure_reason == "first failure"
+
+    async def test_set_status_failed_workflow_resumes_to_in_progress(
+        self, repository
+    ) -> None:
+        """set_status(FAILED -> IN_PROGRESS) recovers the workflow, not a no-op.
+
+        FAILED is resumable (VALID_TRANSITIONS[FAILED] = {IN_PROGRESS}) and must
+        NOT be in the immutable-terminal absorption set. This pins the recovery
+        path used by orchestrator service.py (set_status(..., IN_PROGRESS) when a
+        previously-failed workflow is resumed). If FAILED were treated as an
+        immutable terminal state, this transition would be silently swallowed and
+        the workflow could never be resumed — observe the persisted row, not the
+        call return.
+        """
+        state = ServerExecutionState(
+            id=uuid4(),
+            issue_id="ISSUE-RESUME-FROM-FAILED",
+            worktree_path="/path/to/repo",
+            workflow_status="in_progress",
+        )
+        await repository.create(state)
+        await repository.set_status(
+            state.id,
+            WorkflowStatus.FAILED,
+            failure_reason="transient failure",
+        )
+
+        # Recovery: resume the failed workflow back to in_progress.
+        await repository.set_status(state.id, WorkflowStatus.IN_PROGRESS)
+
+        resumed = await repository.get(state.id)
+        assert resumed.workflow_status == WorkflowStatus.IN_PROGRESS
+
+    async def test_set_status_noop_on_terminal_workflow(self, repository) -> None:
+        """A completed row absorbs a lower-precedence transition as a no-op."""
+        state = ServerExecutionState(
+            id=uuid4(), issue_id="ISSUE-DONE",
+            worktree_path="/p", workflow_status="in_progress",
+        )
+        await repository.create(state)
+        await repository.set_status(state.id, "completed")
+        snapshot = await repository.get(state.id)
+
+        # cancelled (rank 1) cannot override completed (rank 2): no-op.
+        await repository.set_status(state.id, "cancelled")
+
+        final = await repository.get(state.id)
+        assert final.workflow_status == WorkflowStatus.COMPLETED
+        assert final.completed_at == snapshot.completed_at
+
+    async def test_set_status_completion_overrides_cancellation(self, repository) -> None:
+        """COMPLETED (rank 2) overrides a CANCELLED (rank 1) row (terminal precedence)."""
+        state = ServerExecutionState(
+            id=uuid4(), issue_id="ISSUE-OVERRIDE",
+            worktree_path="/p", workflow_status="in_progress",
+        )
+        await repository.create(state)
+        await repository.set_status(state.id, "cancelled")
+
+        # Pre-fix this raises InvalidStateTransitionError; post-fix completion wins.
+        await repository.set_status(state.id, "completed")
+
+        final = await repository.get(state.id)
+        assert final.workflow_status == WorkflowStatus.COMPLETED
+        assert final.completed_at is not None
+
+    async def test_set_status_concurrent_complete_vs_cancel(self, repository) -> None:
+        """Precedence logic is order-independent: completed always beats cancelled.
+
+        NOTE: asyncio.gather on a single-threaded event loop does NOT guarantee
+        true FOR UPDATE lock contention — one transaction typically completes
+        before the other acquires its connection.  What this test actually
+        verifies is that the precedence/state-machine logic produces the correct
+        result regardless of which call runs first (A-then-B or B-then-A).
+        See test_set_status_for_update_blocks_concurrent_writer for the lock
+        contention proof.
+
+        Pre-fix (non-atomic read+validate+write) the last UPDATE wins, so the row
+        can silently end 'cancelled', losing the completion. Atomic FOR UPDATE +
+        terminal precedence (COMPLETED rank 2 > CANCELLED rank 1) make 'completed'
+        win regardless of scheduling order. Neither call raises (cancel from
+        in_progress is legal; the losing call is absorbed/overridden).
+        """
+        for _ in range(20):
+            state = ServerExecutionState(
+                id=uuid4(), issue_id="ISSUE-RACE",
+                worktree_path="/p", workflow_status="in_progress",
+            )
+            await repository.create(state)
+
+            await asyncio.gather(
+                repository.set_status(state.id, "completed"),
+                repository.set_status(state.id, "cancelled"),
+            )
+
+            final = await repository.get(state.id)
+            assert final.workflow_status == WorkflowStatus.COMPLETED
+            assert final.completed_at is not None
+
+    async def test_set_status_concurrent_cancel_vs_blocked(self, repository) -> None:
+        """Precedence logic is order-independent: cancelled always beats blocked.
+
+        NOTE: asyncio.gather on a single-threaded event loop does NOT guarantee
+        true FOR UPDATE lock contention — one transaction typically completes
+        before the other acquires its connection.  What this test actually
+        verifies is that the precedence/state-machine logic produces the correct
+        result regardless of which call runs first (A-then-B or B-then-A).
+        See test_set_status_for_update_blocks_concurrent_writer for the lock
+        contention proof.
+
+        If cancel locks first the row is terminal and absorbs the block (rank 0);
+        if block locks first, cancel is a legal BLOCKED->CANCELLED transition.
+        Either scheduling order -> cancelled, deterministically (spec should-have
+        #5, the 'ideally cancel-vs-blocked' shape).
+        """
+        for _ in range(20):
+            state = ServerExecutionState(
+                id=uuid4(), issue_id="ISSUE-RACE-CB",
+                worktree_path="/p", workflow_status="in_progress",
+            )
+            await repository.create(state)
+
+            await asyncio.gather(
+                repository.set_status(state.id, "cancelled"),
+                repository.set_status(state.id, "blocked"),
+            )
+
+            final = await repository.get(state.id)
+            assert final.workflow_status == WorkflowStatus.CANCELLED
+
+    async def test_set_status_for_update_blocks_concurrent_writer(
+        self, repository
+    ) -> None:
+        """SELECT … FOR UPDATE actually serializes two overlapping transactions.
+
+        Uses asyncio.Event barriers to force true lock contention: Transaction A
+        holds the FOR UPDATE row lock while Transaction B is blocked waiting for
+        it.  This proves the locking path works end-to-end, not just that the
+        precedence logic is correct for sequential calls.
+
+        Sequence:
+          1. Tx-A: BEGIN, SELECT … FOR UPDATE (acquires lock), signals B.
+          2. Tx-B: BEGIN, SELECT … FOR UPDATE (blocks on lock held by A).
+          2a. Test verifies via pg_stat_activity that Tx-B is genuinely
+              blocked on the lock before releasing Tx-A.
+          3. Tx-A: UPDATE status='completed', COMMIT (releases lock).
+          4. Tx-B: unblocks, reads status='completed' (terminal), no-ops, COMMIT.
+          5. Final row must be 'completed'.
+        """
+        state = ServerExecutionState(
+            id=uuid4(), issue_id="ISSUE-LOCK",
+            worktree_path="/p", workflow_status="in_progress",
+        )
+        await repository.create(state)
+
+        # Event that Tx-A signals once it holds the FOR UPDATE lock.
+        lock_held = asyncio.Event()
+        # Event that the test signals to let Tx-A proceed with its UPDATE/COMMIT.
+        proceed = asyncio.Event()
+
+        async def tx_a_hold_then_complete() -> None:
+            """Acquires FOR UPDATE, pauses until proceed is set, then commits."""
+            async with repository.db.pool.acquire() as conn, conn.transaction():
+                await conn.fetchrow(
+                    "SELECT status FROM workflows WHERE id = $1 FOR UPDATE",
+                    state.id,
+                )
+                lock_held.set()          # signal: lock is now held
+                await proceed.wait()     # hold the lock until the test says go
+                await conn.execute(
+                    "UPDATE workflows SET status = $1 WHERE id = $2",
+                    "completed",
+                    state.id,
+                )
+
+        async def tx_b_attempt_cancel() -> None:
+            """Waits until Tx-A holds the lock, then tries set_status('cancelled').
+
+            set_status opens its own transaction and will block on FOR UPDATE
+            until Tx-A commits.  After unblocking it reads status='completed'
+            (terminal) and absorbs the call as a no-op.
+            """
+            await lock_held.wait()           # wait until A holds the lock
+            # This call blocks inside DB until Tx-A commits, then reads
+            # status='completed' and silently no-ops (terminal absorption).
+            await repository.set_status(state.id, "cancelled")
+
+        async def wait_until_tx_b_blocks_on_lock() -> None:
+            """Poll pg_stat_activity until a backend is blocked on a row lock.
+
+            Proves Tx-B has actually issued its FOR UPDATE and is waiting on the
+            lock held by Tx-A — not merely that Tx-A committed first. Without
+            this, proceed.set() could release Tx-A before Tx-B ever contends,
+            and the test would no-op via terminal absorption without exercising
+            the blocking path. Fails loudly if Tx-B never reaches its lock wait.
+            """
+            async with repository.db.pool.acquire() as conn:
+                for _ in range(200):  # ~2s at 10ms intervals
+                    blocked = await conn.fetchval(
+                        """
+                        SELECT count(*) FROM pg_stat_activity
+                        WHERE wait_event_type = 'Lock'
+                          AND state = 'active'
+                          AND query ILIKE '%FOR UPDATE%'
+                          AND pid <> pg_backend_pid()
+                        """,
+                    )
+                    if blocked:
+                        return
+                    await asyncio.sleep(0.01)
+            raise AssertionError(
+                "Tx-B never blocked on the row lock; "
+                "the FOR UPDATE contention path was not exercised."
+            )
+
+        async def orchestrate() -> None:
+            task_a = asyncio.create_task(tx_a_hold_then_complete())
+            task_b = asyncio.create_task(tx_b_attempt_cancel())
+            await lock_held.wait()             # A has the lock
+            await wait_until_tx_b_blocks_on_lock()  # B is provably blocked on it
+            assert not task_b.done()           # B is still waiting, not no-op'd
+            proceed.set()                      # release A → commits → B unblocks
+            await asyncio.gather(task_a, task_b)
+
+        await orchestrate()
+
+        final = await repository.get(state.id)
+        assert final.workflow_status == WorkflowStatus.COMPLETED
 
     async def test_list_active_workflows(self, repository) -> None:
         """Can list all active workflows."""
@@ -508,6 +800,23 @@ class TestWorkflowRepository:
 
         with pytest.raises(WorkflowNotFoundError):
             await repository.update_plan_cache(uuid4(), plan_cache)
+
+    async def test_update_plan_cache_persists(self, repository) -> None:
+        """update_plan_cache writes the cache for an existing workflow."""
+        state = ServerExecutionState(
+            id=uuid4(), issue_id="ISSUE-PC", worktree_path="/p",
+        )
+        await repository.create(state)
+
+        await repository.update_plan_cache(state.id, PlanCache(goal="cache me"))
+
+        final = await repository.get(state.id)
+        assert final.plan_cache is not None
+
+    async def test_update_plan_cache_missing_workflow_raises(self, repository) -> None:
+        """update_plan_cache raises WorkflowNotFoundError for an unknown id (never a silent no-op)."""
+        with pytest.raises(WorkflowNotFoundError):
+            await repository.update_plan_cache(uuid4(), PlanCache(goal="cache me"))
 
     async def test_create_workflow_writes_new_columns(self, repository) -> None:
         """create() dual-writes to new columns (workflow_type, profile_id, plan_cache)."""
