@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError, request } from '../utils';
+import { request } from '../utils';
 
 const mockOnce = (r: unknown) =>
   vi.mocked(fetch).mockResolvedValueOnce(r as Response);
