@@ -29,7 +29,7 @@ describe('request()', () => {
 
     await request('/issues', { params: { profile: 'p', search: undefined, limit: 5 } });
 
-    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('/api/issues?profile=p&limit=5');
+    expect(vi.mocked(fetch).mock.calls[0]![0]).toBe('/api/issues?profile=p&limit=5');
   });
 
   it('sets Content-Type header and stringifies a JSON body', async () => {
@@ -53,7 +53,7 @@ describe('request()', () => {
 
     await request('/upload', { method: 'POST', body: fd });
 
-    const init = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
+    const init = vi.mocked(fetch).mock.calls[0]![1] as RequestInit;
     expect(init.body).toBe(fd);
     expect(init.headers).toBeUndefined();
   });

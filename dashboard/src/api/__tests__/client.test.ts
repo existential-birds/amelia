@@ -577,7 +577,7 @@ describe('API Client', () => {
       });
       const result = await api.getWorkflow('wf-1');
       expect(result.recoverable).toBe(true);
-      expect((result as Record<string, unknown>).recent_events).toBeUndefined();
+      expect((result as unknown as Record<string, unknown>).recent_events).toBeUndefined();
     });
   });
 });
