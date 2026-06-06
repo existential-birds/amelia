@@ -3,7 +3,7 @@ import type { ModelInfo } from '@/components/model-picker/types';
 import { AGENT_MODEL_REQUIREMENTS, MODELS_API_URL } from '@/components/model-picker/constants';
 import { flattenModelsData, filterModelsByRequirements, upsertModelInfo } from '@/lib/models-utils';
 import { logger } from '@/lib/logger';
-import { API_BASE_URL, createTimeoutSignal } from '@/api/utils';
+import { request } from '@/api/utils';
 
 /**
  * Custom error class for fetch timeout events.
@@ -164,29 +164,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
   lookupModelById: async (modelId: string) => {
     const trimmedModelId = modelId.trim();
-    const response = await fetch(`${API_BASE_URL}/models/${encodeModelPath(trimmedModelId)}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      signal: createTimeoutSignal(),
-    });
-
-    let data: unknown;
-    try {
-      data = await response.json();
-    } catch (parseError) {
-      throw new Error(`Invalid JSON response from model lookup API: ${parseError}`);
-    }
-
-    if (!response.ok) {
-      const detail =
-        typeof data === 'object' &&
-        data !== null &&
-        'detail' in data &&
-        typeof data.detail === 'string'
-          ? data.detail
-          : `HTTP ${response.status}`;
-      throw new Error(detail);
-    }
+    const data: unknown = await request(`/models/${encodeModelPath(trimmedModelId)}`);
 
     if (
       !data ||

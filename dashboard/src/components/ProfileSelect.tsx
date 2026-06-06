@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getProfiles, type Profile } from '@/api/settings';
+import { ApiError } from '@/api/client';
 import {
   Select,
   SelectContent,
@@ -62,7 +63,7 @@ export function ProfileSelect({
       const result = await getProfiles(signal);
       setProfiles(result);
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
+      if ((err instanceof DOMException && err.name === 'AbortError') || (err instanceof ApiError && err.code === 'ABORTED')) {
         return; // Don't touch state for aborted requests
       }
       console.error('Failed to fetch profiles:', err);

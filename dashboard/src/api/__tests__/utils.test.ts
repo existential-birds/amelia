@@ -1,6 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { request } from '../utils';
+import { buildQuery, request } from '../utils';
+
+describe('buildQuery()', () => {
+  it('returns empty string when called with no argument', () => {
+    expect(buildQuery()).toBe('');
+  });
+
+  it('returns empty string for an empty params object', () => {
+    expect(buildQuery({})).toBe('');
+  });
+
+  it('skips undefined values', () => {
+    expect(buildQuery({ a: 'x', b: undefined })).toBe('?a=x');
+  });
+
+  it('coerces numbers to strings', () => {
+    expect(buildQuery({ limit: 10 })).toBe('?limit=10');
+  });
+
+  it('includes all defined entries and omits undefined ones', () => {
+    expect(buildQuery({ profile: 'p', search: undefined, limit: 5 })).toBe('?profile=p&limit=5');
+  });
+});
 
 const mockOnce = (r: unknown) =>
   vi.mocked(fetch).mockResolvedValueOnce(r as Response);
@@ -53,6 +75,18 @@ describe('request()', () => {
 
     await request('/upload', { method: 'POST', body: fd });
 
+    const init = vi.mocked(fetch).mock.calls[0]![1] as RequestInit;
+    expect(init.body).toBe(fd);
+    expect(init.headers).toBeUndefined();
+  });
+
+  it('appends query params to the URL when body is FormData', async () => {
+    const fd = new FormData();
+    mockOnce({ ok: true, json: async () => ({}) });
+
+    await request('/upload', { method: 'POST', body: fd, params: { type: 'avatar', size: 128 } });
+
+    expect(vi.mocked(fetch).mock.calls[0]![0]).toBe('/api/upload?type=avatar&size=128');
     const init = vi.mocked(fetch).mock.calls[0]![1] as RequestInit;
     expect(init.body).toBe(fd);
     expect(init.headers).toBeUndefined();

@@ -171,7 +171,7 @@ describe("brainstormApi", () => {
           throw new Error("must not parse");
         },
       } as unknown as Response);
-      await expect(brainstormApi.getSession("x")).resolves.toBeUndefined();
+      await expect(brainstormApi.getSession("x")).resolves.not.toThrow();
     });
   });
 

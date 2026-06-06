@@ -117,11 +117,18 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
 /**
  * Builds a query string from a record of params, skipping `undefined` values
- * and coercing numbers/booleans to strings. Returns `''` when no defined
- * entries remain (no leading `?`).
+ * and coercing numbers to strings via `String()`. Returns `''` when no
+ * defined entries remain (no leading `?`).
+ *
+ * @example
+ * buildQuery({ profile: 'p', limit: 5, search: undefined })
+ * // => '?profile=p&limit=5'
+ *
+ * buildQuery({})   // => ''
+ * buildQuery()     // => ''
  */
 export function buildQuery(
-  params?: Record<string, string | number | boolean | undefined>
+  params?: Record<string, string | number | undefined>
 ): string {
   if (!params) {
     return '';
@@ -141,7 +148,7 @@ export function buildQuery(
 export interface RequestOptions {
   method?: string;
   body?: unknown;
-  params?: Record<string, string | number | boolean | undefined>;
+  params?: Record<string, string | number | undefined>;
   signal?: AbortSignal;
 }
 
