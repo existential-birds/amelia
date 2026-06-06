@@ -602,6 +602,85 @@ class OrchestratorService:
 
         return workflow_id
 
+    async def _launch_review(
+        self,
+        *,
+        worktree_path: str,
+        profile: Profile,
+        issue: Issue | None,
+        diff_content: str,
+        base_commit: str | None,
+        mode: str,
+        review_types: list[str] | None,
+    ) -> uuid.UUID:
+        """Create a REVIEW workflow and launch its background task.
+
+        Shared tail for ``start_review_workflow`` and ``request_review``. Acquires
+        the worktree under ``_start_lock``, builds the ``ImplementationState`` and
+        ``ServerExecutionState`` (workflow_type=REVIEW), persists the state, spawns
+        the review-graph task, registers it in ``_active_tasks`` and attaches the
+        cleanup callback.
+
+        Args:
+            worktree_path: Resolved worktree path (already validated).
+            profile: Profile already resolved and bound to the worktree.
+            issue: Issue for review context, or ``None``.
+            diff_content: The diff the review graph operates on.
+            base_commit: Base commit for the review diff (may be ``None``).
+            mode: Review mode (e.g. ``"review_only"``/``"review_fix"``).
+            review_types: Optional list of review types to run.
+
+        Returns:
+            The new review workflow ID (UUID).
+
+        Raises:
+            WorkflowConflictError: If worktree already has active workflow.
+            ConcurrencyLimitError: If at max concurrent workflows.
+        """
+        async with self._start_lock:
+            self._assert_can_acquire_worktree(worktree_path)
+
+            new_id = uuid4()
+
+            execution_state = ImplementationState(
+                workflow_id=new_id,
+                profile_id=profile.name,
+                created_at=datetime.now(UTC),
+                status="pending",
+                issue=issue,
+                code_changes_for_review=diff_content,
+                base_commit=base_commit,
+                review_iteration=0,
+                review_mode=mode,
+            )
+
+            state = ServerExecutionState(
+                id=new_id,
+                issue_id=issue.id if issue is not None else "LOCAL-REVIEW",
+                worktree_path=worktree_path,
+                workflow_type=WorkflowType.REVIEW,
+                profile_id=profile.name,
+                issue_cache=issue.model_dump(mode="json") if issue is not None else None,
+                workflow_status=WorkflowStatus.PENDING,
+                started_at=datetime.now(UTC),
+                base_commit=base_commit,
+            )
+
+            await self._repository.create(state)
+
+            # Start with review graph instead of full graph
+            task = asyncio.create_task(
+                self._runner.run_review_workflow(
+                    new_id, state, execution_state,
+                    review_mode=mode, review_types=review_types,
+                )
+            )
+            self._active_tasks[worktree_path] = (new_id, task)
+
+        task.add_done_callback(self._make_cleanup_callback(worktree_path, new_id))
+
+        return new_id
+
     async def start_review_workflow(
         self,
         diff_content: str,
@@ -632,60 +711,27 @@ class OrchestratorService:
             raise InvalidWorktreeError(str(worktree), "directory does not exist")
         resolved_path = str(worktree)
 
-        async with self._start_lock:
-            # Same conflict and concurrency checks as start_workflow
-            self._assert_can_acquire_worktree(resolved_path)
+        loaded_profile = await self._resolve_profile(profile, resolved_path)
 
-            workflow_id = uuid4()
+        # Create dummy issue for review context
+        dummy_issue = Issue(
+            id="LOCAL-REVIEW",
+            title="Local Code Review",
+            description="Review local uncommitted changes."
+        )
 
-            loaded_profile = await self._resolve_profile(profile, resolved_path)
+        # Get current HEAD for tracking (even though diff is provided)
+        base_commit = await get_git_head(resolved_path)
 
-            # Create dummy issue for review context
-            dummy_issue = Issue(
-                id="LOCAL-REVIEW",
-                title="Local Code Review",
-                description="Review local uncommitted changes."
-            )
-
-            # Get current HEAD for tracking (even though diff is provided)
-            base_commit = await get_git_head(resolved_path)
-
-            # Initialize ImplementationState with diff content
-            execution_state = ImplementationState(
-                workflow_id=workflow_id,
-                profile_id=loaded_profile.name,
-                created_at=datetime.now(UTC),
-                status="pending",
-                issue=dummy_issue,
-                code_changes_for_review=diff_content,
-                base_commit=base_commit,
-                review_iteration=0,
-            )
-
-            # Create server state with workflow_type="review"
-            # execution_state.issue is always set (constructed above)
-            assert execution_state.issue is not None
-            state = ServerExecutionState(
-                id=workflow_id,
-                issue_id="LOCAL-REVIEW",
-                worktree_path=resolved_path,
-                workflow_type=WorkflowType.REVIEW,
-                profile_id=loaded_profile.name,
-                issue_cache=execution_state.issue.model_dump(mode="json"),
-                workflow_status=WorkflowStatus.PENDING,
-                started_at=datetime.now(UTC),
-                base_commit=execution_state.base_commit,
-            )
-
-            await self._repository.create(state)
-
-            # Start with review graph instead of full graph
-            task = asyncio.create_task(self._runner.run_review_workflow(workflow_id, state, execution_state))
-            self._active_tasks[resolved_path] = (workflow_id, task)
-
-        task.add_done_callback(self._make_cleanup_callback(resolved_path, workflow_id))
-
-        return workflow_id
+        return await self._launch_review(
+            worktree_path=resolved_path,
+            profile=loaded_profile,
+            issue=dummy_issue,
+            diff_content=diff_content,
+            base_commit=base_commit,
+            mode="review_fix",
+            review_types=None,
+        )
 
     async def cancel_workflow(
         self,
@@ -1707,71 +1753,21 @@ class OrchestratorService:
             except (FileNotFoundError, OSError):
                 logger.warning("Failed to get diff", worktree_path=worktree_path)
 
-        async with self._start_lock:
-            self._assert_can_acquire_worktree(worktree_path)
+        # Keep the PARENT workflow's profile (no override): resolve by its
+        # profile_id, falling back to the active profile when unset.
+        loaded_profile = await self._resolve_profile(workflow.profile_id, worktree_path)
 
-            new_id = uuid4()
+        # Reconstruct issue from cached data
+        issue = None
+        if workflow.issue_cache:
+            issue = Issue(**workflow.issue_cache)
 
-            # Load profile
-            if self._profile_repo is None:
-                raise ValueError("ProfileRepository not configured")
-
-            if workflow.profile_id:
-                record = await self._profile_repo.get_profile(workflow.profile_id)
-                if record is None:
-                    raise ValueError(f"Profile '{workflow.profile_id}' not found")
-            else:
-                record = await self._profile_repo.get_active_profile()
-                if record is None:
-                    raise ValueError("No active profile set")
-
-            loaded_profile = self._runner._update_profile_repo_root(record, worktree_path)
-
-            # Reconstruct issue from cached data
-            issue = None
-            if workflow.issue_cache:
-                issue = Issue(**workflow.issue_cache)
-
-            # Create ImplementationState for the review
-            execution_state = ImplementationState(
-                workflow_id=new_id,
-                profile_id=loaded_profile.name,
-                created_at=datetime.now(UTC),
-                status="pending",
-                issue=issue,
-                code_changes_for_review=diff_content,
-                base_commit=base_commit,
-                review_iteration=0,
-                review_mode=mode,
-            )
-
-            # Create server state
-            state = ServerExecutionState(
-                id=new_id,
-                issue_id=workflow.issue_id,
-                worktree_path=worktree_path,
-                workflow_type=WorkflowType.REVIEW,
-                profile_id=loaded_profile.name,
-                issue_cache=workflow.issue_cache,
-                workflow_status=WorkflowStatus.PENDING,
-                started_at=datetime.now(UTC),
-                base_commit=base_commit,
-            )
-
-            await self._repository.create(state)
-
-            task = asyncio.create_task(
-                self._runner.run_review_workflow(
-                    new_id, state, execution_state,
-                    review_mode=mode, review_types=review_types,
-                )
-            )
-            self._active_tasks[worktree_path] = (new_id, task)
-
-        def cleanup_task(_: asyncio.Task[None]) -> None:
-            self._active_tasks.pop(worktree_path, None)
-            self._events.forget(new_id)
-
-        task.add_done_callback(cleanup_task)
-
-        return new_id
+        return await self._launch_review(
+            worktree_path=worktree_path,
+            profile=loaded_profile,
+            issue=issue,
+            diff_content=diff_content,
+            base_commit=base_commit,
+            mode=mode,
+            review_types=review_types,
+        )

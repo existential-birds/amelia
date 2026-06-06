@@ -31,7 +31,7 @@ import httpx
 import pytest
 from fastapi import status
 
-from amelia.core.types import Issue
+from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.exceptions import (
     ConcurrencyLimitError,
@@ -171,6 +171,58 @@ class TestRequestReview:
         assert review_state.workflow_type == WorkflowType.REVIEW
         assert review_state.issue_id == source.issue_id
         assert review_state.worktree_path == valid_worktree
+
+    async def test_uses_parent_profile_not_active(
+        self,
+        test_orchestrator: OrchestratorService,
+        test_repository: WorkflowRepository,
+        test_profile_repository: Any,
+        active_test_profile: Any,
+        valid_worktree: str,
+        langgraph_mock_factory: Any,
+    ) -> None:
+        """request_review keeps the PARENT workflow's profile, not the active one.
+
+        Guards the convergence on _resolve_profile(workflow.profile_id, ...): the
+        created review workflow must inherit the source workflow's profile_id even
+        when a different profile is currently active.
+        """
+        # Make a second profile the ACTIVE one; the source keeps "test".
+        agent_config = AgentConfig(driver="claude", model="sonnet")
+        other = Profile(
+            name="other",
+            tracker="noop",
+            repo_root=valid_worktree,
+            agents={
+                "architect": agent_config,
+                "developer": agent_config,
+                "reviewer": agent_config,
+                "plan_validator": agent_config,
+                "evaluator": agent_config,
+                "task_reviewer": agent_config,
+            },
+        )
+        await test_profile_repository.create_profile(other)
+        await test_profile_repository.set_active("other")
+
+        source = await _create_completed_workflow(
+            test_repository, worktree_path=valid_worktree, profile_id="test",
+        )
+
+        mocks = langgraph_mock_factory(astream_items=[])
+        git_mocks = _make_git_mocks()
+
+        with (
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
+            git_mocks["get_git_head"],
+            git_mocks["create_subprocess_exec"],
+        ):
+            mock_create.return_value = mocks.graph
+            review_id = await test_orchestrator.request_review(source.id)
+
+        review_state = await test_repository.get(review_id)
+        assert review_state is not None
+        assert review_state.profile_id == source.profile_id == "test"
 
     @pytest.mark.parametrize(
         ("review_kwargs", "config_key", "expected_value"),
