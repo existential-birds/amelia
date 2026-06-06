@@ -636,6 +636,90 @@ class TestApproveWorkflowResume:
         call_args = mocks.graph.aupdate_state.call_args
         assert call_args[0][1] == {"human_approved": True}
 
+    @patch("amelia.server.orchestrator.service.create_implementation_graph")
+    async def test_resume_retries_transient_via_with_retry(
+        self,
+        mock_create_graph: MagicMock,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        langgraph_mock_factory: Callable[..., MagicMock],
+        async_iterator_mock_factory: Callable[[list[Any]], Any],
+        capture_emit: tuple[
+            list[tuple[uuid.UUID, EventType, str, dict[str, object]]],
+            Callable[[], None],
+        ],
+    ) -> None:
+        """Approval resume routes retry through with_retry (jittered).
+
+        Drives the astream body to raise a transient error once, then
+        succeed. Asserts with_retry sleeps exactly once and that the
+        observable completion (WORKFLOW_COMPLETED event + COMPLETED status)
+        happens after the retry — pinning the new retry behavior.
+        """
+        emitted_events, install = capture_emit
+        install()
+
+        workflow = ServerExecutionState(
+            id=uuid4(),
+            issue_id="ISSUE-789",
+            worktree_path="/tmp/resume-retry",
+            workflow_status=WorkflowStatus.BLOCKED,
+            profile_id="test",
+        )
+        mock_repository.get.return_value = workflow
+        orchestrator._active_tasks["/tmp/resume-retry"] = (workflow.id, AsyncMock())
+
+        mocks = langgraph_mock_factory(
+            aget_state_return=MagicMock(values={"human_approved": True}, next=[])
+        )
+        mock_create_graph.return_value = mocks.graph
+
+        # First astream call raises a transient error; the second succeeds
+        # (empty stream → workflow completes).
+        astream_calls = 0
+
+        def astream_side_effect(*args: Any, **kwargs: Any) -> Any:
+            nonlocal astream_calls
+            astream_calls += 1
+            if astream_calls == 1:
+                raise ModelProviderError("transient resume failure")
+            return async_iterator_mock_factory([])
+
+        mocks.graph.astream = MagicMock(side_effect=astream_side_effect)
+
+        # Force a deterministic, non-zero jitter so the slept delay is
+        # strictly greater than the un-jittered base_delay. The OLD hand-rolled
+        # resume loop sleeps exactly base_delay (no jitter) and fails this; the
+        # new with_retry path sleeps base_delay + jitter and passes.
+        with (
+            patch(
+                "amelia.core.retry.random.uniform",
+                return_value=0.2,  # 0 < 0.2 <= 0.25 * base_delay(1.0)
+            ),
+            patch(
+                "amelia.core.retry.asyncio.sleep", new_callable=AsyncMock
+            ) as mock_sleep,
+        ):
+            await orchestrator.approve_workflow(workflow.id)
+
+        # with_retry slept exactly once (one transient retry, jittered).
+        assert mock_sleep.call_count == 1
+        # Jittered delay: base_delay(1.0) + jitter(0.2) = 1.2 — strictly above
+        # the un-jittered 1.0 the old loop produced.
+        slept_delay = mock_sleep.call_args_list[0][0][0]
+        assert slept_delay == pytest.approx(1.2)
+        # Observable completion emitted after the retry.
+        assert any(
+            e[1] == EventType.WORKFLOW_COMPLETED for e in emitted_events
+        )
+        # And the repository recorded COMPLETED.
+        completed_calls = [
+            c
+            for c in mock_repository.set_status.call_args_list
+            if len(c[0]) >= 2 and c[0][1] == WorkflowStatus.COMPLETED
+        ]
+        assert len(completed_calls) == 1
+
 
 class TestStartWorkflowWithRetry:
     """Test start_workflow uses retry wrapper."""

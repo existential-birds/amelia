@@ -1635,94 +1635,81 @@ class OrchestratorService:
             # Update checkpoint state with approval decision
             await graph.aupdate_state(config, {"human_approved": True})
 
-            # Resume execution from checkpoint with retry for transient errors
+            # Resume execution from checkpoint, retrying transient failures via
+            # the canonical with_retry helper (jittered exponential backoff).
             retry_config = profile.retry
-            attempt = 0
-            success = False
 
-            while attempt <= retry_config.max_retries and not success:
-                try:
-                    async for chunk in graph.astream(
-                        None,  # Resume from checkpoint, no new input needed
-                        config=config,
-                        stream_mode=["updates", "tasks"],
-                    ):
-                        # Combined mode returns (mode, data) tuples
-                        # Cast for type checker - astream with list mode returns tuples
-                        chunk_tuple = cast(tuple[str, Any], chunk)
-                        # In agentic mode, no interrupts expected after initial approval
-                        if is_interrupt_chunk(chunk_tuple):
-                            _, data = chunk_tuple
-                            state = await graph.aget_state(config)
-                            next_nodes = state.next if state else []
-                            logger.warning(
-                                "Unexpected interrupt after approval",
-                                workflow_id=workflow_id,
-                                next_nodes=next_nodes,
-                            )
-                            continue
-                        await self._events.handle_combined_stream_chunk(workflow_id, chunk_tuple)
-
-                    # Workflow completed after human approval.
-                    # Note: A separate COMPLETED emission exists in _run_workflow() for
-                    # workflows that complete without interruption. These are mutually exclusive
-                    # code paths - only one COMPLETED event is ever emitted per workflow.
-
-                    await self._events.emit(
-                        workflow_id,
-                        EventType.WORKFLOW_COMPLETED,
-                        "Workflow completed successfully",
-                    )
-                    await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
-                    success = True
-
-                except TRANSIENT_EXCEPTIONS as e:
-                    attempt += 1
-
-                    if attempt > retry_config.max_retries:
-                        logger.exception(
-                            "Workflow failed after approval retries exhausted",
+            async def _resume() -> None:
+                async for chunk in graph.astream(
+                    None,  # Resume from checkpoint, no new input needed
+                    config=config,
+                    stream_mode=["updates", "tasks"],
+                ):
+                    # Combined mode returns (mode, data) tuples
+                    # Cast for type checker - astream with list mode returns tuples
+                    chunk_tuple = cast(tuple[str, Any], chunk)
+                    # In agentic mode, no interrupts expected after initial approval
+                    if is_interrupt_chunk(chunk_tuple):
+                        _, data = chunk_tuple
+                        state = await graph.aget_state(config)
+                        next_nodes = state.next if state else []
+                        logger.warning(
+                            "Unexpected interrupt after approval",
                             workflow_id=workflow_id,
+                            next_nodes=next_nodes,
                         )
-                        await self._events.emit(
-                            workflow_id,
-                            EventType.WORKFLOW_FAILED,
-                            f"Workflow failed after {attempt} attempts: {e!s}",
-                            data={"error": str(e), "attempts": attempt},
-                        )
-                        await self._repository.set_status(
-                            workflow_id,
-                            WorkflowStatus.FAILED,
-                            failure_reason=f"Failed after {attempt} attempts: {e}",
-                        )
-                        raise
+                        continue
+                    await self._events.handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
-                    delay = min(
-                        retry_config.base_delay * (2 ** min(attempt - 1, 31)),
-                        retry_config.max_delay,
-                    )
-                    logger.warning(
-                        "Transient error after approval, retrying",
-                        workflow_id=workflow_id,
-                        attempt=attempt,
-                        max_retries=retry_config.max_retries,
-                        delay=delay,
-                        error=str(e),
-                    )
-                    await asyncio.sleep(delay)
+                # Workflow completed after human approval.
+                # Note: A separate COMPLETED emission exists in _run_workflow() for
+                # workflows that complete without interruption. These are mutually exclusive
+                # code paths - only one COMPLETED event is ever emitted per workflow.
 
-                except Exception as e:
-                    logger.exception("Workflow failed after approval", workflow_id=workflow_id)
-                    await self._events.emit(
-                        workflow_id,
-                        EventType.WORKFLOW_FAILED,
-                        f"Workflow failed: {e!s}",
-                        data={"error": str(e)},
-                    )
-                    await self._repository.set_status(
-                        workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
-                    )
-                    raise
+                await self._events.emit(
+                    workflow_id,
+                    EventType.WORKFLOW_COMPLETED,
+                    "Workflow completed successfully",
+                )
+                await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
+
+            try:
+                await with_retry(
+                    _resume,
+                    config=retry_config,
+                    retryable_exceptions=TRANSIENT_EXCEPTIONS,
+                )
+            except TRANSIENT_EXCEPTIONS as e:
+                # Retries exhausted. The total attempt count is 1 + max_retries.
+                attempts = retry_config.max_retries + 1
+                logger.exception(
+                    "Workflow failed after approval retries exhausted",
+                    workflow_id=workflow_id,
+                )
+                await self._events.emit(
+                    workflow_id,
+                    EventType.WORKFLOW_FAILED,
+                    f"Workflow failed after {attempts} attempts: {e!s}",
+                    data={"error": str(e), "attempts": attempts},
+                )
+                await self._repository.set_status(
+                    workflow_id,
+                    WorkflowStatus.FAILED,
+                    failure_reason=f"Failed after {attempts} attempts: {e}",
+                )
+                raise
+            except Exception as e:
+                logger.exception("Workflow failed after approval", workflow_id=workflow_id)
+                await self._events.emit(
+                    workflow_id,
+                    EventType.WORKFLOW_FAILED,
+                    f"Workflow failed: {e!s}",
+                    data={"error": str(e)},
+                )
+                await self._repository.set_status(
+                    workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
+                )
+                raise
         finally:
             if sandbox_provider is not None:
                 try:
