@@ -11,6 +11,7 @@ import {
   type ServerSettings,
   type Profile,
 } from "../settings";
+import { ApiError } from "../utils";
 
 describe("settings API", () => {
   beforeEach(() => {
@@ -19,6 +20,17 @@ describe("settings API", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("throws a typed ApiError on failure", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: async () => ({ detail: "Profile not found" }),
+    } as Response);
+    const err = await getProfile("nope").catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 404, message: "Profile not found" });
   });
 
   // ===========================================================================
@@ -47,7 +59,6 @@ describe("settings API", () => {
       expect(fetch).toHaveBeenCalledWith(
         "/api/settings",
         expect.objectContaining({
-          method: "GET",
           headers: { "Content-Type": "application/json" },
         })
       );
@@ -172,7 +183,6 @@ describe("settings API", () => {
       expect(fetch).toHaveBeenCalledWith(
         "/api/profiles",
         expect.objectContaining({
-          method: "GET",
           headers: { "Content-Type": "application/json" },
         })
       );
@@ -231,7 +241,7 @@ describe("settings API", () => {
 
       expect(fetch).toHaveBeenCalledWith(
         "/api/profiles/work",
-        expect.objectContaining({ method: "GET" })
+        expect.any(Object)
       );
       expect(result).toEqual(mockProfile);
     });

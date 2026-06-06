@@ -4,23 +4,7 @@
  * Provides functions for managing server settings and profile configurations.
  */
 
-import { parseErrorDetail } from './errors';
-import { API_BASE_URL, createTimeoutSignal } from './utils';
-
-/**
- * Handles HTTP response parsing and error handling.
- */
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    const message = parseErrorDetail(error.detail, `HTTP ${response.status}: ${response.statusText}`);
-    throw new Error(message);
-  }
-  if (response.status === 204 || response.headers?.get('content-length') === '0') {
-    return undefined as T;
-  }
-  return response.json();
-}
+import { request } from './utils';
 
 // =============================================================================
 // Types
@@ -150,7 +134,7 @@ export interface ProfileUpdate {
  * Retrieves current server settings.
  *
  * @returns The current server settings configuration.
- * @throws {Error} When the API request fails.
+ * @throws {ApiError} When the API request fails.
  *
  * @example
  * ```typescript
@@ -159,12 +143,7 @@ export interface ProfileUpdate {
  * ```
  */
 export async function getServerSettings(): Promise<ServerSettings> {
-  const response = await fetch(`${API_BASE_URL}/settings`, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-    signal: createTimeoutSignal(),
-  });
-  return handleResponse<ServerSettings>(response);
+  return request<ServerSettings>("/settings");
 }
 
 /**
@@ -172,7 +151,7 @@ export async function getServerSettings(): Promise<ServerSettings> {
  *
  * @param updates - Partial settings to update.
  * @returns The updated server settings.
- * @throws {Error} When the API request fails.
+ * @throws {ApiError} When the API request fails.
  *
  * @example
  * ```typescript
@@ -183,13 +162,7 @@ export async function getServerSettings(): Promise<ServerSettings> {
 export async function updateServerSettings(
   updates: Partial<ServerSettings>
 ): Promise<ServerSettings> {
-  const response = await fetch(`${API_BASE_URL}/settings`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(updates),
-    signal: createTimeoutSignal(),
-  });
-  return handleResponse<ServerSettings>(response);
+  return request<ServerSettings>("/settings", { method: "PUT", body: updates });
 }
 
 // =============================================================================
@@ -201,7 +174,7 @@ export async function updateServerSettings(
  *
  * @param signal - Optional AbortSignal to cancel the request.
  * @returns Array of all profile configurations.
- * @throws {Error} When the API request fails.
+ * @throws {ApiError} When the API request fails.
  *
  * @example
  * ```typescript
@@ -210,17 +183,7 @@ export async function updateServerSettings(
  * ```
  */
 export async function getProfiles(signal?: AbortSignal): Promise<Profile[]> {
-  const timeoutSignal = createTimeoutSignal();
-  const combinedSignal = signal
-    ? AbortSignal.any([timeoutSignal, signal])
-    : timeoutSignal;
-
-  const response = await fetch(`${API_BASE_URL}/profiles`, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-    signal: combinedSignal,
-  });
-  return handleResponse<Profile[]>(response);
+  return request<Profile[]>("/profiles", { signal });
 }
 
 /**
@@ -228,7 +191,7 @@ export async function getProfiles(signal?: AbortSignal): Promise<Profile[]> {
  *
  * @param id - The unique identifier of the profile.
  * @returns The profile configuration.
- * @throws {Error} When the profile is not found or the API request fails.
+ * @throws {ApiError} When the profile is not found or the API request fails.
  *
  * @example
  * ```typescript
@@ -237,12 +200,7 @@ export async function getProfiles(signal?: AbortSignal): Promise<Profile[]> {
  * ```
  */
 export async function getProfile(id: string): Promise<Profile> {
-  const response = await fetch(`${API_BASE_URL}/profiles/${encodeURIComponent(id)}`, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-    signal: createTimeoutSignal(),
-  });
-  return handleResponse<Profile>(response);
+  return request<Profile>(`/profiles/${encodeURIComponent(id)}`);
 }
 
 /**
@@ -250,7 +208,7 @@ export async function getProfile(id: string): Promise<Profile> {
  *
  * @param profile - The profile configuration to create.
  * @returns The created profile.
- * @throws {Error} When validation fails or the API request fails.
+ * @throws {ApiError} When validation fails or the API request fails.
  *
  * @example
  * ```typescript
@@ -264,13 +222,7 @@ export async function getProfile(id: string): Promise<Profile> {
  * ```
  */
 export async function createProfile(profile: ProfileCreate): Promise<Profile> {
-  const response = await fetch(`${API_BASE_URL}/profiles`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(profile),
-    signal: createTimeoutSignal(),
-  });
-  return handleResponse<Profile>(response);
+  return request<Profile>("/profiles", { method: "POST", body: profile });
 }
 
 /**
@@ -279,7 +231,7 @@ export async function createProfile(profile: ProfileCreate): Promise<Profile> {
  * @param id - The unique identifier of the profile to update.
  * @param updates - Partial profile updates to apply.
  * @returns The updated profile.
- * @throws {Error} When the profile is not found or the API request fails.
+ * @throws {ApiError} When the profile is not found or the API request fails.
  *
  * @example
  * ```typescript
@@ -291,20 +243,17 @@ export async function updateProfile(
   id: string,
   updates: ProfileUpdate
 ): Promise<Profile> {
-  const response = await fetch(`${API_BASE_URL}/profiles/${encodeURIComponent(id)}`, {
+  return request<Profile>(`/profiles/${encodeURIComponent(id)}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(updates),
-    signal: createTimeoutSignal(),
+    body: updates,
   });
-  return handleResponse<Profile>(response);
 }
 
 /**
  * Deletes a profile.
  *
  * @param id - The unique identifier of the profile to delete.
- * @throws {Error} When the profile is not found or the API request fails.
+ * @throws {ApiError} When the profile is not found or the API request fails.
  *
  * @example
  * ```typescript
@@ -313,12 +262,7 @@ export async function updateProfile(
  * ```
  */
 export async function deleteProfile(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/profiles/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    signal: createTimeoutSignal(),
-  });
-  await handleResponse<void>(response);
+  await request(`/profiles/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 /**
@@ -326,7 +270,7 @@ export async function deleteProfile(id: string): Promise<void> {
  *
  * @param id - The unique identifier of the profile to activate.
  * @returns The activated profile with is_active set to true.
- * @throws {Error} When the profile is not found or the API request fails.
+ * @throws {ApiError} When the profile is not found or the API request fails.
  *
  * @example
  * ```typescript
@@ -335,13 +279,7 @@ export async function deleteProfile(id: string): Promise<void> {
  * ```
  */
 export async function activateProfile(id: string): Promise<Profile> {
-  const response = await fetch(
-    `${API_BASE_URL}/profiles/${encodeURIComponent(id)}/activate`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal: createTimeoutSignal(),
-    }
-  );
-  return handleResponse<Profile>(response);
+  return request<Profile>(`/profiles/${encodeURIComponent(id)}/activate`, {
+    method: "POST",
+  });
 }
