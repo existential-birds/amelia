@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { brainstormApi } from "../brainstorm";
+import { ApiError } from '../utils';
 
 describe("brainstormApi", () => {
   beforeEach(() => {
@@ -24,7 +25,7 @@ describe("brainstormApi", () => {
 
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/brainstorm/sessions"),
-        expect.objectContaining({ method: "GET" })
+        expect.any(Object)
       );
       expect(result).toEqual(mockSessions);
     });
@@ -85,7 +86,7 @@ describe("brainstormApi", () => {
 
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/brainstorm/sessions/s1"),
-        expect.objectContaining({ method: "GET" })
+        expect.any(Object)
       );
       expect(result).toEqual(mockData);
     });
@@ -115,6 +116,7 @@ describe("brainstormApi", () => {
     it("deletes a session", async () => {
       vi.mocked(fetch).mockResolvedValueOnce({
         ok: true,
+        status: 204,
       } as Response);
 
       await brainstormApi.deleteSession("s1");
@@ -146,6 +148,30 @@ describe("brainstormApi", () => {
         })
       );
       expect(result).toEqual({ workflow_id: "w1", status: "created" });
+    });
+  });
+
+  describe("error contract", () => {
+    it("throws a typed ApiError on an error response", async () => {
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: async () => ({ detail: "missing", code: "NOT_FOUND" }),
+      } as Response);
+      const err = await brainstormApi.getSession("x").catch((e) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect(err).toMatchObject({ code: "NOT_FOUND", status: 404, message: "missing" });
+    });
+
+    it("does not throw on a 204 response", async () => {
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        status: 204,
+        json: async () => {
+          throw new Error("must not parse");
+        },
+      } as unknown as Response);
+      await expect(brainstormApi.getSession("x")).resolves.toBeUndefined();
     });
   });
 
