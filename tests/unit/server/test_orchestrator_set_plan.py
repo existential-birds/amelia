@@ -117,8 +117,8 @@ class TestSetWorkflowPlan:
             ),
             patch.object(mock_orchestrator._runner, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
-            patch.object(
-                mock_orchestrator._runner, "_update_profile_repo_root"
+            patch(
+                "amelia.server.orchestrator.service.update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator._events, "emit", new_callable=AsyncMock),
         ):
@@ -164,8 +164,8 @@ class TestSetWorkflowPlan:
             ),
             patch.object(mock_orchestrator._runner, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
-            patch.object(
-                mock_orchestrator._runner, "_update_profile_repo_root"
+            patch(
+                "amelia.server.orchestrator.service.update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator._events, "emit", new_callable=AsyncMock),
         ):
@@ -243,8 +243,8 @@ class TestSetWorkflowPlan:
             ),
             patch.object(mock_orchestrator._runner, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
-            patch.object(
-                mock_orchestrator._runner, "_update_profile_repo_root"
+            patch(
+                "amelia.server.orchestrator.service.update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator._events, "emit", new_callable=AsyncMock),
         ):
@@ -333,8 +333,8 @@ class TestSetWorkflowPlan:
             ),
             patch.object(mock_orchestrator._runner, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
-            patch.object(
-                mock_orchestrator._runner, "_update_profile_repo_root"
+            patch(
+                "amelia.server.orchestrator.service.update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(
                 mock_orchestrator._events, "emit", new_callable=AsyncMock
@@ -382,8 +382,8 @@ class TestSetWorkflowPlan:
             ),
             patch.object(mock_orchestrator._runner, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
-            patch.object(
-                mock_orchestrator._runner, "_update_profile_repo_root"
+            patch(
+                "amelia.server.orchestrator.service.update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator._events, "emit", new_callable=AsyncMock),
         ):
@@ -425,8 +425,8 @@ class TestSetWorkflowPlan:
             ),
             patch.object(mock_orchestrator._runner, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
-            patch.object(
-                mock_orchestrator._runner, "_update_profile_repo_root"
+            patch(
+                "amelia.server.orchestrator.service.update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(
                 mock_orchestrator._events, "emit", new_callable=AsyncMock

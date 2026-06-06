@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from amelia.core.types import AgentConfig, Profile, TrackerType
 from amelia.server.models.state import WorkflowStatus
+from amelia.server.orchestrator._common import update_profile_repo_root
 from amelia.server.orchestrator.service import OrchestratorService
 
 
@@ -100,17 +101,6 @@ class TestOrchestratorProfileLoading:
 
     async def test_update_profile_repo_root_conversion(self):
         """Verify Profile repo_root is correctly overridden."""
-        mock_event_bus = MagicMock()
-        mock_repository = AsyncMock()
-        mock_repository.get_max_event_sequence.return_value = 0
-        mock_profile_repo = AsyncMock()
-
-        service = OrchestratorService(
-            event_bus=mock_event_bus,
-            repository=mock_repository,
-            profile_repo=mock_profile_repo,
-        )
-
         # Create a profile with original repo_root
         agent_config = AgentConfig(driver="api", model="gpt-4")
         profile = Profile(
@@ -126,7 +116,7 @@ class TestOrchestratorProfileLoading:
             },
         )
 
-        updated_profile = service._runner._update_profile_repo_root(profile, worktree_path="/override/dir")
+        updated_profile = update_profile_repo_root(profile, worktree_path="/override/dir")
 
         assert updated_profile.name == "test-profile"
         assert updated_profile.tracker == "github"

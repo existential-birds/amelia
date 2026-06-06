@@ -36,6 +36,7 @@ from amelia.server.models.state import PlanCache, WorkflowStatus
 from amelia.server.orchestrator._common import (
     TRANSIENT_EXCEPTIONS,
     get_git_head,
+    update_profile_repo_root,
 )
 from amelia.server.orchestrator.event_emitter import (
     StreamEventEmitter,
@@ -183,19 +184,7 @@ class GraphRunner:
             )
             return None
 
-        return self._update_profile_repo_root(record, worktree_path)
-
-    def _update_profile_repo_root(self, profile: Profile, worktree_path: str) -> Profile:
-        """Update profile's repo_root for workflow execution.
-
-        Args:
-            profile: Profile from database.
-            worktree_path: Worktree path to use as repo_root (overrides profile).
-
-        Returns:
-            Profile instance with updated repo_root.
-        """
-        return profile.model_copy(update={"repo_root": worktree_path})
+        return update_profile_repo_root(record, worktree_path)
 
     async def _create_sandbox_provider(
         self,

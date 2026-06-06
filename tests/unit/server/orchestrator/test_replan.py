@@ -46,7 +46,7 @@ def mock_profile_repo() -> AsyncMock:
     default_profile = Profile(
         name="test",
         tracker="noop",
-        # repo_root is overwritten by _update_profile_repo_root in replan_workflow
+        # repo_root is overwritten by update_profile_repo_root in replan_workflow
         repo_root="/tmp/test-repo",
         agents={
             "architect": agent_config,

@@ -48,6 +48,7 @@ from amelia.server.models.state import PlanCache, WorkflowStatus, WorkflowType
 from amelia.server.orchestrator._common import (
     TRANSIENT_EXCEPTIONS,
     get_git_head,
+    update_profile_repo_root,
 )
 from amelia.server.orchestrator.event_emitter import (
     StreamEventEmitter,
@@ -161,7 +162,7 @@ class OrchestratorService:
                     "No active profile set. Use --profile to specify one or set an active profile."
                 )
 
-        return self._runner._update_profile_repo_root(record, worktree_path)
+        return update_profile_repo_root(record, worktree_path)
 
     async def _prepare_workflow_state(
         self,
@@ -1508,7 +1509,7 @@ class OrchestratorService:
         if profile is None:
             raise ValueError("Profile not found for workflow")
 
-        profile = self._runner._update_profile_repo_root(profile, workflow.worktree_path)
+        profile = update_profile_repo_root(profile, workflow.worktree_path)
 
         # Resolve target plan path
         working_dir = Path(profile.repo_root)
@@ -1609,7 +1610,7 @@ class OrchestratorService:
                 raise ValueError(
                     f"Profile '{workflow.profile_id}' not found for workflow {workflow_id}"
                 )
-            profile = self._runner._update_profile_repo_root(record, workflow.worktree_path)
+            profile = update_profile_repo_root(record, workflow.worktree_path)
 
             # Delete stale checkpoint (best-effort: the checkpoint will be
             # regenerated, so a failure here should not block replanning)

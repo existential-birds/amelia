@@ -12,6 +12,7 @@ import openai
 from httpx import TimeoutException
 
 from amelia.core.exceptions import ModelProviderError
+from amelia.core.types import Profile
 
 
 # Exceptions that warrant retry
@@ -47,3 +48,19 @@ async def get_git_head(cwd: str | None) -> str | None:
     except (FileNotFoundError, OSError):
         pass
     return None
+
+
+def update_profile_repo_root(profile: Profile, worktree_path: str) -> Profile:
+    """Return a copy of *profile* with ``repo_root`` set to *worktree_path*.
+
+    The worktree path overrides the profile's configured ``repo_root`` so the
+    workflow executes against the freshly prepared worktree.
+
+    Args:
+        profile: Profile from the database.
+        worktree_path: Worktree path to use as ``repo_root``.
+
+    Returns:
+        A new ``Profile`` instance with the updated ``repo_root``.
+    """
+    return profile.model_copy(update={"repo_root": worktree_path})
