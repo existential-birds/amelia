@@ -214,7 +214,7 @@ async def test_start_workflow_success(
     valid_worktree: str,
 ) -> None:
     """Should start workflow and return workflow ID."""
-    with patch.object(orchestrator._runner, "run_workflow", new=AsyncMock()):
+    with patch.object(orchestrator._runner, "run_workflow_with_retry", new=AsyncMock()):
         workflow_id = await orchestrator.start_workflow(
             issue_id="ISSUE-123",
             worktree_path=valid_worktree,
@@ -1199,4 +1199,50 @@ async def test_resume_workflow_corrupted_checkpoint_raises_invalid_state(
         await orchestrator.resume_workflow(wf_id)
 
     assert "corrupted" in str(exc_info.value).lower()
+
+
+def test_resolve_target_plan_path_relative_within_repo(tmp_path: Path) -> None:
+    """Relative plan_file resolves against working_dir and stays inside it."""
+    result = OrchestratorService._resolve_target_plan_path(
+        plan_file="plans/feature.md",
+        plan_path_pattern="docs/plans/{issue_id}.md",
+        issue_id="ISSUE-123",
+        working_dir=tmp_path,
+    )
+
+    assert result == (tmp_path / "plans/feature.md").resolve()
+
+
+def test_resolve_target_plan_path_rejects_relative_traversal(tmp_path: Path) -> None:
+    """A ../ traversal in plan_file escaping working_dir is rejected."""
+    with pytest.raises(ValueError, match="resolves outside repository directory"):
+        OrchestratorService._resolve_target_plan_path(
+            plan_file="../../../etc/passwd",
+            plan_path_pattern="docs/plans/{issue_id}.md",
+            issue_id="ISSUE-123",
+            working_dir=tmp_path,
+        )
+
+
+def test_resolve_target_plan_path_rejects_absolute_outside(tmp_path: Path) -> None:
+    """An absolute plan_file outside working_dir is rejected."""
+    with pytest.raises(ValueError, match="resolves outside repository directory"):
+        OrchestratorService._resolve_target_plan_path(
+            plan_file="/etc/passwd",
+            plan_path_pattern="docs/plans/{issue_id}.md",
+            issue_id="ISSUE-123",
+            working_dir=tmp_path,
+        )
+
+
+def test_resolve_target_plan_path_pattern_branch(tmp_path: Path) -> None:
+    """With no plan_file, the path derives from the profile pattern."""
+    result = OrchestratorService._resolve_target_plan_path(
+        plan_file=None,
+        plan_path_pattern="docs/plans/{issue_key}.md",
+        issue_id="ISSUE-123",
+        working_dir=tmp_path,
+    )
+
+    assert result == tmp_path / "docs/plans/issue-123.md"
 

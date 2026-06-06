@@ -389,10 +389,20 @@ class OrchestratorService:
             Resolved absolute ``Path`` for the plan file.
         """
         if plan_file is not None:
+            working_dir_resolved = working_dir.resolve()
             source = Path(plan_file)
             if not source.is_absolute():
-                source = working_dir / plan_file
-            return source.expanduser().resolve()
+                source = working_dir_resolved / plan_file
+            resolved = source.expanduser().resolve()
+            # Validate the resolved path stays within the repository
+            # (prevents traversal via .. sequences or symlinks)
+            try:
+                resolved.relative_to(working_dir_resolved)
+            except ValueError:
+                raise ValueError(
+                    f"plan_file '{plan_file}' resolves outside repository directory"
+                ) from None
+            return resolved
         plan_rel_path = resolve_plan_path(plan_path_pattern, issue_id)
         return working_dir / plan_rel_path
 
