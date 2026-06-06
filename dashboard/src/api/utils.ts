@@ -75,9 +75,12 @@ async function fetchWithTimeout(
  */
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    let errorData: Record<string, unknown>;
+    let errorData: Record<string, unknown> = {};
     try {
-      errorData = await response.json();
+      const parsed: unknown = await response.json();
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        errorData = parsed as Record<string, unknown>;
+      }
     } catch {
       throw new ApiError(
         `HTTP ${response.status}: ${response.statusText}`,
@@ -162,9 +165,11 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
 
   const url = `${API_BASE_URL}${path}${buildQuery(opts.params)}`;
   const isFormData = opts.body instanceof FormData;
-  const headers = isFormData ? undefined : { 'Content-Type': 'application/json' };
+  const hasBody = opts.body !== undefined;
+  const headers =
+    hasBody && !isFormData ? { 'Content-Type': 'application/json' } : undefined;
   const body =
-    opts.body === undefined
+    !hasBody
       ? undefined
       : isFormData
         ? (opts.body as FormData)

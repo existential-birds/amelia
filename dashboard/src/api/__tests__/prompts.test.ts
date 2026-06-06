@@ -223,7 +223,7 @@ describe('Prompts API', () => {
         '/api/prompts/architect.system/reset',
         expect.objectContaining({
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: undefined,
           signal: expect.any(AbortSignal),
         })
       );

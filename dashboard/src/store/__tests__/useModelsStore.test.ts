@@ -228,7 +228,7 @@ describe('useModelsStore', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/models/meta-llama/llama-4-scout',
         expect.objectContaining({
-          headers: { 'Content-Type': 'application/json' },
+          headers: undefined,
         })
       );
       expect(useModelsStore.getState().models.some((entry) => entry.id === model.id)).toBe(true);

@@ -70,7 +70,7 @@ describe("settings API", () => {
       expect(fetch).toHaveBeenCalledWith(
         "/api/settings",
         expect.objectContaining({
-          headers: { "Content-Type": "application/json" },
+          headers: undefined,
         })
       );
       expect(result).toEqual(mockSettings);
@@ -145,7 +145,7 @@ describe("settings API", () => {
       expect(fetch).toHaveBeenCalledWith(
         "/api/profiles",
         expect.objectContaining({
-          headers: { "Content-Type": "application/json" },
+          headers: undefined,
         })
       );
       expect(result).toEqual(mockProfiles);

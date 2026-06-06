@@ -36,7 +36,9 @@ export const brainstormApi = {
   },
 
   async getSession(sessionId: string): Promise<SessionWithHistory> {
-    return request<SessionWithHistory>(`/brainstorm/sessions/${sessionId}`);
+    return request<SessionWithHistory>(
+      `/brainstorm/sessions/${encodeURIComponent(sessionId)}`
+    );
   },
 
   async sendMessage(
@@ -44,13 +46,15 @@ export const brainstormApi = {
     content: string
   ): Promise<{ message_id: string }> {
     return request<{ message_id: string }>(
-      `/brainstorm/sessions/${sessionId}/message`,
+      `/brainstorm/sessions/${encodeURIComponent(sessionId)}/message`,
       { method: "POST", body: { content } }
     );
   },
 
   async deleteSession(sessionId: string): Promise<void> {
-    await request(`/brainstorm/sessions/${sessionId}`, { method: "DELETE" });
+    await request(`/brainstorm/sessions/${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+    });
   },
 
   async handoff(
@@ -59,7 +63,7 @@ export const brainstormApi = {
     issueTitle?: string
   ): Promise<{ workflow_id: string; status: string }> {
     return request<{ workflow_id: string; status: string }>(
-      `/brainstorm/sessions/${sessionId}/handoff`,
+      `/brainstorm/sessions/${encodeURIComponent(sessionId)}/handoff`,
       {
         method: "POST",
         body: { artifact_path: artifactPath, issue_title: issueTitle },

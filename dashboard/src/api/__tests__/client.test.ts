@@ -170,7 +170,7 @@ describe('API Client', () => {
           expectedUrl,
           expect.objectContaining({
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: undefined,
             signal: expect.any(AbortSignal),
           })
         );
@@ -329,7 +329,7 @@ describe('API Client', () => {
         '/api/workflows/wf-123/start',
         expect.objectContaining({
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: undefined,
           signal: expect.any(AbortSignal),
         })
       );
