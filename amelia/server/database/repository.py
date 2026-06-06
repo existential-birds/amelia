@@ -29,6 +29,44 @@ _WORKFLOW_COLUMNS = (
 )
 
 
+def _build_workflow_filters(
+    status: WorkflowStatus | None = None,
+    worktree_path: str | None = None,
+    after_started_at: datetime | None = None,
+    after_id: str | None = None,
+) -> tuple[list[str], list[Any]]:
+    """Build workflow WHERE conditions and parameters.
+
+    Pure and DB-free: appends, in order, an equality clause for ``status`` and
+    ``worktree_path`` when truthy, then a cursor clause when both
+    ``after_started_at`` and ``after_id`` are truthy. Placeholders number
+    sequentially from ``$1``; callers derive the next index as
+    ``len(params) + 1``.
+
+    Returns:
+        Tuple of (conditions, params).
+    """
+    conditions: list[str] = []
+    params: list[Any] = []
+
+    if status:
+        params.append(status)
+        conditions.append(f"status = ${len(params)}")
+
+    if worktree_path:
+        params.append(worktree_path)
+        conditions.append(f"worktree_path = ${len(params)}")
+
+    if after_started_at and after_id:
+        idx = len(params) + 1
+        conditions.append(
+            f"(started_at < ${idx} OR (started_at = ${idx + 1} AND id < ${idx + 2}))"
+        )
+        params.extend([after_started_at, after_started_at, after_id])
+
+    return conditions, params
+
+
 class WorkflowRepository:
     """Repository for workflow CRUD operations.
 
@@ -415,42 +453,21 @@ class WorkflowRepository:
         Returns:
             List of workflows matching filters.
         """
-        conditions = []
-        params: list[Any] = []
-        param_idx = 1
-
-        if status:
-            conditions.append(f"status = ${param_idx}")
-            params.append(status)
-            param_idx += 1
-
-        if worktree_path:
-            conditions.append(f"worktree_path = ${param_idx}")
-            params.append(worktree_path)
-            param_idx += 1
-
-        # Cursor-based pagination
-        if after_started_at and after_id:
-            conditions.append(
-                f"(started_at < ${param_idx} OR (started_at = ${param_idx + 1} AND id < ${param_idx + 2}))"
-            )
-            params.extend([after_started_at, after_started_at, after_id])
-            param_idx += 3
-
+        conditions, params = _build_workflow_filters(
+            status=status,
+            worktree_path=worktree_path,
+            after_started_at=after_started_at,
+            after_id=after_id,
+        )
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
-        query = f"""
-            SELECT
-                id, issue_id, worktree_path, status,
-                created_at, started_at, completed_at, failure_reason,
-                workflow_type, profile_id, plan_cache, issue_cache,
-                base_commit, branch
-            FROM workflows
-            WHERE {where_clause}
-            ORDER BY started_at DESC NULLS LAST, id DESC
-            LIMIT ${param_idx}
-        """
         params.append(limit)
+        query = (
+            f"SELECT {_WORKFLOW_COLUMNS} FROM workflows "
+            f"WHERE {where_clause} "
+            f"ORDER BY started_at DESC NULLS LAST, id DESC "
+            f"LIMIT ${len(params)}"
+        )
 
         rows = await self._db.fetch_all(query, *params)
         return [self._row_to_state(row) for row in rows]
@@ -469,20 +486,10 @@ class WorkflowRepository:
         Returns:
             Number of workflows matching filters.
         """
-        conditions = []
-        params: list[Any] = []
-        param_idx = 1
-
-        if status:
-            conditions.append(f"status = ${param_idx}")
-            params.append(status)
-            param_idx += 1
-
-        if worktree_path:
-            conditions.append(f"worktree_path = ${param_idx}")
-            params.append(worktree_path)
-            param_idx += 1
-
+        conditions, params = _build_workflow_filters(
+            status=status,
+            worktree_path=worktree_path,
+        )
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
         query = f"SELECT COUNT(*) FROM workflows WHERE {where_clause}"
