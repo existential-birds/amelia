@@ -9,15 +9,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
-import httpx
-import openai
-from httpx import TimeoutException
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from loguru import logger
 
 from amelia.core.constants import resolve_plan_path
-from amelia.core.exceptions import ModelProviderError
 from amelia.core.retry import with_retry
 from amelia.core.types import (
     Design,
@@ -49,47 +45,16 @@ from amelia.server.models.events import EventType
 from amelia.server.models.requests import BatchStartRequest, CreateWorkflowRequest
 from amelia.server.models.responses import BatchStartResponse
 from amelia.server.models.state import PlanCache, WorkflowStatus, WorkflowType
+from amelia.server.orchestrator._common import (
+    TRANSIENT_EXCEPTIONS,
+    get_git_head,
+)
 from amelia.server.orchestrator.event_emitter import (
     StreamEventEmitter,
     is_interrupt_chunk,
 )
 from amelia.server.orchestrator.runner import GraphRunner
 from amelia.trackers.factory import create_tracker
-
-
-# Exceptions that warrant retry
-TRANSIENT_EXCEPTIONS: tuple[type[Exception], ...] = (
-    asyncio.TimeoutError,
-    TimeoutException,
-    ConnectionError,
-    ModelProviderError,
-    httpx.TransportError,
-    openai.APIConnectionError,
-)
-
-
-async def get_git_head(cwd: str | None) -> str | None:
-    """Get current git HEAD commit SHA.
-
-    Args:
-        cwd: Working directory for git command.
-
-    Returns:
-        Current HEAD commit SHA or None if not a git repo.
-    """
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "git", "rev-parse", "HEAD",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-        )
-        stdout, _ = await proc.communicate()
-        if proc.returncode == 0:
-            return stdout.decode().strip()
-    except (FileNotFoundError, OSError):
-        pass
-    return None
 
 
 class OrchestratorService:

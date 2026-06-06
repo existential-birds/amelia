@@ -13,15 +13,11 @@ import asyncio
 import uuid
 from typing import TYPE_CHECKING, Any, cast
 
-import httpx
-import openai
-from httpx import TimeoutException
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 
-from amelia.core.exceptions import ModelProviderError
 from amelia.core.retry import with_retry
 from amelia.core.types import (
     Issue,
@@ -37,6 +33,10 @@ from amelia.server.events.bus import EventBus
 from amelia.server.models import ServerExecutionState
 from amelia.server.models.events import EventType
 from amelia.server.models.state import PlanCache, WorkflowStatus
+from amelia.server.orchestrator._common import (
+    TRANSIENT_EXCEPTIONS,
+    get_git_head,
+)
 from amelia.server.orchestrator.event_emitter import (
     StreamEventEmitter,
     is_interrupt_chunk,
@@ -48,47 +48,12 @@ if TYPE_CHECKING:
     from amelia.sandbox.provider import SandboxProvider
 
 
-# Exceptions that warrant retry
-TRANSIENT_EXCEPTIONS: tuple[type[Exception], ...] = (
-    asyncio.TimeoutError,
-    TimeoutException,
-    ConnectionError,
-    ModelProviderError,
-    httpx.TransportError,
-    openai.APIConnectionError,
-)
-
-
 class _SandboxBootstrapHandled(Exception):
     """Internal sentinel: a sandbox-bootstrap failure that has already emitted
     WORKFLOW_FAILED and recorded FAILED status. Not a transient exception, so
     with_retry re-raises it immediately; the caller catches it to avoid
     double-emitting a non-transient failure.
     """
-
-
-async def get_git_head(cwd: str | None) -> str | None:
-    """Get current git HEAD commit SHA.
-
-    Args:
-        cwd: Working directory for git command.
-
-    Returns:
-        Current HEAD commit SHA or None if not a git repo.
-    """
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "git", "rev-parse", "HEAD",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-        )
-        stdout, _ = await proc.communicate()
-        if proc.returncode == 0:
-            return stdout.decode().strip()
-    except (FileNotFoundError, OSError):
-        pass
-    return None
 
 
 class GraphRunner:
