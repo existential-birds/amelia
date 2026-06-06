@@ -1222,8 +1222,9 @@ def model_provider_error_patches(
         ),
         patch.object(orchestrator, "_resolve_prompts", return_value={}),
         patch.object(orchestrator._events, "emit", new=AsyncMock()),
+        # with_retry sleeps in amelia.core.retry, not in service.
         patch(
-            "amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock
+            "amelia.core.retry.asyncio.sleep", new_callable=AsyncMock
         ) as mock_sleep,
     ):
         yield mock_sleep
@@ -1315,8 +1316,9 @@ async def test_httpx_connect_error_retried(
         patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
         patch.object(orchestrator, "_resolve_prompts", return_value={}),
         patch.object(orchestrator._events, "emit", new=AsyncMock()),
+        # with_retry sleeps in amelia.core.retry, not in service.
         patch(
-            "amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock
+            "amelia.core.retry.asyncio.sleep", new_callable=AsyncMock
         ) as mock_sleep,
         pytest.raises(httpx.ConnectError),
     ):
@@ -1380,12 +1382,12 @@ class TestExponentialBackoff:
         return mock_state, mock_profile
 
     @pytest.mark.parametrize(
-        "workflow_id,max_retries,base_delay,max_delay,expected_delays",
+        "workflow_id,max_retries,base_delay,max_delay",
         [
             # Normal exponential backoff without cap
-            ("wf-backoff", 3, 0.1, 10.0, [0.1 * (2**i) for i in range(3)]),
+            ("wf-backoff", 3, 0.1, 10.0),
             # Max delay cap is hit
-            ("wf-cap", 5, 1.0, 3.0, [1.0, 2.0, 3.0, 3.0, 3.0]),
+            ("wf-cap", 5, 1.0, 3.0),
         ],
         ids=["normal_exponential_backoff", "max_delay_cap"],
     )
@@ -1398,9 +1400,14 @@ class TestExponentialBackoff:
         max_retries: int,
         base_delay: float,
         max_delay: float,
-        expected_delays: list[float],
     ) -> None:
-        """Verify exponential backoff delays increase with each retry and are capped at max_delay."""
+        """Verify jittered exponential backoff delays fall in the expected range and are capped at max_delay.
+
+        with_retry computes delay = base_delay * 2**n, adds jitter in
+        [0, 0.25*delay], then caps at max_delay. The nth sleep (0-indexed)
+        therefore lies in [min(base, max_delay), min(base*1.25, max_delay)]
+        where base = base_delay * 2**n.
+        """
         mock_state, mock_profile = self._create_test_setup(
             valid_worktree, workflow_id, max_retries=max_retries, base_delay=base_delay, max_delay=max_delay
         )
@@ -1417,14 +1424,19 @@ class TestExponentialBackoff:
         with (
             patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
             patch.object(orchestrator, "_run_workflow", new=failing_run_workflow),
-            patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            # with_retry sleeps in amelia.core.retry, not in service.
+            patch("amelia.core.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
         ):
             await orchestrator._run_workflow_with_retry(mock_state.id, mock_state)
 
-        # Verify delays match expected pattern
-        assert mock_sleep.call_count == len(expected_delays)
+        # One sleep per retry (max_retries retries before the final success).
+        assert mock_sleep.call_count == max_retries
         delays = [call[0][0] for call in mock_sleep.call_args_list]
-        assert delays == expected_delays
+        for n, d in enumerate(delays):
+            base = base_delay * (2**n)
+            lower = min(base, max_delay)
+            upper = min(base * 1.25, max_delay)
+            assert lower <= d <= upper, f"delay[{n}]={d} not in [{lower}, {upper}]"
 
     async def test_max_retries_exhausted(
         self,
@@ -1444,7 +1456,7 @@ class TestExponentialBackoff:
         with (
             patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
             patch.object(orchestrator, "_run_workflow", new=always_fail),
-            patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("amelia.core.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             pytest.raises(ModelProviderError),
         ):
             await orchestrator._run_workflow_with_retry(mock_state.id, mock_state)
@@ -1458,16 +1470,15 @@ class TestExponentialBackoff:
         mock_repository: AsyncMock,
         valid_worktree: str,
     ) -> None:
-        """Verify exponential backoff caps exponent at 31 to prevent overflow.
+        """Verify backoff delays never exceed max_delay, even at the largest configured values.
 
-        The implementation uses: base_delay * (2 ** min(attempt - 1, 31))
-        This test verifies the cap works by using max base_delay (30.0) and
-        max max_delay (300.0), then checking that delays are computed correctly
-        even at the boundary of the overflow cap.
+        with_retry uses base_delay * 2**attempt (max_retries maxes at 10, so
+        2^9 cannot overflow). Each delay (including jitter) is capped at
+        max_delay, so every observed sleep must be <= max_delay.
         """
-        # Use max allowed values to test overflow cap
-        # With base_delay=30.0 and max_retries=10:
-        # - Attempt 10: 30.0 * 2^9 = 15360.0, capped at max_delay=300.0
+        # Use max allowed values to exercise the cap.
+        # With base_delay=30.0 and max_retries=10, uncapped delays grow to
+        # 30.0 * 2^9 = 15360.0, all of which must be capped at max_delay=300.0.
         mock_state, mock_profile = self._create_test_setup(
             valid_worktree, "wf-overflow", max_retries=10, base_delay=30.0, max_delay=300.0
         )
@@ -1484,26 +1495,105 @@ class TestExponentialBackoff:
         with (
             patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
             patch.object(orchestrator, "_run_workflow", new=failing_run_workflow),
-            patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("amelia.core.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
         ):
             await orchestrator._run_workflow_with_retry(mock_state.id, mock_state)
 
-        # Verify the delay calculation doesn't overflow and is properly capped
+        # 10 retries before the 11th (successful) attempt → 10 sleeps.
+        assert mock_sleep.call_count == 10
         delays = [call[0][0] for call in mock_sleep.call_args_list]
+        # No delay may exceed max_delay (the overflow/cap guarantee), and
+        # each must stay within its jittered band.
+        for n, d in enumerate(delays):
+            base = 30.0 * (2**n)
+            lower = min(base, 300.0)
+            upper = min(base * 1.25, 300.0)
+            assert lower <= d <= upper, f"delay[{n}]={d} not in [{lower}, {upper}]"
+            assert d <= 300.0
 
-        # First few attempts before max_delay cap kicks in:
-        # Attempt 1: 30.0 * 2^0 = 30.0
-        # Attempt 2: 30.0 * 2^1 = 60.0
-        # Attempt 3: 30.0 * 2^2 = 120.0
-        # Attempt 4: 30.0 * 2^3 = 240.0
-        # Attempt 5+: 30.0 * 2^4+ = 480.0+, all capped at 300.0
-        assert delays[0] == 30.0
-        assert delays[1] == 60.0
-        assert delays[2] == 120.0
-        assert delays[3] == 240.0
-        # All remaining delays should be capped at max_delay
-        for i in range(4, 10):
-            assert delays[i] == 300.0
+    async def test_sandbox_bootstrap_failure_emits_and_fails(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        valid_worktree: str,
+    ) -> None:
+        """A non-transient sandbox-bootstrap error emits WORKFLOW_FAILED with
+        error_type 'sandbox_bootstrap', records FAILED, and does NOT retry."""
+        mock_state, mock_profile = self._create_test_setup(
+            valid_worktree, "wf-bootstrap", max_retries=3, base_delay=0.1, max_delay=10.0
+        )
+
+        # A generic (non-transient, non-ValueError) failure during bootstrap.
+        async def boom(profile: Profile, **kwargs: Any) -> None:
+            raise RuntimeError("daytona exploded")
+
+        run_workflow = AsyncMock()
+        emit = AsyncMock()
+        with (
+            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(orchestrator, "_create_sandbox_provider", new=boom),
+            patch.object(orchestrator, "_run_workflow", new=run_workflow),
+            patch.object(orchestrator._events, "emit", new=emit),
+            patch("amelia.core.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            # Bootstrap failure is handled internally (no re-raise to caller).
+            await orchestrator._run_workflow_with_retry(mock_state.id, mock_state)
+
+        # Bootstrap failure must not retry and must not run the workflow.
+        assert mock_sleep.call_count == 0
+        run_workflow.assert_not_called()
+        # WORKFLOW_FAILED emitted with the sandbox_bootstrap error_type.
+        emit.assert_awaited_once()
+        emit_args = emit.await_args
+        assert emit_args.args[1] == EventType.WORKFLOW_FAILED
+        assert "Sandbox bootstrap failed" in emit_args.args[2]
+        assert emit_args.kwargs["data"]["error_type"] == "sandbox_bootstrap"
+        # FAILED status recorded with the matching failure_reason.
+        failed_calls = [
+            c
+            for c in mock_repository.set_status.call_args_list
+            if len(c[0]) >= 2 and c[0][1] == WorkflowStatus.FAILED
+        ]
+        assert len(failed_calls) == 1
+        assert "Sandbox bootstrap failed" in failed_calls[0].kwargs.get("failure_reason", "")
+
+    async def test_non_transient_error_emits_and_reraises(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        valid_worktree: str,
+    ) -> None:
+        """A non-transient error from _run_workflow emits WORKFLOW_FAILED with
+        error_type 'non-transient', records FAILED, re-raises, and does NOT retry."""
+        mock_state, mock_profile = self._create_test_setup(
+            valid_worktree, "wf-nontransient", max_retries=3, base_delay=0.1, max_delay=10.0
+        )
+
+        async def boom_workflow(workflow_id: uuid.UUID, state: ServerExecutionState, **kwargs: Any) -> None:
+            raise RuntimeError("non-transient boom")
+
+        emit = AsyncMock()
+        with (
+            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(orchestrator, "_run_workflow", new=boom_workflow),
+            patch.object(orchestrator._events, "emit", new=emit),
+            patch("amelia.core.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            pytest.raises(RuntimeError, match="non-transient boom"),
+        ):
+            await orchestrator._run_workflow_with_retry(mock_state.id, mock_state)
+
+        # Non-transient errors fail immediately — no retries.
+        assert mock_sleep.call_count == 0
+        emit.assert_awaited_once()
+        emit_args = emit.await_args
+        assert emit_args.args[1] == EventType.WORKFLOW_FAILED
+        assert emit_args.kwargs["data"]["error_type"] == "non-transient"
+        failed_calls = [
+            c
+            for c in mock_repository.set_status.call_args_list
+            if len(c[0]) >= 2 and c[0][1] == WorkflowStatus.FAILED
+        ]
+        assert len(failed_calls) == 1
 
 
 # =============================================================================

@@ -19,6 +19,7 @@ from loguru import logger
 
 from amelia.core.constants import resolve_plan_path
 from amelia.core.exceptions import ModelProviderError
+from amelia.core.retry import with_retry
 from amelia.core.types import (
     Design,
     Issue,
@@ -67,6 +68,14 @@ TRANSIENT_EXCEPTIONS: tuple[type[Exception], ...] = (
     httpx.TransportError,
     openai.APIConnectionError,
 )
+
+
+class _SandboxBootstrapHandled(Exception):
+    """Internal sentinel: a sandbox-bootstrap failure that has already emitted
+    WORKFLOW_FAILED and recorded FAILED status. Not a transient exception, so
+    with_retry re-raises it immediately; the caller catches it to avoid
+    double-emitting a non-transient failure.
+    """
 
 
 async def get_git_head(cwd: str | None) -> str | None:
@@ -1278,90 +1287,89 @@ class OrchestratorService:
             return
         retry_config = profile.retry
 
-        # Create shared sandbox provider if Daytona mode
+        # Create shared sandbox provider if Daytona mode. The provider is
+        # (re)created inside _attempt so a transient Daytona failure tears it
+        # down and recreates it on the next retry. The outer finally guarantees
+        # teardown after the final attempt (success or failure).
         sandbox_provider: SandboxProvider | None = None
-        try:
-            attempt = 0
 
-            while attempt <= retry_config.max_retries:
-                try:
-                    # Create sandbox inside retry loop so transient Daytona failures are retried
-                    if sandbox_provider is None:
-                        try:
-                            sandbox_provider = await self._create_sandbox_provider(profile)
-                        except ValueError:
-                            raise  # Non-transient config errors fail immediately
-                        except TRANSIENT_EXCEPTIONS:
-                            raise  # Let outer handler apply retry logic
-                        except Exception as e:
-                            logger.exception("Daytona sandbox bootstrap failed", workflow_id=workflow_id)
-                            await self._events.emit(
-                                workflow_id,
-                                EventType.WORKFLOW_FAILED,
-                                f"Sandbox bootstrap failed: {e!s}",
-                                data={"error": str(e), "error_type": "sandbox_bootstrap"},
-                            )
-                            await self._repository.set_status(
-                                workflow_id, WorkflowStatus.FAILED, failure_reason=f"Sandbox bootstrap failed: {e}"
-                            )
-                            return
-
-                    await self._run_workflow(workflow_id, state, sandbox_provider=sandbox_provider)
-                    return  # Success
-
-                except TRANSIENT_EXCEPTIONS as e:
-                    attempt += 1
-
-                    if attempt > retry_config.max_retries:
-                        logger.exception("Workflow failed after retries exhausted", workflow_id=workflow_id)
+        async def _attempt() -> None:
+            nonlocal sandbox_provider
+            try:
+                # Create sandbox inside the attempt so transient Daytona
+                # failures are retried (sandbox recreated on the next attempt).
+                if sandbox_provider is None:
+                    try:
+                        sandbox_provider = await self._create_sandbox_provider(profile)
+                    except ValueError:
+                        raise  # Non-transient config errors fail immediately
+                    except TRANSIENT_EXCEPTIONS:
+                        raise  # Let with_retry apply retry logic
+                    except Exception as e:
+                        logger.exception("Daytona sandbox bootstrap failed", workflow_id=workflow_id)
                         await self._events.emit(
                             workflow_id,
                             EventType.WORKFLOW_FAILED,
-                            f"Workflow failed after {attempt} attempts: {e!s}",
-                            data={"error": str(e), "attempts": attempt},
+                            f"Sandbox bootstrap failed: {e!s}",
+                            data={"error": str(e), "error_type": "sandbox_bootstrap"},
                         )
                         await self._repository.set_status(
-                            workflow_id,
-                            WorkflowStatus.FAILED,
-                            failure_reason=f"Failed after {attempt} attempts: {e}",
+                            workflow_id, WorkflowStatus.FAILED, failure_reason=f"Sandbox bootstrap failed: {e}"
                         )
-                        raise
+                        # Already emitted/recorded — wrap so the outer handler
+                        # does not double-emit a non-transient failure.
+                        raise _SandboxBootstrapHandled from e
 
-                    # Cap exponent at 31 to prevent overflow (2^32 exceeds 32-bit int)
-                    delay = min(
-                        retry_config.base_delay * (2 ** min(attempt - 1, 31)),
-                        retry_config.max_delay,
-                    )
-                    logger.warning(
-                        "Transient error, retrying",
-                        workflow_id=workflow_id,
-                        attempt=attempt,
-                        max_retries=retry_config.max_retries,
-                        delay=delay,
-                        error=str(e),
-                    )
-                    # Tear down sandbox so it's re-created on next attempt
-                    if sandbox_provider is not None:
-                        try:
-                            await sandbox_provider.teardown()
-                        except Exception:
-                            logger.warning("Sandbox teardown failed during retry", exc_info=True)
-                        sandbox_provider = None
-                    await asyncio.sleep(delay)
+                await self._run_workflow(workflow_id, state, sandbox_provider=sandbox_provider)
+            except BaseException:
+                # Tear down the sandbox so the next retry recreates it cleanly.
+                if sandbox_provider is not None:
+                    try:
+                        await sandbox_provider.teardown()
+                    except Exception:
+                        logger.warning("Sandbox teardown failed during retry", exc_info=True)
+                    sandbox_provider = None
+                raise
 
-                except Exception as e:
-                    # Non-transient error - fail immediately
-                    logger.exception("Workflow failed with non-transient error", workflow_id=workflow_id)
-                    await self._events.emit(
-                        workflow_id,
-                        EventType.WORKFLOW_FAILED,
-                        f"Workflow failed: {e!s}",
-                        data={"error": str(e), "error_type": "non-transient"},
-                    )
-                    await self._repository.set_status(
-                        workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
-                    )
-                    raise
+        try:
+            try:
+                await with_retry(
+                    _attempt,
+                    config=retry_config,
+                    retryable_exceptions=TRANSIENT_EXCEPTIONS,
+                )
+            except _SandboxBootstrapHandled:
+                # Bootstrap failure already emitted WORKFLOW_FAILED + set FAILED.
+                return
+            except TRANSIENT_EXCEPTIONS as e:
+                # Retries exhausted. The total attempt count is 1 + max_retries.
+                attempts = retry_config.max_retries + 1
+                logger.exception("Workflow failed after retries exhausted", workflow_id=workflow_id)
+                await self._events.emit(
+                    workflow_id,
+                    EventType.WORKFLOW_FAILED,
+                    f"Workflow failed after {attempts} attempts: {e!s}",
+                    data={"error": str(e), "attempts": attempts},
+                )
+                await self._repository.set_status(
+                    workflow_id,
+                    WorkflowStatus.FAILED,
+                    failure_reason=f"Failed after {attempts} attempts: {e}",
+                )
+                raise
+            except Exception as e:
+                # Non-transient error - fail immediately.
+                logger.exception("Workflow failed with non-transient error", workflow_id=workflow_id)
+                await self._events.emit(
+                    workflow_id,
+                    EventType.WORKFLOW_FAILED,
+                    f"Workflow failed: {e!s}",
+                    data={"error": str(e), "error_type": "non-transient"},
+                )
+                await self._repository.set_status(
+                    workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
+                )
+                raise
         finally:
             if sandbox_provider is not None:
                 try:
