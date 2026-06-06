@@ -12,6 +12,24 @@ import {
   type Profile,
 } from "../settings";
 import { ApiError } from "../utils";
+import { mockFetchSuccess, mockFetchError } from "@/test/mocks/fetch";
+
+function makeProfile(overrides: Partial<Profile> = {}): Profile {
+  return {
+    id: "work",
+    tracker: "noop",
+    repo_root: "/Users/me/projects",
+    plan_output_dir: "plans",
+    plan_path_pattern: "{issue_id}.md",
+    agents: {
+      architect: { driver: "api", model: "anthropic/claude-3.5-sonnet", options: {} },
+      developer: { driver: "api", model: "anthropic/claude-3.5-sonnet", options: {} },
+      reviewer: { driver: "api", model: "anthropic/claude-3.5-sonnet", options: {} },
+    },
+    is_active: true,
+    ...overrides,
+  };
+}
 
 describe("settings API", () => {
   beforeEach(() => {
@@ -23,11 +41,7 @@ describe("settings API", () => {
   });
 
   it("throws a typed ApiError on failure", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      json: async () => ({ detail: "Profile not found" }),
-    } as Response);
+    mockFetchError(404, { detail: "Profile not found" });
     const err = await getProfile("nope").catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err).toMatchObject({ status: 404, message: "Profile not found" });
@@ -49,10 +63,7 @@ describe("settings API", () => {
         max_concurrent: 5,
       };
 
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockSettings,
-      } as Response);
+      mockFetchSuccess(mockSettings);
 
       const result = await getServerSettings();
 
@@ -66,12 +77,7 @@ describe("settings API", () => {
     });
 
     it("throws error on failure", async () => {
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        statusText: "Internal Server Error",
-        json: async () => ({ detail: "Database error" }),
-      } as Response);
+      mockFetchError(500, { detail: "Database error" }, "Internal Server Error");
 
       await expect(getServerSettings()).rejects.toThrow("Database error");
     });
@@ -89,10 +95,7 @@ describe("settings API", () => {
         max_concurrent: 10,
       };
 
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockSettings,
-      } as Response);
+      mockFetchSuccess(mockSettings);
 
       const result = await updateServerSettings({
         log_retention_days: 60,
@@ -121,62 +124,21 @@ describe("settings API", () => {
   describe("getProfiles", () => {
     it("fetches all profiles", async () => {
       const mockProfiles: Profile[] = [
-        {
-          id: "work",
-          tracker: "noop",
-          repo_root: "/Users/me/projects",
-          plan_output_dir: "plans",
-          plan_path_pattern: "{issue_id}.md",
-          agents: {
-            architect: {
-              driver: "api",
-              model: "anthropic/claude-3.5-sonnet",
-              options: {},
-            },
-            developer: {
-              driver: "api",
-              model: "anthropic/claude-3.5-sonnet",
-              options: {},
-            },
-            reviewer: {
-              driver: "api",
-              model: "anthropic/claude-3.5-sonnet",
-              options: {},
-            },
-          },
-          is_active: true,
-        },
-        {
+        makeProfile(),
+        makeProfile({
           id: "personal",
           tracker: "github",
           repo_root: "/Users/me/personal",
-          plan_output_dir: "plans",
-          plan_path_pattern: "{issue_id}.md",
           agents: {
-            architect: {
-              driver: "claude",
-              model: "claude-sonnet-4-20250514",
-              options: {},
-            },
-            developer: {
-              driver: "claude",
-              model: "claude-sonnet-4-20250514",
-              options: {},
-            },
-            reviewer: {
-              driver: "claude",
-              model: "claude-sonnet-4-20250514",
-              options: {},
-            },
+            architect: { driver: "claude", model: "claude-sonnet-4-20250514", options: {} },
+            developer: { driver: "claude", model: "claude-sonnet-4-20250514", options: {} },
+            reviewer: { driver: "claude", model: "claude-sonnet-4-20250514", options: {} },
           },
           is_active: false,
-        },
+        }),
       ];
 
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockProfiles,
-      } as Response);
+      mockFetchSuccess(mockProfiles);
 
       const result = await getProfiles();
 
@@ -191,12 +153,7 @@ describe("settings API", () => {
     });
 
     it("throws error on failure", async () => {
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        statusText: "Internal Server Error",
-        json: async () => ({}),
-      } as Response);
+      mockFetchError(500, {}, "Internal Server Error");
 
       await expect(getProfiles()).rejects.toThrow(
         "HTTP 500: Internal Server Error"
@@ -206,36 +163,9 @@ describe("settings API", () => {
 
   describe("getProfile", () => {
     it("fetches a single profile by ID", async () => {
-      const mockProfile: Profile = {
-        id: "work",
-        tracker: "noop",
-        repo_root: "/Users/me/projects",
-        plan_output_dir: "plans",
-        plan_path_pattern: "{issue_id}.md",
-        agents: {
-          architect: {
-            driver: "api",
-            model: "anthropic/claude-3.5-sonnet",
-            options: {},
-          },
-          developer: {
-            driver: "api",
-            model: "anthropic/claude-3.5-sonnet",
-            options: {},
-          },
-          reviewer: {
-            driver: "api",
-            model: "anthropic/claude-3.5-sonnet",
-            options: {},
-          },
-        },
-        is_active: true,
-      };
+      const mockProfile = makeProfile();
 
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockProfile,
-      } as Response);
+      mockFetchSuccess(mockProfile);
 
       const result = await getProfile("work");
 
@@ -247,10 +177,7 @@ describe("settings API", () => {
     });
 
     it("encodes profile ID in URL", async () => {
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: "my profile" }),
-      } as Response);
+      mockFetchSuccess({ id: "my profile" });
 
       await getProfile("my profile");
 
@@ -261,12 +188,7 @@ describe("settings API", () => {
     });
 
     it("throws error when profile not found", async () => {
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        statusText: "Not Found",
-        json: async () => ({ detail: "Profile not found" }),
-      } as Response);
+      mockFetchError(404, { detail: "Profile not found" }, "Not Found");
 
       await expect(getProfile("nonexistent")).rejects.toThrow(
         "Profile not found"
@@ -276,36 +198,9 @@ describe("settings API", () => {
 
   describe("createProfile", () => {
     it("creates a new profile", async () => {
-      const mockProfile: Profile = {
-        id: "new-profile",
-        tracker: "noop",
-        repo_root: "/Users/me/projects",
-        plan_output_dir: "plans",
-        plan_path_pattern: "{issue_id}.md",
-        agents: {
-          architect: {
-            driver: "api",
-            model: "anthropic/claude-3.5-sonnet",
-            options: {},
-          },
-          developer: {
-            driver: "api",
-            model: "anthropic/claude-3.5-sonnet",
-            options: {},
-          },
-          reviewer: {
-            driver: "api",
-            model: "anthropic/claude-3.5-sonnet",
-            options: {},
-          },
-        },
-        is_active: false,
-      };
+      const mockProfile = makeProfile({ id: "new-profile", is_active: false });
 
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockProfile,
-      } as Response);
+      mockFetchSuccess(mockProfile);
 
       const createPayload = {
         id: "new-profile",
@@ -342,36 +237,9 @@ describe("settings API", () => {
 
   describe("updateProfile", () => {
     it("updates an existing profile", async () => {
-      const mockProfile: Profile = {
-        id: "work",
-        tracker: "noop",
-        repo_root: "/Users/me/projects",
-        plan_output_dir: "plans",
-        plan_path_pattern: "{issue_id}.md",
-        agents: {
-          architect: {
-            driver: "api",
-            model: "anthropic/claude-3.5-sonnet",
-            options: {},
-          },
-          developer: {
-            driver: "api",
-            model: "anthropic/claude-3.5-sonnet",
-            options: {},
-          },
-          reviewer: {
-            driver: "api",
-            model: "anthropic/claude-3.5-sonnet",
-            options: {},
-          },
-        },
-        is_active: true,
-      };
+      const mockProfile = makeProfile();
 
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockProfile,
-      } as Response);
+      mockFetchSuccess(mockProfile);
 
       const result = await updateProfile("work", { tracker: "github" });
 
@@ -404,12 +272,7 @@ describe("settings API", () => {
     });
 
     it("throws error when profile not found", async () => {
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        statusText: "Not Found",
-        json: async () => ({ detail: "Profile not found" }),
-      } as Response);
+      mockFetchError(404, { detail: "Profile not found" }, "Not Found");
 
       await expect(deleteProfile("nonexistent")).rejects.toThrow(
         "Profile not found"
@@ -419,36 +282,9 @@ describe("settings API", () => {
 
   describe("activateProfile", () => {
     it("activates a profile", async () => {
-      const mockProfile: Profile = {
-        id: "work",
-        tracker: "noop",
-        repo_root: "/Users/me/projects",
-        plan_output_dir: "plans",
-        plan_path_pattern: "{issue_id}.md",
-        agents: {
-          architect: {
-            driver: "api",
-            model: "anthropic/claude-3.5-sonnet",
-            options: {},
-          },
-          developer: {
-            driver: "api",
-            model: "anthropic/claude-3.5-sonnet",
-            options: {},
-          },
-          reviewer: {
-            driver: "api",
-            model: "anthropic/claude-3.5-sonnet",
-            options: {},
-          },
-        },
-        is_active: true,
-      };
+      const mockProfile = makeProfile();
 
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockProfile,
-      } as Response);
+      mockFetchSuccess(mockProfile);
 
       const result = await activateProfile("work");
 

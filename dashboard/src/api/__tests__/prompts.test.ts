@@ -1,27 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { api } from '../client';
+import { mockFetchSuccess, mockFetchError } from '@/test/mocks/fetch';
 
 // Mock fetch globally
 global.fetch = vi.fn();
-
-// ============================================================================
-// Test Helpers
-// ============================================================================
-
-function mockFetchSuccess<T>(data: T) {
-  (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-    ok: true,
-    json: async () => data,
-  });
-}
-
-function mockFetchError(status: number, error: string, code: string) {
-  (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-    ok: false,
-    status,
-    json: async () => ({ error, code }),
-  });
-}
 
 // ============================================================================
 // Tests
@@ -58,7 +40,7 @@ describe('Prompts API', () => {
     });
 
     it('should handle HTTP errors', async () => {
-      mockFetchError(500, 'Internal server error', 'INTERNAL_ERROR');
+      mockFetchError(500, { error: 'Internal server error', code: 'INTERNAL_ERROR' });
 
       await expect(api.getPrompts()).rejects.toThrow('Internal server error');
     });
@@ -95,7 +77,7 @@ describe('Prompts API', () => {
     });
 
     it('should handle HTTP errors', async () => {
-      mockFetchError(404, 'Prompt not found', 'NOT_FOUND');
+      mockFetchError(404, { error: 'Prompt not found', code: 'NOT_FOUND' });
 
       await expect(api.getPrompt('nonexistent')).rejects.toThrow('Prompt not found');
     });
@@ -131,7 +113,7 @@ describe('Prompts API', () => {
     });
 
     it('should handle HTTP errors', async () => {
-      mockFetchError(404, 'Prompt not found', 'NOT_FOUND');
+      mockFetchError(404, { error: 'Prompt not found', code: 'NOT_FOUND' });
 
       await expect(api.getPromptVersions('nonexistent')).rejects.toThrow('Prompt not found');
     });
@@ -161,7 +143,7 @@ describe('Prompts API', () => {
     });
 
     it('should handle HTTP errors', async () => {
-      mockFetchError(404, 'Version not found', 'NOT_FOUND');
+      mockFetchError(404, { error: 'Version not found', code: 'NOT_FOUND' });
 
       await expect(api.getPromptVersion('architect.system', 'nonexistent')).rejects.toThrow(
         'Version not found'
@@ -223,7 +205,7 @@ describe('Prompts API', () => {
     });
 
     it('should handle HTTP errors', async () => {
-      mockFetchError(400, 'Validation error', 'VALIDATION_ERROR');
+      mockFetchError(400, { error: 'Validation error', code: 'VALIDATION_ERROR' });
 
       await expect(api.createPromptVersion('architect.system', '', null)).rejects.toThrow(
         'Validation error'
@@ -248,7 +230,7 @@ describe('Prompts API', () => {
     });
 
     it('should handle HTTP errors', async () => {
-      mockFetchError(404, 'Prompt not found', 'NOT_FOUND');
+      mockFetchError(404, { error: 'Prompt not found', code: 'NOT_FOUND' });
 
       await expect(api.resetPromptToDefault('nonexistent')).rejects.toThrow('Prompt not found');
     });
@@ -276,7 +258,7 @@ describe('Prompts API', () => {
     });
 
     it('should handle HTTP errors', async () => {
-      mockFetchError(404, 'Prompt not found', 'NOT_FOUND');
+      mockFetchError(404, { error: 'Prompt not found', code: 'NOT_FOUND' });
 
       await expect(api.getPromptDefault('nonexistent')).rejects.toThrow('Prompt not found');
     });

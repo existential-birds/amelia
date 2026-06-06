@@ -202,62 +202,6 @@ describe('useModelsStore', () => {
     });
   });
 
-  describe('getModelsForAgent', () => {
-    it('should filter models by agent requirements', () => {
-      const models: ModelInfo[] = [
-        {
-          id: 'model-a',
-          name: 'Model A',
-          provider: 'test',
-          capabilities: { tool_call: true, reasoning: true, structured_output: true },
-          cost: { input: 3, output: 15 },
-          limit: { context: 200000, output: 16000 },
-          modalities: { input: ['text'], output: ['text'] },
-        },
-        {
-          id: 'model-b',
-          name: 'Model B',
-          provider: 'test',
-          capabilities: { tool_call: true, reasoning: false, structured_output: true },
-          cost: { input: 0.1, output: 0.5 },
-          limit: { context: 64000, output: 8000 },
-          modalities: { input: ['text'], output: ['text'] },
-        },
-      ];
-
-      useModelsStore.setState({ models });
-
-      // Architect requires reasoning
-      const architectModels = useModelsStore.getState().getModelsForAgent('architect');
-      expect(architectModels).toHaveLength(1);
-      expect(architectModels[0]?.id).toBe('model-a');
-
-      // Developer doesn't require reasoning
-      const developerModels = useModelsStore.getState().getModelsForAgent('developer');
-      expect(developerModels).toHaveLength(1);
-      expect(developerModels[0]?.id).toBe('model-a'); // model-b fails context requirement
-    });
-
-    it('should return all models for unknown agent', () => {
-      const models: ModelInfo[] = [
-        {
-          id: 'model-a',
-          name: 'Model A',
-          provider: 'test',
-          capabilities: { tool_call: true, reasoning: true, structured_output: true },
-          cost: { input: 3, output: 15 },
-          limit: { context: 200000, output: 16000 },
-          modalities: { input: ['text'], output: ['text'] },
-        },
-      ];
-
-      useModelsStore.setState({ models });
-
-      const result = useModelsStore.getState().getModelsForAgent('unknown-agent');
-      expect(result).toHaveLength(1);
-    });
-  });
-
   describe('lookupModelById', () => {
     it('should fetch a single model and merge it into the store', async () => {
       mockFetch.mockResolvedValueOnce({
@@ -284,7 +228,6 @@ describe('useModelsStore', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/models/meta-llama/llama-4-scout',
         expect.objectContaining({
-          method: 'GET',
           headers: { 'Content-Type': 'application/json' },
         })
       );

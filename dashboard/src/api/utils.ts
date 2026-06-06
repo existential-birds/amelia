@@ -10,11 +10,6 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 /** Default timeout for API requests, in milliseconds. */
 export const DEFAULT_TIMEOUT_MS = 30000;
 
-/** Creates an AbortSignal that aborts after `timeoutMs`. */
-export function createTimeoutSignal(timeoutMs: number = DEFAULT_TIMEOUT_MS): AbortSignal {
-  return AbortSignal.timeout(timeoutMs);
-}
-
 /**
  * Error for API failures, carrying a machine-readable `code`, HTTP `status`,
  * and optional `details` alongside the message.
@@ -40,7 +35,7 @@ async function fetchWithTimeout(
   options: RequestInit = {},
   abortSignal?: AbortSignal
 ): Promise<Response> {
-  const timeoutSignal = createTimeoutSignal();
+  const timeoutSignal = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
 
   // Combine timeout signal with optional abort signal
   const signal = abortSignal

@@ -404,28 +404,6 @@ export const api = {
     });
   },
 
-  /**
-   * Retrieves the most recent workflow defaults for pre-population.
-   *
-   * @deprecated Will be removed when QuickShotModal is deleted.
-   */
-  async getWorkflowDefaults(): Promise<{
-    worktree_path: string | null;
-    profile: string | null;
-  }> {
-    const data = await request<WorkflowListResponse>('/workflows', { params: { limit: 1 } });
-
-    const mostRecent = data.workflows[0];
-    if (mostRecent) {
-      return {
-        worktree_path: mostRecent.worktree_path,
-        profile: mostRecent.profile,
-      };
-    }
-
-    return { worktree_path: null, profile: null }
-  },
-
   // ==========================================================================
   // Prompts API
   // ==========================================================================

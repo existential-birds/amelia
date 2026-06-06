@@ -2,28 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { api, ApiError } from '../client';
 import type { GitHubIssuesResponse } from '@/types';
 import { createMockWorkflowSummary, createMockWorkflowDetail } from '@/__tests__/fixtures';
+import { mockFetchSuccess, mockFetchError } from '@/test/mocks/fetch';
 
 // Mock fetch globally
 global.fetch = vi.fn();
-
-// ============================================================================
-// Test Helpers
-// ============================================================================
-
-function mockFetchSuccess<T>(data: T) {
-  (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-    ok: true,
-    json: async () => data,
-  });
-}
-
-function mockFetchError(status: number, error: string, code: string) {
-  (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-    ok: false,
-    status,
-    json: async () => ({ error, code }),
-  });
-}
 
 // ============================================================================
 // Tests
@@ -50,7 +32,7 @@ describe('API Client', () => {
     });
 
     it('should handle HTTP errors', async () => {
-      mockFetchError(500, 'Internal server error', 'INTERNAL_ERROR');
+      mockFetchError(500, { error: 'Internal server error', code: 'INTERNAL_ERROR' });
 
       await expect(api.getWorkflows()).rejects.toThrow('Internal server error');
     });
@@ -72,7 +54,7 @@ describe('API Client', () => {
     });
 
     it('should handle HTTP errors', async () => {
-      mockFetchError(404, 'Workflow not found', 'NOT_FOUND');
+      mockFetchError(404, { error: 'Workflow not found', code: 'NOT_FOUND' });
 
       await expect(api.getWorkflow('wf-999')).rejects.toThrow('Workflow not found');
     });
@@ -136,7 +118,7 @@ describe('API Client', () => {
     });
 
     it('throws ApiError on 400 validation error', async () => {
-      mockFetchError(400, 'Invalid worktree path', 'VALIDATION_ERROR');
+      mockFetchError(400, { error: 'Invalid worktree path', code: 'VALIDATION_ERROR' });
 
       await expect(
         api.createWorkflow({
@@ -148,7 +130,7 @@ describe('API Client', () => {
     });
 
     it('throws ApiError on 409 conflict', async () => {
-      mockFetchError(409, 'Worktree already has an active workflow', 'WORKTREE_IN_USE');
+      mockFetchError(409, { error: 'Worktree already has an active workflow', code: 'WORKTREE_IN_USE' });
 
       await expect(
         api.createWorkflow({
@@ -215,7 +197,7 @@ describe('API Client', () => {
     });
 
     it('should handle HTTP errors on mutations', async () => {
-      mockFetchError(403, 'Forbidden', 'FORBIDDEN');
+      mockFetchError(403, { error: 'Forbidden', code: 'FORBIDDEN' });
 
       await expect(api.approveWorkflow('wf-1')).rejects.toThrow('Forbidden');
     });
@@ -356,13 +338,13 @@ describe('API Client', () => {
     });
 
     it('should handle HTTP errors', async () => {
-      mockFetchError(404, 'Workflow not found', 'NOT_FOUND');
+      mockFetchError(404, { error: 'Workflow not found', code: 'NOT_FOUND' });
 
       await expect(api.startWorkflow('wf-999')).rejects.toThrow('Workflow not found');
     });
 
     it('should handle conflict when workflow already running', async () => {
-      mockFetchError(409, 'Workflow already running', 'CONFLICT');
+      mockFetchError(409, { error: 'Workflow already running', code: 'CONFLICT' });
 
       await expect(api.startWorkflow('wf-1')).rejects.toThrow('Workflow already running');
     });
@@ -442,7 +424,7 @@ describe('API Client', () => {
     });
 
     it('should handle HTTP errors', async () => {
-      mockFetchError(500, 'Internal server error', 'INTERNAL_ERROR');
+      mockFetchError(500, { error: 'Internal server error', code: 'INTERNAL_ERROR' });
 
       await expect(api.startBatch({})).rejects.toThrow('Internal server error');
     });
@@ -487,7 +469,7 @@ describe('API Client', () => {
     });
 
     it('should throw on API error', async () => {
-      mockFetchError(400, 'Not a GitHub profile', 'INVALID_TRACKER');
+      mockFetchError(400, { error: 'Not a GitHub profile', code: 'INVALID_TRACKER' });
 
       await expect(api.getGitHubIssues('noop-profile')).rejects.toThrow();
     });
@@ -516,7 +498,7 @@ describe('API Client', () => {
     });
 
     it('should handle HTTP errors', async () => {
-      mockFetchError(500, 'Internal server error', 'INTERNAL_ERROR');
+      mockFetchError(500, { error: 'Internal server error', code: 'INTERNAL_ERROR' });
 
       await expect(api.getConfig()).rejects.toThrow('Internal server error');
     });
@@ -546,13 +528,13 @@ describe('API Client', () => {
     });
 
     it('should handle file not found errors', async () => {
-      mockFetchError(404, 'File not found', 'NOT_FOUND');
+      mockFetchError(404, { error: 'File not found', code: 'NOT_FOUND' });
 
       await expect(api.readFile('/path/to/nonexistent.md')).rejects.toThrow('File not found');
     });
 
     it('should handle path validation errors', async () => {
-      mockFetchError(400, 'Invalid path', 'VALIDATION_ERROR');
+      mockFetchError(400, { error: 'Invalid path', code: 'VALIDATION_ERROR' });
 
       await expect(api.readFile('../relative/path.md')).rejects.toThrow('Invalid path');
     });

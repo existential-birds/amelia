@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { ModelInfo } from '@/components/model-picker/types';
-import { AGENT_MODEL_REQUIREMENTS, MODELS_API_URL } from '@/components/model-picker/constants';
-import { flattenModelsData, filterModelsByRequirements, upsertModelInfo } from '@/lib/models-utils';
+import { MODELS_API_URL } from '@/components/model-picker/constants';
+import { flattenModelsData, upsertModelInfo } from '@/lib/models-utils';
 import { logger } from '@/lib/logger';
 import { request } from '@/api/utils';
 
@@ -9,8 +9,8 @@ import { request } from '@/api/utils';
  * Custom error class for fetch timeout events.
  */
 class TimeoutError extends Error {
-  constructor(message: string = 'timeout') {
-    super(message);
+  constructor() {
+    super('timeout');
     this.name = 'TimeoutError';
   }
 }
@@ -40,8 +40,6 @@ interface ModelsState {
   refreshModels: () => Promise<void>;
   /** Look up a single model by ID via the backend and merge it into the store */
   lookupModelById: (modelId: string) => Promise<ModelInfo>;
-  /** Get models filtered by agent requirements */
-  getModelsForAgent: (agentKey: string) => ModelInfo[];
 }
 
 function encodeModelPath(modelId: string): string {
@@ -200,17 +198,5 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     });
 
     return model;
-  },
-
-  getModelsForAgent: (agentKey: string) => {
-    const { models } = get();
-    const requirements = AGENT_MODEL_REQUIREMENTS[agentKey];
-
-    if (!requirements) {
-      // Unknown agent - return all models with tool_call
-      return models;
-    }
-
-    return filterModelsByRequirements(models, requirements);
   },
 }));
