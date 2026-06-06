@@ -557,4 +557,27 @@ describe('API Client', () => {
       await expect(api.readFile('../relative/path.md')).rejects.toThrow('Invalid path');
     });
   });
+
+  describe('searchKnowledge', () => {
+    it('searchKnowledge throws ApiError ABORTED on already-aborted signal without fetching', async () => {
+      const ctrl = new AbortController();
+      ctrl.abort();
+      const err = await api.searchKnowledge('q', 5, undefined, ctrl.signal).catch(e => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect(err.code).toBe('ABORTED');
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getWorkflow recoverable derivation', () => {
+    it('getWorkflow derives recoverable from a workflow_failed event and strips recent_events', async () => {
+      mockFetchSuccess({
+        ...createMockWorkflowDetail({ id: 'wf-1', status: 'failed' }),
+        recent_events: [{ event_type: 'workflow_failed', sequence: 2, data: { recoverable: true } }],
+      });
+      const result = await api.getWorkflow('wf-1');
+      expect(result.recoverable).toBe(true);
+      expect((result as Record<string, unknown>).recent_events).toBeUndefined();
+    });
+  });
 });
