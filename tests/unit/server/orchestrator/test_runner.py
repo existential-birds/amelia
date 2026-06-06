@@ -158,8 +158,8 @@ class TestRunWorkflowCheckpointResume:
         mock_graph.astream.return_value = empty_stream()
 
         with (
-            patch.object(runner, "_create_server_graph", return_value=mock_graph),
-            patch.object(runner, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(runner, "create_server_graph", return_value=mock_graph),
+            patch.object(runner, "get_profile_or_fail", return_value=mock_profile),
             patch.object(runner._events, "emit", new=AsyncMock()),
         ):
             await runner.run_workflow(
@@ -191,8 +191,8 @@ class TestRunWorkflowCheckpointResume:
         mock_graph.astream.return_value = empty_stream()
 
         with (
-            patch.object(runner, "_create_server_graph", return_value=mock_graph),
-            patch.object(runner, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(runner, "create_server_graph", return_value=mock_graph),
+            patch.object(runner, "get_profile_or_fail", return_value=mock_profile),
             patch.object(runner._events, "emit", new=AsyncMock()),
         ):
             await runner.run_workflow(
@@ -278,7 +278,7 @@ class TestRunWorkflowWithRetry:
                 raise ModelProviderError("transient failure")
 
         with (
-            patch.object(runner, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(runner, "get_profile_or_fail", return_value=mock_profile),
             patch.object(runner, "run_workflow", new=failing_run_workflow),
             patch("amelia.core.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
         ):
@@ -309,7 +309,7 @@ class TestRunWorkflowWithRetry:
             raise ModelProviderError("always fails")
 
         with (
-            patch.object(runner, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(runner, "get_profile_or_fail", return_value=mock_profile),
             patch.object(runner, "run_workflow", new=always_fail),
             patch("amelia.core.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             pytest.raises(ModelProviderError),
@@ -347,7 +347,7 @@ class TestRunWorkflowWithRetry:
                 raise ModelProviderError("transient failure")
 
         with (
-            patch.object(runner, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(runner, "get_profile_or_fail", return_value=mock_profile),
             patch.object(runner, "run_workflow", new=failing_run_workflow),
             patch("amelia.core.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
         ):
@@ -379,8 +379,8 @@ class TestRunWorkflowWithRetry:
         run_workflow = AsyncMock()
         emit = AsyncMock()
         with (
-            patch.object(runner, "_get_profile_or_fail", return_value=mock_profile),
-            patch.object(runner, "_create_sandbox_provider", new=boom),
+            patch.object(runner, "get_profile_or_fail", return_value=mock_profile),
+            patch.object(runner, "create_sandbox_provider", new=boom),
             patch.object(runner, "run_workflow", new=run_workflow),
             patch.object(runner._events, "emit", new=emit),
             patch("amelia.core.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
@@ -420,7 +420,7 @@ class TestRunWorkflowWithRetry:
 
         emit = AsyncMock()
         with (
-            patch.object(runner, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(runner, "get_profile_or_fail", return_value=mock_profile),
             patch.object(runner, "run_workflow", new=boom_workflow),
             patch.object(runner._events, "emit", new=emit),
             patch("amelia.core.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,

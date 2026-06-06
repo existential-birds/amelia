@@ -6,15 +6,13 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from loguru import logger
 
 from amelia.core.constants import resolve_plan_path
-from amelia.core.retry import with_retry
 from amelia.core.types import (
     Design,
     Issue,
@@ -23,12 +21,7 @@ from amelia.core.types import (
 )
 
 
-if TYPE_CHECKING:
-    from amelia.sandbox.provider import SandboxProvider
-from amelia.pipelines.implementation.external_plan import (
-    ExternalPlanImportResult,
-    import_external_plan,
-)
+from amelia.pipelines.implementation.external_plan import import_external_plan
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.database import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
@@ -46,14 +39,10 @@ from amelia.server.models.requests import BatchStartRequest, CreateWorkflowReque
 from amelia.server.models.responses import BatchStartResponse
 from amelia.server.models.state import PlanCache, WorkflowStatus, WorkflowType
 from amelia.server.orchestrator._common import (
-    TRANSIENT_EXCEPTIONS,
     get_git_head,
     update_profile_repo_root,
 )
-from amelia.server.orchestrator.event_emitter import (
-    StreamEventEmitter,
-    is_interrupt_chunk,
-)
+from amelia.server.orchestrator.event_emitter import StreamEventEmitter
 from amelia.server.orchestrator.runner import GraphRunner
 from amelia.trackers.factory import create_tracker
 
@@ -381,6 +370,34 @@ class OrchestratorService:
 
         return worktree
 
+    @staticmethod
+    def _resolve_target_plan_path(
+        plan_file: str | None,
+        plan_path_pattern: str,
+        issue_id: str,
+        working_dir: Path,
+    ) -> Path:
+        """Resolve the filesystem path where a plan should be stored.
+
+        Args:
+            plan_file: Explicit plan file path (relative or absolute).
+                When provided the file is used in-place.
+            plan_path_pattern: Profile pattern used to derive the conventional
+                path when *plan_file* is ``None``.
+            issue_id: Issue ID substituted into *plan_path_pattern*.
+            working_dir: Repo root; relative paths are resolved against it.
+
+        Returns:
+            Resolved absolute ``Path`` for the plan file.
+        """
+        if plan_file is not None:
+            source = Path(plan_file)
+            if not source.is_absolute():
+                source = working_dir / plan_file
+            return source.expanduser().resolve()
+        plan_rel_path = resolve_plan_path(plan_path_pattern, issue_id)
+        return working_dir / plan_rel_path
+
     def _assert_can_acquire_worktree(self, worktree_path: str) -> None:
         """Assert a worktree can be acquired for a new workflow.
 
@@ -524,18 +541,12 @@ class OrchestratorService:
         if request.plan_file is not None or request.plan_content is not None:
             working_dir = Path(profile.repo_root)
 
-            if request.plan_file is not None:
-                # External plan file: use it in-place (no naming convention copy)
-                source = Path(request.plan_file)
-                if not source.is_absolute():
-                    source = working_dir / request.plan_file
-                target_path = source.expanduser().resolve()
-            else:
-                # Pasted content: generate path from naming convention
-                plan_rel_path = resolve_plan_path(
-                    profile.plan_path_pattern, request.issue_id
-                )
-                target_path = working_dir / plan_rel_path
+            target_path = self._resolve_target_plan_path(
+                request.plan_file,
+                profile.plan_path_pattern,
+                request.issue_id,
+                working_dir,
+            )
 
             # Import and validate external plan (regex extraction)
             plan_result = await import_external_plan(
@@ -804,24 +815,7 @@ class OrchestratorService:
             )
 
         # Validate checkpoint exists (read-only, safe outside lock)
-        graph = self._runner._create_server_graph(self._checkpointer)
-        config: RunnableConfig = {
-            "configurable": {"thread_id": str(workflow_id)},
-        }
-        try:
-            checkpoint_state = await graph.aget_state(config)
-        except Exception as exc:
-            raise InvalidStateError(
-                f"Cannot resume: checkpoint data is corrupted ({type(exc).__name__}: {exc})",
-                workflow_id=workflow_id,
-                current_status=workflow.workflow_status,
-            ) from exc
-        if checkpoint_state is None or not checkpoint_state.values:
-            raise InvalidStateError(
-                "Cannot resume: no checkpoint found for workflow",
-                workflow_id=workflow_id,
-                current_status=workflow.workflow_status,
-            )
+        await self._runner.validate_resume_checkpoint(workflow_id, workflow.workflow_status)
 
         async with self._start_lock:
             # Check worktree is not occupied (under lock to prevent TOCTOU race)
@@ -905,58 +899,6 @@ class OrchestratorService:
         return await self._repository.get(workflow_id)
 
 
-    async def _emit_plan_validation_event(
-        self,
-        workflow_id: uuid.UUID,
-        plan_result: ExternalPlanImportResult,
-    ) -> dict[str, Any]:
-        """Emit plan validation event and return response dict.
-
-        Args:
-            workflow_id: The workflow ID.
-            plan_result: Result from import_external_plan with validation data.
-
-        Returns:
-            Dict with status, goal, key_files, total_tasks, and validation_issues if invalid.
-        """
-        validation = plan_result.validation_result
-        if validation is not None and not validation.valid:
-            await self._events.emit(
-                workflow_id,
-                EventType.PLAN_VALIDATION_FAILED,
-                f"Plan validation failed: {'; '.join(validation.issues)}",
-                agent="system",
-                data={
-                    "issues": validation.issues,
-                    "severity": validation.severity,
-                },
-            )
-            return {
-                "status": "invalid",
-                "goal": plan_result.goal,
-                "key_files": plan_result.key_files,
-                "total_tasks": plan_result.total_tasks,
-                "validation_issues": validation.issues,
-            }
-
-        await self._events.emit(
-            workflow_id,
-            EventType.PLAN_VALIDATED,
-            f"Plan validated: {plan_result.goal}",
-            agent="system",
-            data={
-                "goal": plan_result.goal,
-                "key_files": plan_result.key_files,
-                "total_tasks": plan_result.total_tasks,
-            },
-        )
-        return {
-            "status": "ready",
-            "goal": plan_result.goal,
-            "key_files": plan_result.key_files,
-            "total_tasks": plan_result.total_tasks,
-        }
-
     async def _delete_checkpoint(self, workflow_id: uuid.UUID) -> None:
         """Delete LangGraph checkpoint data for a workflow.
 
@@ -1002,115 +944,13 @@ class OrchestratorService:
 
             await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
 
-        # Get profile from settings using profile_id
-        if workflow.profile_id is None:
-            logger.error("No profile_id in workflow", workflow_id=workflow_id)
-            await self._repository.set_status(
-                workflow_id, WorkflowStatus.FAILED, failure_reason="Missing profile_id"
-            )
-            return
-        profile = await self._runner._get_profile_or_fail(
-            workflow_id, workflow.profile_id, workflow.worktree_path
+        # Delegate post-approval execution to the runner, which owns the
+        # execution-driver pattern (retry/failure-ladder, sandbox lifecycle).
+        await self._runner.resume_workflow_with_retry(
+            workflow_id,
+            workflow.profile_id,
+            workflow.worktree_path,
         )
-        if profile is None:
-            return
-
-        # Resolve prompts for workflow resume
-        prompts = await self._runner._resolve_prompts(workflow_id)
-
-        # Resume LangGraph execution with updated state
-        graph = self._runner._create_server_graph(self._checkpointer)
-
-        sandbox_provider: SandboxProvider | None = None
-        try:
-            sandbox_provider = await self._runner._create_sandbox_provider(profile)
-
-            config = self._runner._build_runnable_config(workflow_id, profile, prompts, sandbox_provider)
-
-            # Update checkpoint state with approval decision
-            await graph.aupdate_state(config, {"human_approved": True})
-
-            # Resume execution from checkpoint, retrying transient failures via
-            # the canonical with_retry helper (jittered exponential backoff).
-            retry_config = profile.retry
-
-            async def _resume() -> None:
-                async for chunk in graph.astream(
-                    None,  # Resume from checkpoint, no new input needed
-                    config=config,
-                    stream_mode=["updates", "tasks"],
-                ):
-                    # Combined mode returns (mode, data) tuples
-                    # Cast for type checker - astream with list mode returns tuples
-                    chunk_tuple = cast(tuple[str, Any], chunk)
-                    # In agentic mode, no interrupts expected after initial approval
-                    if is_interrupt_chunk(chunk_tuple):
-                        _, data = chunk_tuple
-                        state = await graph.aget_state(config)
-                        next_nodes = state.next if state else []
-                        logger.warning(
-                            "Unexpected interrupt after approval",
-                            workflow_id=workflow_id,
-                            next_nodes=next_nodes,
-                        )
-                        continue
-                    await self._events.handle_combined_stream_chunk(workflow_id, chunk_tuple)
-
-                # Workflow completed after human approval.
-                # Note: A separate COMPLETED emission exists in _run_workflow() for
-                # workflows that complete without interruption. These are mutually exclusive
-                # code paths - only one COMPLETED event is ever emitted per workflow.
-
-                await self._events.emit(
-                    workflow_id,
-                    EventType.WORKFLOW_COMPLETED,
-                    "Workflow completed successfully",
-                )
-                await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
-
-            try:
-                await with_retry(
-                    _resume,
-                    config=retry_config,
-                    retryable_exceptions=TRANSIENT_EXCEPTIONS,
-                )
-            except TRANSIENT_EXCEPTIONS as e:
-                # Retries exhausted. The total attempt count is 1 + max_retries.
-                attempts = retry_config.max_retries + 1
-                logger.exception(
-                    "Workflow failed after approval retries exhausted",
-                    workflow_id=workflow_id,
-                )
-                await self._events.emit(
-                    workflow_id,
-                    EventType.WORKFLOW_FAILED,
-                    f"Workflow failed after {attempts} attempts: {e!s}",
-                    data={"error": str(e), "attempts": attempts},
-                )
-                await self._repository.set_status(
-                    workflow_id,
-                    WorkflowStatus.FAILED,
-                    failure_reason=f"Failed after {attempts} attempts: {e}",
-                )
-                raise
-            except Exception as e:
-                logger.exception("Workflow failed after approval", workflow_id=workflow_id)
-                await self._events.emit(
-                    workflow_id,
-                    EventType.WORKFLOW_FAILED,
-                    f"Workflow failed: {e!s}",
-                    data={"error": str(e)},
-                )
-                await self._repository.set_status(
-                    workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
-                )
-                raise
-        finally:
-            if sandbox_provider is not None:
-                try:
-                    await sandbox_provider.teardown()
-                except Exception:
-                    logger.warning("Sandbox teardown failed", exc_info=True)
 
     async def reject_workflow(
         self,
@@ -1156,22 +996,10 @@ class OrchestratorService:
                 _, task = self._active_tasks[workflow.worktree_path]
                 task.cancel()
 
-        # Get profile from settings using profile_id
-        if workflow.profile_id is None:
-            logger.error("No profile_id in workflow", workflow_id=workflow_id)
-            return
-        profile = await self._runner._get_profile_or_fail(
+        # Write human_approved=False into the LangGraph checkpoint (best-effort)
+        await self._runner.record_rejection(
             workflow_id, workflow.profile_id, workflow.worktree_path
         )
-        if profile is None:
-            return
-
-        # Update LangGraph state to record rejection
-        graph = self._runner._create_server_graph(self._checkpointer)
-
-        config = self._runner._build_runnable_config(workflow_id, profile, prompts={})
-
-        await graph.aupdate_state(config, {"human_approved": False})
 
     async def recover_interrupted_workflows(self) -> None:
         """Recover workflows that were running when server restarted.
@@ -1350,8 +1178,8 @@ class OrchestratorService:
                         current_status=workflow.workflow_status,
                     ) from exc
 
-            # Set started_at timestamp (status transition happens in _run_workflow)
-            # NOTE: We don't set workflow_status here - _run_workflow handles
+            # Set started_at timestamp (status transition happens in runner.run_workflow)
+            # NOTE: We don't set workflow_status here - runner.run_workflow handles
             # the pending -> in_progress transition, consistent with start_workflow
             workflow.started_at = datetime.now(UTC)
             await self._repository.update(workflow)
@@ -1501,7 +1329,7 @@ class OrchestratorService:
             )
 
         # Get profile for plan path resolution
-        profile = await self._runner._get_profile_or_fail(
+        profile = await self._runner.get_profile_or_fail(
             workflow_id,
             workflow.profile_id,
             workflow.worktree_path,
@@ -1513,19 +1341,9 @@ class OrchestratorService:
 
         # Resolve target plan path
         working_dir = Path(profile.repo_root)
-
-        if plan_file is not None:
-            # External plan file: use it in-place (no naming convention copy)
-            source = Path(plan_file)
-            if not source.is_absolute():
-                source = working_dir / plan_file
-            target_path = source.expanduser().resolve()
-        else:
-            # Pasted content: generate path from naming convention
-            plan_rel_path = resolve_plan_path(
-                profile.plan_path_pattern, workflow.issue_id
-            )
-            target_path = working_dir / plan_rel_path
+        target_path = self._resolve_target_plan_path(
+            plan_file, profile.plan_path_pattern, workflow.issue_id, working_dir
+        )
 
         # Delegate to import_external_plan for read, write, extract, validate
         plan_result = await import_external_plan(
@@ -1547,7 +1365,7 @@ class OrchestratorService:
         await self._repository.update_plan_cache(workflow_id, plan_cache)
 
         # Emit validation event and build response
-        result = await self._emit_plan_validation_event(workflow_id, plan_result)
+        result = await self._runner.emit_plan_validation_event(workflow_id, plan_result)
 
         logger.info(
             "External plan imported and validated",
@@ -1654,7 +1472,7 @@ class OrchestratorService:
 
             # Emit replanning event inside the lock, before spawning the task,
             # to guarantee ordering: STAGE_STARTED always precedes any events
-            # emitted by _run_planning_task (e.g. APPROVAL_REQUIRED).
+            # emitted by runner.run_planning_task (e.g. APPROVAL_REQUIRED).
             await self._events.emit(
                 workflow_id,
                 EventType.STAGE_STARTED,
@@ -1663,9 +1481,9 @@ class OrchestratorService:
                 data={"stage": "architect", "replan": True},
             )
 
-            # Spawn planning task in background (reuses existing _run_planning_task).
+            # Spawn planning task in background (reuses existing runner.run_planning_task).
             # Note: workflow/execution_state are only used as initial graph input
-            # (see _run_planning_task docstring). The reconstructed execution_state
+            # (see runner.run_planning_task docstring). The reconstructed execution_state
             # seeds a fresh planning run. The task re-fetches from the repository
             # before any mutations, so staleness is safe.
             task = asyncio.create_task(
@@ -1761,7 +1579,7 @@ class OrchestratorService:
         # Reconstruct issue from cached data
         issue = None
         if workflow.issue_cache:
-            issue = Issue(**workflow.issue_cache)
+            issue = Issue.model_validate(workflow.issue_cache)
 
         return await self._launch_review(
             worktree_path=worktree_path,

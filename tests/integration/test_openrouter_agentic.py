@@ -52,9 +52,8 @@ async def _execute_with_retry(
             #     it belongs in the same skip class as a rate-limit.
             exc_str = str(exc).lower()
             unavailable_markers = (
-                "rate",
-                "limit",
-                "max_tokens",
+                "rate limit",
+                "rate_limit",
                 "max_completion_tokens",
                 "maximum allowed",
             )

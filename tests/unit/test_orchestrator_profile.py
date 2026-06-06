@@ -43,8 +43,8 @@ class TestOrchestratorProfileLoading:
         assert profile.name == "dev"
         assert profile.agents["developer"].driver == "claude"
 
-    async def test_get_profile_or_fail_returns_profile(self):
-        """Verify _get_profile_or_fail returns Profile from database."""
+    async def testget_profile_or_fail_returns_profile(self):
+        """Verify get_profile_or_fail returns Profile from database."""
         mock_event_bus = MagicMock()
         mock_repository = AsyncMock()
         mock_repository.get_max_event_sequence.return_value = 0
@@ -59,7 +59,7 @@ class TestOrchestratorProfileLoading:
             profile_repo=mock_profile_repo,
         )
 
-        profile = await service._runner._get_profile_or_fail(
+        profile = await service._runner.get_profile_or_fail(
             workflow_id=uuid4(),
             profile_id="dev",
             worktree_path="/some/worktree",
@@ -71,8 +71,8 @@ class TestOrchestratorProfileLoading:
         assert profile.repo_root == "/some/worktree"
         mock_profile_repo.get_profile.assert_called_once_with("dev")
 
-    async def test_get_profile_or_fail_profile_not_found(self):
-        """Verify _get_profile_or_fail returns None and sets failed status when profile not found."""
+    async def testget_profile_or_fail_profile_not_found(self):
+        """Verify get_profile_or_fail returns None and sets failed status when profile not found."""
         mock_event_bus = MagicMock()
         mock_repository = AsyncMock()
         mock_repository.get_max_event_sequence.return_value = 0
@@ -86,7 +86,7 @@ class TestOrchestratorProfileLoading:
         )
 
         wf_id = uuid4()
-        profile = await service._runner._get_profile_or_fail(
+        profile = await service._runner.get_profile_or_fail(
             workflow_id=wf_id,
             profile_id="nonexistent",
             worktree_path="/some/worktree",

@@ -78,7 +78,7 @@ def mock_graph():
     mock.astream = MagicMock(return_value=AsyncMock())
     mock.aget_state = AsyncMock(return_value=MagicMock(values={}, next=[]))
     with patch.object(
-        GraphRunner, "_create_server_graph", return_value=mock
+        GraphRunner, "create_server_graph", return_value=mock
     ):
         yield mock
 

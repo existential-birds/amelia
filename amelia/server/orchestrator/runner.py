@@ -24,6 +24,7 @@ from amelia.core.types import (
     Profile,
     SandboxMode,
 )
+from amelia.pipelines.implementation.external_plan import ExternalPlanImportResult
 from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.review import create_review_graph
@@ -93,7 +94,7 @@ class GraphRunner:
     # Setup helpers
     # ------------------------------------------------------------------
 
-    def _create_server_graph(
+    def create_server_graph(
         self,
         checkpointer: BaseCheckpointSaver[Any] | None = None,
     ) -> CompiledStateGraph[Any]:
@@ -112,7 +113,7 @@ class GraphRunner:
             ],
         )
 
-    async def _resolve_prompts(self, workflow_id: uuid.UUID) -> dict[str, str]:
+    async def resolve_prompts(self, workflow_id: uuid.UUID) -> dict[str, str]:
         """Resolve all prompts for a workflow.
 
         Uses PromptResolver to get current active prompts, falling back to
@@ -147,7 +148,7 @@ class GraphRunner:
             )
             return {}
 
-    async def _get_profile_or_fail(
+    async def get_profile_or_fail(
         self,
         workflow_id: uuid.UUID,
         profile_id: str,
@@ -186,7 +187,7 @@ class GraphRunner:
 
         return update_profile_repo_root(record, worktree_path)
 
-    async def _create_sandbox_provider(
+    async def create_sandbox_provider(
         self,
         profile: Profile,
         agent_name: str = "developer",
@@ -221,7 +222,7 @@ class GraphRunner:
         await provider.ensure_running()
         return provider
 
-    def _build_runnable_config(
+    def build_runnable_config(
         self,
         workflow_id: uuid.UUID,
         profile: Profile,
@@ -397,6 +398,59 @@ class GraphRunner:
                 error=str(e),
             )
 
+    async def emit_plan_validation_event(
+        self,
+        workflow_id: uuid.UUID,
+        plan_result: ExternalPlanImportResult,
+    ) -> dict[str, Any]:
+        """Emit plan validation event and return response dict.
+
+        Args:
+            workflow_id: The workflow ID.
+            plan_result: Result from import_external_plan with validation data.
+
+        Returns:
+            Dict with status, goal, key_files, total_tasks, and
+            validation_issues if invalid.
+        """
+        validation = plan_result.validation_result
+        if validation is not None and not validation.valid:
+            await self._events.emit(
+                workflow_id,
+                EventType.PLAN_VALIDATION_FAILED,
+                f"Plan validation failed: {'; '.join(validation.issues)}",
+                agent="system",
+                data={
+                    "issues": validation.issues,
+                    "severity": validation.severity,
+                },
+            )
+            return {
+                "status": "invalid",
+                "goal": plan_result.goal,
+                "key_files": plan_result.key_files,
+                "total_tasks": plan_result.total_tasks,
+                "validation_issues": validation.issues,
+            }
+
+        await self._events.emit(
+            workflow_id,
+            EventType.PLAN_VALIDATED,
+            f"Plan validated: {plan_result.goal}",
+            agent="system",
+            data={
+                "goal": plan_result.goal,
+                "key_files": plan_result.key_files,
+                "total_tasks": plan_result.total_tasks,
+            },
+        )
+        return {
+            "status": "ready",
+            "goal": plan_result.goal,
+            "key_files": plan_result.key_files,
+            "total_tasks": plan_result.total_tasks,
+        }
+
     # ------------------------------------------------------------------
     # Execution drivers
     # ------------------------------------------------------------------
@@ -428,19 +482,19 @@ class GraphRunner:
             return
 
         # Get profile from settings using profile_id (with worktree_path fallback)
-        profile = await self._get_profile_or_fail(
+        profile = await self.get_profile_or_fail(
             workflow_id, profile_id, state.worktree_path
         )
         if profile is None:
             return
 
         # Resolve prompts before starting workflow
-        prompts = await self._resolve_prompts(workflow_id)
+        prompts = await self.resolve_prompts(workflow_id)
 
         # CRITICAL: Pass interrupt_before to enable server-mode approval
-        graph = self._create_server_graph(self._checkpointer)
+        graph = self.create_server_graph(self._checkpointer)
 
-        config = self._build_runnable_config(workflow_id, profile, prompts, sandbox_provider)
+        config = self.build_runnable_config(workflow_id, profile, prompts, sandbox_provider)
 
         await self._events.emit(
             workflow_id,
@@ -541,7 +595,7 @@ class GraphRunner:
             return
 
         # Get profile from settings using profile_id (with worktree_path fallback)
-        profile = await self._get_profile_or_fail(
+        profile = await self.get_profile_or_fail(
             workflow_id, profile_id, state.worktree_path
         )
         if profile is None:
@@ -561,7 +615,7 @@ class GraphRunner:
                 # failures are retried (sandbox recreated on the next attempt).
                 if sandbox_provider is None:
                     try:
-                        sandbox_provider = await self._create_sandbox_provider(profile)
+                        sandbox_provider = await self.create_sandbox_provider(profile)
                     except ValueError:
                         raise  # Non-transient config errors fail immediately
                     except TRANSIENT_EXCEPTIONS:
@@ -638,6 +692,156 @@ class GraphRunner:
                 except Exception:
                     logger.warning("Sandbox teardown failed", exc_info=True)
 
+    async def resume_workflow_with_retry(
+        self,
+        workflow_id: uuid.UUID,
+        profile_id: str | None,
+        worktree_path: str,
+    ) -> None:
+        """Resume a post-approval workflow from checkpoint with retry.
+
+        Updates the LangGraph checkpoint state with ``human_approved=True`` and
+        streams from the existing checkpoint (``None`` input).  Uses the same
+        retry/failure-ladder as ``run_workflow_with_retry`` so transient errors
+        are retried and sandbox lifecycle is managed correctly.
+
+        Args:
+            workflow_id: The workflow to resume.
+            profile_id: Profile ID; if ``None`` the workflow is failed immediately.
+            worktree_path: Worktree path used to resolve the profile's repo root.
+        """
+        if profile_id is None:
+            logger.error("No profile_id in workflow", workflow_id=workflow_id)
+            await self._repository.set_status(
+                workflow_id, WorkflowStatus.FAILED, failure_reason="Missing profile_id"
+            )
+            return
+
+        profile = await self.get_profile_or_fail(workflow_id, profile_id, worktree_path)
+        if profile is None:
+            return
+
+        retry_config = profile.retry
+        sandbox_provider: SandboxProvider | None = None
+
+        async def _resume() -> None:
+            nonlocal sandbox_provider
+            try:
+                if sandbox_provider is None:
+                    try:
+                        sandbox_provider = await self.create_sandbox_provider(profile)
+                    except ValueError:
+                        raise  # Non-transient config errors fail immediately
+                    except TRANSIENT_EXCEPTIONS:
+                        raise  # Let with_retry apply retry logic
+                    except Exception as e:
+                        logger.exception("Daytona sandbox bootstrap failed", workflow_id=workflow_id)
+                        await self._events.emit(
+                            workflow_id,
+                            EventType.WORKFLOW_FAILED,
+                            f"Sandbox bootstrap failed: {e!s}",
+                            data={"error": str(e), "error_type": "sandbox_bootstrap"},
+                        )
+                        await self._repository.set_status(
+                            workflow_id,
+                            WorkflowStatus.FAILED,
+                            failure_reason=f"Sandbox bootstrap failed: {e}",
+                        )
+                        raise _SandboxBootstrapHandled from e
+
+                prompts = await self.resolve_prompts(workflow_id)
+                graph = self.create_server_graph(self._checkpointer)
+                config = self.build_runnable_config(workflow_id, profile, prompts, sandbox_provider)
+
+                # Inject the approval decision into the checkpoint before resuming.
+                await graph.aupdate_state(config, {"human_approved": True})
+
+                async for chunk in graph.astream(
+                    None,  # Resume from checkpoint, no new input needed
+                    config=config,
+                    stream_mode=["updates", "tasks"],
+                ):
+                    chunk_tuple = cast(tuple[str, Any], chunk)
+                    # In agentic mode, no interrupts expected after initial approval
+                    if is_interrupt_chunk(chunk_tuple):
+                        _, _data = chunk_tuple
+                        state = await graph.aget_state(config)
+                        next_nodes = state.next if state else []
+                        logger.warning(
+                            "Unexpected interrupt after approval",
+                            workflow_id=workflow_id,
+                            next_nodes=next_nodes,
+                        )
+                        continue
+                    await self._events.handle_combined_stream_chunk(workflow_id, chunk_tuple)
+
+                # Workflow completed after human approval.
+                # Note: A separate COMPLETED emission exists in run_workflow() for
+                # workflows that complete without interruption. These are mutually
+                # exclusive code paths — only one COMPLETED event is emitted per workflow.
+                await self._events.emit(
+                    workflow_id,
+                    EventType.WORKFLOW_COMPLETED,
+                    "Workflow completed successfully",
+                )
+                await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
+            except BaseException:
+                # Tear down the sandbox so the next retry recreates it cleanly.
+                if sandbox_provider is not None:
+                    try:
+                        await sandbox_provider.teardown()
+                    except Exception:
+                        logger.warning("Sandbox teardown failed during retry", exc_info=True)
+                    sandbox_provider = None
+                raise
+
+        try:
+            try:
+                await with_retry(
+                    _resume,
+                    config=retry_config,
+                    retryable_exceptions=TRANSIENT_EXCEPTIONS,
+                )
+            except _SandboxBootstrapHandled:
+                # Bootstrap failure already emitted WORKFLOW_FAILED + set FAILED.
+                return
+            except TRANSIENT_EXCEPTIONS as e:
+                attempts = retry_config.max_retries + 1
+                logger.exception(
+                    "Workflow failed after approval retries exhausted",
+                    workflow_id=workflow_id,
+                )
+                await self._events.emit(
+                    workflow_id,
+                    EventType.WORKFLOW_FAILED,
+                    f"Workflow failed after {attempts} attempts: {e!s}",
+                    data={"error": str(e), "attempts": attempts},
+                )
+                await self._repository.set_status(
+                    workflow_id,
+                    WorkflowStatus.FAILED,
+                    failure_reason=f"Failed after {attempts} attempts: {e}",
+                )
+                raise
+            except Exception as e:
+                logger.exception("Workflow failed after approval", workflow_id=workflow_id)
+                await self._events.emit(
+                    workflow_id,
+                    EventType.WORKFLOW_FAILED,
+                    f"Workflow failed: {e!s}",
+                    data={"error": str(e)},
+                )
+                await self._repository.set_status(
+                    workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
+                )
+                raise
+        finally:
+            if sandbox_provider is not None:
+                try:
+                    await sandbox_provider.teardown()
+                except Exception:
+                    logger.warning("Sandbox teardown failed", exc_info=True)
+
     async def run_review_workflow(
         self,
         workflow_id: uuid.UUID,
@@ -666,14 +870,14 @@ class GraphRunner:
             )
             return
 
-        profile = await self._get_profile_or_fail(
+        profile = await self.get_profile_or_fail(
             workflow_id, state.profile_id, state.worktree_path
         )
         if profile is None:
             return
 
         # Resolve prompts before starting workflow
-        prompts = await self._resolve_prompts(workflow_id)
+        prompts = await self.resolve_prompts(workflow_id)
 
         # Use dedicated review graph for review workflows
         graph = create_review_graph(
@@ -683,9 +887,9 @@ class GraphRunner:
         sandbox_provider: SandboxProvider | None = None
         try:
             try:
-                sandbox_provider = await self._create_sandbox_provider(profile)
+                sandbox_provider = await self.create_sandbox_provider(profile)
 
-                config = self._build_runnable_config(
+                config = self.build_runnable_config(
                     workflow_id, profile, prompts, sandbox_provider,
                     review_mode=review_mode, review_types=review_types,
                 )
@@ -771,6 +975,71 @@ class GraphRunner:
                 except Exception:
                     logger.warning("Sandbox teardown failed", exc_info=True)
 
+    async def validate_resume_checkpoint(
+        self,
+        workflow_id: uuid.UUID,
+        workflow_status: "WorkflowStatus",
+    ) -> None:
+        """Validate that a resumable checkpoint exists for *workflow_id*.
+
+        Reads the LangGraph checkpoint state (read-only) and raises
+        ``InvalidStateError`` if the checkpoint is missing or corrupted.
+
+        Args:
+            workflow_id: The workflow whose checkpoint to validate.
+            workflow_status: The current workflow status (used in error messages).
+
+        Raises:
+            InvalidStateError: If the checkpoint data is absent or corrupted.
+        """
+        from amelia.server.exceptions import InvalidStateError  # noqa: PLC0415
+
+        graph = self.create_server_graph(self._checkpointer)
+        config: RunnableConfig = {"configurable": {"thread_id": str(workflow_id)}}
+        try:
+            checkpoint_state = await graph.aget_state(config)
+        except Exception as exc:
+            raise InvalidStateError(
+                f"Cannot resume: checkpoint data is corrupted ({type(exc).__name__}: {exc})",
+                workflow_id=workflow_id,
+                current_status=workflow_status,
+            ) from exc
+        if checkpoint_state is None or not checkpoint_state.values:
+            raise InvalidStateError(
+                "Cannot resume: no checkpoint found for workflow",
+                workflow_id=workflow_id,
+                current_status=workflow_status,
+            )
+
+    async def record_rejection(
+        self,
+        workflow_id: uuid.UUID,
+        profile_id: str | None,
+        worktree_path: str,
+    ) -> None:
+        """Write ``human_approved=False`` into the LangGraph checkpoint.
+
+        Called by the service after a rejection has been persisted to the
+        repository and the waiting task has been cancelled. Failure is
+        warn-and-continue: the checkpoint write is best-effort — the workflow
+        is already in FAILED state when this runs.
+
+        Args:
+            workflow_id: The rejected workflow.
+            profile_id: Profile ID; if ``None`` the update is skipped and an
+                error is logged (matching the pre-extraction behaviour).
+            worktree_path: Worktree path for profile resolution.
+        """
+        if profile_id is None:
+            logger.error("No profile_id in workflow", workflow_id=workflow_id)
+            return
+        profile = await self.get_profile_or_fail(workflow_id, profile_id, worktree_path)
+        if profile is None:
+            return
+        graph = self.create_server_graph(self._checkpointer)
+        config = self.build_runnable_config(workflow_id, profile, prompts={})
+        await graph.aupdate_state(config, {"human_approved": False})
+
     async def run_planning_task(
         self,
         workflow_id: uuid.UUID,
@@ -795,15 +1064,15 @@ class GraphRunner:
             profile: The profile with driver configuration.
         """
         # Resolve prompts for architect
-        prompts = await self._resolve_prompts(workflow_id)
+        prompts = await self.resolve_prompts(workflow_id)
 
-        graph = self._create_server_graph(self._checkpointer)
+        graph = self.create_server_graph(self._checkpointer)
 
         sandbox_provider: SandboxProvider | None = None
         try:
-            sandbox_provider = await self._create_sandbox_provider(profile, agent_name="architect")
+            sandbox_provider = await self.create_sandbox_provider(profile, agent_name="architect")
 
-            config = self._build_runnable_config(workflow_id, profile, prompts, sandbox_provider)
+            config = self.build_runnable_config(workflow_id, profile, prompts, sandbox_provider)
 
             was_interrupted = False
             # Convert Pydantic model to JSON-serializable dict for checkpointing

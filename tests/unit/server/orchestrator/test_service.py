@@ -1053,13 +1053,12 @@ def model_provider_error_patches(
     """Context manager for common patches in ModelProviderError tests."""
     with (
         patch.object(
-            orchestrator._runner, "_get_profile_or_fail", return_value=setup.mock_profile
+            orchestrator._runner, "get_profile_or_fail", return_value=setup.mock_profile
         ),
         patch.object(
-            orchestrator._runner, "_create_server_graph", return_value=setup.mock_graph
+            orchestrator._runner, "create_server_graph", return_value=setup.mock_graph
         ),
-        patch.object(orchestrator._runner, "_resolve_prompts", return_value={}),
-        patch.object(orchestrator._events, "emit", new=AsyncMock()),
+        patch.object(orchestrator._runner, "resolve_prompts", return_value={}),
         # with_retry sleeps in amelia.core.retry, not in service.
         patch(
             "amelia.core.retry.asyncio.sleep", new_callable=AsyncMock
@@ -1150,10 +1149,9 @@ async def test_httpx_connect_error_retried(
     mock_graph.astream = MagicMock(side_effect=httpx.ConnectError("Connection refused"))
 
     with (
-        patch.object(orchestrator._runner, "_get_profile_or_fail", return_value=mock_profile),
-        patch.object(orchestrator._runner, "_create_server_graph", return_value=mock_graph),
-        patch.object(orchestrator._runner, "_resolve_prompts", return_value={}),
-        patch.object(orchestrator._events, "emit", new=AsyncMock()),
+        patch.object(orchestrator._runner, "get_profile_or_fail", return_value=mock_profile),
+        patch.object(orchestrator._runner, "create_server_graph", return_value=mock_graph),
+        patch.object(orchestrator._runner, "resolve_prompts", return_value={}),
         # with_retry sleeps in amelia.core.retry, not in service.
         patch(
             "amelia.core.retry.asyncio.sleep", new_callable=AsyncMock
@@ -1195,7 +1193,7 @@ async def test_resume_workflow_corrupted_checkpoint_raises_invalid_state(
     )
 
     with (
-        patch.object(orchestrator._runner, "_create_server_graph", return_value=mock_graph),
+        patch.object(orchestrator._runner, "create_server_graph", return_value=mock_graph),
         pytest.raises(InvalidStateError) as exc_info,
     ):
         await orchestrator.resume_workflow(wf_id)
