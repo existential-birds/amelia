@@ -20,6 +20,15 @@ from amelia.server.models.state import (
 from amelia.server.models.tokens import TokenSummary, TokenUsage
 
 
+# Workflow SELECT column list in the order _row_to_state consumes.
+_WORKFLOW_COLUMNS = (
+    "id, issue_id, worktree_path, status, "
+    "created_at, started_at, completed_at, failure_reason, "
+    "workflow_type, profile_id, plan_cache, issue_cache, "
+    "base_commit, branch"
+)
+
+
 class WorkflowRepository:
     """Repository for workflow CRUD operations.
 
@@ -121,14 +130,7 @@ class WorkflowRepository:
             Workflow state or None if not found.
         """
         row = await self._db.fetch_one(
-            """
-            SELECT
-                id, issue_id, worktree_path, status,
-                created_at, started_at, completed_at, failure_reason,
-                workflow_type, profile_id, plan_cache, issue_cache,
-                base_commit, branch
-            FROM workflows WHERE id = $1
-            """,
+            f"SELECT {_WORKFLOW_COLUMNS} FROM workflows WHERE id = $1",
             workflow_id,
         )
         if row is None:
@@ -157,11 +159,7 @@ class WorkflowRepository:
         placeholders = in_clause_placeholders(len(statuses), start=2)
         row = await self._db.fetch_one(
             f"""
-            SELECT
-                id, issue_id, worktree_path, status,
-                created_at, started_at, completed_at, failure_reason,
-                workflow_type, profile_id, plan_cache, issue_cache,
-                base_commit, branch
+            SELECT {_WORKFLOW_COLUMNS}
             FROM workflows
             WHERE worktree_path = $1
             AND status IN ({placeholders})
@@ -389,11 +387,7 @@ class WorkflowRepository:
         placeholders = in_clause_placeholders(len(statuses))
         rows = await self._db.fetch_all(
             f"""
-            SELECT
-                id, issue_id, worktree_path, status,
-                created_at, started_at, completed_at, failure_reason,
-                workflow_type, profile_id, plan_cache, issue_cache,
-                base_commit, branch
+            SELECT {_WORKFLOW_COLUMNS}
             FROM workflows
             WHERE status IN ({placeholders})
             """,
