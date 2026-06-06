@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { brainstormApi } from "../brainstorm";
+import { ApiError } from '../utils';
+import { mockFetchSuccess } from "@/test/mocks/fetch";
 
 describe("brainstormApi", () => {
   beforeEach(() => {
@@ -15,25 +17,19 @@ describe("brainstormApi", () => {
       const mockSessions = [
         { id: "s1", profile_id: "p1", status: "active", topic: "Test" },
       ];
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockSessions,
-      } as Response);
+      mockFetchSuccess(mockSessions);
 
       const result = await brainstormApi.listSessions();
 
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/brainstorm/sessions"),
-        expect.objectContaining({ method: "GET" })
+        expect.any(Object)
       );
       expect(result).toEqual(mockSessions);
     });
 
     it("applies filters to query string", async () => {
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => [],
-      } as Response);
+      mockFetchSuccess([]);
 
       await brainstormApi.listSessions({ profileId: "p1", status: "active" });
 
@@ -51,10 +47,7 @@ describe("brainstormApi", () => {
   describe("createSession", () => {
     it("creates a new session", async () => {
       const mockSession = { id: "s1", profile_id: "p1", status: "active" };
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockSession,
-      } as Response);
+      mockFetchSuccess(mockSession);
 
       const result = await brainstormApi.createSession("p1", "Test topic");
 
@@ -76,16 +69,13 @@ describe("brainstormApi", () => {
         messages: [],
         artifacts: [],
       };
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      } as Response);
+      mockFetchSuccess(mockData);
 
       const result = await brainstormApi.getSession("s1");
 
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/brainstorm/sessions/s1"),
-        expect.objectContaining({ method: "GET" })
+        expect.any(Object)
       );
       expect(result).toEqual(mockData);
     });
@@ -93,10 +83,7 @@ describe("brainstormApi", () => {
 
   describe("sendMessage", () => {
     it("sends message and returns message_id", async () => {
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ message_id: "m1" }),
-      } as Response);
+      mockFetchSuccess({ message_id: "m1" });
 
       const result = await brainstormApi.sendMessage("s1", "Hello");
 
@@ -115,6 +102,7 @@ describe("brainstormApi", () => {
     it("deletes a session", async () => {
       vi.mocked(fetch).mockResolvedValueOnce({
         ok: true,
+        status: 204,
       } as Response);
 
       await brainstormApi.deleteSession("s1");
@@ -128,10 +116,7 @@ describe("brainstormApi", () => {
 
   describe("handoff", () => {
     it("hands off session to implementation", async () => {
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ workflow_id: "w1", status: "created" }),
-      } as Response);
+      mockFetchSuccess({ workflow_id: "w1", status: "created" });
 
       const result = await brainstormApi.handoff("s1", "/path/doc.md", "Title");
 
@@ -146,6 +131,19 @@ describe("brainstormApi", () => {
         })
       );
       expect(result).toEqual({ workflow_id: "w1", status: "created" });
+    });
+  });
+
+  describe("error contract", () => {
+    it("throws a typed ApiError on an error response", async () => {
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: async () => ({ detail: "missing", code: "NOT_FOUND" }),
+      } as Response);
+      const err = await brainstormApi.getSession("x").catch((e) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect(err).toMatchObject({ code: "NOT_FOUND", status: 404, message: "missing" });
     });
   });
 

@@ -4,20 +4,7 @@ import type {
   SessionWithHistory,
   SessionStatus,
 } from "@/types/api";
-import { parseErrorDetail } from './errors';
-import { createTimeoutSignal } from './utils';
-
-const API_BASE_URL = "/api/brainstorm";
-const DEFAULT_TIMEOUT_MS = 30000;
-
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    const message = parseErrorDetail(error.detail, `HTTP ${response.status}`);
-    throw new Error(message);
-  }
-  return response.json();
-}
+import { request } from './utils';
 
 interface ListSessionsFilters {
   profileId?: string;
@@ -29,68 +16,45 @@ export const brainstormApi = {
   async listSessions(
     filters?: ListSessionsFilters
   ): Promise<BrainstormingSession[]> {
-    const params = new URLSearchParams();
-    if (filters?.profileId) params.set("profile_id", filters.profileId);
-    if (filters?.status) params.set("status", filters.status);
-    if (filters?.limit) params.set("limit", String(filters.limit));
-
-    const url = `${API_BASE_URL}/sessions${params.toString() ? `?${params}` : ""}`;
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      signal: createTimeoutSignal(DEFAULT_TIMEOUT_MS),
+    return request<BrainstormingSession[]>("/brainstorm/sessions", {
+      params: {
+        profile_id: filters?.profileId,
+        status: filters?.status,
+        limit: filters?.limit,
+      },
     });
-    return handleResponse<BrainstormingSession[]>(response);
   },
 
   async createSession(
     profileId: string,
     topic?: string
   ): Promise<CreateSessionResponse> {
-    const response = await fetch(`${API_BASE_URL}/sessions`, {
+    return request<CreateSessionResponse>("/brainstorm/sessions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile_id: profileId, topic }),
-      signal: createTimeoutSignal(DEFAULT_TIMEOUT_MS),
+      body: { profile_id: profileId, topic },
     });
-    return handleResponse<CreateSessionResponse>(response);
   },
 
   async getSession(sessionId: string): Promise<SessionWithHistory> {
-    const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      signal: createTimeoutSignal(DEFAULT_TIMEOUT_MS),
-    });
-    return handleResponse<SessionWithHistory>(response);
+    return request<SessionWithHistory>(
+      `/brainstorm/sessions/${encodeURIComponent(sessionId)}`
+    );
   },
 
   async sendMessage(
     sessionId: string,
     content: string
   ): Promise<{ message_id: string }> {
-    const response = await fetch(
-      `${API_BASE_URL}/sessions/${sessionId}/message`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-        signal: createTimeoutSignal(DEFAULT_TIMEOUT_MS),
-      }
+    return request<{ message_id: string }>(
+      `/brainstorm/sessions/${encodeURIComponent(sessionId)}/message`,
+      { method: "POST", body: { content } }
     );
-    return handleResponse<{ message_id: string }>(response);
   },
 
   async deleteSession(sessionId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
+    await request(`/brainstorm/sessions/${encodeURIComponent(sessionId)}`, {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      signal: createTimeoutSignal(DEFAULT_TIMEOUT_MS),
     });
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(parseErrorDetail(error.detail, `HTTP ${response.status}`));
-    }
   },
 
   async handoff(
@@ -98,18 +62,12 @@ export const brainstormApi = {
     artifactPath: string,
     issueTitle?: string
   ): Promise<{ workflow_id: string; status: string }> {
-    const response = await fetch(
-      `${API_BASE_URL}/sessions/${sessionId}/handoff`,
+    return request<{ workflow_id: string; status: string }>(
+      `/brainstorm/sessions/${encodeURIComponent(sessionId)}/handoff`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          artifact_path: artifactPath,
-          issue_title: issueTitle,
-        }),
-        signal: createTimeoutSignal(DEFAULT_TIMEOUT_MS),
+        body: { artifact_path: artifactPath, issue_title: issueTitle },
       }
     );
-    return handleResponse<{ workflow_id: string; status: string }>(response);
   },
 };

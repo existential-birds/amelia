@@ -113,7 +113,6 @@ export function makeMockModelsStore(
     fetchModels: vi.fn(),
     refreshModels: vi.fn(),
     lookupModelById: vi.fn(),
-    getModelsForAgent: vi.fn().mockReturnValue(mockModels),
     ...overrides,
   };
 

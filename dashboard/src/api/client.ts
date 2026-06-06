@@ -32,108 +32,7 @@ import type {
   KnowledgeDocumentListResponse,
   SearchResult,
 } from '../types/knowledge';
-import { parseErrorDetail } from './errors';
-import { API_BASE_URL, createTimeoutSignal } from './utils';
-
-/**
- * Wraps fetch with a timeout, optionally combined with an external abort
- * signal. Throws {@link ApiError} with a TIMEOUT or ABORTED code on abort.
- */
-async function fetchWithTimeout(
-  url: string,
-  options: RequestInit = {},
-  abortSignal?: AbortSignal
-): Promise<Response> {
-  const timeoutSignal = createTimeoutSignal();
-
-  // Combine timeout signal with optional abort signal
-  const signal = abortSignal
-    ? AbortSignal.any([timeoutSignal, abortSignal])
-    : timeoutSignal;
-
-  try {
-    return await fetch(url, { ...options, signal });
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      // Check if it was an external abort (not timeout)
-      if (abortSignal?.aborted) {
-        throw new ApiError('Request aborted', 'ABORTED', 0);
-      }
-      throw new ApiError('Request timeout', 'TIMEOUT', 408);
-    }
-    throw error;
-  }
-}
-
-/**
- * Error for API failures, carrying a machine-readable `code`, HTTP `status`,
- * and optional `details` alongside the message.
- */
-class ApiError extends Error {
-  constructor(
-    message: string,
-    public code: string,
-    public status: number,
-    public details?: Record<string, unknown>
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
-
-/**
- * Handles HTTP response parsing and error handling.
- *
- * Checks if the response is successful, parses the JSON body, and throws
- * ApiError if the response indicates an error. Attempts to parse error
- * details from the response body when available.
- *
- * @param response - The fetch Response object to handle.
- * @returns The parsed JSON response body.
- * @throws {ApiError} When the response status is not OK (non-2xx status code).
- *
- * @example
- * ```typescript
- * const response = await fetch('/api/workflows');
- * const data = await handleResponse<WorkflowListResponse>(response);
- * ```
- */
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    let errorData: Record<string, unknown>;
-    try {
-      errorData = await response.json();
-    } catch {
-      throw new ApiError(
-        `HTTP ${response.status}: ${response.statusText}`,
-        'HTTP_ERROR',
-        response.status
-      );
-    }
-
-    // Handle both our ErrorResponse format ({error, code}) and
-    // FastAPI's HTTPException format ({detail})
-    const message = parseErrorDetail(
-      errorData.detail ?? errorData.error,
-      `HTTP ${response.status}: ${response.statusText}`
-    );
-    const code = (errorData.code as string) || 'HTTP_ERROR';
-
-    throw new ApiError(
-      message,
-      code,
-      response.status,
-      errorData.details as Record<string, unknown> | undefined
-    );
-  }
-
-  // Handle responses with no content (e.g., 204 No Content from DELETE)
-  if (response.status === 204 || response.headers?.get('content-length') === '0') {
-    return (void 0) as T;
-  }
-
-  return response.json();
-}
+import { request, ApiError } from './utils';
 
 /**
  * API client for interacting with the Amelia workflow management backend.
@@ -157,8 +56,7 @@ export const api = {
    * ```
    */
   async getWorkflows(): Promise<WorkflowSummary[]> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/active`);
-    const data = await handleResponse<WorkflowListResponse>(response);
+    const data = await request<WorkflowListResponse>('/workflows/active');
     return data.workflows;
   },
 
@@ -179,29 +77,32 @@ export const api = {
    * ```
    */
   async getWorkflow(id: string): Promise<WorkflowDetailResponse> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}`);
-    const data = await handleResponse<WorkflowDetailResponse & { recent_events?: Array<{ event_type: string; sequence: number; data?: Record<string, unknown> }> }>(response);
+    const { recent_events, ...rest } = await request<
+      WorkflowDetailResponse & {
+        recent_events?: Array<{
+          event_type: string;
+          sequence: number;
+          data?: Record<string, unknown>;
+        }>;
+      }
+    >(`/workflows/${id}`);
 
     // Extract recoverable flag from recent_events in the raw API response
     // so recovery detection survives page refresh without ephemeral store events.
     // Only set recoverable when we find a workflow_failed event — an empty array
     // must leave recoverable undefined so the store-events fallback still works.
-    if (data.status === 'failed' && data.recent_events?.length) {
-      const failedEvents = data.recent_events
+    let recoverable: boolean | undefined;
+    if (rest.status === 'failed' && recent_events?.length) {
+      const failedEvents = recent_events
         .filter(e => e.event_type === 'workflow_failed')
         .sort((a, b) => b.sequence - a.sequence);
       const latest = failedEvents[0];
-      if (latest) {
-        const recoverable = latest.data?.recoverable;
-        if (typeof recoverable === 'boolean') {
-          data.recoverable = recoverable;
-        }
+      if (latest && typeof latest.data?.recoverable === 'boolean') {
+        recoverable = latest.data.recoverable;
       }
     }
-    // Strip recent_events from the response — they are not part of the frontend type
-    delete (data as unknown as Record<string, unknown>).recent_events;
 
-    return data;
+    return recoverable === undefined ? rest : { ...rest, recoverable };
   },
 
   /**
@@ -221,11 +122,7 @@ export const api = {
    * ```
    */
   async approveWorkflow(id: string): Promise<void> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    await handleResponse(response);
+    await request(`/workflows/${id}/approve`, { method: 'POST' });
   },
 
   /**
@@ -246,12 +143,7 @@ export const api = {
    * ```
    */
   async rejectWorkflow(id: string, feedback: string): Promise<void> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}/reject`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feedback }),
-    });
-    await handleResponse(response);
+    await request(`/workflows/${id}/reject`, { method: 'POST', body: { feedback } });
   },
 
   /**
@@ -271,11 +163,7 @@ export const api = {
    * ```
    */
   async replanWorkflow(id: string): Promise<void> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}/replan`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    await handleResponse(response);
+    await request(`/workflows/${id}/replan`, { method: 'POST' });
   },
 
   /**
@@ -295,11 +183,7 @@ export const api = {
    * ```
    */
   async cancelWorkflow(id: string): Promise<void> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}/cancel`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    await handleResponse(response);
+    await request(`/workflows/${id}/cancel`, { method: 'POST' });
   },
 
   /**
@@ -315,11 +199,7 @@ export const api = {
    * ```
    */
   async resumeWorkflow(id: string): Promise<void> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}/resume`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    await handleResponse(response);
+    await request(`/workflows/${id}/resume`, { method: 'POST' });
   },
 
   /**
@@ -343,8 +223,9 @@ export const api = {
     const statuses: WorkflowStatus[] = ['completed', 'failed', 'cancelled'];
     const results = await Promise.all(
       statuses.map(async (status) => {
-        const response = await fetchWithTimeout(`${API_BASE_URL}/workflows?status=${status}`);
-        const data = await handleResponse<WorkflowListResponse>(response);
+        const data = await request<WorkflowListResponse>('/workflows', {
+          params: { status },
+        });
         return data.workflows;
       })
     );
@@ -376,14 +257,9 @@ export const api = {
    * ```
    */
   async createWorkflow(
-    request: CreateWorkflowRequest
+    payload: CreateWorkflowRequest
   ): Promise<CreateWorkflowResponse> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    });
-    return handleResponse<CreateWorkflowResponse>(response);
+    return request<CreateWorkflowResponse>('/workflows', { method: 'POST', body: payload });
   },
 
   /**
@@ -403,11 +279,7 @@ export const api = {
    * ```
    */
   async startWorkflow(id: string): Promise<StartWorkflowResponse> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}/start`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    return handleResponse<StartWorkflowResponse>(response);
+    return request<StartWorkflowResponse>(`/workflows/${id}/start`, { method: 'POST' });
   },
 
   /**
@@ -440,13 +312,8 @@ export const api = {
    * console.log(`Goal: ${result.goal}, Tasks: ${result.total_tasks}`);
    * ```
    */
-  async setPlan(id: string, request: SetPlanRequest): Promise<SetPlanResponse> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}/plan`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    });
-    return handleResponse<SetPlanResponse>(response);
+  async setPlan(id: string, payload: SetPlanRequest): Promise<SetPlanResponse> {
+    return request<SetPlanResponse>(`/workflows/${id}/plan`, { method: 'POST', body: payload });
   },
 
   /**
@@ -470,12 +337,9 @@ export const api = {
     globPattern: string = '*.md',
     worktreePath?: string
   ): Promise<FileListResponse> {
-    const params = new URLSearchParams({ directory, glob_pattern: globPattern });
-    if (worktreePath) {
-      params.append('worktree_path', worktreePath);
-    }
-    const response = await fetchWithTimeout(`${API_BASE_URL}/files/list?${params}`);
-    return handleResponse<FileListResponse>(response);
+    return request<FileListResponse>('/files/list', {
+      params: { directory, glob_pattern: globPattern, worktree_path: worktreePath },
+    });
   },
 
   /**
@@ -500,13 +364,8 @@ export const api = {
    * console.log(`Started: ${result.started.length}, Errors: ${Object.keys(result.errors).length}`);
    * ```
    */
-  async startBatch(request: BatchStartRequest): Promise<BatchStartResponse> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/start-batch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    });
-    return handleResponse<BatchStartResponse>(response);
+  async startBatch(payload: BatchStartRequest): Promise<BatchStartResponse> {
+    return request<BatchStartResponse>('/workflows/start-batch', { method: 'POST', body: payload });
   },
 
   /**
@@ -522,14 +381,10 @@ export const api = {
     search?: string,
     signal?: AbortSignal,
   ): Promise<GitHubIssuesResponse> {
-    const params = new URLSearchParams({ profile });
-    if (search) params.set('search', search);
-    const response = await fetchWithTimeout(
-      `${API_BASE_URL}/github/issues?${params}`,
-      {},
+    return request<GitHubIssuesResponse>('/github/issues', {
+      params: { profile, search },
       signal,
-    );
-    return handleResponse<GitHubIssuesResponse>(response);
+    });
   },
 
   /**
@@ -543,35 +398,10 @@ export const api = {
     description: string,
     profile?: string,
   ): Promise<CondenseDescriptionResponse> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/descriptions/condense`, {
+    return request<CondenseDescriptionResponse>('/descriptions/condense', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description, profile }),
+      body: { description, profile },
     });
-    return handleResponse<CondenseDescriptionResponse>(response);
-  },
-
-  /**
-   * Retrieves the most recent workflow defaults for pre-population.
-   *
-   * @deprecated Will be removed when QuickShotModal is deleted.
-   */
-  async getWorkflowDefaults(): Promise<{
-    worktree_path: string | null;
-    profile: string | null;
-  }> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows?limit=1`);
-    const data = await handleResponse<WorkflowListResponse>(response);
-
-    const mostRecent = data.workflows[0];
-    if (mostRecent) {
-      return {
-        worktree_path: mostRecent.worktree_path,
-        profile: mostRecent.profile,
-      };
-    }
-
-    return { worktree_path: null, profile: null }
   },
 
   // ==========================================================================
@@ -591,8 +421,7 @@ export const api = {
    * ```
    */
   async getPrompts(): Promise<PromptSummary[]> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/prompts`);
-    const data = await handleResponse<{ prompts: PromptSummary[] }>(response);
+    const data = await request<{ prompts: PromptSummary[] }>('/prompts');
     return data.prompts;
   },
 
@@ -610,8 +439,7 @@ export const api = {
    * ```
    */
   async getPrompt(id: string): Promise<PromptDetail> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/prompts/${id}`);
-    return handleResponse<PromptDetail>(response);
+    return request<PromptDetail>(`/prompts/${id}`);
   },
 
   /**
@@ -628,8 +456,7 @@ export const api = {
    * ```
    */
   async getPromptVersions(promptId: string): Promise<VersionSummary[]> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/prompts/${promptId}/versions`);
-    const data = await handleResponse<{ versions: VersionSummary[] }>(response);
+    const data = await request<{ versions: VersionSummary[] }>(`/prompts/${promptId}/versions`);
     return data.versions;
   },
 
@@ -651,10 +478,7 @@ export const api = {
     promptId: string,
     versionId: string
   ): Promise<VersionDetail> {
-    const response = await fetchWithTimeout(
-      `${API_BASE_URL}/prompts/${promptId}/versions/${versionId}`
-    );
-    return handleResponse<VersionDetail>(response);
+    return request<VersionDetail>(`/prompts/${promptId}/versions/${versionId}`);
   },
 
   /**
@@ -681,12 +505,10 @@ export const api = {
     content: string,
     changeNote: string | null
   ): Promise<VersionDetail> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/prompts/${promptId}/versions`, {
+    return request<VersionDetail>(`/prompts/${promptId}/versions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, change_note: changeNote }),
+      body: { content, change_note: changeNote },
     });
-    return handleResponse<VersionDetail>(response);
   },
 
   /**
@@ -703,11 +525,7 @@ export const api = {
    * ```
    */
   async resetPromptToDefault(promptId: string): Promise<void> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/prompts/${promptId}/reset`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    await handleResponse(response);
+    await request(`/prompts/${promptId}/reset`, { method: 'POST' });
   },
 
   /**
@@ -724,8 +542,7 @@ export const api = {
    * ```
    */
   async getPromptDefault(promptId: string): Promise<DefaultContent> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/prompts/${promptId}/default`);
-    return handleResponse<DefaultContent>(response);
+    return request<DefaultContent>(`/prompts/${promptId}/default`);
   },
 
   // ==========================================================================
@@ -745,8 +562,7 @@ export const api = {
    * ```
    */
   async getConfig(): Promise<ConfigResponse> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/config`);
-    return handleResponse<ConfigResponse>(response);
+    return request<ConfigResponse>('/config');
   },
 
   // ==========================================================================
@@ -768,19 +584,11 @@ export const api = {
    * ```
    */
   async readFile(path: string, worktreePath?: string): Promise<FileReadResponse> {
-    const params = new URLSearchParams();
-    if (worktreePath) {
-      params.append('worktree_path', worktreePath);
-    }
-    const url = params.toString()
-      ? `${API_BASE_URL}/files/read?${params}`
-      : `${API_BASE_URL}/files/read`;
-    const response = await fetchWithTimeout(url, {
+    return request<FileReadResponse>('/files/read', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path }),
+      params: { worktree_path: worktreePath },
+      body: { path },
     });
-    return handleResponse<FileReadResponse>(response);
   },
 
   // ==========================================================================
@@ -804,16 +612,11 @@ export const api = {
    * ```
    */
   async validatePath(path: string, signal?: AbortSignal): Promise<PathValidationResponse> {
-    const response = await fetchWithTimeout(
-      `${API_BASE_URL}/paths/validate`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      },
-      signal
-    );
-    return handleResponse<PathValidationResponse>(response);
+    return request<PathValidationResponse>('/paths/validate', {
+      method: 'POST',
+      body: { path },
+      signal,
+    });
   },
 
   // ==========================================================================
@@ -841,19 +644,12 @@ export const api = {
     end?: string;
     preset?: string;
   }): Promise<UsageResponse> {
-    const searchParams = new URLSearchParams();
+    const queryParams =
+      params.start && params.end
+        ? { start: params.start, end: params.end }
+        : { preset: params.preset ?? '30d' };
 
-    if (params.start && params.end) {
-      searchParams.set('start', params.start);
-      searchParams.set('end', params.end);
-    } else {
-      searchParams.set('preset', params.preset ?? '30d');
-    }
-
-    const response = await fetchWithTimeout(
-      `${API_BASE_URL}/usage?${searchParams.toString()}`
-    );
-    return handleResponse<UsageResponse>(response);
+    return request<UsageResponse>('/usage', { params: queryParams });
   },
 
   // ==========================================================================
@@ -867,8 +663,7 @@ export const api = {
    * @throws {ApiError} When the API request fails.
    */
   async getKnowledgeDocuments(): Promise<KnowledgeDocument[]> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/knowledge/documents`);
-    const data = await handleResponse<KnowledgeDocumentListResponse>(response);
+    const data = await request<KnowledgeDocumentListResponse>('/knowledge/documents');
     return data.documents;
   },
 
@@ -897,11 +692,10 @@ export const api = {
     formData.append('name', name);
     formData.append('tags', tags.join(','));
 
-    const response = await fetchWithTimeout(`${API_BASE_URL}/knowledge/documents`, {
+    return request<KnowledgeDocument>('/knowledge/documents', {
       method: 'POST',
       body: formData,
     });
-    return handleResponse<KnowledgeDocument>(response);
   },
 
   /**
@@ -911,11 +705,7 @@ export const api = {
    * @throws {ApiError} When document not found or API request fails.
    */
   async deleteKnowledgeDocument(documentId: string): Promise<void> {
-    const response = await fetchWithTimeout(
-      `${API_BASE_URL}/knowledge/documents/${documentId}`,
-      { method: 'DELETE' }
-    );
-    await handleResponse(response);
+    await request(`/knowledge/documents/${documentId}`, { method: 'DELETE' });
   },
 
   /**
@@ -933,19 +723,11 @@ export const api = {
     tags?: string[],
     signal?: AbortSignal
   ): Promise<SearchResult[]> {
-    if (signal?.aborted) {
-      throw new DOMException('Request aborted', 'AbortError');
-    }
-    const response = await fetchWithTimeout(
-      `${API_BASE_URL}/knowledge/search`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, top_k: topK, tags }),
-      },
-      signal
-    );
-    return handleResponse<SearchResult[]>(response);
+    return request<SearchResult[]>('/knowledge/search', {
+      method: 'POST',
+      body: { query, top_k: topK, tags },
+      signal,
+    });
   },
 
   // ==========================================================================
@@ -962,17 +744,9 @@ export const api = {
    */
   async requestReview(
     workflowId: string,
-    request: RequestReviewRequest
+    payload: RequestReviewRequest
   ): Promise<void> {
-    const response = await fetchWithTimeout(
-      `${API_BASE_URL}/workflows/${workflowId}/review`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      }
-    );
-    await handleResponse<void>(response);
+    await request(`/workflows/${workflowId}/review`, { method: 'POST', body: payload });
   },
 
   // ==========================================================================
@@ -993,18 +767,7 @@ export const api = {
     profile?: string;
     aggressiveness?: string;
   }): Promise<PRAutoFixMetricsResponse> {
-    const searchParams = new URLSearchParams();
-
-    if (params.start) searchParams.set('start', params.start);
-    if (params.end) searchParams.set('end', params.end);
-    if (params.preset) searchParams.set('preset', params.preset);
-    if (params.profile) searchParams.set('profile', params.profile);
-    if (params.aggressiveness) searchParams.set('aggressiveness', params.aggressiveness);
-
-    const response = await fetchWithTimeout(
-      `${API_BASE_URL}/github/pr-autofix/metrics?${searchParams.toString()}`
-    );
-    return handleResponse<PRAutoFixMetricsResponse>(response);
+    return request<PRAutoFixMetricsResponse>('/github/pr-autofix/metrics', { params });
   },
 
   /**
@@ -1021,18 +784,7 @@ export const api = {
     limit?: number;
     offset?: number;
   }): Promise<ClassificationsResponse> {
-    const searchParams = new URLSearchParams();
-
-    if (params.start) searchParams.set('start', params.start);
-    if (params.end) searchParams.set('end', params.end);
-    if (params.preset) searchParams.set('preset', params.preset);
-    if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
-    if (params.offset !== undefined) searchParams.set('offset', String(params.offset));
-
-    const response = await fetchWithTimeout(
-      `${API_BASE_URL}/github/pr-autofix/classifications?${searchParams.toString()}`
-    );
-    return handleResponse<ClassificationsResponse>(response);
+    return request<ClassificationsResponse>('/github/pr-autofix/classifications', { params });
   },
 };
 
