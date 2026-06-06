@@ -124,7 +124,7 @@ class TestPlanNowApproveFlow:
         test_orchestrator._checkpointer = AsyncMock()
 
         with patch(
-            "amelia.server.orchestrator.service.create_implementation_graph"
+            "amelia.server.orchestrator.runner.create_implementation_graph"
         ) as mock_create_graph:
             mock_create_graph.return_value = mocks.graph
 

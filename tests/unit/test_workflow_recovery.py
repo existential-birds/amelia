@@ -201,7 +201,7 @@ class TestResumeWorkflow:
 
         mock_graph = MagicMock()
         mock_graph.aget_state = AsyncMock(return_value=mock_state)
-        service._create_server_graph = MagicMock(return_value=mock_graph)
+        service._runner._create_server_graph = MagicMock(return_value=mock_graph)
 
         with pytest.raises(InvalidStateError, match="worktree.*occupied"):
             await service.resume_workflow(wf.id)
@@ -229,9 +229,9 @@ class TestResumeWorkflow:
 
         mock_graph = MagicMock()
         mock_graph.aget_state = AsyncMock(return_value=mock_state)
-        service._create_server_graph = MagicMock(return_value=mock_graph)
+        service._runner._create_server_graph = MagicMock(return_value=mock_graph)
 
-        service._run_workflow_with_retry = AsyncMock()
+        service._runner.run_workflow_with_retry = AsyncMock()
 
         await service.resume_workflow(wf.id)
 
@@ -262,8 +262,8 @@ class TestResumeWorkflow:
 
         mock_graph = MagicMock()
         mock_graph.aget_state = AsyncMock(return_value=mock_state)
-        service._create_server_graph = MagicMock(return_value=mock_graph)
-        service._run_workflow_with_retry = AsyncMock()
+        service._runner._create_server_graph = MagicMock(return_value=mock_graph)
+        service._runner.run_workflow_with_retry = AsyncMock()
 
         await service.resume_workflow(wf.id)
 

@@ -11,6 +11,7 @@ import pytest
 
 from amelia.core.types import AgentConfig, Profile
 from amelia.server.models.requests import CreateWorkflowRequest
+from amelia.server.orchestrator.runner import GraphRunner
 from amelia.server.orchestrator.service import OrchestratorService
 
 
@@ -175,9 +176,7 @@ async def mock_checkpointer_and_graph(
     """
     mock_checkpointer = MagicMock()
 
-    with patch.object(
-        OrchestratorService,
-        "_create_server_graph",
+    with patch.object(GraphRunner, "_create_server_graph",
         return_value=mock_graph,
     ):
         yield mock_checkpointer

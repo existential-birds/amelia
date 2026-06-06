@@ -78,7 +78,7 @@ class TestStartPendingWorkflow:
         """
         mock_repository.get.return_value = pending_workflow
 
-        with patch.object(orchestrator, "_run_workflow_with_retry", new_callable=AsyncMock):
+        with patch.object(orchestrator._runner, "run_workflow_with_retry", new_callable=AsyncMock):
             await orchestrator.start_pending_workflow("wf-pending123")
 
         # Workflow should have started_at set but status unchanged
@@ -168,8 +168,7 @@ class TestStartPendingWorkflow:
         """Starting pending workflow spawns execution task."""
         mock_repository.get.return_value = pending_workflow
 
-        with patch.object(
-            orchestrator, "_run_workflow_with_retry", new_callable=AsyncMock
+        with patch.object(orchestrator._runner, "run_workflow_with_retry", new_callable=AsyncMock
         ):
             await orchestrator.start_pending_workflow("wf-pending123")
 
@@ -192,8 +191,7 @@ class TestStartPendingWorkflow:
         # get_by_worktree returns None because it excludes pending by default
         mock_repository.get_by_worktree.return_value = None
 
-        with patch.object(
-            orchestrator, "_run_workflow_with_retry", new_callable=AsyncMock
+        with patch.object(orchestrator._runner, "run_workflow_with_retry", new_callable=AsyncMock
         ):
             # Should succeed - no active (in_progress/blocked) workflow on worktree
             await orchestrator.start_pending_workflow("wf-pending123")

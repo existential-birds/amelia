@@ -70,7 +70,7 @@ class TestApproveWorkflowEndpoint:
         # Mock LangGraph to prevent actual graph execution
         mocks = langgraph_mock_factory(astream_items=[])
         with patch(
-            "amelia.server.orchestrator.service.create_implementation_graph"
+            "amelia.server.orchestrator.runner.create_implementation_graph"
         ) as mock_create_graph:
             mock_create_graph.return_value = mocks.graph
 

@@ -138,7 +138,7 @@ class TestReplanWorkflow:
 
         with (
             patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock) as mock_delete,
-            patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock),
+            patch.object(orchestrator._runner, "run_planning_task", new_callable=AsyncMock),
         ):
             await orchestrator.replan_workflow(wf_id)
 
@@ -212,7 +212,7 @@ class TestReplanWorkflow:
 
         with (
             patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock),
-            patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock),
+            patch.object(orchestrator._runner, "run_planning_task", new_callable=AsyncMock),
         ):
             await orchestrator.replan_workflow(workflow.id)
 

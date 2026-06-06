@@ -58,7 +58,7 @@ class TestOrchestratorProfileLoading:
             profile_repo=mock_profile_repo,
         )
 
-        profile = await service._get_profile_or_fail(
+        profile = await service._runner._get_profile_or_fail(
             workflow_id=uuid4(),
             profile_id="dev",
             worktree_path="/some/worktree",
@@ -85,7 +85,7 @@ class TestOrchestratorProfileLoading:
         )
 
         wf_id = uuid4()
-        profile = await service._get_profile_or_fail(
+        profile = await service._runner._get_profile_or_fail(
             workflow_id=wf_id,
             profile_id="nonexistent",
             worktree_path="/some/worktree",
@@ -126,7 +126,7 @@ class TestOrchestratorProfileLoading:
             },
         )
 
-        updated_profile = service._update_profile_repo_root(profile, worktree_path="/override/dir")
+        updated_profile = service._runner._update_profile_repo_root(profile, worktree_path="/override/dir")
 
         assert updated_profile.name == "test-profile"
         assert updated_profile.tracker == "github"

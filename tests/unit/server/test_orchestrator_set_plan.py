@@ -115,11 +115,10 @@ class TestSetWorkflowPlan:
                 new_callable=AsyncMock,
                 return_value=import_result,
             ),
-            patch.object(
-                mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
+            patch.object(mock_orchestrator._runner, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
             patch.object(
-                mock_orchestrator, "_update_profile_repo_root"
+                mock_orchestrator._runner, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator._events, "emit", new_callable=AsyncMock),
         ):
@@ -163,11 +162,10 @@ class TestSetWorkflowPlan:
                 new_callable=AsyncMock,
                 return_value=import_result,
             ),
-            patch.object(
-                mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
+            patch.object(mock_orchestrator._runner, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
             patch.object(
-                mock_orchestrator, "_update_profile_repo_root"
+                mock_orchestrator._runner, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator._events, "emit", new_callable=AsyncMock),
         ):
@@ -243,11 +241,10 @@ class TestSetWorkflowPlan:
                 new_callable=AsyncMock,
                 return_value=import_result,
             ),
-            patch.object(
-                mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
+            patch.object(mock_orchestrator._runner, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
             patch.object(
-                mock_orchestrator, "_update_profile_repo_root"
+                mock_orchestrator._runner, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator._events, "emit", new_callable=AsyncMock),
         ):
@@ -334,11 +331,10 @@ class TestSetWorkflowPlan:
                 new_callable=AsyncMock,
                 return_value=import_result,
             ),
-            patch.object(
-                mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
+            patch.object(mock_orchestrator._runner, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
             patch.object(
-                mock_orchestrator, "_update_profile_repo_root"
+                mock_orchestrator._runner, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(
                 mock_orchestrator._events, "emit", new_callable=AsyncMock
@@ -384,11 +380,10 @@ class TestSetWorkflowPlan:
                 new_callable=AsyncMock,
                 return_value=import_result,
             ),
-            patch.object(
-                mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
+            patch.object(mock_orchestrator._runner, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
             patch.object(
-                mock_orchestrator, "_update_profile_repo_root"
+                mock_orchestrator._runner, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator._events, "emit", new_callable=AsyncMock),
         ):
@@ -428,11 +423,10 @@ class TestSetWorkflowPlan:
                 new_callable=AsyncMock,
                 return_value=import_result,
             ),
-            patch.object(
-                mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
+            patch.object(mock_orchestrator._runner, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
             patch.object(
-                mock_orchestrator, "_update_profile_repo_root"
+                mock_orchestrator._runner, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(
                 mock_orchestrator._events, "emit", new_callable=AsyncMock

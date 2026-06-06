@@ -10,7 +10,7 @@ Mock boundaries:
 - get_git_head / asyncio.create_subprocess_exec: Prevents real git calls
 
 Real components:
-- OrchestratorService (start_review_workflow, request_review, _run_review_workflow)
+- OrchestratorService (start_review_workflow, request_review) + GraphRunner.run_review_workflow
 - WorkflowRepository with PostgreSQL test database
 - ProfileRepository with PostgreSQL test database
 - FastAPI route handlers (for HTTP endpoint tests)
@@ -155,7 +155,7 @@ class TestRequestReview:
         git_mocks = _make_git_mocks()
 
         with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
             git_mocks["get_git_head"],
             git_mocks["create_subprocess_exec"],
         ):
@@ -223,7 +223,7 @@ class TestRequestReview:
         mocks.graph.astream = capture_astream
 
         with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
             git_mocks["get_git_head"],
             git_mocks["create_subprocess_exec"],
         ):
@@ -267,7 +267,7 @@ class TestRequestReview:
         # Occupy the worktree with a long-running task
         long_event = asyncio.Event()
         with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
             git_mocks["get_git_head"],
             git_mocks["create_subprocess_exec"],
         ):
@@ -323,7 +323,7 @@ class TestRequestReview:
         mocks.graph.astream = _make_blocking_astream(long_event)
 
         with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
             git_mocks["get_git_head"],
             git_mocks["create_subprocess_exec"],
         ):
@@ -373,7 +373,7 @@ class TestStartReviewWorkflow:
         mocks = langgraph_mock_factory(astream_items=[])
 
         with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
             patch("amelia.server.orchestrator.service.get_git_head", return_value="def456"),
         ):
             mock_create.return_value = mocks.graph
@@ -403,7 +403,7 @@ class TestStartReviewWorkflow:
         mocks = langgraph_mock_factory(astream_items=[])
 
         with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
             patch("amelia.server.orchestrator.service.get_git_head", return_value="abc123"),
         ):
             mock_create.return_value = mocks.graph
@@ -430,7 +430,7 @@ class TestStartReviewWorkflow:
         mocks = langgraph_mock_factory(astream_items=[])
 
         with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
             patch("amelia.server.orchestrator.service.get_git_head", return_value="abc123"),
         ):
             mock_create.return_value = mocks.graph
@@ -449,7 +449,7 @@ class TestStartReviewWorkflow:
 
 @pytest.mark.integration
 class TestRunReviewWorkflow:
-    """Tests for _run_review_workflow() graph execution.
+    """Tests for GraphRunner.run_review_workflow() graph execution.
 
     Validates status transitions and event emission during review graph execution.
     """
@@ -466,7 +466,7 @@ class TestRunReviewWorkflow:
         mocks = langgraph_mock_factory(astream_items=[])
 
         with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
             patch("amelia.server.orchestrator.service.get_git_head", return_value="abc123"),
         ):
             mock_create.return_value = mocks.graph
@@ -510,7 +510,7 @@ class TestRunReviewWorkflow:
         mock_graph.astream = failing_astream
 
         with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
             patch("amelia.server.orchestrator.service.get_git_head", return_value="abc123"),
         ):
             mock_create.return_value = mock_graph
@@ -553,7 +553,7 @@ class TestRunReviewWorkflow:
 
         git_mocks = _make_git_mocks()
         with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
             git_mocks["get_git_head"],
             git_mocks["create_subprocess_exec"],
         ):
@@ -602,7 +602,7 @@ class TestRunReviewWorkflow:
         mocks = langgraph_mock_factory(astream_items=[])
 
         with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
             patch("amelia.server.orchestrator.service.get_git_head", return_value="abc123"),
         ):
             mock_create.return_value = mocks.graph
@@ -642,7 +642,7 @@ class TestReviewEndpointIntegration:
         git_mocks = _make_git_mocks()
 
         with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
             git_mocks["get_git_head"],
             git_mocks["create_subprocess_exec"],
         ):
@@ -698,7 +698,7 @@ class TestReviewEndpointIntegration:
         mocks.graph.astream = _make_blocking_astream(long_event)
 
         with (
-            patch("amelia.server.orchestrator.service.create_review_graph") as mock_create,
+            patch("amelia.server.orchestrator.runner.create_review_graph") as mock_create,
             git_mocks["get_git_head"],
             git_mocks["create_subprocess_exec"],
         ):
