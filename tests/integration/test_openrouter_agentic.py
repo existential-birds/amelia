@@ -54,13 +54,18 @@ async def _execute_with_retry(
             unavailable_markers = (
                 "rate limit",
                 "rate_limit",
-                "max_completion_tokens",
-                "maximum allowed",
             )
+            # HTTP 400 "Requested max_tokens of N, but the maximum allowed is M"
+            # is an upstream routed-provider cap error (e.g. Venice free tier),
+            # not an Amelia request-construction defect. Require "400" in the
+            # exception string so we don't mask a genuine Amelia bug that happens
+            # to mention token limits without an HTTP status code.
+            upstream_token_cap = "400" in str(exc) and "maximum allowed" in exc_str
             if (
                 "429" in str(exc)
                 or "402" in str(exc)
                 or any(marker in exc_str for marker in unavailable_markers)
+                or upstream_token_cap
             ):
                 pytest.skip(f"OpenRouter free model unavailable after {MAX_RETRIES} retries: {exc}")
             raise

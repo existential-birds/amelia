@@ -23,6 +23,6 @@ class TestSchemaValidationError:
         assert str(err) == "Schema validation failed"
 
     def test_not_in_transient_exceptions(self) -> None:
-        from amelia.server.orchestrator.service import TRANSIENT_EXCEPTIONS
+        from amelia.server.orchestrator._common import TRANSIENT_EXCEPTIONS
 
         assert SchemaValidationError not in TRANSIENT_EXCEPTIONS
