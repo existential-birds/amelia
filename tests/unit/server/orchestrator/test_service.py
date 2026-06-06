@@ -291,6 +291,32 @@ async def test_start_workflow_concurrency_limit(
             await task
 
 
+async def test_assert_can_acquire_raises_on_active_worktree(
+    orchestrator: OrchestratorService,
+) -> None:
+    """Guard raises WorkflowConflictError when worktree already active."""
+    existing_id = uuid4()
+    orchestrator._active_tasks["/wt"] = (existing_id, AsyncMock())
+    with pytest.raises(WorkflowConflictError) as exc_info:
+        orchestrator._assert_can_acquire_worktree("/wt")
+
+    assert exc_info.value.worktree_path == "/wt"
+    assert exc_info.value.workflow_id == existing_id
+
+
+async def test_assert_can_acquire_raises_at_concurrency_limit(
+    orchestrator: OrchestratorService,
+) -> None:
+    """Guard raises ConcurrencyLimitError when at max concurrent."""
+    orchestrator._max_concurrent = 1
+    orchestrator._active_tasks["/other"] = (uuid4(), AsyncMock())
+    with pytest.raises(ConcurrencyLimitError) as exc_info:
+        orchestrator._assert_can_acquire_worktree("/wt")
+
+    assert exc_info.value.max_concurrent == 1
+    assert exc_info.value.current_count == 1
+
+
 async def test_cancel_workflow(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,

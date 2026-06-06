@@ -583,6 +583,27 @@ class OrchestratorService:
 
         return worktree
 
+    def _assert_can_acquire_worktree(self, worktree_path: str) -> None:
+        """Assert a worktree can be acquired for a new workflow.
+
+        Must be called while holding ``self._start_lock`` so the observed
+        active-task count is stable.
+
+        Args:
+            worktree_path: Resolved worktree path to acquire.
+
+        Raises:
+            WorkflowConflictError: If the worktree already has an active task.
+            ConcurrencyLimitError: If at the max concurrent workflow limit.
+        """
+        if worktree_path in self._active_tasks:
+            existing_id, _ = self._active_tasks[worktree_path]
+            raise WorkflowConflictError(worktree_path, existing_id)
+
+        current_count = len(self._active_tasks)
+        if current_count >= self._max_concurrent:
+            raise ConcurrencyLimitError(self._max_concurrent, current_count)
+
     async def start_workflow(
         self,
         issue_id: str,
@@ -619,16 +640,7 @@ class OrchestratorService:
         resolved_path = str(worktree)
 
         async with self._start_lock:
-            # Check worktree conflict - workflow_id is cached in tuple
-            # Use resolved path for consistent comparison
-            if resolved_path in self._active_tasks:
-                existing_id, _ = self._active_tasks[resolved_path]
-                raise WorkflowConflictError(resolved_path, existing_id)
-
-            # Check concurrency limit
-            current_count = len(self._active_tasks)
-            if current_count >= self._max_concurrent:
-                raise ConcurrencyLimitError(self._max_concurrent, current_count)
+            self._assert_can_acquire_worktree(resolved_path)
 
             workflow_id = uuid4()
 
@@ -825,12 +837,7 @@ class OrchestratorService:
 
         async with self._start_lock:
             # Same conflict and concurrency checks as start_workflow
-            if resolved_path in self._active_tasks:
-                existing_id, _ = self._active_tasks[resolved_path]
-                raise WorkflowConflictError(resolved_path, existing_id)
-
-            if len(self._active_tasks) >= self._max_concurrent:
-                raise ConcurrencyLimitError(self._max_concurrent, len(self._active_tasks))
+            self._assert_can_acquire_worktree(resolved_path)
 
             workflow_id = uuid4()
 
@@ -2146,15 +2153,8 @@ class OrchestratorService:
                     workflow.worktree_path, active_on_worktree.id
                 )
 
-            # Also check in-memory tasks for worktree conflict
-            if workflow.worktree_path in self._active_tasks:
-                existing_id, _ = self._active_tasks[workflow.worktree_path]
-                raise WorkflowConflictError(workflow.worktree_path, existing_id)
-
-            # Check concurrency limit
-            current_count = len(self._active_tasks)
-            if current_count >= self._max_concurrent:
-                raise ConcurrencyLimitError(self._max_concurrent, current_count)
+            # Also check in-memory tasks for worktree conflict and limit
+            self._assert_can_acquire_worktree(workflow.worktree_path)
 
             # Checkout the workflow branch if one was persisted
             if workflow.branch:
@@ -2574,12 +2574,7 @@ class OrchestratorService:
                 logger.warning("Failed to get diff", worktree_path=worktree_path)
 
         async with self._start_lock:
-            if worktree_path in self._active_tasks:
-                existing_id, _ = self._active_tasks[worktree_path]
-                raise WorkflowConflictError(worktree_path, existing_id)
-
-            if len(self._active_tasks) >= self._max_concurrent:
-                raise ConcurrencyLimitError(self._max_concurrent, len(self._active_tasks))
+            self._assert_can_acquire_worktree(worktree_path)
 
             new_id = uuid4()
 
