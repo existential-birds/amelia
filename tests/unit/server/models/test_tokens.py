@@ -18,6 +18,7 @@ from amelia.server.models.model_cache import (
 from amelia.server.models.tokens import (
     STATIC_FALLBACK_PRICING,
     ModelPricing,
+    TokenSummary,
     TokenUsage,
     calculate_token_cost,
     fetch_openrouter_pricing,
@@ -676,3 +677,27 @@ class TestCalculateTokenCost:
             )
             # Same as claude-sonnet-4-5-20251101: $3 + $15 = $18
             assert cost == 18.0
+
+
+class TestTokenSummary:
+    """Tests for TokenSummary.from_usages factory."""
+
+    def test_from_usages_empty_returns_none(self) -> None:
+        assert TokenSummary.from_usages([]) is None
+
+    def test_from_usages_aggregates_and_preserves_breakdown(self) -> None:
+        usages = [
+            make_usage(input_tokens=500, output_tokens=200, cache_read_tokens=100,
+                       cost_usd=0.005, duration_ms=3000, num_turns=2),
+            make_usage(input_tokens=2000, output_tokens=1000, cache_read_tokens=500,
+                       cost_usd=0.025, duration_ms=10000, num_turns=5),
+        ]
+        summary = TokenSummary.from_usages(usages)
+        assert summary is not None
+        assert summary.total_input_tokens == 2500
+        assert summary.total_output_tokens == 1200
+        assert summary.total_cache_read_tokens == 600
+        assert summary.total_cost_usd == pytest.approx(0.030, rel=1e-6)
+        assert summary.total_duration_ms == 13000
+        assert summary.total_turns == 7
+        assert summary.breakdown == usages  # same list, same order
