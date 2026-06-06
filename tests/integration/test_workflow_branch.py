@@ -18,6 +18,7 @@ from amelia.core.types import (
 from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.requests import CreateWorkflowRequest
+from amelia.server.orchestrator.runner import GraphRunner
 from amelia.server.orchestrator.service import OrchestratorService
 
 
@@ -77,7 +78,7 @@ def mock_graph():
     mock.astream = MagicMock(return_value=AsyncMock())
     mock.aget_state = AsyncMock(return_value=MagicMock(values={}, next=[]))
     with patch.object(
-        OrchestratorService, "_create_server_graph", return_value=mock
+        GraphRunner, "create_server_graph", return_value=mock
     ):
         yield mock
 

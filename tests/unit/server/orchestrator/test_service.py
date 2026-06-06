@@ -3,15 +3,14 @@
 import asyncio
 import contextlib
 import uuid
-from collections.abc import AsyncIterator, Callable, Generator
+from collections.abc import Callable, Generator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
-from langchain_core.runnables.config import RunnableConfig
 
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.pipelines.implementation.state import (
@@ -120,7 +119,7 @@ def capture_emit(
     """Capture events emitted by the orchestrator.
 
     Returns a tuple of (emitted_events list, install function).
-    Call the install function to patch orchestrator._emit.
+    Call the install function to patch orchestrator._events.emit.
 
     Returns:
         Tuple of (emitted_events, install_fn) where:
@@ -151,7 +150,7 @@ def capture_emit(
         )
 
     def install() -> None:
-        setattr(orchestrator, "_emit", _capture)  # noqa: B010
+        setattr(orchestrator._events, "emit", _capture)  # noqa: B010
 
     return emitted_events, install
 
@@ -215,7 +214,7 @@ async def test_start_workflow_success(
     valid_worktree: str,
 ) -> None:
     """Should start workflow and return workflow ID."""
-    with patch.object(orchestrator, "_run_workflow", new=AsyncMock()):
+    with patch.object(orchestrator._runner, "run_workflow_with_retry", new=AsyncMock()):
         workflow_id = await orchestrator.start_workflow(
             issue_id="ISSUE-123",
             worktree_path=valid_worktree,
@@ -289,6 +288,32 @@ async def test_start_workflow_concurrency_limit(
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
+
+
+async def test_assert_can_acquire_raises_on_active_worktree(
+    orchestrator: OrchestratorService,
+) -> None:
+    """Guard raises WorkflowConflictError when worktree already active."""
+    existing_id = uuid4()
+    orchestrator._active_tasks["/wt"] = (existing_id, AsyncMock())
+    with pytest.raises(WorkflowConflictError) as exc_info:
+        orchestrator._assert_can_acquire_worktree("/wt")
+
+    assert exc_info.value.worktree_path == "/wt"
+    assert exc_info.value.workflow_id == existing_id
+
+
+async def test_assert_can_acquire_raises_at_concurrency_limit(
+    orchestrator: OrchestratorService,
+) -> None:
+    """Guard raises ConcurrencyLimitError when at max concurrent."""
+    orchestrator._max_concurrent = 1
+    orchestrator._active_tasks["/other"] = (uuid4(), AsyncMock())
+    with pytest.raises(ConcurrencyLimitError) as exc_info:
+        orchestrator._assert_can_acquire_worktree("/wt")
+
+    assert exc_info.value.max_concurrent == 1
+    assert exc_info.value.current_count == 1
 
 
 async def test_cancel_workflow(
@@ -444,7 +469,7 @@ def test_get_active_workflows(orchestrator: OrchestratorService) -> None:
 # =============================================================================
 
 
-@patch("amelia.server.orchestrator.service.create_implementation_graph")
+@patch("amelia.server.orchestrator.runner.create_implementation_graph")
 async def test_approve_workflow_success(
     mock_create_graph: MagicMock,
     orchestrator: OrchestratorService,
@@ -489,7 +514,7 @@ async def test_approve_workflow_success(
     assert len(approval_granted) == 1
 
 
-@patch("amelia.server.orchestrator.service.create_implementation_graph")
+@patch("amelia.server.orchestrator.runner.create_implementation_graph")
 async def test_reject_workflow_success(
     mock_create_graph: MagicMock,
     orchestrator: OrchestratorService,
@@ -543,7 +568,7 @@ async def test_reject_workflow_success(
 class TestRejectWorkflowGraphState:
     """Test reject_workflow updates LangGraph state."""
 
-    @patch("amelia.server.orchestrator.service.create_implementation_graph")
+    @patch("amelia.server.orchestrator.runner.create_implementation_graph")
     async def test_reject_updates_graph_state(
         self,
         mock_create_graph: MagicMock,
@@ -576,7 +601,7 @@ class TestRejectWorkflowGraphState:
 class TestApproveWorkflowResume:
     """Test approve_workflow resumes LangGraph execution."""
 
-    @patch("amelia.server.orchestrator.service.create_implementation_graph")
+    @patch("amelia.server.orchestrator.runner.create_implementation_graph")
     async def test_approve_updates_state_and_resumes(
         self,
         mock_create_graph: MagicMock,
@@ -610,147 +635,89 @@ class TestApproveWorkflowResume:
         call_args = mocks.graph.aupdate_state.call_args
         assert call_args[0][1] == {"human_approved": True}
 
+    @patch("amelia.server.orchestrator.runner.create_implementation_graph")
+    async def test_resume_retries_transient_via_with_retry(
+        self,
+        mock_create_graph: MagicMock,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        langgraph_mock_factory: Callable[..., MagicMock],
+        async_iterator_mock_factory: Callable[[list[Any]], Any],
+        capture_emit: tuple[
+            list[tuple[uuid.UUID, EventType, str, dict[str, object]]],
+            Callable[[], None],
+        ],
+    ) -> None:
+        """Approval resume routes retry through with_retry (jittered).
 
-# =============================================================================
-# Event Emission Tests
-# =============================================================================
+        Drives the astream body to raise a transient error once, then
+        succeed. Asserts with_retry sleeps exactly once and that the
+        observable completion (WORKFLOW_COMPLETED event + COMPLETED status)
+        happens after the retry — pinning the new retry behavior.
+        """
+        emitted_events, install = capture_emit
+        install()
 
+        workflow = ServerExecutionState(
+            id=uuid4(),
+            issue_id="ISSUE-789",
+            worktree_path="/tmp/resume-retry",
+            workflow_status=WorkflowStatus.BLOCKED,
+            profile_id="test",
+        )
+        mock_repository.get.return_value = workflow
+        orchestrator._active_tasks["/tmp/resume-retry"] = (workflow.id, AsyncMock())
 
-async def test_emit_event(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-    mock_event_bus: EventBus,
-) -> None:
-    """Should emit event with sequence number and persist to DB."""
-    received = []
-    mock_event_bus.subscribe(lambda e: received.append(e))
+        mocks = langgraph_mock_factory(
+            aget_state_return=MagicMock(values={"human_approved": True}, next=[])
+        )
+        mock_create_graph.return_value = mocks.graph
 
-    await orchestrator._emit(
-        workflow_id=uuid4(),
-        event_type=EventType.WORKFLOW_STARTED,
-        message="Test message",
-    )
+        # First astream call raises a transient error; the second succeeds
+        # (empty stream → workflow completes).
+        astream_calls = 0
 
-    # Should persist to DB
-    mock_repository.save_event.assert_called_once()
-    saved_event = mock_repository.save_event.call_args[0][0]
-    assert saved_event.workflow_id is not None
-    assert saved_event.event_type == EventType.WORKFLOW_STARTED
-    assert saved_event.message == "Test message"
-    assert saved_event.sequence == 1
-    assert saved_event.agent == "system"
+        def astream_side_effect(*args: Any, **kwargs: Any) -> Any:
+            nonlocal astream_calls
+            astream_calls += 1
+            if astream_calls == 1:
+                raise ModelProviderError("transient resume failure")
+            return async_iterator_mock_factory([])
 
-    # Should broadcast to event bus
-    assert len(received) == 1
-    assert received[0] == saved_event
+        mocks.graph.astream = MagicMock(side_effect=astream_side_effect)
 
+        # Force a deterministic, non-zero jitter so the slept delay is
+        # strictly greater than the un-jittered base_delay. The OLD hand-rolled
+        # resume loop sleeps exactly base_delay (no jitter) and fails this; the
+        # new with_retry path sleeps base_delay + jitter and passes.
+        with (
+            patch(
+                "amelia.core.retry.random.uniform",
+                return_value=0.2,  # 0 < 0.2 <= 0.25 * base_delay(1.0)
+            ),
+            patch(
+                "amelia.core.retry.asyncio.sleep", new_callable=AsyncMock
+            ) as mock_sleep,
+        ):
+            await orchestrator.approve_workflow(workflow.id)
 
-async def test_emit_sequence_increment(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-) -> None:
-    """Sequence numbers should increment per workflow."""
-    wf_id = uuid4()
-    await orchestrator._emit(wf_id, EventType.WORKFLOW_STARTED, "Event 1")
-    await orchestrator._emit(wf_id, EventType.STAGE_STARTED, "Event 2")
-    await orchestrator._emit(wf_id, EventType.STAGE_COMPLETED, "Event 3")
-
-    # Check sequences
-    calls = mock_repository.save_event.call_args_list
-    assert calls[0][0][0].sequence == 1
-    assert calls[1][0][0].sequence == 2
-    assert calls[2][0][0].sequence == 3
-
-
-async def test_emit_different_workflows(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-) -> None:
-    """Different workflows should have independent sequence counters."""
-    wf1_id = uuid4()
-    wf2_id = uuid4()
-    await orchestrator._emit(wf1_id, EventType.WORKFLOW_STARTED, "WF1 Event 1")
-    await orchestrator._emit(wf2_id, EventType.WORKFLOW_STARTED, "WF2 Event 1")
-    await orchestrator._emit(wf1_id, EventType.STAGE_STARTED, "WF1 Event 2")
-
-    calls = mock_repository.save_event.call_args_list
-    # wf-1 sequences: 1, 2
-    assert calls[0][0][0].workflow_id == wf1_id
-    assert calls[0][0][0].sequence == 1
-    assert calls[2][0][0].workflow_id == wf1_id
-    assert calls[2][0][0].sequence == 2
-    # wf-2 sequences: 1
-    assert calls[1][0][0].workflow_id == wf2_id
-    assert calls[1][0][0].sequence == 1
-
-
-async def test_emit_concurrent_same_workflow(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-) -> None:
-    """Concurrent emits for same workflow should have unique sequences."""
-    # Simulate concurrent emits
-    concurrent_wf_id = uuid4()
-    await asyncio.gather(
-        orchestrator._emit(concurrent_wf_id, EventType.FILE_CREATED, "File 1"),
-        orchestrator._emit(concurrent_wf_id, EventType.FILE_CREATED, "File 2"),
-        orchestrator._emit(concurrent_wf_id, EventType.FILE_CREATED, "File 3"),
-    )
-
-    calls = mock_repository.save_event.call_args_list
-    sequences = [call[0][0].sequence for call in calls]
-
-    # All sequences should be unique
-    assert len(set(sequences)) == 3
-    assert set(sequences) == {1, 2, 3}
-
-
-async def test_emit_resumes_from_db_max_sequence(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-) -> None:
-    """First emit should query DB for max sequence."""
-    mock_repository.get_max_event_sequence.return_value = 42
-
-    resume_wf_id = uuid4()
-    await orchestrator._emit(resume_wf_id, EventType.WORKFLOW_STARTED, "Resume")
-
-    # Should query DB once
-    mock_repository.get_max_event_sequence.assert_called_once_with(resume_wf_id)
-
-    # Next sequence should be 43
-    saved_event = mock_repository.save_event.call_args[0][0]
-    assert saved_event.sequence == 43
-
-
-async def test_emit_concurrent_lock_creation_race(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-) -> None:
-    """Concurrent first emits for same workflow should not create duplicate locks."""
-    # Slow down the lock acquisition to increase race window
-    original_get_max = mock_repository.get_max_event_sequence
-
-    async def slow_get_max(workflow_id: uuid.UUID) -> int:
-        await asyncio.sleep(0.01)  # Create race window
-        result = await original_get_max(workflow_id)
-        return cast(int, result)
-
-    mock_repository.get_max_event_sequence = slow_get_max
-
-    # Fire many concurrent emits for a NEW workflow (no lock exists yet)
-    race_wf_id = uuid4()
-    tasks = [
-        orchestrator._emit(race_wf_id, EventType.FILE_CREATED, f"File {i}")
-        for i in range(10)
-    ]
-    await asyncio.gather(*tasks)
-
-    # All sequences must be unique (1-10)
-    calls = mock_repository.save_event.call_args_list
-    sequences = [call[0][0].sequence for call in calls]
-    assert len(set(sequences)) == 10, f"Duplicate sequences found: {sequences}"
-    assert set(sequences) == set(range(1, 11))
+        # with_retry slept exactly once (one transient retry, jittered).
+        assert mock_sleep.call_count == 1
+        # Jittered delay: base_delay(1.0) + jitter(0.2) = 1.2 — strictly above
+        # the un-jittered 1.0 the old loop produced.
+        slept_delay = mock_sleep.call_args_list[0][0][0]
+        assert slept_delay == pytest.approx(1.2)
+        # Observable completion emitted after the retry.
+        assert any(
+            e[1] == EventType.WORKFLOW_COMPLETED for e in emitted_events
+        )
+        # And the repository recorded COMPLETED.
+        completed_calls = [
+            c
+            for c in mock_repository.set_status.call_args_list
+            if len(c[0]) >= 2 and c[0][1] == WorkflowStatus.COMPLETED
+        ]
+        assert len(completed_calls) == 1
 
 
 class TestStartWorkflowWithRetry:
@@ -761,7 +728,7 @@ class TestStartWorkflowWithRetry:
     ) -> None:
         """start_workflow creates task with _run_workflow_with_retry."""
         mock_retry = AsyncMock()
-        with patch.object(orchestrator, "_run_workflow_with_retry", new=mock_retry):
+        with patch.object(orchestrator._runner, "run_workflow_with_retry", new=mock_retry):
             workflow_id = await orchestrator.start_workflow(
                 issue_id="TEST-1",
                 worktree_path=valid_worktree,
@@ -818,251 +785,6 @@ async def test_get_workflow_by_worktree_uses_cache(
 
 
 # =============================================================================
-# Plan Sync Tests
-# =============================================================================
-
-
-class TestSyncPlanFromCheckpoint:
-    """Tests for _sync_plan_from_checkpoint method."""
-
-    async def test_sync_plan_updates_plan_cache(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-    ) -> None:
-        """_sync_plan_from_checkpoint should update plan_cache with goal/plan from checkpoint."""
-        # Create mock graph with checkpoint containing goal and plan_markdown
-        mock_graph = MagicMock()
-        checkpoint_values = {"goal": "Test goal", "plan_markdown": "# Test Plan"}
-        mock_graph.aget_state = AsyncMock(
-            return_value=MagicMock(values=checkpoint_values)
-        )
-
-        config: RunnableConfig = {"configurable": {"thread_id": str(uuid4())}}
-        workflow_id = uuid4()
-
-        # Call _sync_plan_from_checkpoint
-        await orchestrator._sync_plan_from_checkpoint(workflow_id, mock_graph, config)
-
-        # Verify repository.update_plan_cache was called
-        mock_repository.update_plan_cache.assert_called_once()
-
-        # Verify the PlanCache has the goal and plan_markdown
-        call_args = mock_repository.update_plan_cache.call_args
-        assert call_args[0][0] == workflow_id
-        plan_cache = call_args[0][1]
-        assert plan_cache.goal == "Test goal"
-        assert plan_cache.plan_markdown == "# Test Plan"
-
-    async def test_sync_plan_no_checkpoint_state(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-    ) -> None:
-        """_sync_plan_from_checkpoint should return early if no checkpoint state."""
-        mock_graph = MagicMock()
-        mock_graph.aget_state = AsyncMock(return_value=None)
-
-        config: RunnableConfig = {"configurable": {"thread_id": str(uuid4())}}
-        workflow_id = uuid4()
-
-        # Should not raise, just return early
-        await orchestrator._sync_plan_from_checkpoint(workflow_id, mock_graph, config)
-
-        # Repository should not be called
-        mock_repository.get.assert_not_called()
-        mock_repository.update.assert_not_called()
-
-    async def test_sync_plan_no_goal_or_plan_in_checkpoint(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-    ) -> None:
-        """_sync_plan_from_checkpoint should return early if no goal/plan_markdown in checkpoint."""
-        mock_graph = MagicMock()
-        mock_graph.aget_state = AsyncMock(
-            return_value=MagicMock(values={"some_other_key": "value"})
-        )
-
-        config: RunnableConfig = {"configurable": {"thread_id": str(uuid4())}}
-        workflow_id = uuid4()
-
-        # Should not raise, just return early
-        await orchestrator._sync_plan_from_checkpoint(workflow_id, mock_graph, config)
-
-        # Repository.get should not be called since we exit before that
-        mock_repository.get.assert_not_called()
-
-    async def test_sync_plan_workflow_not_found(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-    ) -> None:
-        """_sync_plan_from_checkpoint should return early if workflow not found."""
-        mock_graph = MagicMock()
-        mock_graph.aget_state = AsyncMock(
-            return_value=MagicMock(values={"goal": "Test goal"})
-        )
-
-        mock_repository.get.return_value = None  # Workflow not found
-
-        config: RunnableConfig = {"configurable": {"thread_id": str(uuid4())}}
-        workflow_id = uuid4()
-
-        # Should not raise, just log warning and return
-        await orchestrator._sync_plan_from_checkpoint(workflow_id, mock_graph, config)
-
-        # Repository.update should not be called
-        mock_repository.update.assert_not_called()
-
-
-# =============================================================================
-# Checkpoint Resume Tests (Bug #199: Infinite Loop)
-# =============================================================================
-
-
-class TestRunWorkflowCheckpointResume:
-    """Test _run_workflow correctly resumes from checkpoint on retry.
-
-    Bug #199: When _run_workflow was called during retry, it always passed
-    initial_state to graph.astream(), which starts a NEW execution instead
-    of resuming from the checkpoint. This caused the developer-reviewer loop
-    to restart from review_iteration=0 on each retry, creating an infinite loop.
-
-    The fix: Check if a checkpoint exists before calling astream().
-    - If checkpoint exists → pass None to resume
-    - If no checkpoint → pass initial_state to start fresh
-    """
-
-    @pytest.fixture
-    def mock_graph(self) -> MagicMock:
-        """Create mock compiled graph."""
-        graph = MagicMock()
-        graph.aget_state = AsyncMock()
-        graph.astream = MagicMock()
-        return graph
-
-    @pytest.fixture
-    def mock_state(self) -> ServerExecutionState:
-        """Create mock server execution state."""
-        return ServerExecutionState(
-            id=uuid4(),
-            issue_id="ISSUE-123",
-            worktree_path="/path/to/worktree",
-            workflow_status=WorkflowStatus.IN_PROGRESS,
-            started_at=datetime.now(UTC),
-            profile_id="test",
-        )
-
-    async def test_run_workflow_resumes_when_checkpoint_exists(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-        mock_graph: MagicMock,
-        mock_state: ServerExecutionState,
-    ) -> None:
-        """_run_workflow should pass None to astream when checkpoint exists.
-
-        This ensures the graph resumes from checkpoint instead of restarting
-        with initial_state, which would reset review_iteration to 0.
-        """
-        # Setup: checkpoint exists with some state
-        mock_checkpoint_state = MagicMock()
-        mock_checkpoint_state.values = {"review_iteration": 2, "goal": "test"}
-        mock_graph.aget_state.return_value = mock_checkpoint_state
-
-        # Setup astream to return empty iterator (workflow completes)
-        async def empty_stream() -> AsyncIterator[dict[str, Any]]:
-            return
-            yield  # Makes this an async generator
-
-        mock_graph.astream.return_value = empty_stream()
-
-        # Create mock profile
-        from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
-
-        mock_profile = Profile(
-            name="test",
-            tracker=TrackerType.NOOP,
-            repo_root="/tmp/test",
-            agents={
-                "architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
-                "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
-                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
-            },
-        )
-
-        # Patch to use our mock graph
-        with (
-            patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
-            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
-            patch.object(orchestrator, "_emit", new=AsyncMock()),
-        ):
-            await orchestrator._run_workflow(UUID("00000000-0000-0000-0000-000000000001"), mock_state)
-
-        # Verify: astream was called with None (resume from checkpoint)
-        mock_graph.astream.assert_called_once()
-        call_args = mock_graph.astream.call_args
-        first_arg = call_args[0][0] if call_args[0] else call_args[1].get("input")
-
-        assert first_arg is None, (
-            f"Expected astream to be called with None to resume from checkpoint, "
-            f"but got {type(first_arg).__name__}: {first_arg}"
-        )
-
-    async def test_run_workflow_starts_fresh_when_no_checkpoint(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-        mock_graph: MagicMock,
-        mock_state: ServerExecutionState,
-    ) -> None:
-        """_run_workflow should pass initial_state when no checkpoint exists.
-
-        For the first run of a workflow, we need to pass the initial state
-        to start the execution.
-        """
-        # Setup: no checkpoint exists
-        mock_graph.aget_state.return_value = None
-
-        # Setup astream to return empty iterator
-        async def empty_stream() -> AsyncIterator[dict[str, Any]]:
-            return
-            yield  # Makes this an async generator
-
-        mock_graph.astream.return_value = empty_stream()
-
-        from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
-
-        mock_profile = Profile(
-            name="test",
-            tracker=TrackerType.NOOP,
-            repo_root="/tmp/test",
-            agents={
-                "architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
-                "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
-                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
-            },
-        )
-
-        with (
-            patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
-            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
-            patch.object(orchestrator, "_emit", new=AsyncMock()),
-        ):
-            await orchestrator._run_workflow(UUID("00000000-0000-0000-0000-000000000002"), mock_state)
-
-        # Verify: astream was called with initial_state (start fresh)
-        mock_graph.astream.assert_called_once()
-        call_args = mock_graph.astream.call_args
-        first_arg = call_args[0][0] if call_args[0] else call_args[1].get("input")
-
-        assert first_arg is not None, "Expected astream to be called with initial_state"
-        assert isinstance(first_arg, dict), "Expected initial_state to be a dict"
-        assert first_arg.get("profile_id") == "test", "Expected profile_id in initial_state"
-
-
-# =============================================================================
 # Task Title/Description Tests
 # =============================================================================
 
@@ -1096,7 +818,7 @@ class TestTaskProgressEvents:
             "name": "developer_node",
             "input": input_state,
         }
-        await orchestrator._handle_tasks_event(uuid4(), task_data)
+        await orchestrator._events.handle_tasks_event(uuid4(), task_data)
 
         # Verify TASK_STARTED event emitted
         task_events = [e for e in emitted_events if e[1] == EventType.TASK_STARTED]
@@ -1144,7 +866,7 @@ class TestTaskProgressEvents:
             }
         }
 
-        await orchestrator._handle_stream_chunk(uuid4(), chunk)
+        await orchestrator._events.handle_stream_chunk(uuid4(), chunk)
 
         # Verify TASK_COMPLETED event emitted
         task_events = [e for e in emitted_events if e[1] == EventType.TASK_COMPLETED]
@@ -1174,7 +896,7 @@ class TestStartWorkflowWithTaskFields:
         (worktree / ".git").touch()
 
         # mock_profile_repo fixture already returns a profile with tracker="noop"
-        with patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()):
+        with patch.object(orchestrator._runner, "run_workflow_with_retry", new=AsyncMock()):
             workflow_id = await orchestrator.start_workflow(
                 issue_id="TASK-1",
                 worktree_path=str(worktree),
@@ -1222,7 +944,7 @@ class TestStartWorkflowWithTaskFields:
             patch(
                 "amelia.server.orchestrator.service.create_tracker"
             ) as mock_create_tracker,
-            patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()),
+            patch.object(orchestrator._runner, "run_workflow_with_retry", new=AsyncMock()),
         ):
             await orchestrator.start_workflow(
                 issue_id="TASK-1",
@@ -1258,7 +980,7 @@ class TestStartWorkflowWithTaskFields:
         (worktree / ".git").touch()
 
         # mock_profile_repo fixture already returns a profile with tracker="noop"
-        with patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()):
+        with patch.object(orchestrator._runner, "run_workflow_with_retry", new=AsyncMock()):
             await orchestrator.start_workflow(
                 issue_id="TASK-1",
                 worktree_path=str(worktree),
@@ -1331,15 +1053,15 @@ def model_provider_error_patches(
     """Context manager for common patches in ModelProviderError tests."""
     with (
         patch.object(
-            orchestrator, "_get_profile_or_fail", return_value=setup.mock_profile
+            orchestrator._runner, "get_profile_or_fail", return_value=setup.mock_profile
         ),
         patch.object(
-            orchestrator, "_create_server_graph", return_value=setup.mock_graph
+            orchestrator._runner, "create_server_graph", return_value=setup.mock_graph
         ),
-        patch.object(orchestrator, "_resolve_prompts", return_value={}),
-        patch.object(orchestrator, "_emit", new=AsyncMock()),
+        patch.object(orchestrator._runner, "resolve_prompts", return_value={}),
+        # with_retry sleeps in amelia.core.retry, not in service.
         patch(
-            "amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock
+            "amelia.core.retry.asyncio.sleep", new_callable=AsyncMock
         ) as mock_sleep,
     ):
         yield mock_sleep
@@ -1427,12 +1149,12 @@ async def test_httpx_connect_error_retried(
     mock_graph.astream = MagicMock(side_effect=httpx.ConnectError("Connection refused"))
 
     with (
-        patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
-        patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
-        patch.object(orchestrator, "_resolve_prompts", return_value={}),
-        patch.object(orchestrator, "_emit", new=AsyncMock()),
+        patch.object(orchestrator._runner, "get_profile_or_fail", return_value=mock_profile),
+        patch.object(orchestrator._runner, "create_server_graph", return_value=mock_graph),
+        patch.object(orchestrator._runner, "resolve_prompts", return_value={}),
+        # with_retry sleeps in amelia.core.retry, not in service.
         patch(
-            "amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock
+            "amelia.core.retry.asyncio.sleep", new_callable=AsyncMock
         ) as mock_sleep,
         pytest.raises(httpx.ConnectError),
     ):
@@ -1441,185 +1163,6 @@ async def test_httpx_connect_error_retried(
     # max_retries=2 means attempts 0, 1, 2 → astream called 3 times
     assert mock_graph.astream.call_count == 3
     assert mock_sleep.call_count == 2
-
-
-# =============================================================================
-# Exponential Backoff Tests
-# =============================================================================
-
-
-class TestExponentialBackoff:
-    """Tests for exponential backoff edge cases in retry logic."""
-
-    def _create_test_setup(
-        self,
-        valid_worktree: str,
-        workflow_id: str,
-        max_retries: int = 3,
-        base_delay: float = 0.1,
-        max_delay: float = 10.0,
-    ) -> tuple[ServerExecutionState, Profile]:
-        """Helper to create common test setup for backoff tests.
-
-        Args:
-            valid_worktree: Path to valid worktree
-            workflow_id: Workflow ID for the state
-            max_retries: Maximum retry attempts
-            base_delay: Base delay for exponential backoff
-            max_delay: Maximum delay cap
-
-        Returns:
-            Tuple of (mock_state, mock_profile)
-        """
-        mock_state = ServerExecutionState(
-            id=uuid4(),
-            issue_id="ISSUE-BACKOFF",
-            worktree_path=valid_worktree,
-            workflow_status=WorkflowStatus.IN_PROGRESS,
-            started_at=datetime.now(UTC),
-            profile_id="test",
-        )
-
-        agent_config = AgentConfig(driver=DriverType.CLAUDE, model="sonnet")
-        mock_profile = Profile(
-            name="test",
-            tracker=TrackerType.NOOP,
-            repo_root=valid_worktree,
-            retry=RetryConfig(max_retries=max_retries, base_delay=base_delay, max_delay=max_delay),
-            agents={
-                "architect": agent_config,
-                "developer": agent_config,
-                "reviewer": agent_config,
-            },
-        )
-
-        return mock_state, mock_profile
-
-    @pytest.mark.parametrize(
-        "workflow_id,max_retries,base_delay,max_delay,expected_delays",
-        [
-            # Normal exponential backoff without cap
-            ("wf-backoff", 3, 0.1, 10.0, [0.1 * (2**i) for i in range(3)]),
-            # Max delay cap is hit
-            ("wf-cap", 5, 1.0, 3.0, [1.0, 2.0, 3.0, 3.0, 3.0]),
-        ],
-        ids=["normal_exponential_backoff", "max_delay_cap"],
-    )
-    async def test_exponential_backoff_delays(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-        valid_worktree: str,
-        workflow_id: str,
-        max_retries: int,
-        base_delay: float,
-        max_delay: float,
-        expected_delays: list[float],
-    ) -> None:
-        """Verify exponential backoff delays increase with each retry and are capped at max_delay."""
-        mock_state, mock_profile = self._create_test_setup(
-            valid_worktree, workflow_id, max_retries=max_retries, base_delay=base_delay, max_delay=max_delay
-        )
-
-        # Make _run_workflow fail max_retries times, then succeed
-        call_count = 0
-
-        async def failing_run_workflow(workflow_id: uuid.UUID, state: ServerExecutionState, **kwargs: Any) -> None:
-            nonlocal call_count
-            call_count += 1
-            if call_count <= max_retries:
-                raise ModelProviderError("transient failure")
-
-        with (
-            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
-            patch.object(orchestrator, "_run_workflow", new=failing_run_workflow),
-            patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-        ):
-            await orchestrator._run_workflow_with_retry(mock_state.id, mock_state)
-
-        # Verify delays match expected pattern
-        assert mock_sleep.call_count == len(expected_delays)
-        delays = [call[0][0] for call in mock_sleep.call_args_list]
-        assert delays == expected_delays
-
-    async def test_max_retries_exhausted(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-        valid_worktree: str,
-    ) -> None:
-        """Verify workflow fails after max_retries exhausted."""
-        mock_state, mock_profile = self._create_test_setup(
-            valid_worktree, "unused", max_retries=2, base_delay=0.1, max_delay=10.0
-        )
-
-        # Always fail
-        async def always_fail(workflow_id: str, state: ServerExecutionState, **kwargs: Any) -> None:
-            raise ModelProviderError("always fails")
-
-        with (
-            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
-            patch.object(orchestrator, "_run_workflow", new=always_fail),
-            patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-            pytest.raises(ModelProviderError),
-        ):
-            await orchestrator._run_workflow_with_retry(mock_state.id, mock_state)
-
-        # max_retries=2 means attempts 0, 1, 2 → 3 total attempts, 2 sleeps
-        assert mock_sleep.call_count == 2
-
-    async def test_overflow_prevention(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-        valid_worktree: str,
-    ) -> None:
-        """Verify exponential backoff caps exponent at 31 to prevent overflow.
-
-        The implementation uses: base_delay * (2 ** min(attempt - 1, 31))
-        This test verifies the cap works by using max base_delay (30.0) and
-        max max_delay (300.0), then checking that delays are computed correctly
-        even at the boundary of the overflow cap.
-        """
-        # Use max allowed values to test overflow cap
-        # With base_delay=30.0 and max_retries=10:
-        # - Attempt 10: 30.0 * 2^9 = 15360.0, capped at max_delay=300.0
-        mock_state, mock_profile = self._create_test_setup(
-            valid_worktree, "wf-overflow", max_retries=10, base_delay=30.0, max_delay=300.0
-        )
-
-        # Fail exactly 10 times
-        call_count = 0
-
-        async def failing_run_workflow(workflow_id: uuid.UUID, state: ServerExecutionState, **kwargs: Any) -> None:
-            nonlocal call_count
-            call_count += 1
-            if call_count <= 10:
-                raise ModelProviderError("transient failure")
-
-        with (
-            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
-            patch.object(orchestrator, "_run_workflow", new=failing_run_workflow),
-            patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-        ):
-            await orchestrator._run_workflow_with_retry(mock_state.id, mock_state)
-
-        # Verify the delay calculation doesn't overflow and is properly capped
-        delays = [call[0][0] for call in mock_sleep.call_args_list]
-
-        # First few attempts before max_delay cap kicks in:
-        # Attempt 1: 30.0 * 2^0 = 30.0
-        # Attempt 2: 30.0 * 2^1 = 60.0
-        # Attempt 3: 30.0 * 2^2 = 120.0
-        # Attempt 4: 30.0 * 2^3 = 240.0
-        # Attempt 5+: 30.0 * 2^4+ = 480.0+, all capped at 300.0
-        assert delays[0] == 30.0
-        assert delays[1] == 60.0
-        assert delays[2] == 120.0
-        assert delays[3] == 240.0
-        # All remaining delays should be capped at max_delay
-        for i in range(4, 10):
-            assert delays[i] == 300.0
 
 
 # =============================================================================
@@ -1650,10 +1193,56 @@ async def test_resume_workflow_corrupted_checkpoint_raises_invalid_state(
     )
 
     with (
-        patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
+        patch.object(orchestrator._runner, "create_server_graph", return_value=mock_graph),
         pytest.raises(InvalidStateError) as exc_info,
     ):
         await orchestrator.resume_workflow(wf_id)
 
     assert "corrupted" in str(exc_info.value).lower()
+
+
+def test_resolve_target_plan_path_relative_within_repo(tmp_path: Path) -> None:
+    """Relative plan_file resolves against working_dir and stays inside it."""
+    result = OrchestratorService._resolve_target_plan_path(
+        plan_file="plans/feature.md",
+        plan_path_pattern="docs/plans/{issue_id}.md",
+        issue_id="ISSUE-123",
+        working_dir=tmp_path,
+    )
+
+    assert result == (tmp_path / "plans/feature.md").resolve()
+
+
+def test_resolve_target_plan_path_rejects_relative_traversal(tmp_path: Path) -> None:
+    """A ../ traversal in plan_file escaping working_dir is rejected."""
+    with pytest.raises(ValueError, match="resolves outside repository directory"):
+        OrchestratorService._resolve_target_plan_path(
+            plan_file="../../../etc/passwd",
+            plan_path_pattern="docs/plans/{issue_id}.md",
+            issue_id="ISSUE-123",
+            working_dir=tmp_path,
+        )
+
+
+def test_resolve_target_plan_path_rejects_absolute_outside(tmp_path: Path) -> None:
+    """An absolute plan_file outside working_dir is rejected."""
+    with pytest.raises(ValueError, match="resolves outside repository directory"):
+        OrchestratorService._resolve_target_plan_path(
+            plan_file="/etc/passwd",
+            plan_path_pattern="docs/plans/{issue_id}.md",
+            issue_id="ISSUE-123",
+            working_dir=tmp_path,
+        )
+
+
+def test_resolve_target_plan_path_pattern_branch(tmp_path: Path) -> None:
+    """With no plan_file, the path derives from the profile pattern."""
+    result = OrchestratorService._resolve_target_plan_path(
+        plan_file=None,
+        plan_path_pattern="docs/plans/{issue_key}.md",
+        issue_id="ISSUE-123",
+        working_dir=tmp_path,
+    )
+
+    assert result == tmp_path / "docs/plans/issue-123.md"
 

@@ -51,7 +51,7 @@ class TestStreamModeTaskEvents:
         }
 
         # Call the handler
-        await service._handle_tasks_event(uuid4(), task_event)
+        await service._events.handle_tasks_event(uuid4(), task_event)
 
         # Verify STAGE_STARTED was emitted
         mock_event_bus.emit.assert_called()
@@ -82,7 +82,7 @@ class TestStreamModeTaskEvents:
         }
 
         # Call the handler
-        await service._handle_tasks_event(uuid4(), task_result)
+        await service._events.handle_tasks_event(uuid4(), task_result)
 
         # Verify no event was emitted
         mock_event_bus.emit.assert_not_called()
@@ -108,7 +108,7 @@ class TestStreamModeTaskEvents:
 
         # Process each chunk
         for chunk in chunks:
-            await service._handle_combined_stream_chunk(uuid4(), chunk)
+            await service._events.handle_combined_stream_chunk(uuid4(), chunk)
 
         # Verify both handlers were called: tasks mode emits STAGE_STARTED,
         # updates mode emits STAGE_COMPLETED
@@ -122,18 +122,13 @@ class TestStreamModeTaskEvents:
         self, mock_repository, mock_event_bus
     ):
         """Interrupts in updates mode should still be detected."""
-        from amelia.server.orchestrator.service import OrchestratorService
-
-        service = OrchestratorService(
-            repository=mock_repository,
-            event_bus=mock_event_bus,
-        )
+        from amelia.server.orchestrator.event_emitter import is_interrupt_chunk
 
         # Simulate interrupt chunk
         chunk = ("updates", {"__interrupt__": ({"value": "test"},)})
 
         # The interrupt should be detected
-        is_interrupt = service._is_interrupt_chunk(chunk)
+        is_interrupt = is_interrupt_chunk(chunk)
         assert is_interrupt is True
 
     @pytest.mark.asyncio
@@ -141,20 +136,15 @@ class TestStreamModeTaskEvents:
         self, mock_repository, mock_event_bus
     ):
         """Regular updates should not be flagged as interrupts."""
-        from amelia.server.orchestrator.service import OrchestratorService
-
-        service = OrchestratorService(
-            repository=mock_repository,
-            event_bus=mock_event_bus,
-        )
+        from amelia.server.orchestrator.event_emitter import is_interrupt_chunk
 
         # Regular update chunk
         chunk = ("updates", {"architect_node": {"goal": "Test"}})
-        assert service._is_interrupt_chunk(chunk) is False
+        assert is_interrupt_chunk(chunk) is False
 
         # Tasks chunk
         chunk = ("tasks", {"id": "t1", "name": "architect_node"})
-        assert service._is_interrupt_chunk(chunk) is False
+        assert is_interrupt_chunk(chunk) is False
 
 
 class TestTaskStartedEvents:
@@ -198,7 +188,7 @@ class TestTaskStartedEvents:
             "triggers": ["approve_plan_node"],
         }
 
-        await service._handle_tasks_event(uuid4(), task_event)
+        await service._events.handle_tasks_event(uuid4(), task_event)
 
         # Verify TASK_STARTED was emitted (in addition to STAGE_STARTED)
         assert mock_event_bus.emit.call_count == 2

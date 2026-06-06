@@ -46,7 +46,7 @@ def mock_profile_repo() -> AsyncMock:
     default_profile = Profile(
         name="test",
         tracker="noop",
-        # repo_root is overwritten by _update_profile_repo_root in replan_workflow
+        # repo_root is overwritten by update_profile_repo_root in replan_workflow
         repo_root="/tmp/test-repo",
         agents={
             "architect": agent_config,
@@ -138,7 +138,7 @@ class TestReplanWorkflow:
 
         with (
             patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock) as mock_delete,
-            patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock),
+            patch.object(orchestrator._runner, "run_planning_task", new_callable=AsyncMock),
         ):
             await orchestrator.replan_workflow(wf_id)
 
@@ -212,7 +212,7 @@ class TestReplanWorkflow:
 
         with (
             patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock),
-            patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock),
+            patch.object(orchestrator._runner, "run_planning_task", new_callable=AsyncMock),
         ):
             await orchestrator.replan_workflow(workflow.id)
 

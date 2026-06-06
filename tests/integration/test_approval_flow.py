@@ -59,7 +59,7 @@ class TestMissingRequiredFields:
         )
 
         await mock_repository.create(server_state)
-        await service._run_workflow(server_state.id, server_state)
+        await service._runner.run_workflow(server_state.id, server_state)
 
         # Verify status is "failed"
         persisted = await mock_repository.get(server_state.id)
@@ -72,7 +72,7 @@ class TestMissingRequiredFields:
 class TestLifecycleEvents:
     """Test workflow lifecycle event emission."""
 
-    @patch("amelia.server.orchestrator.service.create_implementation_graph")
+    @patch("amelia.server.orchestrator.runner.create_implementation_graph")
     async def test_workflow_started_event_emitted(
         self,
         mock_create_graph,
@@ -102,7 +102,7 @@ class TestLifecycleEvents:
         )
 
         await mock_repository.create(server_state)
-        await service._run_workflow(server_state.id, server_state)
+        await service._runner.run_workflow(server_state.id, server_state)
 
         # Check WORKFLOW_STARTED was emitted
         started_events = event_tracker.get_by_type(EventType.WORKFLOW_STARTED)
@@ -112,7 +112,7 @@ class TestLifecycleEvents:
 class TestGraphInterruptHandling:
     """Test GraphInterrupt is handled correctly."""
 
-    @patch("amelia.server.orchestrator.service.create_implementation_graph")
+    @patch("amelia.server.orchestrator.runner.create_implementation_graph")
     async def test_interrupt_sets_status_blocked(
         self,
         mock_create_graph,
@@ -147,7 +147,7 @@ class TestGraphInterruptHandling:
         )
 
         await mock_repository.create(server_state)
-        await service._run_workflow(server_state.id, server_state)
+        await service._runner.run_workflow(server_state.id, server_state)
 
         # Verify status is blocked
         persisted = await mock_repository.get(server_state.id)

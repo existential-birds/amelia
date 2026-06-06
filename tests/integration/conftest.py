@@ -31,6 +31,7 @@ from amelia.server.events.bus import EventBus
 from amelia.server.events.connection_manager import ConnectionManager
 from amelia.server.models.events import WorkflowEvent
 from amelia.server.models.state import ServerExecutionState
+from amelia.server.orchestrator.runner import GraphRunner
 from amelia.server.orchestrator.service import OrchestratorService
 from tests.conftest import AsyncIteratorMock
 
@@ -605,7 +606,7 @@ async def mock_langgraph_for_planning(
 ) -> AsyncGenerator[MagicMock, None]:
     """Context manager that mocks LangGraph for planning tests.
 
-    Patches _create_server_graph so that the OrchestratorService runs
+    Patches create_server_graph so that the OrchestratorService runs
     against a mock graph instead of a real LangGraph instance.
 
     Args:
@@ -620,7 +621,7 @@ async def mock_langgraph_for_planning(
     )
 
     with patch.object(
-        OrchestratorService, "_create_server_graph", return_value=mock_graph
+        GraphRunner, "create_server_graph", return_value=mock_graph
     ):
         yield mock_graph
 
