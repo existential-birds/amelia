@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import uuid4
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -19,8 +19,6 @@ from amelia.core.types import (
     Profile,
     SandboxMode,
 )
-
-
 from amelia.pipelines.implementation.external_plan import import_external_plan
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.database import ProfileRepository
