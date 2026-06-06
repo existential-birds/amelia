@@ -28,6 +28,8 @@ _WORKFLOW_COLUMNS = (
     "base_commit, branch"
 )
 
+_ACTIVE_STATUS_SQL = "status IN ('pending', 'in_progress', 'blocked')"
+
 
 def _build_workflow_filters(
     status: WorkflowStatus | None = None,
@@ -365,34 +367,13 @@ class WorkflowRepository:
         Returns:
             List of active workflows (pending, in_progress, blocked).
         """
-        if worktree_path:
-            rows = await self._db.fetch_all(
-                """
-                SELECT
-                    id, issue_id, worktree_path, status,
-                    created_at, started_at, completed_at, failure_reason,
-                    workflow_type, profile_id, plan_cache, issue_cache,
-                    base_commit, branch
-                FROM workflows
-                WHERE status IN ('pending', 'in_progress', 'blocked')
-                AND worktree_path = $1
-                ORDER BY started_at DESC
-                """,
-                worktree_path,
-            )
-        else:
-            rows = await self._db.fetch_all(
-                """
-                SELECT
-                    id, issue_id, worktree_path, status,
-                    created_at, started_at, completed_at, failure_reason,
-                    workflow_type, profile_id, plan_cache, issue_cache,
-                    base_commit, branch
-                FROM workflows
-                WHERE status IN ('pending', 'in_progress', 'blocked')
-                ORDER BY started_at DESC
-                """
-            )
+        conditions, params = _build_workflow_filters(worktree_path=worktree_path)
+        where_clause = " AND ".join([_ACTIVE_STATUS_SQL, *conditions])
+        rows = await self._db.fetch_all(
+            f"SELECT {_WORKFLOW_COLUMNS} FROM workflows "
+            f"WHERE {where_clause} ORDER BY started_at DESC",
+            *params,
+        )
         return [self._row_to_state(row) for row in rows]
 
     async def count_active(self) -> int:
@@ -402,10 +383,7 @@ class WorkflowRepository:
             Number of active workflows.
         """
         result = await self._db.fetch_scalar(
-            """
-            SELECT COUNT(*) FROM workflows
-            WHERE status IN ('pending', 'in_progress', 'blocked')
-            """
+            f"SELECT COUNT(*) FROM workflows WHERE {_ACTIVE_STATUS_SQL}"
         )
         # Type narrowing for asyncpg return type (COUNT returns int but fetch_scalar returns Any)
         return result if isinstance(result, int) else 0
