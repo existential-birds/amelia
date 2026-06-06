@@ -713,18 +713,7 @@ class WorkflowRepository:
         """
         usages = await self.get_token_usage(workflow_id)
 
-        if not usages:
-            return None
-
-        return TokenSummary(
-            total_input_tokens=sum(u.input_tokens for u in usages),
-            total_output_tokens=sum(u.output_tokens for u in usages),
-            total_cache_read_tokens=sum(u.cache_read_tokens for u in usages),
-            total_cost_usd=sum(u.cost_usd for u in usages),
-            total_duration_ms=sum(u.duration_ms for u in usages),
-            total_turns=sum(u.num_turns for u in usages),
-            breakdown=usages,
-        )
+        return TokenSummary.from_usages(usages)
 
     async def get_token_summaries_batch(
         self, workflow_ids: list[uuid.UUID]
@@ -770,19 +759,7 @@ class WorkflowRepository:
         # Build summaries for each workflow
         result: dict[uuid.UUID, TokenSummary | None] = {}
         for wid in workflow_ids:
-            usages = usages_by_workflow[wid]
-            if not usages:
-                result[wid] = None
-            else:
-                result[wid] = TokenSummary(
-                    total_input_tokens=sum(u.input_tokens for u in usages),
-                    total_output_tokens=sum(u.output_tokens for u in usages),
-                    total_cache_read_tokens=sum(u.cache_read_tokens for u in usages),
-                    total_cost_usd=sum(u.cost_usd for u in usages),
-                    total_duration_ms=sum(u.duration_ms for u in usages),
-                    total_turns=sum(u.num_turns for u in usages),
-                    breakdown=usages,
-                )
+            result[wid] = TokenSummary.from_usages(usages_by_workflow[wid])
 
         return result
 
