@@ -8,6 +8,7 @@ import pytest
 
 from amelia.core.types import AgentConfig, Profile
 from amelia.server.models.requests import CreateWorkflowRequest
+from amelia.server.orchestrator.event_emitter import StreamEventEmitter
 from amelia.server.orchestrator.service import OrchestratorService
 
 
@@ -188,6 +189,9 @@ class TestHandoffDesignFlow:
         orchestrator._repository = MagicMock()
         orchestrator._repository.create = AsyncMock()
         orchestrator._profile_repo = mock_profile_repo
+        orchestrator._events = StreamEventEmitter(
+            repository=orchestrator._repository, event_bus=orchestrator._event_bus
+        )
 
         # Use worktree-relative path (not absolute) for security
         request = CreateWorkflowRequest(
@@ -199,7 +203,7 @@ class TestHandoffDesignFlow:
         )
 
         with (
-            patch.object(orchestrator, "_emit", new_callable=AsyncMock),
+            patch.object(orchestrator._events, "emit", new_callable=AsyncMock),
             patch(
                 "amelia.server.orchestrator.service.get_git_head",
                 new_callable=AsyncMock,

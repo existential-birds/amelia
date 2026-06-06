@@ -35,7 +35,6 @@ from amelia.pipelines.implementation.external_plan import (
     import_external_plan,
 )
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.pipelines.implementation.utils import extract_task_title
 from amelia.pipelines.review import create_review_graph
 from amelia.server.database import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
@@ -48,21 +47,15 @@ from amelia.server.exceptions import (
     WorkflowNotFoundError,
 )
 from amelia.server.models import ServerExecutionState
-from amelia.server.models.events import EventType, WorkflowEvent
+from amelia.server.models.events import EventType
 from amelia.server.models.requests import BatchStartRequest, CreateWorkflowRequest
 from amelia.server.models.responses import BatchStartResponse
 from amelia.server.models.state import PlanCache, WorkflowStatus, WorkflowType
 from amelia.server.orchestrator.event_emitter import (
-    STAGE_NODES,
+    StreamEventEmitter,
     is_interrupt_chunk,
-    summarize_stage_output,
 )
 from amelia.trackers.factory import create_tracker
-
-
-# Back-compat alias for the orchestrator/old emission path. Task 2 migrates the
-# remaining internal caller (and TestEmissionPathsSummarize) off this name.
-_summarize_stage_output = summarize_stage_output
 
 
 # Exceptions that warrant retry
@@ -130,16 +123,14 @@ class OrchestratorService:
         self._profile_repo = profile_repo
         self._max_concurrent = max_concurrent
         self._checkpointer = checkpointer
+        # Owns event emission + per-workflow sequencing.
+        self._events = StreamEventEmitter(repository=repository, event_bus=event_bus)
         # worktree_path -> (workflow_id, task)
         self._active_tasks: dict[str, tuple[uuid.UUID, asyncio.Task[None]]] = {}
         # workflow_id -> planning task
         self._planning_tasks: dict[uuid.UUID, asyncio.Task[None]] = {}
         self._approval_lock = asyncio.Lock()  # Prevents race conditions on approvals
         self._start_lock = asyncio.Lock()  # Prevents race conditions on workflow start
-        # workflow_id -> next sequence
-        self._sequence_counters: dict[uuid.UUID, int] = {}
-        # workflow_id -> lock
-        self._sequence_locks: dict[uuid.UUID, asyncio.Lock] = {}
 
     def _create_server_graph(
         self,
@@ -262,8 +253,7 @@ class OrchestratorService:
         """
         def _cleanup(_: asyncio.Task[None]) -> None:
             self._active_tasks.pop(worktree_path, None)
-            self._sequence_counters.pop(workflow_id, None)
-            self._sequence_locks.pop(workflow_id, None)
+            self._events.forget(workflow_id)
             logger.debug(
                 "Workflow task completed",
                 workflow_id=workflow_id,
@@ -787,7 +777,7 @@ class OrchestratorService:
         await self._repository.create(state)
 
         # Emit created event
-        await self._emit(
+        await self._events.emit(
             workflow_id,
             EventType.WORKFLOW_CREATED,
             f"Workflow queued for {request.issue_id}",
@@ -998,7 +988,7 @@ class OrchestratorService:
             workflow.workflow_status = WorkflowStatus.IN_PROGRESS
             await self._repository.update(workflow)
 
-            await self._emit(
+            await self._events.emit(
                 workflow_id,
                 EventType.WORKFLOW_STARTED,
                 "Workflow resumed from checkpoint",
@@ -1175,7 +1165,7 @@ class OrchestratorService:
 
         config = self._build_runnable_config(workflow_id, profile, prompts, sandbox_provider)
 
-        await self._emit(
+        await self._events.emit(
             workflow_id,
             EventType.WORKFLOW_STARTED,
             "Workflow execution started",
@@ -1230,7 +1220,7 @@ class OrchestratorService:
                 # Sync plan from LangGraph checkpoint to ServerExecutionState
                 # so it's available via REST API while blocked
                 await self._sync_plan_from_checkpoint(workflow_id, graph, config)
-                await self._emit(
+                await self._events.emit(
                     workflow_id,
                     EventType.APPROVAL_REQUIRED,
                     "Plan ready for review - awaiting human approval",
@@ -1240,7 +1230,7 @@ class OrchestratorService:
                 await self._repository.set_status(workflow_id, WorkflowStatus.BLOCKED)
                 break
             # Handle combined mode chunk
-            await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
+            await self._events.handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
         if not was_interrupted:
             # Workflow completed without interruption (no human approval needed).
@@ -1248,7 +1238,7 @@ class OrchestratorService:
             # workflows that resume after human approval. These are mutually exclusive
             # code paths - only one COMPLETED event is ever emitted per workflow.
 
-            await self._emit(
+            await self._events.emit(
                 workflow_id,
                 EventType.WORKFLOW_COMPLETED,
                 "Workflow completed successfully",
@@ -1298,7 +1288,7 @@ class OrchestratorService:
                             raise  # Let outer handler apply retry logic
                         except Exception as e:
                             logger.exception("Daytona sandbox bootstrap failed", workflow_id=workflow_id)
-                            await self._emit(
+                            await self._events.emit(
                                 workflow_id,
                                 EventType.WORKFLOW_FAILED,
                                 f"Sandbox bootstrap failed: {e!s}",
@@ -1317,7 +1307,7 @@ class OrchestratorService:
 
                     if attempt > retry_config.max_retries:
                         logger.exception("Workflow failed after retries exhausted", workflow_id=workflow_id)
-                        await self._emit(
+                        await self._events.emit(
                             workflow_id,
                             EventType.WORKFLOW_FAILED,
                             f"Workflow failed after {attempt} attempts: {e!s}",
@@ -1355,7 +1345,7 @@ class OrchestratorService:
                 except Exception as e:
                     # Non-transient error - fail immediately
                     logger.exception("Workflow failed with non-transient error", workflow_id=workflow_id)
-                    await self._emit(
+                    await self._events.emit(
                         workflow_id,
                         EventType.WORKFLOW_FAILED,
                         f"Workflow failed: {e!s}",
@@ -1425,7 +1415,7 @@ class OrchestratorService:
                 )
             except Exception as e:
                 logger.exception("Review workflow setup failed", workflow_id=workflow_id)
-                await self._emit(
+                await self._events.emit(
                     workflow_id,
                     EventType.WORKFLOW_FAILED,
                     f"Review workflow setup failed: {e}",
@@ -1436,7 +1426,7 @@ class OrchestratorService:
                 )
                 return
 
-            await self._emit(
+            await self._events.emit(
                 workflow_id,
                 EventType.WORKFLOW_STARTED,
                 "Review workflow started",
@@ -1465,7 +1455,7 @@ class OrchestratorService:
                             "Unexpected interrupt in review workflow",
                             workflow_id=workflow_id,
                         )
-                        await self._emit(
+                        await self._events.emit(
                             workflow_id,
                             EventType.WORKFLOW_FAILED,
                             "Review workflow aborted due to unexpected interrupt",
@@ -1478,9 +1468,9 @@ class OrchestratorService:
                         )
                         return
                     # Emit stage events for each node
-                    await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
+                    await self._events.handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
-                await self._emit(
+                await self._events.emit(
                     workflow_id,
                     EventType.WORKFLOW_COMPLETED,
                     "Review workflow completed",
@@ -1489,7 +1479,7 @@ class OrchestratorService:
 
             except Exception as e:
                 logger.exception("Review workflow failed", workflow_id=workflow_id)
-                await self._emit(
+                await self._events.emit(
                     workflow_id,
                     EventType.WORKFLOW_FAILED,
                     f"Review workflow failed: {e}",
@@ -1504,69 +1494,6 @@ class OrchestratorService:
                     await sandbox_provider.teardown()
                 except Exception:
                     logger.warning("Sandbox teardown failed", exc_info=True)
-
-    async def _emit(
-        self,
-        workflow_id: uuid.UUID,
-        event_type: EventType,
-        message: str,
-        agent: str = "system",
-        data: dict[str, object] | None = None,
-        correlation_id: uuid.UUID | None = None,
-    ) -> WorkflowEvent:
-        """Emit a workflow event.
-
-        Creates an event with monotonically increasing sequence number,
-        persists to repository, and broadcasts via event bus.
-
-        Args:
-            workflow_id: The workflow this event belongs to.
-            event_type: Type of event.
-            message: Human-readable message.
-            agent: Source agent (default: "system").
-            data: Optional structured payload.
-            correlation_id: Optional ID for tracing related events.
-
-        Returns:
-            The emitted WorkflowEvent.
-        """
-        # Get or create lock atomically (setdefault is atomic for dict operations)
-        lock = self._sequence_locks.setdefault(workflow_id, asyncio.Lock())
-
-        async with lock:
-            # Initialize or get sequence counter
-            if workflow_id not in self._sequence_counters:
-                max_seq = await self._repository.get_max_event_sequence(workflow_id)
-                # Repository returns 0 if no events exist, so max_seq + 1 starts at 1
-                self._sequence_counters[workflow_id] = max_seq + 1
-
-            sequence = self._sequence_counters[workflow_id]
-            self._sequence_counters[workflow_id] += 1
-
-        event = WorkflowEvent(
-            id=uuid4(),
-            workflow_id=workflow_id,
-            sequence=sequence,
-            timestamp=datetime.now(UTC),
-            agent=agent,
-            event_type=event_type,
-            message=message,
-            data=data,
-            correlation_id=correlation_id,
-        )
-
-        # Persist and broadcast
-        await self._repository.save_event(event)
-        self._event_bus.emit(event)
-
-        logger.debug(
-            "Event emitted",
-            workflow_id=workflow_id,
-            event_type=event_type.value,
-            sequence=sequence,
-        )
-
-        return event
 
     async def _emit_plan_validation_event(
         self,
@@ -1584,7 +1511,7 @@ class OrchestratorService:
         """
         validation = plan_result.validation_result
         if validation is not None and not validation.valid:
-            await self._emit(
+            await self._events.emit(
                 workflow_id,
                 EventType.PLAN_VALIDATION_FAILED,
                 f"Plan validation failed: {'; '.join(validation.issues)}",
@@ -1602,7 +1529,7 @@ class OrchestratorService:
                 "validation_issues": validation.issues,
             }
 
-        await self._emit(
+        await self._events.emit(
             workflow_id,
             EventType.PLAN_VALIDATED,
             f"Plan validated: {plan_result.goal}",
@@ -1656,7 +1583,7 @@ class OrchestratorService:
                     current_status=workflow.workflow_status,
                 )
 
-            await self._emit(
+            await self._events.emit(
                 workflow_id,
                 EventType.APPROVAL_GRANTED,
                 "Plan approved",
@@ -1719,14 +1646,14 @@ class OrchestratorService:
                                 next_nodes=next_nodes,
                             )
                             continue
-                        await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
+                        await self._events.handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
                     # Workflow completed after human approval.
                     # Note: A separate COMPLETED emission exists in _run_workflow() for
                     # workflows that complete without interruption. These are mutually exclusive
                     # code paths - only one COMPLETED event is ever emitted per workflow.
 
-                    await self._emit(
+                    await self._events.emit(
                         workflow_id,
                         EventType.WORKFLOW_COMPLETED,
                         "Workflow completed successfully",
@@ -1742,7 +1669,7 @@ class OrchestratorService:
                             "Workflow failed after approval retries exhausted",
                             workflow_id=workflow_id,
                         )
-                        await self._emit(
+                        await self._events.emit(
                             workflow_id,
                             EventType.WORKFLOW_FAILED,
                             f"Workflow failed after {attempt} attempts: {e!s}",
@@ -1771,7 +1698,7 @@ class OrchestratorService:
 
                 except Exception as e:
                     logger.exception("Workflow failed after approval", workflow_id=workflow_id)
-                    await self._emit(
+                    await self._events.emit(
                         workflow_id,
                         EventType.WORKFLOW_FAILED,
                         f"Workflow failed: {e!s}",
@@ -1821,7 +1748,7 @@ class OrchestratorService:
             await self._repository.set_status(
                 workflow_id, WorkflowStatus.FAILED, failure_reason=feedback
             )
-            await self._emit(
+            await self._events.emit(
                 workflow_id,
                 EventType.APPROVAL_REJECTED,
                 f"Plan rejected: {feedback}",
@@ -1848,338 +1775,6 @@ class OrchestratorService:
         config = self._build_runnable_config(workflow_id, profile, prompts={})
 
         await graph.aupdate_state(config, {"human_approved": False})
-
-    async def _handle_stream_chunk(
-        self,
-        workflow_id: uuid.UUID,
-        chunk: dict[str, Any],
-    ) -> None:
-        """Handle an updates chunk from astream(stream_mode=['updates', 'tasks']).
-
-        With combined stream mode, updates chunks map node names to their
-        state updates. We emit STAGE_COMPLETED after each node that's in
-        STAGE_NODES.
-
-        Note: STAGE_STARTED events are emitted by _handle_tasks_event when
-        task events arrive from the tasks stream mode.
-
-        Args:
-            workflow_id: The workflow this chunk belongs to.
-            chunk: Dict mapping node names to state updates.
-        """
-        for node_name, output in chunk.items():
-            if node_name in STAGE_NODES:
-                # Some nodes (e.g. human_approval_node) produce None output
-                if output is None:
-                    await self._emit(
-                        workflow_id,
-                        EventType.STAGE_COMPLETED,
-                        f"Completed {node_name}",
-                        agent=node_name.removesuffix("_node"),
-                        data={"stage": node_name},
-                    )
-                    continue
-
-                # output is always a dict here (node state update from LangGraph)
-                summarized = _summarize_stage_output(output)
-                assert summarized is not None
-
-                # Emit agent-specific messages based on node
-                await self._emit_agent_messages(workflow_id, node_name, summarized)
-
-                # Emit STAGE_COMPLETED for the current node
-                await self._emit(
-                    workflow_id,
-                    EventType.STAGE_COMPLETED,
-                    f"Completed {node_name}",
-                    agent=node_name.removesuffix("_node"),
-                    data={"stage": node_name, "output": summarized},
-                )
-
-            # Emit TASK_COMPLETED when next_task_node completes
-            if node_name == "next_task_node":
-                # Get total_tasks from output (passed through by next_task_node)
-                total_tasks = output.get("total_tasks")
-                if total_tasks is not None:
-                    # The output contains the NEW index, so completed task is index - 1
-                    new_index = output.get("current_task_index", 0)
-                    completed_index = new_index - 1 if new_index > 0 else 0
-
-                    await self._emit(
-                        workflow_id,
-                        EventType.TASK_COMPLETED,
-                        f"Completed Task {completed_index + 1}/{total_tasks}",
-                        agent="system",
-                        data={
-                            "task_index": completed_index,
-                            "total_tasks": total_tasks,
-                        },
-                    )
-
-    async def _handle_tasks_event(
-        self,
-        workflow_id: uuid.UUID,
-        task_data: dict[str, Any],
-    ) -> None:
-        """Handle a task event from stream_mode='tasks'.
-
-        LangGraph emits two types of task events:
-        - Task START: {id, name, input, triggers} - when node begins
-        - Task RESULT: {id, name, error, result, interrupts} - when node completes
-
-        We only process START events for STAGE_STARTED. Result events are
-        ignored since STAGE_COMPLETED is handled via "updates" mode.
-
-        Args:
-            workflow_id: The workflow this task belongs to.
-            task_data: Task event data from LangGraph.
-        """
-        # Ignore task result events - only process task start events
-        if "input" not in task_data:
-            return
-
-        node_name = task_data.get("name", "")
-        if node_name in STAGE_NODES:
-            await self._emit(
-                workflow_id,
-                EventType.STAGE_STARTED,
-                f"Starting {node_name}",
-                agent=node_name.removesuffix("_node"),
-                data={"stage": node_name},
-            )
-
-        # Emit TASK_STARTED for developer_node in task-based mode
-        if node_name == "developer_node":
-            input_state = task_data.get("input")
-            # input_state is an ImplementationState Pydantic model from LangGraph.
-            # Access attributes directly, not via .get() which doesn't exist on Pydantic models.
-            if input_state is not None and getattr(input_state, "total_tasks", None) is not None:
-                total_tasks = input_state.total_tasks
-                task_index = input_state.current_task_index
-                plan_markdown = input_state.plan_markdown or ""
-                task_title = extract_task_title(plan_markdown, task_index) or "Unknown"
-
-                await self._emit(
-                    workflow_id,
-                    EventType.TASK_STARTED,
-                    f"Starting Task {task_index + 1}/{total_tasks}: {task_title}",
-                    agent="developer",
-                    data={
-                        "task_index": task_index,
-                        "total_tasks": total_tasks,
-                        "task_title": task_title,
-                    },
-                )
-
-    async def _handle_combined_stream_chunk(
-        self,
-        workflow_id: uuid.UUID,
-        chunk: tuple[str, Any],
-    ) -> None:
-        """Handle a chunk from stream_mode=['updates', 'tasks'].
-
-        Combined stream mode emits tuples of (mode, data). We route each
-        to the appropriate handler.
-
-        Args:
-            workflow_id: The workflow this chunk belongs to.
-            chunk: Tuple of (mode_name, data).
-        """
-        mode, data = chunk
-        if mode == "tasks":
-            await self._handle_tasks_event(workflow_id, data)
-        elif mode == "updates":
-            # Interrupts handled by caller via is_interrupt_chunk check
-            if "__interrupt__" in data:
-                return
-            await self._handle_stream_chunk(workflow_id, data)
-
-    async def _emit_agent_messages(
-        self,
-        workflow_id: uuid.UUID,
-        node_name: str,
-        output: dict[str, Any],
-    ) -> None:
-        """Emit detailed agent messages based on node output.
-
-        Args:
-            workflow_id: The workflow ID.
-            node_name: Name of the node that produced this output.
-            output: State updates from the node.
-        """
-        if node_name == "architect_node":
-            await self._emit_architect_messages(workflow_id, output)
-        elif node_name == "plan_validator_node":
-            await self._emit_validator_messages(workflow_id, output)
-        elif node_name == "developer_node":
-            await self._emit_developer_messages(workflow_id, output)
-        elif node_name == "reviewer_node":
-            await self._emit_reviewer_messages(workflow_id, output)
-        elif node_name == "evaluation_node":
-            await self._emit_evaluator_messages(workflow_id, output)
-
-    async def _emit_architect_messages(
-        self,
-        workflow_id: uuid.UUID,
-        output: dict[str, Any],
-    ) -> None:
-        """Emit messages for architect node output.
-
-        Args:
-            workflow_id: The workflow ID.
-            output: State updates from the architect node.
-        """
-        # In agentic mode, architect sets goal and generates markdown plan
-        goal = output.get("goal")
-        plan_markdown = output.get("plan_markdown")
-
-        if goal:
-            await self._emit(
-                workflow_id,
-                EventType.AGENT_MESSAGE,
-                f"Goal: {goal}",
-                agent="architect",
-                data={"goal": goal, "has_plan": plan_markdown is not None},
-            )
-
-    async def _emit_validator_messages(
-        self,
-        workflow_id: uuid.UUID,
-        output: dict[str, Any],
-    ) -> None:
-        """Emit messages for plan validator node output.
-
-        Args:
-            workflow_id: The workflow ID.
-            output: State updates from the validator node.
-        """
-        goal = output.get("goal")
-        key_files = output.get("key_files", [])
-
-        if goal:
-            await self._emit(
-                workflow_id,
-                EventType.AGENT_MESSAGE,
-                f"Plan validated: {goal}",
-                agent="plan_validator",
-                data={"goal": goal, "key_files_count": len(key_files)},
-            )
-
-    async def _emit_developer_messages(
-        self,
-        workflow_id: uuid.UUID,
-        output: dict[str, Any],
-    ) -> None:
-        """Emit messages for developer node output.
-
-        Args:
-            workflow_id: The workflow ID.
-            output: State updates from the developer node.
-        """
-        # In agentic mode, developer works autonomously with tool calls
-        # Emit status updates based on agentic state
-        status = output.get("agentic_status")
-        final_response = output.get("final_response")
-
-        if status == "completed" and final_response:
-            await self._emit(
-                workflow_id,
-                EventType.AGENT_MESSAGE,
-                "Development complete",
-                agent="developer",
-                data={"status": status},
-            )
-        elif status == "failed":
-            error = output.get("error", "Unknown error")
-            await self._emit(
-                workflow_id,
-                EventType.AGENT_MESSAGE,
-                f"Development failed: {error}",
-                agent="developer",
-                data={"status": status, "error": error},
-            )
-
-    async def _emit_reviewer_messages(
-        self,
-        workflow_id: uuid.UUID,
-        output: dict[str, Any],
-    ) -> None:
-        """Emit messages for reviewer node output.
-
-        Args:
-            workflow_id: The workflow ID.
-            output: State updates from the reviewer node.
-        """
-        last_reviews = output.get("last_reviews")
-        if not last_reviews:
-            return
-
-        # Emit a message for each review in the list
-        for review in last_reviews:
-            approved = review.approved
-            severity = review.severity
-            issue_count = len(review.comments) if review.comments else 0
-            persona = review.reviewer_persona or "reviewer"
-
-            await self._emit(
-                workflow_id,
-                EventType.AGENT_MESSAGE,
-                f"Review ({persona}) {'approved' if approved else 'requested changes'} "
-                f"({severity} severity, {issue_count} issues)",
-                agent="reviewer",
-                data={
-                    "approved": approved,
-                    "severity": severity,
-                    "issue_count": issue_count,
-                    "reviewer_persona": persona,
-                },
-            )
-
-    async def _emit_evaluator_messages(
-        self,
-        workflow_id: uuid.UUID,
-        output: dict[str, Any],
-    ) -> None:
-        """Emit messages for evaluator node output.
-
-        Args:
-            workflow_id: The workflow ID.
-            output: State updates from the evaluator node.
-        """
-        evaluation_result = output.get("evaluation_result")
-        if not evaluation_result:
-            return
-
-        # Node returns EvaluationResult Pydantic model directly
-        to_implement = len(evaluation_result.items_to_implement)
-        rejected = len(evaluation_result.items_rejected)
-        deferred = len(evaluation_result.items_deferred)
-        clarify = len(evaluation_result.items_needing_clarification)
-
-        summary_parts = []
-        if to_implement:
-            summary_parts.append(f"{to_implement} to implement")
-        if rejected:
-            summary_parts.append(f"{rejected} rejected")
-        if deferred:
-            summary_parts.append(f"{deferred} deferred")
-        if clarify:
-            summary_parts.append(f"{clarify} need clarification")
-
-        message = f"Evaluation: {', '.join(summary_parts)}" if summary_parts else "Evaluation complete"
-
-        await self._emit(
-            workflow_id,
-            EventType.AGENT_MESSAGE,
-            message,
-            agent="evaluator",
-            data={
-                "to_implement": to_implement,
-                "rejected": rejected,
-                "deferred": deferred,
-                "needs_clarification": clarify,
-            },
-        )
 
     async def _sync_plan_from_checkpoint(
         self,
@@ -2270,7 +1865,7 @@ class OrchestratorService:
                 WorkflowStatus.FAILED,
                 failure_reason="Server restarted while workflow was running",
             )
-            await self._emit(
+            await self._events.emit(
                 wf.id,
                 EventType.WORKFLOW_FAILED,
                 "Server restarted while workflow was running",
@@ -2282,7 +1877,7 @@ class OrchestratorService:
         # Handle BLOCKED workflows — re-emit approval events
         blocked = await self._repository.find_by_status([WorkflowStatus.BLOCKED])
         for wf in blocked:
-            await self._emit(
+            await self._events.emit(
                 wf.id,
                 EventType.APPROVAL_REQUIRED,
                 "Plan ready for review - awaiting human approval (restored after restart)",
@@ -2377,7 +1972,7 @@ class OrchestratorService:
                     fresh.workflow_status = WorkflowStatus.BLOCKED
                     await self._repository.update(fresh)
 
-                    await self._emit(
+                    await self._events.emit(
                         workflow_id,
                         EventType.APPROVAL_REQUIRED,
                         "Plan ready for review - awaiting human approval",
@@ -2388,7 +1983,7 @@ class OrchestratorService:
                     break
 
                 # Handle combined mode chunk (updates, tasks)
-                await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
+                await self._events.handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
             if not was_interrupted:
                 # Graph completed without interrupting - unexpected for planning
@@ -2416,7 +2011,7 @@ class OrchestratorService:
                     error=str(update_err),
                 )
 
-            await self._emit(
+            await self._events.emit(
                 workflow_id,
                 EventType.WORKFLOW_FAILED,
                 f"Planning failed: {e}",
@@ -2491,7 +2086,7 @@ class OrchestratorService:
         await self._repository.create(state)
 
         # Emit workflow created event
-        await self._emit(
+        await self._events.emit(
             workflow_id,
             EventType.WORKFLOW_CREATED,
             f"Workflow queued for {request.issue_id}, planning...",
@@ -2879,7 +2474,7 @@ class OrchestratorService:
             # Emit replanning event inside the lock, before spawning the task,
             # to guarantee ordering: STAGE_STARTED always precedes any events
             # emitted by _run_planning_task (e.g. APPROVAL_REQUIRED).
-            await self._emit(
+            await self._events.emit(
                 workflow_id,
                 EventType.STAGE_STARTED,
                 "Replanning: regenerating plan with Architect",
@@ -3046,8 +2641,7 @@ class OrchestratorService:
 
         def cleanup_task(_: asyncio.Task[None]) -> None:
             self._active_tasks.pop(worktree_path, None)
-            self._sequence_counters.pop(new_id, None)
-            self._sequence_locks.pop(new_id, None)
+            self._events.forget(new_id)
 
         task.add_done_callback(cleanup_task)
 

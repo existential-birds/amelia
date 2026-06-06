@@ -6,7 +6,7 @@ import uuid
 from collections.abc import AsyncIterator, Callable, Generator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
@@ -120,7 +120,7 @@ def capture_emit(
     """Capture events emitted by the orchestrator.
 
     Returns a tuple of (emitted_events list, install function).
-    Call the install function to patch orchestrator._emit.
+    Call the install function to patch orchestrator._events.emit.
 
     Returns:
         Tuple of (emitted_events, install_fn) where:
@@ -151,7 +151,7 @@ def capture_emit(
         )
 
     def install() -> None:
-        setattr(orchestrator, "_emit", _capture)  # noqa: B010
+        setattr(orchestrator._events, "emit", _capture)  # noqa: B010
 
     return emitted_events, install
 
@@ -611,148 +611,6 @@ class TestApproveWorkflowResume:
         assert call_args[0][1] == {"human_approved": True}
 
 
-# =============================================================================
-# Event Emission Tests
-# =============================================================================
-
-
-async def test_emit_event(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-    mock_event_bus: EventBus,
-) -> None:
-    """Should emit event with sequence number and persist to DB."""
-    received = []
-    mock_event_bus.subscribe(lambda e: received.append(e))
-
-    await orchestrator._emit(
-        workflow_id=uuid4(),
-        event_type=EventType.WORKFLOW_STARTED,
-        message="Test message",
-    )
-
-    # Should persist to DB
-    mock_repository.save_event.assert_called_once()
-    saved_event = mock_repository.save_event.call_args[0][0]
-    assert saved_event.workflow_id is not None
-    assert saved_event.event_type == EventType.WORKFLOW_STARTED
-    assert saved_event.message == "Test message"
-    assert saved_event.sequence == 1
-    assert saved_event.agent == "system"
-
-    # Should broadcast to event bus
-    assert len(received) == 1
-    assert received[0] == saved_event
-
-
-async def test_emit_sequence_increment(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-) -> None:
-    """Sequence numbers should increment per workflow."""
-    wf_id = uuid4()
-    await orchestrator._emit(wf_id, EventType.WORKFLOW_STARTED, "Event 1")
-    await orchestrator._emit(wf_id, EventType.STAGE_STARTED, "Event 2")
-    await orchestrator._emit(wf_id, EventType.STAGE_COMPLETED, "Event 3")
-
-    # Check sequences
-    calls = mock_repository.save_event.call_args_list
-    assert calls[0][0][0].sequence == 1
-    assert calls[1][0][0].sequence == 2
-    assert calls[2][0][0].sequence == 3
-
-
-async def test_emit_different_workflows(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-) -> None:
-    """Different workflows should have independent sequence counters."""
-    wf1_id = uuid4()
-    wf2_id = uuid4()
-    await orchestrator._emit(wf1_id, EventType.WORKFLOW_STARTED, "WF1 Event 1")
-    await orchestrator._emit(wf2_id, EventType.WORKFLOW_STARTED, "WF2 Event 1")
-    await orchestrator._emit(wf1_id, EventType.STAGE_STARTED, "WF1 Event 2")
-
-    calls = mock_repository.save_event.call_args_list
-    # wf-1 sequences: 1, 2
-    assert calls[0][0][0].workflow_id == wf1_id
-    assert calls[0][0][0].sequence == 1
-    assert calls[2][0][0].workflow_id == wf1_id
-    assert calls[2][0][0].sequence == 2
-    # wf-2 sequences: 1
-    assert calls[1][0][0].workflow_id == wf2_id
-    assert calls[1][0][0].sequence == 1
-
-
-async def test_emit_concurrent_same_workflow(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-) -> None:
-    """Concurrent emits for same workflow should have unique sequences."""
-    # Simulate concurrent emits
-    concurrent_wf_id = uuid4()
-    await asyncio.gather(
-        orchestrator._emit(concurrent_wf_id, EventType.FILE_CREATED, "File 1"),
-        orchestrator._emit(concurrent_wf_id, EventType.FILE_CREATED, "File 2"),
-        orchestrator._emit(concurrent_wf_id, EventType.FILE_CREATED, "File 3"),
-    )
-
-    calls = mock_repository.save_event.call_args_list
-    sequences = [call[0][0].sequence for call in calls]
-
-    # All sequences should be unique
-    assert len(set(sequences)) == 3
-    assert set(sequences) == {1, 2, 3}
-
-
-async def test_emit_resumes_from_db_max_sequence(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-) -> None:
-    """First emit should query DB for max sequence."""
-    mock_repository.get_max_event_sequence.return_value = 42
-
-    resume_wf_id = uuid4()
-    await orchestrator._emit(resume_wf_id, EventType.WORKFLOW_STARTED, "Resume")
-
-    # Should query DB once
-    mock_repository.get_max_event_sequence.assert_called_once_with(resume_wf_id)
-
-    # Next sequence should be 43
-    saved_event = mock_repository.save_event.call_args[0][0]
-    assert saved_event.sequence == 43
-
-
-async def test_emit_concurrent_lock_creation_race(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-) -> None:
-    """Concurrent first emits for same workflow should not create duplicate locks."""
-    # Slow down the lock acquisition to increase race window
-    original_get_max = mock_repository.get_max_event_sequence
-
-    async def slow_get_max(workflow_id: uuid.UUID) -> int:
-        await asyncio.sleep(0.01)  # Create race window
-        result = await original_get_max(workflow_id)
-        return cast(int, result)
-
-    mock_repository.get_max_event_sequence = slow_get_max
-
-    # Fire many concurrent emits for a NEW workflow (no lock exists yet)
-    race_wf_id = uuid4()
-    tasks = [
-        orchestrator._emit(race_wf_id, EventType.FILE_CREATED, f"File {i}")
-        for i in range(10)
-    ]
-    await asyncio.gather(*tasks)
-
-    # All sequences must be unique (1-10)
-    calls = mock_repository.save_event.call_args_list
-    sequences = [call[0][0].sequence for call in calls]
-    assert len(set(sequences)) == 10, f"Duplicate sequences found: {sequences}"
-    assert set(sequences) == set(range(1, 11))
-
-
 class TestStartWorkflowWithRetry:
     """Test start_workflow uses retry wrapper."""
 
@@ -996,7 +854,7 @@ class TestRunWorkflowCheckpointResume:
         with (
             patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
             patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
-            patch.object(orchestrator, "_emit", new=AsyncMock()),
+            patch.object(orchestrator._events, "emit", new=AsyncMock()),
         ):
             await orchestrator._run_workflow(UUID("00000000-0000-0000-0000-000000000001"), mock_state)
 
@@ -1048,7 +906,7 @@ class TestRunWorkflowCheckpointResume:
         with (
             patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
             patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
-            patch.object(orchestrator, "_emit", new=AsyncMock()),
+            patch.object(orchestrator._events, "emit", new=AsyncMock()),
         ):
             await orchestrator._run_workflow(UUID("00000000-0000-0000-0000-000000000002"), mock_state)
 
@@ -1096,7 +954,7 @@ class TestTaskProgressEvents:
             "name": "developer_node",
             "input": input_state,
         }
-        await orchestrator._handle_tasks_event(uuid4(), task_data)
+        await orchestrator._events.handle_tasks_event(uuid4(), task_data)
 
         # Verify TASK_STARTED event emitted
         task_events = [e for e in emitted_events if e[1] == EventType.TASK_STARTED]
@@ -1144,7 +1002,7 @@ class TestTaskProgressEvents:
             }
         }
 
-        await orchestrator._handle_stream_chunk(uuid4(), chunk)
+        await orchestrator._events.handle_stream_chunk(uuid4(), chunk)
 
         # Verify TASK_COMPLETED event emitted
         task_events = [e for e in emitted_events if e[1] == EventType.TASK_COMPLETED]
@@ -1337,7 +1195,7 @@ def model_provider_error_patches(
             orchestrator, "_create_server_graph", return_value=setup.mock_graph
         ),
         patch.object(orchestrator, "_resolve_prompts", return_value={}),
-        patch.object(orchestrator, "_emit", new=AsyncMock()),
+        patch.object(orchestrator._events, "emit", new=AsyncMock()),
         patch(
             "amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock
         ) as mock_sleep,
@@ -1430,7 +1288,7 @@ async def test_httpx_connect_error_retried(
         patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
         patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
         patch.object(orchestrator, "_resolve_prompts", return_value={}),
-        patch.object(orchestrator, "_emit", new=AsyncMock()),
+        patch.object(orchestrator._events, "emit", new=AsyncMock()),
         patch(
             "amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock
         ) as mock_sleep,

@@ -1,20 +1,11 @@
 # tests/unit/server/orchestrator/test_stage_output_summary.py
-"""Tests for STAGE_COMPLETED output summarization (fix for #427)."""
+"""Tests for STAGE_COMPLETED output summarization (fix for #427).
 
-from typing import TYPE_CHECKING, Self
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+Emission-path coverage (that both STAGE_COMPLETED paths summarize) now lives in
+``test_event_emitter.py``, asserting on the WorkflowEvents the bus broadcasts.
+"""
 
 from amelia.server.orchestrator.event_emitter import summarize_stage_output
-
-# TestEmissionPathsSummarize still exercises the orchestrator/old path via
-# _summarize_stage_output; Task 2 migrates those calls. Keep the alias resolving.
-from amelia.server.orchestrator.service import _summarize_stage_output
-
-
-if TYPE_CHECKING:
-    from amelia.server.orchestrator.service import OrchestratorService
 
 
 class TestSummarizeStageOutput:
@@ -158,98 +149,4 @@ class TestSummarizeStageOutput:
         assert result["results"][0]["id"] == "1"
         assert result["results"][1]["content"] == "short"
         assert result["results"][1]["id"] == "2"
-
-
-class TestEmissionPathsSummarize:
-    """Tests that both STAGE_COMPLETED emission paths use summarized output."""
-
-    @pytest.fixture
-    def service(self: Self) -> "OrchestratorService":
-        from amelia.server.orchestrator.service import OrchestratorService
-
-        return OrchestratorService(
-            repository=AsyncMock(),
-            event_bus=MagicMock(),
-        )
-
-    @pytest.mark.asyncio
-    async def test_handle_stream_chunk_uses_summary(self: Self, service: "OrchestratorService") -> None:
-        """_handle_stream_chunk should summarize output in STAGE_COMPLETED events."""
-        from amelia.server.models.events import EventType
-
-        with (
-            patch.object(service, "_emit", new_callable=AsyncMock) as mock_emit,
-            patch.object(service, "_emit_agent_messages", new_callable=AsyncMock),
-        ):
-            big_output = {
-                "tool_calls": [{"id": str(i)} for i in range(100)],
-                "tool_results": [{"output": f"r{i}"} for i in range(100)],
-                "agentic_status": "completed",
-            }
-
-            await service._handle_stream_chunk("wf-1", {"developer_node": big_output})
-
-            # Find the STAGE_COMPLETED call
-            stage_completed_calls = [
-                c
-                for c in mock_emit.call_args_list
-                if c.args[1] == EventType.STAGE_COMPLETED
-            ]
-            assert len(stage_completed_calls) == 1
-
-            data = stage_completed_calls[0].kwargs["data"]
-            assert data["output"]["tool_calls_count"] == 100
-            assert data["output"]["tool_results_count"] == 100
-            assert "tool_calls" not in data["output"]
-            assert "tool_results" not in data["output"]
-            assert data["output"]["agentic_status"] == "completed"
-
-    @pytest.mark.asyncio
-    async def test_handle_stream_chunk_passes_summarized_to_emit_agent_messages(
-        self: Self, service: "OrchestratorService"
-    ) -> None:
-        """_emit_agent_messages should receive the summarized output."""
-        with (
-            patch.object(service, "_emit", new_callable=AsyncMock),
-            patch.object(service, "_emit_agent_messages", new_callable=AsyncMock) as mock_emit_agent_messages,
-        ):
-            big_output = {
-                "tool_calls": [{"id": "1"}],
-                "agentic_status": "completed",
-            }
-
-            await service._handle_stream_chunk("wf-1", {"developer_node": big_output})
-
-            # _emit_agent_messages should get the summarized output
-            mock_emit_agent_messages.assert_called_once_with(
-                "wf-1", "developer_node", _summarize_stage_output(big_output)
-            )
-
-    @pytest.mark.asyncio
-    async def test_handle_stream_chunk_none_output_emits_stage_completed(
-        self: Self, service: "OrchestratorService"
-    ) -> None:
-        """Nodes like human_approval_node may produce None output."""
-        from amelia.server.models.events import EventType
-
-        with (
-            patch.object(service, "_emit", new_callable=AsyncMock) as mock_emit,
-            patch.object(service, "_emit_agent_messages", new_callable=AsyncMock) as mock_agent_msgs,
-        ):
-            await service._handle_stream_chunk("wf-1", {"human_approval_node": None})
-
-            # Should still emit STAGE_COMPLETED
-            stage_completed_calls = [
-                c
-                for c in mock_emit.call_args_list
-                if c.args[1] == EventType.STAGE_COMPLETED
-            ]
-            assert len(stage_completed_calls) == 1
-
-            data = stage_completed_calls[0].kwargs["data"]
-            assert data["stage"] == "human_approval_node"
-            assert "output" not in data
-
-            # Should NOT call _emit_agent_messages for None output
-            mock_agent_msgs.assert_not_called()
 

@@ -121,7 +121,7 @@ class TestSetWorkflowPlan:
             patch.object(
                 mock_orchestrator, "_update_profile_repo_root"
             ) as mock_update_profile,
-            patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
+            patch.object(mock_orchestrator._events, "emit", new_callable=AsyncMock),
         ):
             mock_get_profile.return_value = mock_profile
             mock_update_profile.return_value = mock_profile
@@ -169,7 +169,7 @@ class TestSetWorkflowPlan:
             patch.object(
                 mock_orchestrator, "_update_profile_repo_root"
             ) as mock_update_profile,
-            patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
+            patch.object(mock_orchestrator._events, "emit", new_callable=AsyncMock),
         ):
             mock_get_profile.return_value = mock_profile
             mock_update_profile.return_value = mock_profile
@@ -249,7 +249,7 @@ class TestSetWorkflowPlan:
             patch.object(
                 mock_orchestrator, "_update_profile_repo_root"
             ) as mock_update_profile,
-            patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
+            patch.object(mock_orchestrator._events, "emit", new_callable=AsyncMock),
         ):
             mock_get_profile.return_value = mock_profile
             mock_update_profile.return_value = mock_profile
@@ -341,7 +341,7 @@ class TestSetWorkflowPlan:
                 mock_orchestrator, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(
-                mock_orchestrator, "_emit", new_callable=AsyncMock
+                mock_orchestrator._events, "emit", new_callable=AsyncMock
             ) as mock_emit,
         ):
             mock_get_profile.return_value = mock_profile
@@ -390,7 +390,7 @@ class TestSetWorkflowPlan:
             patch.object(
                 mock_orchestrator, "_update_profile_repo_root"
             ) as mock_update_profile,
-            patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
+            patch.object(mock_orchestrator._events, "emit", new_callable=AsyncMock),
         ):
             mock_get_profile.return_value = mock_profile
             mock_update_profile.return_value = mock_profile
@@ -435,7 +435,7 @@ class TestSetWorkflowPlan:
                 mock_orchestrator, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(
-                mock_orchestrator, "_emit", new_callable=AsyncMock
+                mock_orchestrator._events, "emit", new_callable=AsyncMock
             ) as mock_emit,
         ):
             mock_get_profile.return_value = mock_profile
