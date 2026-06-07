@@ -67,7 +67,7 @@ async def test_calls_calculate_token_cost_when_cost_usd_is_none(
     driver = _make_driver(cost_usd=None, input_tokens=1000, output_tokens=500)
 
     with patch(
-        "amelia.pipelines.nodes.calculate_token_cost",
+        "amelia.server.models.tokens.calculate_token_cost",
         new_callable=AsyncMock,
         return_value=0.042,
     ) as mock_calc:
@@ -92,7 +92,7 @@ async def test_calls_calculate_token_cost_when_cost_usd_is_zero(
     driver = _make_driver(cost_usd=0.0, input_tokens=2000, output_tokens=800)
 
     with patch(
-        "amelia.pipelines.nodes.calculate_token_cost",
+        "amelia.server.models.tokens.calculate_token_cost",
         new_callable=AsyncMock,
         return_value=0.1,
     ) as mock_calc:
@@ -117,7 +117,7 @@ async def test_uses_driver_cost_when_provided(
     driver = _make_driver(cost_usd=0.55)
 
     with patch(
-        "amelia.pipelines.nodes.calculate_token_cost",
+        "amelia.server.models.tokens.calculate_token_cost",
         new_callable=AsyncMock,
     ) as mock_calc:
         await _save_token_usage(driver, workflow_id, "developer", repository)
@@ -141,7 +141,7 @@ async def test_falls_back_to_driver_model_when_usage_model_is_none(
     )
 
     with patch(
-        "amelia.pipelines.nodes.calculate_token_cost",
+        "amelia.server.models.tokens.calculate_token_cost",
         new_callable=AsyncMock,
         return_value=0.03,
     ) as mock_calc:
@@ -172,7 +172,7 @@ async def test_forwards_cache_tokens_to_calculate_token_cost(
     )
 
     with patch(
-        "amelia.pipelines.nodes.calculate_token_cost",
+        "amelia.server.models.tokens.calculate_token_cost",
         new_callable=AsyncMock,
         return_value=0.065,
     ) as mock_calc:
