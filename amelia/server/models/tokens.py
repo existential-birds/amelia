@@ -281,6 +281,29 @@ class TokenSummary(BaseModel):
     total_turns: int = Field(default=0, ge=0)
     breakdown: list[TokenUsage] = Field(default_factory=list)
 
+    @classmethod
+    def from_usages(cls, usages: list[TokenUsage]) -> "TokenSummary | None":
+        """Aggregate per-agent token usage records into a summary.
+
+        Args:
+            usages: Per-agent token usage records to aggregate.
+
+        Returns:
+            A summary with totals and breakdown, or None if usages is empty.
+        """
+        if not usages:
+            return None
+
+        return cls(
+            total_input_tokens=sum(u.input_tokens for u in usages),
+            total_output_tokens=sum(u.output_tokens for u in usages),
+            total_cache_read_tokens=sum(u.cache_read_tokens for u in usages),
+            total_cost_usd=sum(u.cost_usd for u in usages),
+            total_duration_ms=sum(u.duration_ms for u in usages),
+            total_turns=sum(u.num_turns for u in usages),
+            breakdown=usages,
+        )
+
 
 async def calculate_token_cost(
     model: str,

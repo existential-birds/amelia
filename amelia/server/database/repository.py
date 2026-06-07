@@ -20,6 +20,55 @@ from amelia.server.models.state import (
 from amelia.server.models.tokens import TokenSummary, TokenUsage
 
 
+# Workflow SELECT column list. Order is cosmetic; _row_to_state reads all fields by name.
+_WORKFLOW_COLUMNS = (
+    "id, issue_id, worktree_path, status, "
+    "created_at, started_at, completed_at, failure_reason, "
+    "workflow_type, profile_id, plan_cache, issue_cache, "
+    "base_commit, branch"
+)
+
+_ACTIVE_STATUS_SQL = "status IN ('pending', 'in_progress', 'blocked')"
+
+
+def _build_workflow_filters(
+    status: WorkflowStatus | None = None,
+    worktree_path: str | None = None,
+    after_started_at: datetime | None = None,
+    after_id: str | None = None,
+) -> tuple[list[str], list[Any]]:
+    """Build workflow WHERE conditions and parameters.
+
+    Pure and DB-free: appends, in order, an equality clause for ``status`` and
+    ``worktree_path`` when truthy, then a cursor clause when both
+    ``after_started_at`` and ``after_id`` are truthy. Placeholders number
+    sequentially from ``$1``; callers derive the next index as
+    ``len(params) + 1``.
+
+    Returns:
+        Tuple of (conditions, params).
+    """
+    conditions: list[str] = []
+    params: list[Any] = []
+
+    if status is not None:
+        params.append(status)
+        conditions.append(f"status = ${len(params)}")
+
+    if worktree_path is not None:
+        params.append(worktree_path)
+        conditions.append(f"worktree_path = ${len(params)}")
+
+    if after_started_at and after_id:
+        idx = len(params) + 1
+        conditions.append(
+            f"(started_at < ${idx} OR (started_at = ${idx + 1} AND id < ${idx + 2}))"
+        )
+        params.extend([after_started_at, after_started_at, after_id])
+
+    return conditions, params
+
+
 class WorkflowRepository:
     """Repository for workflow CRUD operations.
 
@@ -121,14 +170,7 @@ class WorkflowRepository:
             Workflow state or None if not found.
         """
         row = await self._db.fetch_one(
-            """
-            SELECT
-                id, issue_id, worktree_path, status,
-                created_at, started_at, completed_at, failure_reason,
-                workflow_type, profile_id, plan_cache, issue_cache,
-                base_commit, branch
-            FROM workflows WHERE id = $1
-            """,
+            f"SELECT {_WORKFLOW_COLUMNS} FROM workflows WHERE id = $1",
             workflow_id,
         )
         if row is None:
@@ -157,11 +199,7 @@ class WorkflowRepository:
         placeholders = in_clause_placeholders(len(statuses), start=2)
         row = await self._db.fetch_one(
             f"""
-            SELECT
-                id, issue_id, worktree_path, status,
-                created_at, started_at, completed_at, failure_reason,
-                workflow_type, profile_id, plan_cache, issue_cache,
-                base_commit, branch
+            SELECT {_WORKFLOW_COLUMNS}
             FROM workflows
             WHERE worktree_path = $1
             AND status IN ({placeholders})
@@ -329,34 +367,13 @@ class WorkflowRepository:
         Returns:
             List of active workflows (pending, in_progress, blocked).
         """
-        if worktree_path:
-            rows = await self._db.fetch_all(
-                """
-                SELECT
-                    id, issue_id, worktree_path, status,
-                    created_at, started_at, completed_at, failure_reason,
-                    workflow_type, profile_id, plan_cache, issue_cache,
-                    base_commit, branch
-                FROM workflows
-                WHERE status IN ('pending', 'in_progress', 'blocked')
-                AND worktree_path = $1
-                ORDER BY started_at DESC
-                """,
-                worktree_path,
-            )
-        else:
-            rows = await self._db.fetch_all(
-                """
-                SELECT
-                    id, issue_id, worktree_path, status,
-                    created_at, started_at, completed_at, failure_reason,
-                    workflow_type, profile_id, plan_cache, issue_cache,
-                    base_commit, branch
-                FROM workflows
-                WHERE status IN ('pending', 'in_progress', 'blocked')
-                ORDER BY started_at DESC
-                """
-            )
+        conditions, params = _build_workflow_filters(worktree_path=worktree_path)
+        where_clause = " AND ".join([_ACTIVE_STATUS_SQL, *conditions])
+        rows = await self._db.fetch_all(
+            f"SELECT {_WORKFLOW_COLUMNS} FROM workflows "
+            f"WHERE {where_clause} ORDER BY started_at DESC",
+            *params,
+        )
         return [self._row_to_state(row) for row in rows]
 
     async def count_active(self) -> int:
@@ -366,10 +383,7 @@ class WorkflowRepository:
             Number of active workflows.
         """
         result = await self._db.fetch_scalar(
-            """
-            SELECT COUNT(*) FROM workflows
-            WHERE status IN ('pending', 'in_progress', 'blocked')
-            """
+            f"SELECT COUNT(*) FROM workflows WHERE {_ACTIVE_STATUS_SQL}"
         )
         # Type narrowing for asyncpg return type (COUNT returns int but fetch_scalar returns Any)
         return result if isinstance(result, int) else 0
@@ -389,11 +403,7 @@ class WorkflowRepository:
         placeholders = in_clause_placeholders(len(statuses))
         rows = await self._db.fetch_all(
             f"""
-            SELECT
-                id, issue_id, worktree_path, status,
-                created_at, started_at, completed_at, failure_reason,
-                workflow_type, profile_id, plan_cache, issue_cache,
-                base_commit, branch
+            SELECT {_WORKFLOW_COLUMNS}
             FROM workflows
             WHERE status IN ({placeholders})
             """,
@@ -421,42 +431,21 @@ class WorkflowRepository:
         Returns:
             List of workflows matching filters.
         """
-        conditions = []
-        params: list[Any] = []
-        param_idx = 1
-
-        if status:
-            conditions.append(f"status = ${param_idx}")
-            params.append(status)
-            param_idx += 1
-
-        if worktree_path:
-            conditions.append(f"worktree_path = ${param_idx}")
-            params.append(worktree_path)
-            param_idx += 1
-
-        # Cursor-based pagination
-        if after_started_at and after_id:
-            conditions.append(
-                f"(started_at < ${param_idx} OR (started_at = ${param_idx + 1} AND id < ${param_idx + 2}))"
-            )
-            params.extend([after_started_at, after_started_at, after_id])
-            param_idx += 3
-
+        conditions, params = _build_workflow_filters(
+            status=status,
+            worktree_path=worktree_path,
+            after_started_at=after_started_at,
+            after_id=after_id,
+        )
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
-        query = f"""
-            SELECT
-                id, issue_id, worktree_path, status,
-                created_at, started_at, completed_at, failure_reason,
-                workflow_type, profile_id, plan_cache, issue_cache,
-                base_commit, branch
-            FROM workflows
-            WHERE {where_clause}
-            ORDER BY started_at DESC NULLS LAST, id DESC
-            LIMIT ${param_idx}
-        """
         params.append(limit)
+        query = (
+            f"SELECT {_WORKFLOW_COLUMNS} FROM workflows "
+            f"WHERE {where_clause} "
+            f"ORDER BY started_at DESC NULLS LAST, id DESC "
+            f"LIMIT ${len(params)}"
+        )
 
         rows = await self._db.fetch_all(query, *params)
         return [self._row_to_state(row) for row in rows]
@@ -475,20 +464,10 @@ class WorkflowRepository:
         Returns:
             Number of workflows matching filters.
         """
-        conditions = []
-        params: list[Any] = []
-        param_idx = 1
-
-        if status:
-            conditions.append(f"status = ${param_idx}")
-            params.append(status)
-            param_idx += 1
-
-        if worktree_path:
-            conditions.append(f"worktree_path = ${param_idx}")
-            params.append(worktree_path)
-            param_idx += 1
-
+        conditions, params = _build_workflow_filters(
+            status=status,
+            worktree_path=worktree_path,
+        )
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
         query = f"SELECT COUNT(*) FROM workflows WHERE {where_clause}"
@@ -713,18 +692,7 @@ class WorkflowRepository:
         """
         usages = await self.get_token_usage(workflow_id)
 
-        if not usages:
-            return None
-
-        return TokenSummary(
-            total_input_tokens=sum(u.input_tokens for u in usages),
-            total_output_tokens=sum(u.output_tokens for u in usages),
-            total_cache_read_tokens=sum(u.cache_read_tokens for u in usages),
-            total_cost_usd=sum(u.cost_usd for u in usages),
-            total_duration_ms=sum(u.duration_ms for u in usages),
-            total_turns=sum(u.num_turns for u in usages),
-            breakdown=usages,
-        )
+        return TokenSummary.from_usages(usages)
 
     async def get_token_summaries_batch(
         self, workflow_ids: list[uuid.UUID]
@@ -770,19 +738,7 @@ class WorkflowRepository:
         # Build summaries for each workflow
         result: dict[uuid.UUID, TokenSummary | None] = {}
         for wid in workflow_ids:
-            usages = usages_by_workflow[wid]
-            if not usages:
-                result[wid] = None
-            else:
-                result[wid] = TokenSummary(
-                    total_input_tokens=sum(u.input_tokens for u in usages),
-                    total_output_tokens=sum(u.output_tokens for u in usages),
-                    total_cache_read_tokens=sum(u.cache_read_tokens for u in usages),
-                    total_cost_usd=sum(u.cost_usd for u in usages),
-                    total_duration_ms=sum(u.duration_ms for u in usages),
-                    total_turns=sum(u.num_turns for u in usages),
-                    breakdown=usages,
-                )
+            result[wid] = TokenSummary.from_usages(usages_by_workflow[wid])
 
         return result
 
