@@ -117,6 +117,10 @@ export interface BrainstormingSession {
   id: string;
   profile_id: string;
   driver_session_id: string | null;
+  /** Driver backing the session ('cli' or 'api'); optional, defaults to null backend-side. */
+  driver_type?: string | null;
+  /** Path to the generated output artifact, if any; optional, defaults to null backend-side. */
+  output_artifact_path?: string | null;
   status: SessionStatus;
   topic: string | null;
   created_at: string;
