@@ -98,8 +98,22 @@ export interface WorkflowDetail extends WorkflowSummary {
   /** PR comments with resolution status, only present for pr_auto_fix workflows. */
   pr_comments: PRCommentData[] | null;
 
-  /** Whether this failed workflow can be resumed from its last checkpoint. Derived client-side from the API response. */
+  /** Client-enriched flag derived from recent_events.workflow_failed.data.recoverable. */
   recoverable?: boolean;
+}
+
+/**
+ * Minimal recent event shape returned with raw workflow detail API responses.
+ */
+export interface WorkflowDetailRecentEvent {
+  /** Type of event that occurred. */
+  event_type: string;
+
+  /** Sequential event number within the workflow. */
+  sequence: number;
+
+  /** Optional additional structured data specific to this event type. */
+  data?: Record<string, unknown>;
 }
 
 /**
@@ -151,8 +165,17 @@ export interface WorkflowListResponse {
 }
 
 /**
- * Response payload for retrieving a single workflow's details.
- * Used by GET /api/workflows/:id endpoint.
+ * Raw backend payload for retrieving a single workflow's details.
+ * Used by GET /api/workflows/:id before client-side enrichment.
+ */
+export interface WorkflowDetailApiResponse extends Omit<WorkflowDetail, 'recoverable'> {
+  /** Recent workflow events from the backend response. */
+  recent_events: WorkflowDetailRecentEvent[];
+}
+
+/**
+ * Client-enriched workflow detail returned by api.getWorkflow().
+ * Keeps the existing response alias for dashboard consumers.
  */
 export type WorkflowDetailResponse = WorkflowDetail;
 
@@ -198,7 +221,7 @@ export interface CreateWorkflowResponse {
   id: string;
 
   /** Initial workflow status (usually 'pending'). */
-  status: string;
+  status: WorkflowStatus;
 
   /** Human-readable confirmation message. */
   message: string;
@@ -221,7 +244,7 @@ export interface StartWorkflowResponse {
   /** Unique identifier for the started workflow. */
   workflow_id: string;
 
-  /** Status after starting (usually 'started' or 'in_progress'). */
+  /** Status after starting (usually 'started'). */
   status: string;
 }
 

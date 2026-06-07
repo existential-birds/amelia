@@ -1,6 +1,7 @@
 import type {
   WorkflowSummary,
   WorkflowStatus,
+  WorkflowDetailApiResponse,
   WorkflowDetailResponse,
   WorkflowListResponse,
 
@@ -77,15 +78,9 @@ export const api = {
    * ```
    */
   async getWorkflow(id: string): Promise<WorkflowDetailResponse> {
-    const { recent_events, ...rest } = await request<
-      WorkflowDetailResponse & {
-        recent_events?: Array<{
-          event_type: string;
-          sequence: number;
-          data?: Record<string, unknown>;
-        }>;
-      }
-    >(`/workflows/${id}`);
+    const { recent_events, ...rest } = await request<WorkflowDetailApiResponse>(
+      `/workflows/${id}`
+    );
 
     // Extract recoverable flag from recent_events in the raw API response
     // so recovery detection survives page refresh without ephemeral store events.

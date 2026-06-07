@@ -35,7 +35,7 @@ export interface FileListResponse {
  * Used by POST /api/files/read endpoint.
  */
 export interface FileReadRequest {
-  /** Absolute path to the file to read. */
+  /** Absolute or relative path to the file to read. */
   path: string;
 }
 
