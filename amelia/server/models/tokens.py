@@ -13,6 +13,7 @@ import httpx
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from amelia.drivers.base import DriverUsage
 from amelia.server.models.model_cache import ModelCacheEntry
 
 
@@ -345,3 +346,25 @@ async def calculate_token_cost(
     )
 
     return round(cost, 6)
+
+
+async def resolve_driver_cost(
+    driver_usage: DriverUsage,
+    fallback_model: str | None = None,
+) -> float:
+    """Return the driver-reported cost, or compute it from cached pricing when absent.
+
+    Falls back to ``calculate_token_cost`` using ``fallback_model`` when the driver
+    does not supply ``cost_usd``. Returns 0.0 when no cost and no model are available.
+    """
+    cost = driver_usage.cost_usd or 0.0
+    model = driver_usage.model or fallback_model
+    if not cost and model:
+        cost = await calculate_token_cost(
+            model=model,
+            input_tokens=driver_usage.input_tokens or 0,
+            output_tokens=driver_usage.output_tokens or 0,
+            cache_read_tokens=driver_usage.cache_read_tokens or 0,
+            cache_creation_tokens=driver_usage.cache_creation_tokens or 0,
+        )
+    return cost

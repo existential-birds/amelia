@@ -98,7 +98,8 @@ class TestRecordForWorkflow:
     """Tests for record_for_workflow method."""
 
     async def test_records_custom_versions_only(self, mock_repository) -> None:
-        """Should only record custom versions, not defaults."""
+        """Should record one row per custom-versioned prompt with the right args."""
+        version_id = uuid4()
         mock_repository.get_prompt.return_value = Prompt(
             id="architect.plan",
             agent="architect",
@@ -106,7 +107,7 @@ class TestRecordForWorkflow:
             current_version_id=str(uuid4()),
         )
         mock_repository.get_version.return_value = PromptVersion(
-            id=uuid4(),
+            id=version_id,
             prompt_id="architect.plan",
             version_number=1,
             content="Custom content",
@@ -114,8 +115,18 @@ class TestRecordForWorkflow:
         resolver = PromptResolver(mock_repository)
         await resolver.record_for_workflow("wf-1")
 
-        # Should have been called for each prompt with a version_id
-        assert mock_repository.record_workflow_prompt.called
+        # Every default prompt resolves to the same custom version here, so the
+        # resolver must record exactly one row per known prompt id.
+        calls = mock_repository.record_workflow_prompt.call_args_list
+        assert mock_repository.record_workflow_prompt.call_count == len(PROMPT_DEFAULTS)
+
+        # Each call is record_workflow_prompt(workflow_id, prompt_id, version_id).
+        recorded_workflow_ids = {call.args[0] for call in calls}
+        recorded_prompt_ids = {call.args[1] for call in calls}
+        recorded_version_ids = {call.args[2] for call in calls}
+        assert recorded_workflow_ids == {"wf-1"}
+        assert recorded_prompt_ids == set(PROMPT_DEFAULTS)
+        assert recorded_version_ids == {version_id}
 
     async def test_does_not_record_defaults(self, mock_repository) -> None:
         """Should not record anything when all use defaults."""

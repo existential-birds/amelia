@@ -206,9 +206,16 @@ class TestConnectionManagerTraceEvents:
 
         await manager.broadcast(trace_event)
 
-        # Both clients receive trace events (no workflow filtering)
-        assert mock_websocket.send_text.called
-        assert mock_ws2.send_text.called
+        # Both clients receive the SAME trace event despite mismatched subscriptions
+        # (trace events bypass workflow filtering). Decode the JSON each client got and
+        # assert the wrapper type plus the actual event id/type, so a wrong payload fails.
+        for ws in (mock_websocket, mock_ws2):
+            ws.send_text.assert_awaited_once()
+            payload = json.loads(ws.send_text.call_args[0][0])
+            assert payload["type"] == "event"
+            assert payload["payload"]["id"] == str(trace_event.id)
+            assert payload["payload"]["event_type"] == EventType.CLAUDE_TOOL_CALL.value
+            assert payload["payload"]["agent"] == "developer"
 
 
 class TestBroadcastDomainRouting:

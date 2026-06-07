@@ -313,8 +313,22 @@ class TestQueueAndPlanWorkflow:
             if workflow_id in orchestrator._planning_tasks:
                 await orchestrator._planning_tasks[workflow_id]
 
-        # Should have emitted events (workflow_created, stage events, approval_required)
-        assert mock_event_bus.emit.called
+        # event_bus.emit() receives fully-built WorkflowEvent objects. Inspect the
+        # emitted event_type values so the test fails if the wrong events fire.
+        from amelia.server.models.events import EventType
+
+        emitted_types = {
+            call.args[0].event_type for call in mock_event_bus.emit.call_args_list
+        }
+
+        # The happy planning path must emit: creation, the architect stage completing,
+        # and an approval gate once the graph interrupts at human_approval_node.
+        assert EventType.WORKFLOW_CREATED in emitted_types
+        assert EventType.STAGE_COMPLETED in emitted_types
+        assert EventType.APPROVAL_REQUIRED in emitted_types
+        # Planning paused for approval — it must NOT report completion or failure.
+        assert EventType.WORKFLOW_COMPLETED not in emitted_types
+        assert EventType.WORKFLOW_FAILED not in emitted_types
 
     @pytest.mark.asyncio
     async def test_queue_and_plan_validates_worktree(

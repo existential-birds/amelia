@@ -30,7 +30,7 @@ def _make_driver_usage(
 class TestBrainstormCostFallback:
     """Test cost calculation fallback when driver doesn't provide cost."""
 
-    @patch("amelia.server.services.brainstorm.calculate_token_cost", new_callable=AsyncMock)
+    @patch("amelia.server.models.tokens.calculate_token_cost", new_callable=AsyncMock)
     async def test_calls_calculate_token_cost_when_driver_has_no_cost(
         self, mock_calc: AsyncMock
     ):
@@ -57,7 +57,7 @@ class TestBrainstormCostFallback:
             cache_creation_tokens=0,
         )
 
-    @patch("amelia.server.services.brainstorm.calculate_token_cost", new_callable=AsyncMock)
+    @patch("amelia.server.models.tokens.calculate_token_cost", new_callable=AsyncMock)
     async def test_passes_through_driver_provided_cost(self, mock_calc: AsyncMock):
         """When driver provides cost_usd, it's used directly without fallback."""
         usage = _make_driver_usage(
@@ -72,7 +72,7 @@ class TestBrainstormCostFallback:
         assert result.cost_usd == 0.05
         mock_calc.assert_not_awaited()
 
-    @patch("amelia.server.services.brainstorm.calculate_token_cost", new_callable=AsyncMock)
+    @patch("amelia.server.models.tokens.calculate_token_cost", new_callable=AsyncMock)
     async def test_skips_calculation_when_model_is_none(self, mock_calc: AsyncMock):
         """When driver_usage.model is None, cost stays 0.0 (no calculation)."""
         usage = _make_driver_usage(
@@ -87,7 +87,7 @@ class TestBrainstormCostFallback:
         assert result.cost_usd == 0.0
         mock_calc.assert_not_awaited()
 
-    @patch("amelia.server.services.brainstorm.calculate_token_cost", new_callable=AsyncMock)
+    @patch("amelia.server.models.tokens.calculate_token_cost", new_callable=AsyncMock)
     async def test_includes_cache_tokens_in_calculation(self, mock_calc: AsyncMock):
         """Cache read/write tokens are passed to calculate_token_cost."""
         mock_calc.return_value = 0.010335
@@ -112,7 +112,7 @@ class TestBrainstormCostFallback:
             cache_creation_tokens=100,
         )
 
-    @patch("amelia.server.services.brainstorm.calculate_token_cost", new_callable=AsyncMock)
+    @patch("amelia.server.models.tokens.calculate_token_cost", new_callable=AsyncMock)
     async def test_zero_cost_triggers_fallback(self, mock_calc: AsyncMock):
         """When driver provides cost_usd=0.0, fallback is triggered."""
         mock_calc.return_value = 0.0105
@@ -129,7 +129,7 @@ class TestBrainstormCostFallback:
         assert result.cost_usd > 0.0
         mock_calc.assert_awaited_once()
 
-    @patch("amelia.server.services.brainstorm.calculate_token_cost", new_callable=AsyncMock)
+    @patch("amelia.server.models.tokens.calculate_token_cost", new_callable=AsyncMock)
     async def test_fallback_model_used_when_driver_usage_model_is_none(
         self, mock_calc: AsyncMock
     ):
