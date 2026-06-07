@@ -1,20 +1,16 @@
 /**
  * Workflow and brainstorm event types.
  *
- * `EventType` and `BrainstormEventType` mirror the backend `EventType` StrEnum
- * in `amelia/server/models/events.py`. The backend defines a single enum; the
- * frontend splits it into two because brainstorm events are serialized
- * differently over the WebSocket:
+ * These mirror two backend StrEnums in `amelia/server/models/events.py`, 1:1:
  *
- * - Non-brainstorm events are sent wrapped as `{ type: 'event', payload }` with
- *   the raw backend value, so `EventType` = the backend enum MINUS the
- *   `brainstorm_*` members.
- * - Brainstorm events are sent flat as `{ type: 'brainstorm', event_type, ... }`
- *   with the `brainstorm_` prefix stripped (see
- *   `amelia/server/events/connection_manager.py`), so `BrainstormEventType` =
- *   the backend `brainstorm_*` members WITHOUT the prefix.
+ * - `EventType` ↔ backend `EventType`: workflow events, sent wrapped as
+ *   `{ type: 'event', payload }`.
+ * - `BrainstormEventType` ↔ backend `BrainstormEventType`: brainstorm events,
+ *   sent flat as `{ type: 'brainstorm', event_type, ... }`.
  *
- * Parity with the backend is enforced by `tests/unit/test_event_type_parity.py`.
+ * Brainstorm is its own domain with its own enum, so the names are unprefixed on
+ * both ends — no wire transform. Parity with the backend is enforced by
+ * `tests/unit/test_event_type_parity.py`.
  */
 
 /**

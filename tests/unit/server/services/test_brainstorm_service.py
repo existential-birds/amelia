@@ -109,7 +109,7 @@ class TestCreateSession(TestBrainstormService):
 
         mock_event_bus.emit.assert_called_once()
         event = mock_event_bus.emit.call_args[0][0]
-        assert event.event_type.value == "brainstorm_session_created"
+        assert event.event_type.value == "session_created"
 
 
 class TestGetSession(TestBrainstormService):
@@ -450,11 +450,11 @@ class TestArtifactDetection(TestBrainstormService):
         mock_event_bus: MagicMock,
         mock_driver_result_only: MagicMock,
     ) -> None:
-        """Should emit BRAINSTORM_ARTIFACT_CREATED event when plan file exists."""
+        """Should emit ARTIFACT_CREATED event when plan file exists."""
         from pathlib import Path
         from unittest.mock import patch
 
-        from amelia.server.models.events import EventType
+        from amelia.server.models.events import BrainstormEventType
 
         sess_id = uuid4()
         mock_repository.get_session.return_value = self._make_session(sess_id)
@@ -480,7 +480,7 @@ class TestArtifactDetection(TestBrainstormService):
         artifact_events = [
             call[0][0]
             for call in mock_event_bus.emit.call_args_list
-            if call[0][0].event_type == EventType.BRAINSTORM_ARTIFACT_CREATED
+            if call[0][0].event_type == BrainstormEventType.ARTIFACT_CREATED
         ]
         assert len(artifact_events) == 1
         event = artifact_events[0]
@@ -1626,8 +1626,8 @@ class TestAskUserQuestionConversion(TestBrainstormService):
         mock_event_bus: MagicMock,
         mock_driver_with_ask: MagicMock,
     ) -> None:
-        """ask_user_question tool call should be emitted as BRAINSTORM_ASK_USER."""
-        from amelia.server.models.events import EventType
+        """ask_user_question tool call should be emitted as ASK_USER."""
+        from amelia.server.models.events import BrainstormEventType
 
         now = datetime.now(UTC)
         sess_id = uuid4()
@@ -1651,7 +1651,7 @@ class TestAskUserQuestionConversion(TestBrainstormService):
             events.append(event)
 
         ask_user_events = [
-            e for e in events if e.event_type == EventType.BRAINSTORM_ASK_USER
+            e for e in events if e.event_type == BrainstormEventType.ASK_USER
         ]
         assert len(ask_user_events) == 1
         assert "What's your primary goal?" in (ask_user_events[0].message or "")
@@ -1666,7 +1666,7 @@ class TestAskUserQuestionConversion(TestBrainstormService):
         mock_driver_with_ask: MagicMock,
     ) -> None:
         """ask_user event data should contain structured questions payload."""
-        from amelia.server.models.events import EventType
+        from amelia.server.models.events import BrainstormEventType
 
         now = datetime.now(UTC)
         sess_id = uuid4()
@@ -1690,7 +1690,7 @@ class TestAskUserQuestionConversion(TestBrainstormService):
             events.append(event)
 
         ask_user_events = [
-            e for e in events if e.event_type == EventType.BRAINSTORM_ASK_USER
+            e for e in events if e.event_type == BrainstormEventType.ASK_USER
         ]
         assert len(ask_user_events) == 1
         data = ask_user_events[0].data
@@ -1711,9 +1711,9 @@ class TestAskUserQuestionConversion(TestBrainstormService):
         self,
         service: BrainstormService,
     ) -> None:
-        """Malformed ask_user_question payload should fall back to BRAINSTORM_TOOL_CALL."""
+        """Malformed ask_user_question payload should fall back to TOOL_CALL."""
         from amelia.drivers.base import AgenticMessageType
-        from amelia.server.models.events import EventType
+        from amelia.server.models.events import BrainstormEventType
 
         sess_id = uuid4()
         msg_id = uuid4()
@@ -1736,7 +1736,7 @@ class TestAskUserQuestionConversion(TestBrainstormService):
         event = service._agentic_message_to_event(agentic_msg, sess_id, msg_id)
 
         # Malformed payload can't be parsed, so it falls through to generic tool_call handling
-        assert event.event_type == EventType.BRAINSTORM_TOOL_CALL
+        assert event.event_type == BrainstormEventType.TOOL_CALL
         assert event.tool_name == "ask_user_question"
         assert event.data is None or "questions" not in (event.data or {})
 
@@ -1748,7 +1748,7 @@ class TestAskUserQuestionConversion(TestBrainstormService):
         mock_driver_with_ask: MagicMock,
     ) -> None:
         """tool_result for ask_user_question should not be emitted."""
-        from amelia.server.models.events import EventType
+        from amelia.server.models.events import BrainstormEventType
 
         now = datetime.now(UTC)
         sess_id = uuid4()
@@ -1775,8 +1775,8 @@ class TestAskUserQuestionConversion(TestBrainstormService):
         tool_events = [
             e for e in events
             if e.event_type in (
-                EventType.BRAINSTORM_TOOL_CALL,
-                EventType.BRAINSTORM_TOOL_RESULT,
+                BrainstormEventType.TOOL_CALL,
+                BrainstormEventType.TOOL_RESULT,
             )
         ]
         assert len(tool_events) == 0

@@ -10,6 +10,7 @@ from fastapi import WebSocketDisconnect
 
 from amelia.server.events.connection_manager import ConnectionManager
 from amelia.server.models.events import (
+    BrainstormEventType,
     EventDomain,
     EventLevel,
     EventType,
@@ -256,7 +257,7 @@ class TestBroadcastDomainRouting:
             sequence=0,
             timestamp=datetime.now(UTC),
             agent="brainstormer",
-            event_type=EventType.BRAINSTORM_TEXT,
+            event_type=BrainstormEventType.TEXT,
             message="Streaming",
             domain=EventDomain.BRAINSTORM,
             data={"session_id": str(session_wf_id), "message_id": message_id, "text": "Hello"},

@@ -209,7 +209,7 @@ class TestSendMessage(TestBrainstormRoutes):
     ) -> None:
         """Should return message_id on success."""
         from amelia.server.models.brainstorm import BrainstormingSession
-        from amelia.server.models.events import EventType, WorkflowEvent
+        from amelia.server.models.events import BrainstormEventType, WorkflowEvent
 
         now = datetime.now(UTC)
 
@@ -234,7 +234,7 @@ class TestSendMessage(TestBrainstormRoutes):
                 sequence=0,
                 timestamp=now,
                 agent="brainstormer",
-                event_type=EventType.BRAINSTORM_MESSAGE_COMPLETE,
+                event_type=BrainstormEventType.MESSAGE_COMPLETE,
                 message="Response",
             )
 
