@@ -20,7 +20,7 @@ from amelia.server.models.state import (
 from amelia.server.models.tokens import TokenSummary, TokenUsage
 
 
-# Workflow SELECT column list in the order _row_to_state consumes.
+# Workflow SELECT column list. Order is cosmetic; _row_to_state reads all fields by name.
 _WORKFLOW_COLUMNS = (
     "id, issue_id, worktree_path, status, "
     "created_at, started_at, completed_at, failure_reason, "
@@ -51,11 +51,11 @@ def _build_workflow_filters(
     conditions: list[str] = []
     params: list[Any] = []
 
-    if status:
+    if status is not None:
         params.append(status)
         conditions.append(f"status = ${len(params)}")
 
-    if worktree_path:
+    if worktree_path is not None:
         params.append(worktree_path)
         conditions.append(f"worktree_path = ${len(params)}")
 
