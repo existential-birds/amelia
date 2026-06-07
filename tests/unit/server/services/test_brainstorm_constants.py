@@ -1,6 +1,6 @@
 """Tests for brainstormer prompt constants."""
 
-from amelia.server.services.brainstorm import (
+from amelia.server.services.brainstormer_agent import (
     BRAINSTORMER_FILESYSTEM_PROMPT,
     BRAINSTORMER_SYSTEM_PROMPT,
     BRAINSTORMER_USER_PROMPT_TEMPLATE,
@@ -9,12 +9,6 @@ from amelia.server.services.brainstorm import (
 
 class TestBrainstormerSystemPrompt:
     """Tests for BRAINSTORMER_SYSTEM_PROMPT constant."""
-
-    def test_system_prompt_exists(self) -> None:
-        """System prompt constant should exist."""
-        assert BRAINSTORMER_SYSTEM_PROMPT is not None
-        assert isinstance(BRAINSTORMER_SYSTEM_PROMPT, str)
-        assert len(BRAINSTORMER_SYSTEM_PROMPT) > 0
 
     def test_system_prompt_contains_role_section(self) -> None:
         """System prompt should define the agent's role."""
@@ -37,11 +31,6 @@ class TestBrainstormerSystemPrompt:
 class TestBrainstormerUserPromptTemplate:
     """Tests for BRAINSTORMER_USER_PROMPT_TEMPLATE constant."""
 
-    def test_template_exists(self) -> None:
-        """User prompt template should exist."""
-        assert BRAINSTORMER_USER_PROMPT_TEMPLATE is not None
-        assert isinstance(BRAINSTORMER_USER_PROMPT_TEMPLATE, str)
-
     def test_template_has_placeholder(self) -> None:
         """Template should have {idea} placeholder."""
         assert "{idea}" in BRAINSTORMER_USER_PROMPT_TEMPLATE
@@ -54,10 +43,6 @@ class TestBrainstormerUserPromptTemplate:
 
 class TestBrainstormerFilesystemPrompt:
     """Tests for updated BRAINSTORMER_FILESYSTEM_PROMPT."""
-
-    def test_filesystem_prompt_exists(self) -> None:
-        """Filesystem prompt should exist."""
-        assert BRAINSTORMER_FILESYSTEM_PROMPT is not None
 
     def test_filesystem_prompt_restricts_writing(self) -> None:
         """Filesystem prompt should restrict writing to markdown only."""
