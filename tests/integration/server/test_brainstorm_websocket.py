@@ -379,6 +379,10 @@ class TestBrainstormEventDataField:
         assert "session_id" in event.data, "Event must have session_id in data"
         assert event.data["session_id"] == session_id
         assert "message_id" in event.data, "Event must have message_id in data"
+        # Wire format requires string ids, not raw UUID objects, so the
+        # payload survives JSON serialization over the WebSocket.
+        assert isinstance(event.data["session_id"], str)
+        assert isinstance(event.data["message_id"], str)
 
 
 @pytest.mark.integration

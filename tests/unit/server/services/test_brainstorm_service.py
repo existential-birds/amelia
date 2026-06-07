@@ -994,15 +994,6 @@ class TestUpdateSessionStatusCleanup(TestBrainstormService):
         mock_cleanup.assert_not_called()
 
 
-class TestNoPrimeSession:
-    """Tests verifying prime_session is removed."""
-
-    def test_service_has_no_prime_session_method(self) -> None:
-        """BrainstormService should not have prime_session method."""
-        from amelia.server.services.brainstorm import BrainstormService
-        assert not hasattr(BrainstormService, "prime_session")
-
-
 class TestGetSessionWithHistory(TestBrainstormService):
     """Test get_session_with_history returns messages correctly."""
 
@@ -1054,40 +1045,6 @@ class TestGetSessionWithHistory(TestBrainstormService):
         assert len(result["messages"]) == 2
 
 
-class TestGetSessionWithHistoryNoFiltering(TestBrainstormService):
-    """Tests verifying system message filtering is removed."""
-
-    async def test_get_messages_called_without_include_system(
-        self,
-        service: BrainstormService,
-        mock_repository: MagicMock,
-    ) -> None:
-        """get_messages should be called without include_system parameter.
-
-        System message filtering is no longer needed since priming is removed.
-        The repository's get_messages method now returns all messages.
-        """
-        now = datetime.now(UTC)
-        sess_id = uuid4()
-        mock_session = BrainstormingSession(
-            id=sess_id,
-            profile_id="work",
-            status=SessionStatus.ACTIVE,
-            created_at=now,
-            updated_at=now,
-        )
-        mock_repository.get_session.return_value = mock_session
-        mock_repository.get_artifacts.return_value = []
-        mock_repository.get_messages.return_value = []
-        mock_repository.get_session_usage.return_value = None
-
-        await service.get_session_with_history(sess_id)
-
-        # Verify get_messages was called with only the session_id
-        # (no include_system parameter should be passed)
-        mock_repository.get_messages.assert_called_once_with(sess_id)
-
-
 class TestSendMessageNewArchitecture:
     """Tests for send_message with new prompt architecture."""
 
@@ -1136,7 +1093,9 @@ class TestSendMessageNewArchitecture:
         mock_event_bus: MagicMock,
     ) -> None:
         """First message (max_seq == 0) should prepend 'Help me design:' template."""
-        from amelia.server.services.brainstorm import BRAINSTORMER_USER_PROMPT_TEMPLATE
+        from amelia.server.services.brainstormer_agent import (
+            BRAINSTORMER_USER_PROMPT_TEMPLATE,
+        )
 
         now = datetime.now(UTC)
         sess_id = uuid4()
