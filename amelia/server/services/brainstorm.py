@@ -562,7 +562,7 @@ class BrainstormService:
         """
         complete_data: dict[str, Any] = {
             "session_id": str(session_id),
-            "message_id": message_id,
+            "message_id": str(message_id),
         }
         if message_usage:
             complete_data["usage"] = message_usage.model_dump()
