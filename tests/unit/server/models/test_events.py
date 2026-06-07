@@ -7,6 +7,7 @@ import pytest
 
 from amelia.server.models.events import (
     PERSISTED_TYPES,
+    BrainstormEventType,
     EventLevel,
     EventType,
     WorkflowEvent,
@@ -73,11 +74,11 @@ class TestEventLevel:
             (EventType.CLAUDE_TOOL_RESULT, EventLevel.DEBUG),
             (EventType.AGENT_OUTPUT, EventLevel.DEBUG),
             # DEBUG level - brainstorm trace events
-            (EventType.BRAINSTORM_REASONING, EventLevel.DEBUG),
-            (EventType.BRAINSTORM_TOOL_CALL, EventLevel.DEBUG),
-            (EventType.BRAINSTORM_TOOL_RESULT, EventLevel.DEBUG),
-            (EventType.BRAINSTORM_TEXT, EventLevel.DEBUG),
-            (EventType.BRAINSTORM_MESSAGE_COMPLETE, EventLevel.DEBUG),
+            (BrainstormEventType.REASONING, EventLevel.DEBUG),
+            (BrainstormEventType.TOOL_CALL, EventLevel.DEBUG),
+            (BrainstormEventType.TOOL_RESULT, EventLevel.DEBUG),
+            (BrainstormEventType.TEXT, EventLevel.DEBUG),
+            (BrainstormEventType.MESSAGE_COMPLETE, EventLevel.DEBUG),
             # DEBUG level - oracle trace events
             (EventType.ORACLE_CONSULTATION_THINKING, EventLevel.DEBUG),
             (EventType.ORACLE_TOOL_CALL, EventLevel.DEBUG),
@@ -221,11 +222,11 @@ class TestPersistedTypes:
     def test_brainstorm_trace_events_are_not_persisted(self) -> None:
         """Brainstorm trace events must NOT be persisted."""
         brainstorm_trace = {
-            EventType.BRAINSTORM_REASONING,
-            EventType.BRAINSTORM_TOOL_CALL,
-            EventType.BRAINSTORM_TOOL_RESULT,
-            EventType.BRAINSTORM_TEXT,
-            EventType.BRAINSTORM_MESSAGE_COMPLETE,
+            BrainstormEventType.REASONING,
+            BrainstormEventType.TOOL_CALL,
+            BrainstormEventType.TOOL_RESULT,
+            BrainstormEventType.TEXT,
+            BrainstormEventType.MESSAGE_COMPLETE,
         }
         assert brainstorm_trace.isdisjoint(PERSISTED_TYPES)
 
@@ -243,12 +244,6 @@ class TestPersistedTypes:
             EventType.ORACLE_CONSULTATION_THINKING,
             EventType.ORACLE_TOOL_CALL,
             EventType.ORACLE_TOOL_RESULT,
-            EventType.BRAINSTORM_REASONING,
-            EventType.BRAINSTORM_TOOL_CALL,
-            EventType.BRAINSTORM_TOOL_RESULT,
-            EventType.BRAINSTORM_TEXT,
-            EventType.BRAINSTORM_ASK_USER,
-            EventType.BRAINSTORM_MESSAGE_COMPLETE,
             EventType.STREAM,
             EventType.AGENT_MESSAGE,
             EventType.DOCUMENT_INGESTION_PROGRESS,
@@ -259,3 +254,22 @@ class TestPersistedTypes:
         classified = PERSISTED_TYPES | stream_only
         unclassified = all_types - classified
         assert not unclassified, f"Unclassified event types: {unclassified}"
+
+    def test_every_brainstorm_event_type_is_classified(self) -> None:
+        """Every BrainstormEventType must be either persisted or ephemeral.
+
+        Guards against new brainstorm event types being added without
+        classification.
+        """
+        all_types = set(BrainstormEventType)
+        ephemeral = {
+            BrainstormEventType.REASONING,
+            BrainstormEventType.TOOL_CALL,
+            BrainstormEventType.TOOL_RESULT,
+            BrainstormEventType.TEXT,
+            BrainstormEventType.ASK_USER,
+            BrainstormEventType.MESSAGE_COMPLETE,
+        }
+        classified = PERSISTED_TYPES | ephemeral
+        unclassified = all_types - classified
+        assert not unclassified, f"Unclassified brainstorm event types: {unclassified}"

@@ -23,8 +23,8 @@ from amelia.server.models.brainstorm import (
 )
 from amelia.server.models.events import (
     EPHEMERAL_SEQUENCE,
+    BrainstormEventType,
     EventDomain,
-    EventType,
     WorkflowEvent,
 )
 from amelia.server.orchestrator.service import OrchestratorService
@@ -329,7 +329,7 @@ async def send_message(
                 sequence=EPHEMERAL_SEQUENCE,
                 timestamp=datetime.now(UTC),
                 agent="brainstormer",
-                event_type=EventType.BRAINSTORM_MESSAGE_FAILED,
+                event_type=BrainstormEventType.MESSAGE_FAILED,
                 message=f"Message processing failed: {e}",
                 data={
                     "session_id": str(session_id),

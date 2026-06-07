@@ -125,14 +125,11 @@ class ConnectionManager:
             return
 
         if event.domain == EventDomain.BRAINSTORM:
-            # Brainstorm events use flat format for direct frontend handling
-            event_type_str = event.event_type.value
-            if event_type_str.startswith("brainstorm_"):
-                event_type_str = event_type_str[len("brainstorm_"):]
-
+            # Brainstorm events use a flat envelope for direct frontend handling.
+            # event_type is already a clean BrainstormEventType value (e.g. "text").
             payload = {
                 "type": "brainstorm",
-                "event_type": event_type_str,
+                "event_type": event.event_type.value,
                 "session_id": str(event.workflow_id),  # Brainstorm events use workflow_id as session_id
                 "message_id": event.data.get("message_id") if event.data else None,
                 "data": event.data or {},

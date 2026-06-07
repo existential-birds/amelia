@@ -82,18 +82,6 @@ class EventType(StrEnum):
     CLAUDE_TOOL_RESULT = "claude_tool_result"
     AGENT_OUTPUT = "agent_output"
 
-    # Brainstorming (chat-based design sessions)
-    BRAINSTORM_SESSION_CREATED = "brainstorm_session_created"
-    BRAINSTORM_REASONING = "brainstorm_reasoning"
-    BRAINSTORM_TOOL_CALL = "brainstorm_tool_call"
-    BRAINSTORM_TOOL_RESULT = "brainstorm_tool_result"
-    BRAINSTORM_TEXT = "brainstorm_text"
-    BRAINSTORM_ASK_USER = "brainstorm_ask_user"
-    BRAINSTORM_MESSAGE_COMPLETE = "brainstorm_message_complete"
-    BRAINSTORM_ARTIFACT_CREATED = "brainstorm_artifact_created"
-    BRAINSTORM_SESSION_COMPLETED = "brainstorm_session_completed"
-    BRAINSTORM_MESSAGE_FAILED = "brainstorm_message_failed"
-
     # Oracle consultation events
     ORACLE_CONSULTATION_STARTED = "oracle_consultation_started"
     ORACLE_CONSULTATION_THINKING = "oracle_consultation_thinking"
@@ -131,8 +119,33 @@ class EventType(StrEnum):
     PR_POLL_RATE_LIMITED = "pr_poll_rate_limited"
 
 
+class BrainstormEventType(StrEnum):
+    """Event types for chat-based brainstorming/design sessions.
+
+    Brainstorm events are their own domain: they ride a dedicated WebSocket
+    envelope (``{type: "brainstorm", ...}``) and are routed straight to the
+    dashboard's brainstorm store. Names are unprefixed because we own both ends
+    of the wire — the dashboard ``BrainstormEventType`` mirrors these values 1:1.
+    """
+
+    SESSION_CREATED = "session_created"
+    REASONING = "reasoning"
+    TOOL_CALL = "tool_call"
+    TOOL_RESULT = "tool_result"
+    TEXT = "text"
+    ASK_USER = "ask_user"
+    MESSAGE_COMPLETE = "message_complete"
+    ARTIFACT_CREATED = "artifact_created"
+    SESSION_COMPLETED = "session_completed"
+    MESSAGE_FAILED = "message_failed"
+
+
+# An event_type may come from either domain enum.
+AnyEventType = EventType | BrainstormEventType
+
+
 # Persisted event types (written to workflow log)
-PERSISTED_TYPES: frozenset[EventType] = frozenset({
+PERSISTED_TYPES: frozenset[AnyEventType] = frozenset({
     # Lifecycle
     EventType.WORKFLOW_CREATED,
     EventType.WORKFLOW_STARTED,
@@ -166,10 +179,10 @@ PERSISTED_TYPES: frozenset[EventType] = frozenset({
     EventType.ORACLE_CONSULTATION_COMPLETED,
     EventType.ORACLE_CONSULTATION_FAILED,
     # Brainstorm
-    EventType.BRAINSTORM_SESSION_CREATED,
-    EventType.BRAINSTORM_SESSION_COMPLETED,
-    EventType.BRAINSTORM_ARTIFACT_CREATED,
-    EventType.BRAINSTORM_MESSAGE_FAILED,
+    BrainstormEventType.SESSION_CREATED,
+    BrainstormEventType.SESSION_COMPLETED,
+    BrainstormEventType.ARTIFACT_CREATED,
+    BrainstormEventType.MESSAGE_FAILED,
     # Knowledge ingestion
     EventType.DOCUMENT_INGESTION_STARTED,
     EventType.DOCUMENT_INGESTION_COMPLETED,
@@ -193,26 +206,26 @@ PERSISTED_TYPES: frozenset[EventType] = frozenset({
     EventType.PR_POLL_RATE_LIMITED,
 })
 
-_ERROR_TYPES: frozenset[EventType] = frozenset({
+_ERROR_TYPES: frozenset[AnyEventType] = frozenset({
     EventType.WORKFLOW_FAILED,
     EventType.TASK_FAILED,
     EventType.SYSTEM_ERROR,
     EventType.ORACLE_CONSULTATION_FAILED,
     EventType.DOCUMENT_INGESTION_FAILED,
     EventType.PLAN_VALIDATION_FAILED,
-    EventType.BRAINSTORM_MESSAGE_FAILED,
+    BrainstormEventType.MESSAGE_FAILED,
     EventType.PR_FIX_RETRIES_EXHAUSTED,
     EventType.PR_POLL_ERROR,
     EventType.PR_AUTO_FIX_FAILED,
 })
 
-_WARNING_TYPES: frozenset[EventType] = frozenset({
+_WARNING_TYPES: frozenset[AnyEventType] = frozenset({
     EventType.SYSTEM_WARNING,
     EventType.PR_FIX_DIVERGED,
     EventType.PR_POLL_RATE_LIMITED,
 })
 
-_INFO_TYPES: frozenset[EventType] = frozenset({
+_INFO_TYPES: frozenset[AnyEventType] = frozenset({
     EventType.WORKFLOW_CREATED,
     EventType.WORKFLOW_STARTED,
     EventType.WORKFLOW_COMPLETED,
@@ -238,7 +251,7 @@ _INFO_TYPES: frozenset[EventType] = frozenset({
 })
 
 
-def get_event_level(event_type: EventType) -> EventLevel:
+def get_event_level(event_type: AnyEventType) -> EventLevel:
     """Get the level for an event type.
 
     Args:
@@ -272,7 +285,7 @@ class WorkflowEvent(BaseModel):
     sequence: int = Field(..., ge=0, description="Monotonic sequence number (0 for trace-only events)")
     timestamp: datetime = Field(..., description="When event occurred")
     agent: str = Field(..., description="Event source agent")
-    event_type: EventType = Field(..., description="Event type category")
+    event_type: AnyEventType = Field(..., description="Event type category")
     level: EventLevel | None = Field(default=None, description="Event severity level")
     message: str = Field(..., description="Human-readable message")
     data: dict[str, Any] | None = Field(

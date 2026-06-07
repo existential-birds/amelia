@@ -10,6 +10,7 @@ from fastapi import WebSocketDisconnect
 
 from amelia.server.events.connection_manager import ConnectionManager
 from amelia.server.models.events import (
+    BrainstormEventType,
     EventDomain,
     EventLevel,
     EventType,
@@ -205,9 +206,16 @@ class TestConnectionManagerTraceEvents:
 
         await manager.broadcast(trace_event)
 
-        # Both clients receive trace events (no workflow filtering)
-        assert mock_websocket.send_text.called
-        assert mock_ws2.send_text.called
+        # Both clients receive the SAME trace event despite mismatched subscriptions
+        # (trace events bypass workflow filtering). Decode the JSON each client got and
+        # assert the wrapper type plus the actual event id/type, so a wrong payload fails.
+        for ws in (mock_websocket, mock_ws2):
+            ws.send_text.assert_awaited_once()
+            payload = json.loads(ws.send_text.call_args[0][0])
+            assert payload["type"] == "event"
+            assert payload["payload"]["id"] == str(trace_event.id)
+            assert payload["payload"]["event_type"] == EventType.CLAUDE_TOOL_CALL.value
+            assert payload["payload"]["agent"] == "developer"
 
 
 class TestBroadcastDomainRouting:
@@ -256,7 +264,7 @@ class TestBroadcastDomainRouting:
             sequence=0,
             timestamp=datetime.now(UTC),
             agent="brainstormer",
-            event_type=EventType.BRAINSTORM_TEXT,
+            event_type=BrainstormEventType.TEXT,
             message="Streaming",
             domain=EventDomain.BRAINSTORM,
             data={"session_id": str(session_wf_id), "message_id": message_id, "text": "Hello"},

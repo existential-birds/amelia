@@ -32,7 +32,7 @@ from amelia.server.database.connection import Database
 from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.events.connection_manager import ConnectionManager
-from amelia.server.models.events import EventDomain, EventType, WorkflowEvent
+from amelia.server.models.events import BrainstormEventType, EventDomain, EventType, WorkflowEvent
 from amelia.server.services.brainstorm import BrainstormService
 
 from .conftest import (
@@ -138,13 +138,13 @@ class TestBrainstormEventEmission:
         test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
-        """THINKING agentic message should emit BRAINSTORM_REASONING event."""
+        """THINKING agentic message should emit REASONING event."""
         await create_session_and_send_message(test_client)
 
         # Find reasoning event
         reasoning_events = [
             e for e in captured_events
-            if e.event_type == EventType.BRAINSTORM_REASONING
+            if e.event_type == BrainstormEventType.REASONING
         ]
         assert len(reasoning_events) >= 1
         assert reasoning_events[0].message is not None
@@ -155,13 +155,13 @@ class TestBrainstormEventEmission:
         test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
-        """TOOL_CALL agentic message should emit BRAINSTORM_TOOL_CALL event."""
+        """TOOL_CALL agentic message should emit TOOL_CALL event."""
         await create_session_and_send_message(test_client)
 
         # Find tool call event
         tool_call_events = [
             e for e in captured_events
-            if e.event_type == EventType.BRAINSTORM_TOOL_CALL
+            if e.event_type == BrainstormEventType.TOOL_CALL
         ]
         assert len(tool_call_events) >= 1
         assert tool_call_events[0].tool_name == "read_file"
@@ -171,13 +171,13 @@ class TestBrainstormEventEmission:
         test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
-        """TOOL_RESULT agentic message should emit BRAINSTORM_TOOL_RESULT event."""
+        """TOOL_RESULT agentic message should emit TOOL_RESULT event."""
         await create_session_and_send_message(test_client)
 
         # Find tool result event
         tool_result_events = [
             e for e in captured_events
-            if e.event_type == EventType.BRAINSTORM_TOOL_RESULT
+            if e.event_type == BrainstormEventType.TOOL_RESULT
         ]
         assert len(tool_result_events) >= 1
         assert tool_result_events[0].tool_name == "read_file"
@@ -187,13 +187,13 @@ class TestBrainstormEventEmission:
         test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
-        """RESULT agentic message should emit BRAINSTORM_TEXT event."""
+        """RESULT agentic message should emit TEXT event."""
         await create_session_and_send_message(test_client)
 
         # Find text event
         text_events = [
             e for e in captured_events
-            if e.event_type == EventType.BRAINSTORM_TEXT
+            if e.event_type == BrainstormEventType.TEXT
         ]
         assert len(text_events) >= 1
 
@@ -202,13 +202,13 @@ class TestBrainstormEventEmission:
         test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
-        """Completing a message should emit BRAINSTORM_MESSAGE_COMPLETE event."""
+        """Completing a message should emit MESSAGE_COMPLETE event."""
         await create_session_and_send_message(test_client)
 
         # Find complete event
         complete_events = [
             e for e in captured_events
-            if e.event_type == EventType.BRAINSTORM_MESSAGE_COMPLETE
+            if e.event_type == BrainstormEventType.MESSAGE_COMPLETE
         ]
         assert len(complete_events) == 1
         assert "message_id" in (complete_events[0].data or {})
@@ -224,12 +224,12 @@ class TestBrainstormEventEmission:
         # All brainstorm events should have correct workflow_id
         brainstorm_events = [
             e for e in captured_events
-            if e.event_type.value.startswith("brainstorm_")
+            if e.domain == EventDomain.BRAINSTORM
         ]
         # Skip session_created which happens before the message
         message_events = [
             e for e in brainstorm_events
-            if e.event_type != EventType.BRAINSTORM_SESSION_CREATED
+            if e.event_type != BrainstormEventType.SESSION_CREATED
         ]
         for event in message_events:
             assert event.workflow_id == uuid.UUID(session_id)
@@ -260,7 +260,7 @@ class TestBrainstormArtifactEvents:
         test_client_with_write_file: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
-        """Successful write_file should emit BRAINSTORM_ARTIFACT_CREATED event."""
+        """Successful write_file should emit ARTIFACT_CREATED event."""
         session_id = await create_session_and_send_message(
             test_client_with_write_file, message="Create design doc"
         )
@@ -268,7 +268,7 @@ class TestBrainstormArtifactEvents:
         # Find artifact created event
         artifact_events = [
             e for e in captured_events
-            if e.event_type == EventType.BRAINSTORM_ARTIFACT_CREATED
+            if e.event_type == BrainstormEventType.ARTIFACT_CREATED
         ]
         assert len(artifact_events) == 1
 
@@ -334,7 +334,7 @@ class TestBrainstormEventDataField:
 
     @pytest.mark.parametrize(
         "event_type",
-        [EventType.BRAINSTORM_TEXT, EventType.BRAINSTORM_REASONING],
+        [BrainstormEventType.TEXT, BrainstormEventType.REASONING],
     )
     async def test_event_has_session_id_in_data(
         self,
@@ -363,13 +363,13 @@ class TestBrainstormEventDataField:
         test_client: httpx.AsyncClient,
         captured_events: list[WorkflowEvent],
     ) -> None:
-        """BRAINSTORM_MESSAGE_COMPLETE must have session_id and message_id in data."""
+        """MESSAGE_COMPLETE must have session_id and message_id in data."""
         session_id = await create_session_and_send_message(test_client)
 
         # Find complete event
         complete_events = [
             e for e in captured_events
-            if e.event_type == EventType.BRAINSTORM_MESSAGE_COMPLETE
+            if e.event_type == BrainstormEventType.MESSAGE_COMPLETE
         ]
         assert len(complete_events) == 1
 
@@ -418,7 +418,7 @@ class TestBrainstormWireFormat:
             sequence=0,
             timestamp=datetime.now(UTC),
             agent="brainstormer",
-            event_type=EventType.BRAINSTORM_TEXT,
+            event_type=BrainstormEventType.TEXT,
             message="Streaming text",
             domain=EventDomain.BRAINSTORM,
             data={
@@ -486,7 +486,7 @@ class TestBrainstormWireFormat:
             sequence=0,
             timestamp=datetime.now(UTC),
             agent="brainstormer",
-            event_type=EventType.BRAINSTORM_MESSAGE_COMPLETE,
+            event_type=BrainstormEventType.MESSAGE_COMPLETE,
             message="Complete",
             domain=EventDomain.BRAINSTORM,
             data={

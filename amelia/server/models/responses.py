@@ -90,9 +90,6 @@ class WorkflowDetailResponse(BaseModel):
     )
     token_usage: TokenSummary | None = Field(default=None, description="Token usage summary")
     recent_events: list[dict[str, Any]] = Field(description="Recent workflow events")
-    final_response: str | None = Field(
-        default=None, description="Final response from the agent"
-    )
     pipeline_type: str | None = Field(
         default=None, description="Pipeline type (e.g. full, review, pr_auto_fix)"
     )

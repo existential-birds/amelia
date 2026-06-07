@@ -10,6 +10,7 @@ from uuid import uuid4
 import httpx
 import pytest
 
+from amelia.drivers.base import DriverUsage
 from amelia.server.models.model_cache import (
     ModelCacheCapabilities,
     ModelCacheEntry,
@@ -23,6 +24,7 @@ from amelia.server.models.tokens import (
     calculate_token_cost,
     fetch_openrouter_pricing,
     get_pricing,
+    resolve_driver_cost,
 )
 
 
@@ -677,6 +679,86 @@ class TestCalculateTokenCost:
             )
             # Same as claude-sonnet-4-5-20251101: $3 + $15 = $18
             assert cost == 18.0
+
+
+class TestResolveDriverCost:
+    """Tests for resolve_driver_cost() against the real cost path."""
+
+    def _reset_cache(self) -> None:
+        """Reset module-level cache state between tests."""
+        import amelia.server.models.tokens as tokens_mod
+
+        tokens_mod._cached_pricing = {}
+        tokens_mod._cache_expires_at = 0.0
+        tokens_mod._cache_lock = asyncio.Lock()
+
+    async def test_driver_cost_returned_unchanged_without_computation(self) -> None:
+        """When the driver reports cost_usd, it is returned as-is."""
+        self._reset_cache()
+        usage = DriverUsage(
+            input_tokens=1_000_000,
+            output_tokens=1_000_000,
+            cost_usd=0.42,
+            model="claude-sonnet-4-5-20251101",
+        )
+
+        # If this path computed cost it would be $18, not 0.42.
+        cost = await resolve_driver_cost(usage)
+        assert cost == 0.42
+
+    async def test_computes_from_pricing_when_cost_absent(self) -> None:
+        """When cost_usd is missing but a model is known, cost is computed > 0."""
+        self._reset_cache()
+        usage = DriverUsage(
+            input_tokens=1_000_000,
+            output_tokens=1_000_000,
+            cost_usd=None,
+            model="claude-sonnet-4-5-20251101",
+        )
+
+        with patch(
+            "amelia.server.models.tokens.fetch_openrouter_pricing",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            cost = await resolve_driver_cost(usage)
+
+        # Static fallback for sonnet: 1M*$3 + 1M*$15 = $18.
+        assert cost == 18.0
+
+    async def test_uses_fallback_model_when_usage_model_absent(self) -> None:
+        """fallback_model supplies pricing when driver_usage.model is None."""
+        self._reset_cache()
+        usage = DriverUsage(
+            input_tokens=1_000_000,
+            output_tokens=1_000_000,
+            cost_usd=None,
+            model=None,
+        )
+
+        with patch(
+            "amelia.server.models.tokens.fetch_openrouter_pricing",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            cost = await resolve_driver_cost(
+                usage, fallback_model="claude-sonnet-4-5-20251101"
+            )
+
+        assert cost == 18.0
+
+    async def test_returns_zero_when_no_cost_and_no_model(self) -> None:
+        """With no cost and no model anywhere, returns 0.0 (no computation)."""
+        self._reset_cache()
+        usage = DriverUsage(
+            input_tokens=1_000_000,
+            output_tokens=1_000_000,
+            cost_usd=None,
+            model=None,
+        )
+
+        cost = await resolve_driver_cost(usage)
+        assert cost == 0.0
 
 
 class TestTokenSummary:

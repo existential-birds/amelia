@@ -39,9 +39,9 @@ from amelia.server.models.brainstorm import (
     MessageUsage,
     SessionStatus,
 )
-from amelia.server.models.events import EventDomain, EventType, WorkflowEvent
+from amelia.server.models.events import BrainstormEventType, EventDomain, WorkflowEvent
 from amelia.server.models.requests import CreateWorkflowRequest
-from amelia.server.models.tokens import calculate_token_cost
+from amelia.server.models.tokens import resolve_driver_cost
 from amelia.server.services.brainstormer_agent import (
     BRAINSTORMER_USER_PROMPT_TEMPLATE,
     BrainstormerFilesystemMiddleware,
@@ -63,18 +63,7 @@ async def _build_message_usage(
     calculate_token_cost using cached pricing data. Uses fallback_model
     when driver_usage.model is not set.
     """
-    cost = driver_usage.cost_usd or 0.0
-
-    # Compute cost from cached pricing if driver didn't provide it
-    model = driver_usage.model or fallback_model
-    if not cost and model:
-        cost = await calculate_token_cost(
-            model=model,
-            input_tokens=driver_usage.input_tokens or 0,
-            output_tokens=driver_usage.output_tokens or 0,
-            cache_read_tokens=driver_usage.cache_read_tokens or 0,
-            cache_creation_tokens=driver_usage.cache_creation_tokens or 0,
-        )
+    cost = await resolve_driver_cost(driver_usage, fallback_model)
 
     return MessageUsage(
         input_tokens=driver_usage.input_tokens or 0,
@@ -179,7 +168,7 @@ class BrainstormService:
             sequence=0,
             timestamp=now,
             agent="brainstormer",
-            event_type=EventType.BRAINSTORM_SESSION_CREATED,
+            event_type=BrainstormEventType.SESSION_CREATED,
             message=f"Brainstorming session created: {topic or 'No topic'}",
             data={"session_id": session.id, "profile_id": profile_id, "topic": topic},
         )
@@ -448,7 +437,7 @@ class BrainstormService:
                     agentic_msg.type == AgenticMessageType.TOOL_CALL
                     and agentic_msg.tool_name == "ask_user_question"
                     and agentic_msg.tool_call_id
-                    and event.event_type == EventType.BRAINSTORM_ASK_USER
+                    and event.event_type == BrainstormEventType.ASK_USER
                 ):
                     suppressed_tool_ids.add(agentic_msg.tool_call_id)
 
@@ -555,7 +544,7 @@ class BrainstormService:
         message_id: uuid.UUID,
         message_usage: MessageUsage | None,
     ) -> WorkflowEvent:
-        """Assemble the BRAINSTORM_MESSAGE_COMPLETE event.
+        """Assemble the MESSAGE_COMPLETE event.
 
         Includes per-message usage when available plus the aggregated session
         usage summary fetched from the repository.
@@ -577,7 +566,7 @@ class BrainstormService:
             sequence=0,
             timestamp=datetime.now(UTC),
             agent="brainstormer",
-            event_type=EventType.BRAINSTORM_MESSAGE_COMPLETE,
+            event_type=BrainstormEventType.MESSAGE_COMPLETE,
             message="Message complete",
             data=complete_data,
             domain=EventDomain.BRAINSTORM,
@@ -625,17 +614,17 @@ class BrainstormService:
         """
         # Map agentic message types to brainstorm event types
         type_mapping = {
-            AgenticMessageType.THINKING: EventType.BRAINSTORM_REASONING,
-            AgenticMessageType.TOOL_CALL: EventType.BRAINSTORM_TOOL_CALL,
-            AgenticMessageType.TOOL_RESULT: EventType.BRAINSTORM_TOOL_RESULT,
-            AgenticMessageType.RESULT: EventType.BRAINSTORM_TEXT,
+            AgenticMessageType.THINKING: BrainstormEventType.REASONING,
+            AgenticMessageType.TOOL_CALL: BrainstormEventType.TOOL_CALL,
+            AgenticMessageType.TOOL_RESULT: BrainstormEventType.TOOL_RESULT,
+            AgenticMessageType.RESULT: BrainstormEventType.TEXT,
         }
 
-        event_type = type_mapping.get(agentic_msg.type, EventType.BRAINSTORM_TEXT)
+        event_type = type_mapping.get(agentic_msg.type, BrainstormEventType.TEXT)
 
         # Intercept ask_user_question tool calls and emit as interactive
-        # BRAINSTORM_ASK_USER events with structured question payload.
-        # Falls back to plain BRAINSTORM_TEXT if the payload is malformed.
+        # ASK_USER events with structured question payload.
+        # Falls back to plain TEXT if the payload is malformed.
         if (
             agentic_msg.type == AgenticMessageType.TOOL_CALL
             and agentic_msg.tool_name == "ask_user_question"
@@ -660,7 +649,7 @@ class BrainstormService:
                         sequence=0,
                         timestamp=datetime.now(UTC),
                         agent="brainstormer",
-                        event_type=EventType.BRAINSTORM_ASK_USER,
+                        event_type=BrainstormEventType.ASK_USER,
                         message=formatted,
                         model=agentic_msg.model,
                         domain=EventDomain.BRAINSTORM,
@@ -741,7 +730,7 @@ class BrainstormService:
             sequence=0,
             timestamp=now,
             agent="brainstormer",
-            event_type=EventType.BRAINSTORM_ARTIFACT_CREATED,
+            event_type=BrainstormEventType.ARTIFACT_CREATED,
             message=f"Created artifact: {path}",
             data={
                 "id": artifact.id,
@@ -861,7 +850,7 @@ class BrainstormService:
             sequence=0,
             timestamp=datetime.now(UTC),
             agent="brainstormer",
-            event_type=EventType.BRAINSTORM_SESSION_COMPLETED,
+            event_type=BrainstormEventType.SESSION_COMPLETED,
             message=f"Session completed, handed off to implementation {workflow_id}",
             data={
                 "session_id": session_id,

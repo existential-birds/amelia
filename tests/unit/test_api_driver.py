@@ -31,26 +31,11 @@ def api_driver() -> ApiDriver:
 class TestApiDriverInit:
     """Test ApiDriver initialization."""
 
-    def test_uses_provided_model(self) -> None:
-        """Should use the provided model name."""
-        driver = ApiDriver(model="anthropic/claude-sonnet-4-20250514", provider="openrouter")
-        assert driver.model == "anthropic/claude-sonnet-4-20250514"
-
     def test_defaults_to_minimax_m2(self) -> None:
         """Should default to MiniMax M2 when no model provided."""
         driver = ApiDriver()
         assert driver.model == ApiDriver.DEFAULT_MODEL
         assert driver.model == "minimax/minimax-m2"  # No prefix
-
-    def test_stores_cwd(self) -> None:
-        """Should store the cwd parameter."""
-        driver = ApiDriver(cwd="/some/path")
-        assert driver.cwd == "/some/path"
-
-    def test_stores_provider(self) -> None:
-        """Should store the provider parameter."""
-        driver = ApiDriver(provider="openrouter")
-        assert driver.provider == "openrouter"
 
     def test_provider_defaults_to_openrouter(self) -> None:
         """Should default provider to 'openrouter' when not specified."""

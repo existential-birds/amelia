@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { z } from 'zod';
 import { useWorkflowStore } from '../store/workflowStore';
 import { useBrainstormStore } from '../store/brainstormStore';
-import type { WebSocketMessage, WorkflowEvent, BrainstormMessage } from '../types';
+import type { WebSocketMessage, WorkflowEvent, BrainstormStreamEvent } from '../types';
 import type { AskUserQuestionItem, BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
 import * as Toast from '../components/Toast';
 import { logger } from '../lib/logger';
@@ -169,7 +169,7 @@ const INITIAL_RECONNECT_DELAY = 1000; // 1 second
  *
  * @param msg - The brainstorm message from the WebSocket
  */
-export function handleBrainstormMessage(msg: BrainstormMessage): void {
+export function handleBrainstormMessage(msg: BrainstormStreamEvent): void {
   const state = useBrainstormStore.getState();
 
   // Ignore events for different sessions
