@@ -29,18 +29,23 @@ export default defineConfig({
     outDir: '../amelia/server/static',
     emptyOutDir: true,
     sourcemap: true,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks(id) {
-          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
-            return 'react-vendor';
-          }
-          if (id.includes('node_modules/react-router-dom/')) {
-            return 'router';
-          }
-          if (/node_modules\/@radix-ui\/react-(collapsible|dialog|dropdown-menu|scroll-area|slot|tooltip)\//.test(id)) {
-            return 'radix';
-          }
+        codeSplitting: {
+          groups: [
+            {
+              name: 'react-vendor',
+              test: /node_modules\/(react|react-dom)\//,
+            },
+            {
+              name: 'router',
+              test: /node_modules\/react-router-dom\//,
+            },
+            {
+              name: 'radix',
+              test: /node_modules\/@radix-ui\/react-(collapsible|dialog|dropdown-menu|scroll-area|slot|tooltip)\//,
+            },
+          ],
         },
       },
     },
