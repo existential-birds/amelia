@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-06-07
+
+### Added
+
+- **dashboard:** Replace profile edit modal with a routed detail page — profile editing now navigates to a dedicated URL instead of opening an overlay ([#599](https://github.com/existential-birds/amelia/pull/599))
+
+### Changed
+
+- **dashboard:** Remove most-recently-completed fallback from the active workflows view — the view no longer surfaces a completed workflow when no workflow is running ([#600](https://github.com/existential-birds/amelia/pull/600))
+
+### Fixed
+
+- **server:** Make `set_status` atomic using row-level locking with terminal-state precedence — prevents a non-terminal status update from overwriting a terminal one under concurrent writers ([#612](https://github.com/existential-birds/amelia/pull/612))
+
+### Security
+
+- **deps:** Resolve 7 Dependabot alerts in `react-router` and `ai-sdk` ([#614](https://github.com/existential-birds/amelia/pull/614))
+- **deps:** Bump `starlette` 0.50.0 → 1.0.1 ([#611](https://github.com/existential-birds/amelia/pull/611))
+- **deps:** Bump `aiohttp` 3.13.4 → 3.14.0 ([#602](https://github.com/existential-birds/amelia/pull/602))
+
 ## [0.21.0] - 2026-05-31
 
 ### Added
@@ -564,7 +584,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/existential-birds/amelia/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/existential-birds/amelia/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/existential-birds/amelia/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/existential-birds/amelia/compare/v0.19.0...v0.20.0
