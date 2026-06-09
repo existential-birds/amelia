@@ -36,14 +36,12 @@ export default defineConfig({
             {
               name: 'react-vendor',
               test: /node_modules\/(react|react-dom)\//,
-            },
-            {
-              name: 'router',
-              test: /node_modules\/react-router-dom\//,
+              priority: 20,
             },
             {
               name: 'radix',
               test: /node_modules\/@radix-ui\/react-(collapsible|dialog|dropdown-menu|scroll-area|slot|tooltip)\//,
+              priority: 10,
             },
           ],
         },
