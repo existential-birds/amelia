@@ -36,7 +36,6 @@ from amelia.server.banner import (
 from amelia.server.config import ServerConfig
 
 
-# Process prefixes
 SERVER_PREFIX = Text("[server]    ", style=TWILIGHT)
 DASHBOARD_PREFIX = Text("[dashboard] ", style=GOLD)
 
@@ -206,7 +205,6 @@ def _get_log_level_style(text: str) -> str:
 
     # Check for loguru-style logs (level appears after │ separator)
     if "│" in text_upper:
-        # Extract the level field (second segment between │ separators)
         parts = text_upper.split("│")
         if len(parts) >= 2:
             level = parts[1].strip()
@@ -239,8 +237,6 @@ async def stream_output(
         prefix: The colored Rich Text prefix to prepend to each line.
         is_stderr: Unused, kept for API compatibility.
     """
-    # Note: is_stderr is kept for API compatibility but we parse log levels instead
-    # because uvicorn writes all logs (including INFO) to stderr
     _ = is_stderr
     while True:
         line = await stream.readline()
@@ -248,7 +244,6 @@ async def stream_output(
             break
         text = line.decode().rstrip()
         if text:
-            # Enhanced log level detection for both uvicorn and loguru formats
             style = _get_log_level_style(text)
             console.print(prefix + Text(text, style=Style(color=style)))
 
@@ -348,14 +343,11 @@ class ProcessManager:
         assert process.stdout is not None
         assert process.stderr is not None
 
-        # Stream both stdout and stderr
         stdout_task = asyncio.create_task(stream_output(process.stdout, prefix))
         stderr_task = asyncio.create_task(stream_output(process.stderr, prefix, is_stderr=True))
 
-        # Wait for process to complete
         exit_code = await process.wait()
 
-        # Wait for output streaming to complete
         await stdout_task
         await stderr_task
 
@@ -475,7 +467,6 @@ async def run_dev_mode(
     manager = ProcessManager()
     loop = asyncio.get_running_loop()
 
-    # Handle signals
     def signal_handler() -> None:
         """Handle termination signals by requesting graceful shutdown."""
         manager.request_shutdown()
@@ -527,7 +518,6 @@ async def run_dev_mode(
                 )
                 return 1
 
-            # Start Vite dev server for HMR
             dashboard = await manager.start_dashboard()
             tasks.append(
                 asyncio.create_task(
@@ -541,7 +531,6 @@ async def run_dev_mode(
             return_when=asyncio.FIRST_COMPLETED,
         )
 
-        # Cancel pending tasks
         for task in pending:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -549,7 +538,6 @@ async def run_dev_mode(
 
     finally:
         await manager.shutdown()
-        # Remove signal handlers
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.remove_signal_handler(sig)
 
@@ -597,7 +585,6 @@ def dev(
 
     is_dev_repo = is_amelia_dev_repo()
 
-    # Check prerequisites for dev mode
     if is_dev_repo and not no_dashboard:
         if not check_node_installed():
             console.print(
@@ -617,15 +604,12 @@ def dev(
             )
             raise typer.Exit(code=1)
 
-    # Print banner
     print_banner(console)
 
-    # Load config
     config = ServerConfig()
     effective_port = port if port is not None else config.port
     effective_host = "0.0.0.0" if bind_all else config.host
 
-    # Check port availability
     if not check_port_available(effective_host, effective_port):
         console.print(
             Text(
@@ -636,7 +620,6 @@ def dev(
         )
         raise typer.Exit(code=1)
 
-    # Show mode and service URLs
     mode = "dev" if is_dev_repo else "user"
     is_dev_mode = is_dev_repo and not no_dashboard
     console.print(Text(f"Mode: {mode}", style=MOSS))
@@ -652,7 +635,6 @@ def dev(
             )
         )
 
-    # Run the async event loop
     try:
         exit_code = asyncio.run(
             run_dev_mode(effective_host, effective_port, no_dashboard, is_dev_repo)

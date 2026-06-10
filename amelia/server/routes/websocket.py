@@ -12,7 +12,6 @@ from amelia.server.events.connection_manager import ConnectionManager
 
 router = APIRouter(tags=["websocket"])
 
-# Global connection manager instance
 connection_manager = ConnectionManager()
 
 
@@ -44,7 +43,6 @@ async def websocket_endpoint(
     logger.info("websocket_connected", active_connections=connection_manager.active_connections)
 
     try:
-        # Handle backfill if reconnecting
         if since:
             bus = connection_manager.get_event_bus()
             if bus:
@@ -76,11 +74,9 @@ async def websocket_endpoint(
             else:
                 logger.warning("backfill_unavailable", reason="event_bus_not_initialized")
 
-        # Start heartbeat task
         heartbeat_task = asyncio.create_task(_heartbeat_loop(websocket))
 
         try:
-            # Message handling loop
             while True:
                 data = await websocket.receive_json()
                 message_type = data.get("type")
@@ -102,11 +98,9 @@ async def websocket_endpoint(
                     logger.debug("subscribed_to_all")
 
                 elif message_type == "pong":
-                    # Heartbeat response - just log
                     logger.debug("heartbeat_pong_received")
 
         finally:
-            # Cancel heartbeat when loop exits
             heartbeat_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await heartbeat_task

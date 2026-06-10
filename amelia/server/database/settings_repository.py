@@ -84,7 +84,6 @@ class SettingsRepository:
         if not updates:
             return await self.get_server_settings()
 
-        # Build UPDATE statement
         set_clauses = []
         values = []
         for i, (k, v) in enumerate(updates.items(), start=1):

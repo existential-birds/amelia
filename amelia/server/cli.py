@@ -54,16 +54,12 @@ def server(
 
     Port and host can be configured via AMELIA_PORT and AMELIA_HOST env vars.
     """
-    # Skip if subcommand is invoked
     if ctx.invoked_subcommand is not None:
         return
 
-    # Run first-time setup if needed
     if not run_first_time_setup():
         raise typer.Exit(1)
 
-    # Configure logging with dashboard colors
-    # Read log level from environment variable (default to INFO)
     log_level = os.environ.get("AMELIA_LOG_LEVEL", "INFO").upper()
     configure_logging(level=log_level)
 
@@ -72,14 +68,12 @@ def server(
     if working_dir:
         os.environ["AMELIA_WORKING_DIR"] = str(working_dir)
 
-    # Load config (respects environment variables)
     config = ServerConfig()
 
     # CLI flags override config
     effective_port = port if port is not None else config.port
     effective_host = "0.0.0.0" if bind_all else config.host
 
-    # Print ASCII banner
     print_banner(console)
 
     if bind_all:
@@ -104,8 +98,6 @@ def server(
         console.print("\nServer stopped.")
 
 
-# NOTE: Cleanup command will be implemented in Phase 2.1-02 (Database Foundation)
-# when LogRetentionService is added. See docs/plans/phase-2.1-02-database-foundation.md
 @server_app.command("cleanup", hidden=True)
 def cleanup(
     retention_days: Annotated[
@@ -123,7 +115,6 @@ def cleanup(
 
     Note: This command requires the database foundation (Phase 2.1-02).
     """
-    # Placeholder until LogRetentionService is implemented in Phase 2.1-02
     console.print(
         "[yellow]Cleanup not yet available.[/yellow] "
         "Requires database foundation (see docs/plans/phase-2.1-02-database-foundation.md)"

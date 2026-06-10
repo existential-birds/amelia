@@ -52,8 +52,6 @@ from amelia.trajectory import (
 )
 
 
-# Cap on projected history entries in the detail response; mirrors the
-# pre-trajectory wire behavior (last 50 events).
 RECENT_EVENT_LIMIT = 50
 
 
@@ -87,7 +85,6 @@ def _to_workflow_summary(workflow: ServerExecutionState) -> WorkflowSummary:
     )
 
 
-# Create the workflows router
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
 
@@ -109,8 +106,6 @@ async def create_workflow(
         WorkflowConflictError: If worktree is already in use.
         ConcurrencyLimitError: If concurrent workflow limit is reached.
     """
-    # Let orchestrator handle everything - it will raise appropriate exceptions
-    # Choose method based on start/plan_now flags
     if request.start:
         if request.plan_file is not None or request.plan_content is not None:
             # External plan + immediate start: queue (persists plan_cache) then start
@@ -122,7 +117,6 @@ async def create_workflow(
                 await orchestrator.cancel_workflow(workflow_id)
                 raise
         else:
-            # Immediate execution (existing behavior)
             workflow_id = await orchestrator.start_workflow(
                 issue_id=request.issue_id,
                 worktree_path=request.worktree_path,
@@ -203,7 +197,6 @@ async def list_workflows(
     Raises:
         HTTPException: 400 if cursor is invalid.
     """
-    # Decode cursor
     after_started_at: datetime | None = None
     after_id: str | None = None
     if cursor:
@@ -234,7 +227,6 @@ async def list_workflows(
     if has_more:
         workflows = workflows[:limit]
 
-    # Build next cursor
     next_cursor: str | None = None
     if has_more and workflows:
         last = workflows[-1]
@@ -352,7 +344,6 @@ async def get_workflow(
         summary = trajectory_to_token_summary(trajectory)
         token_usage = summary if summary.breakdown else None
 
-    # Extract plan data from plan_cache
     goal: str | None = None
     plan_markdown: str | None = None
     plan_path: str | None = None
@@ -838,7 +829,6 @@ def configure_exception_handlers(app: FastAPI) -> None:
             JSONResponse with 400 status code.
         """
         logger.warning("Validation error", error=str(exc))
-        # Convert error objects to JSON-serializable format
         errors: list[dict[str, object]] = []
         for error in exc.errors():
             serializable_error: dict[str, object] = {
@@ -846,7 +836,6 @@ def configure_exception_handlers(app: FastAPI) -> None:
                 "loc": list(error["loc"]),
                 "msg": error["msg"],
             }
-            # Add ctx if present
             if "ctx" in error:
                 serializable_error["ctx"] = {
                     k: str(v) for k, v in error["ctx"].items()

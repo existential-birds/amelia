@@ -1,4 +1,3 @@
-# amelia/server/routes/settings.py
 """API routes for server settings and profiles."""
 import os
 from collections.abc import Mapping
@@ -71,7 +70,6 @@ def _validate_required_agents(agents: Mapping[str, object] | None) -> None:
             raise ValueError(f"Missing required agents: {', '.join(sorted(missing))}")
 
 
-# Response models
 class ServerSettingsResponse(BaseModel):
     """Server settings API response."""
 
@@ -213,7 +211,6 @@ async def fetch_openrouter_model_entry(model_id: str) -> ModelCacheEntry | None:
     return None
 
 
-# Server settings endpoints
 @router.get("/settings", response_model=ServerSettingsResponse)
 async def get_server_settings(
     repo: SettingsRepository = Depends(get_settings_repository),
@@ -266,7 +263,6 @@ async def get_model(
     return to_model_lookup_response(fetched)
 
 
-# Profile endpoints
 @router.get("/profiles", response_model=list[ProfileResponse])
 async def list_profiles(
     repo: ProfileRepository = Depends(get_profile_repository),
@@ -284,7 +280,6 @@ async def create_profile(
     repo: ProfileRepository = Depends(get_profile_repository),
 ) -> ProfileResponse:
     """Create a new profile."""
-    # Convert AgentConfigCreate to AgentConfig
     agents = {
         name: AgentConfig(
             driver=config.driver,
@@ -335,7 +330,6 @@ async def update_profile(
     """Update a profile."""
     update_dict: dict[str, Any] = {}
 
-    # Handle simple fields
     for field in ["tracker", "repo_root", "plan_output_dir", "plan_path_pattern"]:
         value = getattr(updates, field)
         if value is not None:

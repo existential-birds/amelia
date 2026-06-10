@@ -34,9 +34,6 @@ _GH_ISSUE_LIMIT = "50"
 _MAX_BODY_LENGTH = 5000
 
 
-# ---------------------------------------------------------------------------
-# Issue models and endpoint
-# ---------------------------------------------------------------------------
 
 
 class GitHubIssueLabel(BaseModel):
@@ -152,9 +149,6 @@ async def list_github_issues(
     )
 
 
-# ---------------------------------------------------------------------------
-# PR models
-# ---------------------------------------------------------------------------
 
 
 class TriggerPRAutoFixRequest(BaseModel):
@@ -224,9 +218,6 @@ async def _get_repo_name(repo_root: str) -> str:
     return stdout_bytes.decode().strip()
 
 
-# ---------------------------------------------------------------------------
-# PR endpoints
-# ---------------------------------------------------------------------------
 
 
 @router.get("/prs/config", response_model=PRAutoFixStatusResponse)
@@ -341,7 +332,6 @@ async def trigger_pr_autofix(
 
     repo = await _get_repo_name(resolved.repo_root)
 
-    # Determine config override
     effective_config: PRAutoFixConfig | None = None
     if body and body.aggressiveness:
         try:

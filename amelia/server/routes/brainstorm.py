@@ -39,7 +39,6 @@ if TYPE_CHECKING:
 router = APIRouter(tags=["brainstorm"])
 
 
-# Dependency placeholder - will be properly wired in main.py
 def get_brainstorm_service() -> BrainstormService:
     """Get BrainstormService dependency.
 
@@ -106,7 +105,6 @@ async def get_profile_info(
         return None
 
 
-# Request/Response Models
 class CreateSessionRequest(BaseModel):
     """Request to create a new brainstorming session."""
 
@@ -155,9 +153,6 @@ class HandoffResponse(BaseModel):
 
     workflow_id: uuid.UUID
     status: str
-
-
-# Session Lifecycle Endpoints
 @router.post(
     "/sessions",
     status_code=status.HTTP_201_CREATED,
@@ -235,7 +230,6 @@ async def get_session(
             detail=f"Session not found: {session_id}",
         )
 
-    # Load profile info for display
     session = result["session"]
     profile_info = await get_profile_info(session.profile_id, profile_repo)
 
@@ -261,7 +255,6 @@ async def delete_session(
     await service.delete_session(session_id)
 
 
-# Chat Endpoints
 @router.post(
     "/sessions/{session_id}/message",
     status_code=status.HTTP_202_ACCEPTED,
@@ -322,7 +315,6 @@ async def send_message(
                 session_id=str(session_id),
                 message_id=str(message_id),
             )
-            # Emit error event to notify frontend
             error_event = WorkflowEvent(
                 id=uuid4(),
                 workflow_id=session_id,
@@ -345,7 +337,6 @@ async def send_message(
     return SendMessageResponse(message_id=message_id)
 
 
-# Handoff Endpoint
 @router.post(
     "/sessions/{session_id}/handoff",
     response_model=HandoffResponse,

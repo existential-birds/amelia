@@ -117,7 +117,6 @@ async def validate_path(request: PathValidationRequest) -> PathValidationRespons
     """
     file_path = Path(request.path)
 
-    # Check if path is absolute
     if not file_path.is_absolute():
         return PathValidationResponse(
             exists=False,
@@ -151,7 +150,6 @@ async def validate_path(request: PathValidationRequest) -> PathValidationRespons
             message="Path must be within the home directory",
         )
 
-    # Check existence
     if not resolved_path.exists():
         return PathValidationResponse(
             exists=False,
@@ -159,7 +157,6 @@ async def validate_path(request: PathValidationRequest) -> PathValidationRespons
             message="Path does not exist",
         )
 
-    # Check if it's a directory
     if not resolved_path.is_dir():
         return PathValidationResponse(
             exists=True,
@@ -167,7 +164,6 @@ async def validate_path(request: PathValidationRequest) -> PathValidationRespons
             message="Path is a file, not a directory",
         )
 
-    # Check if it's a git repository
     # .git is a directory for regular repos, or a file with a gitdir pointer for worktrees
     git_dir = resolved_path / ".git"
     is_git_repo = git_dir.is_dir()
@@ -189,7 +185,6 @@ async def validate_path(request: PathValidationRequest) -> PathValidationRespons
     branch = await _get_git_branch(resolved_path)
     has_changes = await _has_uncommitted_changes(resolved_path)
 
-    # Build message
     change_indicator = " with uncommitted changes" if has_changes else ""
     branch_info = f" on branch '{branch}'" if branch else ""
     message = f"Git repository{branch_info}{change_indicator}"

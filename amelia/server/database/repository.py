@@ -320,7 +320,6 @@ class WorkflowRepository:
             else:
                 validate_transition(current, new_status)  # non-terminal: state machine rules
 
-            # Set completed_at for terminal states
             completed_at = None
             if new_status in (WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED):
                 completed_at = datetime.now(UTC)

@@ -98,10 +98,6 @@ class GraphRunner:
             recorders if recorders is not None else {}
         )
 
-    # ------------------------------------------------------------------
-    # Setup helpers
-    # ------------------------------------------------------------------
-
     def create_server_graph(
         self,
         checkpointer: BaseCheckpointSaver[Any] | None = None,
@@ -143,7 +139,6 @@ class GraphRunner:
             resolved_prompts = await resolver.get_all_active()
             prompts = {pid: rp.content for pid, rp in resolved_prompts.items()}
 
-            # Record which versions the workflow uses (best-effort)
             await resolver.record_for_workflow(workflow_id)
 
             return prompts
@@ -286,7 +281,6 @@ class GraphRunner:
         Raises:
             ValueError: If required fields are missing.
         """
-        # Parse issue from issue_cache
         issue = None
         if state.issue_cache:
             issue = Issue.model_validate(state.issue_cache)
@@ -315,7 +309,6 @@ class GraphRunner:
             if plan_cache.current_task_index is not None:
                 plan_fields["current_task_index"] = plan_cache.current_task_index
 
-        # Reconstruct ImplementationState
         impl_state = ImplementationState(
             workflow_id=state.id,
             profile_id=profile.name,
@@ -356,7 +349,6 @@ class GraphRunner:
             config: The RunnableConfig with thread_id.
         """
         try:
-            # Fetch current checkpoint state from LangGraph
             checkpoint_state = await graph.aget_state(config)
             if checkpoint_state is None or checkpoint_state.values is None:
                 logger.warning(
@@ -365,11 +357,9 @@ class GraphRunner:
                 )
                 return
 
-            # Check for goal and plan_markdown from agentic execution
             goal = checkpoint_state.values.get("goal")
             plan_markdown = checkpoint_state.values.get("plan_markdown")
 
-            # Log checkpoint values for debugging
             logger.info(
                 "Syncing plan from checkpoint",
                 workflow_id=workflow_id,
@@ -387,7 +377,6 @@ class GraphRunner:
                 )
                 return
 
-            # Create PlanCache from checkpoint values
             plan_cache = PlanCache.from_checkpoint_values(checkpoint_state.values)
 
             # Update plan_cache column directly (efficient, no full state load)
@@ -459,10 +448,6 @@ class GraphRunner:
             "key_files": plan_result.key_files,
             "total_tasks": plan_result.total_tasks,
         }
-
-    # ------------------------------------------------------------------
-    # Trajectory finalization
-    # ------------------------------------------------------------------
 
     async def _get_review_verdicts(self, workflow_id: uuid.UUID) -> list[dict[str, Any]]:
         """Read the final review verdicts from the LangGraph checkpoint, if any.
@@ -558,10 +543,6 @@ class GraphRunner:
                 status=status,
             )
 
-    # ------------------------------------------------------------------
-    # Execution drivers
-    # ------------------------------------------------------------------
-
     async def run_workflow(
         self,
         workflow_id: uuid.UUID,
@@ -588,14 +569,12 @@ class GraphRunner:
             )
             return
 
-        # Get profile from settings using profile_id (with worktree_path fallback)
         profile = await self.get_profile_or_fail(
             workflow_id, profile_id, state.worktree_path
         )
         if profile is None:
             return
 
-        # Resolve prompts before starting workflow
         prompts = await self.resolve_prompts(workflow_id)
 
         # CRITICAL: Pass interrupt_before to enable server-mode approval
@@ -620,14 +599,12 @@ class GraphRunner:
         # Use astream with stream_mode="updates" to detect interrupts
         # astream_events does NOT surface __interrupt__ events
 
-        # BUG FIX (#199): Check if checkpoint exists before starting.
         # If we have an existing checkpoint, pass None to resume from it.
         # If no checkpoint, pass initial_state to start fresh.
         # This prevents the infinite loop bug where retries would restart
         # the workflow from review_iteration=0 instead of resuming.
         checkpoint_state = await graph.aget_state(config)
         if checkpoint_state is not None and checkpoint_state.values:
-            # Checkpoint exists - resume from it
             logger.debug(
                 "Resuming workflow from existing checkpoint",
                 workflow_id=workflow_id,
@@ -635,8 +612,6 @@ class GraphRunner:
             )
             input_state = None
         else:
-            # No checkpoint - start fresh with initial state
-            # Reconstruct ImplementationState from columns
             input_state = await self._reconstruct_initial_state(state, profile)
 
             logger.debug(
@@ -667,7 +642,6 @@ class GraphRunner:
                 )
                 await self._repository.set_status(workflow_id, WorkflowStatus.BLOCKED)
                 break
-            # Handle combined mode chunk
             await self._events.handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
         if not was_interrupted:
@@ -702,7 +676,6 @@ class GraphRunner:
             )
             return
 
-        # Get profile from settings using profile_id (with worktree_path fallback)
         profile = await self.get_profile_or_fail(
             workflow_id, profile_id, state.worktree_path
         )
@@ -1011,10 +984,8 @@ class GraphRunner:
         if profile is None:
             return
 
-        # Resolve prompts before starting workflow
         prompts = await self.resolve_prompts(workflow_id)
 
-        # Use dedicated review graph for review workflows
         graph = create_review_graph(
             checkpointer=self._checkpointer,
         )
@@ -1051,7 +1022,6 @@ class GraphRunner:
             try:
                 await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
 
-                # Convert Pydantic model to JSON-serializable dict for checkpointing
                 initial_state = execution_state.model_dump(mode="json")
 
                 async for chunk in graph.astream(
@@ -1082,7 +1052,6 @@ class GraphRunner:
                             failure_reason="Unexpected interrupt in review workflow",
                         )
                         return
-                    # Emit stage events for each node
                     await self._events.handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
                 await self._events.emit(
@@ -1210,7 +1179,6 @@ class GraphRunner:
             config = self.build_runnable_config(workflow_id, profile, prompts, sandbox_provider)
 
             was_interrupted = False
-            # Convert Pydantic model to JSON-serializable dict for checkpointing
             input_state = execution_state.model_dump(mode="json")
 
             async for chunk in graph.astream(
@@ -1230,7 +1198,6 @@ class GraphRunner:
                         workflow_id=workflow_id,
                         interrupt_data=interrupt_data,
                     )
-                    # Sync plan from LangGraph checkpoint to ServerExecutionState
                     await self._sync_plan_from_checkpoint(workflow_id, graph, config)
 
                     # Re-fetch to avoid clobbering concurrent updates
@@ -1264,7 +1231,6 @@ class GraphRunner:
 
                     break
 
-                # Handle combined mode chunk (updates, tasks)
                 await self._events.handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
             if not was_interrupted:
@@ -1279,7 +1245,6 @@ class GraphRunner:
             logger.info("Planning task cancelled", workflow_id=workflow_id)
             raise
         except Exception as e:
-            # Mark workflow as failed using fresh state
             try:
                 fresh = await self._repository.get(workflow_id)
                 if fresh is not None and fresh.workflow_status == WorkflowStatus.PENDING:

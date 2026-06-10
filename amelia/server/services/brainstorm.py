@@ -49,7 +49,6 @@ from amelia.server.services.brainstormer_agent import (
 )
 
 
-# Default plan path pattern used when no profile is available
 _DEFAULT_PLAN_PATH_PATTERN = "docs/plans/{date}-{issue_key}.md"
 
 
@@ -141,7 +140,6 @@ class BrainstormService:
         Returns:
             Created session.
         """
-        # Look up driver type from brainstormer agent config if available
         driver_type: str | None = None
         if self._profile_repo is not None:
             profile = await self._profile_repo.get_profile(profile_id)
@@ -161,7 +159,6 @@ class BrainstormService:
 
         await self._repository.create_session(session)
 
-        # Emit session created event
         event = WorkflowEvent(
             id=uuid4(),
             workflow_id=session.id,  # Use session_id as workflow_id for events
@@ -206,7 +203,6 @@ class BrainstormService:
         messages = await self._repository.get_messages(session_id)
         artifacts = await self._repository.get_artifacts(session_id)
 
-        # Fetch and attach usage summary to session
         usage_summary = await self._repository.get_session_usage(session_id)
         session.usage_summary = usage_summary
 
@@ -368,11 +364,9 @@ class BrainstormService:
         # Acquire session lock to prevent sequence collisions under concurrent sends
         lock = self._get_session_lock(session_id)
         async with lock:
-            # Get next sequence number and save user message
             max_seq = await self._repository.get_max_sequence(session_id)
             user_sequence = max_seq + 1
 
-            # Detect first message and format prompt accordingly
             is_first_message = max_seq == 0
             if is_first_message:
                 formatted_prompt = BRAINSTORMER_USER_PROMPT_TEMPLATE.format(
@@ -401,7 +395,6 @@ class BrainstormService:
             else:
                 resolved_message_id = uuid4()
 
-            # Invoke driver and stream events
             assistant_content_parts: list[str] = []
             driver_session_id: str | None = None
             suppressed_tool_ids: set[str] = set()  # tool calls converted to text
@@ -427,7 +420,6 @@ class BrainstormService:
                 ):
                     continue
 
-                # Convert to event and emit
                 event = self._agentic_message_to_event(
                     agentic_msg, session_id, resolved_message_id
                 )
@@ -444,7 +436,6 @@ class BrainstormService:
                 self._event_bus.emit(event)
                 yield event
 
-                # Collect result content and session ID
                 if agentic_msg.type == AgenticMessageType.RESULT:
                     if agentic_msg.content:
                         assistant_content_parts.append(agentic_msg.content)
@@ -458,13 +449,11 @@ class BrainstormService:
             if artifact_event:
                 yield artifact_event
 
-            # Update driver session ID if we got one
             if driver_session_id and driver_session_id != session.driver_session_id:
                 session.driver_session_id = driver_session_id
                 session.updated_at = datetime.now(UTC)
                 await self._repository.update_session(session)
 
-            # Extract token usage from driver
             message_usage: MessageUsage | None = None
             driver_usage = driver.get_usage()
             if driver_usage:
@@ -473,7 +462,6 @@ class BrainstormService:
                     fallback_model=getattr(driver, "model", None),
                 )
 
-            # Save assistant message
             assistant_sequence = user_sequence + 1
             assistant_content = "\n".join(assistant_content_parts)
             assistant_message = Message(
@@ -487,7 +475,6 @@ class BrainstormService:
             )
             await self._repository.save_message(assistant_message)
 
-        # Emit message complete event
         complete_event = await self._build_complete_event(
             session_id, assistant_message.id, message_usage
         )
@@ -667,7 +654,6 @@ class BrainstormService:
                     tool_input=agentic_msg.tool_input,
                 )
 
-        # Build message from content
         message = agentic_msg.content or ""
         if agentic_msg.type == AgenticMessageType.TOOL_CALL:
             message = f"Calling {agentic_msg.tool_name or 'tool'}"
@@ -756,19 +742,15 @@ class BrainstormService:
         """
         path_lower = path.lower()
 
-        # Check for ADR pattern
         if "/adr/" in path_lower or "adr-" in path_lower:
             return "adr"
 
-        # Check for spec pattern
         if "/spec/" in path_lower or "-spec" in path_lower or "_spec" in path_lower:
             return "spec"
 
-        # Check for readme pattern
         if "readme" in path_lower:
             return "readme"
 
-        # Check for design/plan pattern
         if (
             "/design/" in path_lower
             or "/plans/" in path_lower
@@ -777,7 +759,6 @@ class BrainstormService:
         ):
             return "design"
 
-        # Default to document
         return "document"
 
     async def handoff_to_implementation(
@@ -810,7 +791,6 @@ class BrainstormService:
         if session is None:
             raise ValueError(f"Session not found: {session_id}")
 
-        # Validate artifact exists
         artifacts = await self._repository.get_artifacts(session_id)
         artifact = next((a for a in artifacts if a.path == artifact_path), None)
         if artifact is None:
@@ -827,7 +807,6 @@ class BrainstormService:
         sid_prefix = str(session_id)[:8]
         issue_id = f"{slug}-{sid_prefix}" if slug else f"brainstorm-{sid_prefix}"
 
-        # Queue workflow with orchestrator
         request = CreateWorkflowRequest(
             issue_id=issue_id,
             worktree_path=worktree_path,
@@ -838,12 +817,10 @@ class BrainstormService:
         )
         workflow_id = await orchestrator.queue_workflow(request)
 
-        # Update session status to completed
         session.status = SessionStatus.COMPLETED
         session.updated_at = datetime.now(UTC)
         await self._repository.update_session(session)
 
-        # Emit session completed event
         event = WorkflowEvent(
             id=uuid4(),
             workflow_id=session_id,

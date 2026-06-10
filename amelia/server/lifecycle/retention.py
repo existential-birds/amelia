@@ -180,7 +180,6 @@ class LogRetentionService:
 
         checkpointer = self._checkpointer
 
-        # Build query based on retention days
         if retention_days == 0:
             finished = await self._db.fetch_all(
                 "SELECT id FROM workflows WHERE status IN ('completed', 'failed', 'cancelled')"

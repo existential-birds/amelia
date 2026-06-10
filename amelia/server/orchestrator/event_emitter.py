@@ -19,7 +19,6 @@ from amelia.server.events.bus import EventBus
 from amelia.server.models.events import EventType, WorkflowEvent
 
 
-# Nodes that emit stage events
 STAGE_NODES: frozenset[str] = frozenset({
     "architect_node",
     "plan_validator_node",
@@ -96,7 +95,6 @@ def is_interrupt_chunk(chunk: tuple[str, Any] | dict[str, Any]) -> bool:
         if mode == "updates" and isinstance(data, dict):
             return "__interrupt__" in data
         return False
-    # Single mode (dict)
     return "__interrupt__" in chunk
 
 
@@ -214,10 +212,8 @@ class StreamEventEmitter:
                 summarized = summarize_stage_output(output)
                 assert summarized is not None
 
-                # Emit agent-specific messages based on node
                 await self._emit_agent_messages(workflow_id, node_name, summarized)
 
-                # Emit STAGE_COMPLETED for the current node
                 await self.emit(
                     workflow_id,
                     EventType.STAGE_COMPLETED,
@@ -226,9 +222,7 @@ class StreamEventEmitter:
                     data={"stage": node_name, "output": summarized},
                 )
 
-            # Emit TASK_COMPLETED when next_task_node completes
             if node_name == "next_task_node":
-                # Get total_tasks from output (passed through by next_task_node)
                 total_tasks = output.get("total_tasks")
                 if total_tasks is not None:
                     # The output contains the NEW index, so completed task is index - 1
@@ -264,7 +258,6 @@ class StreamEventEmitter:
             workflow_id: The workflow this task belongs to.
             task_data: Task event data from LangGraph.
         """
-        # Ignore task result events - only process task start events
         if "input" not in task_data:
             return
 
@@ -278,7 +271,6 @@ class StreamEventEmitter:
                 data={"stage": node_name},
             )
 
-        # Emit TASK_STARTED for developer_node in task-based mode
         if node_name == "developer_node":
             input_state = task_data.get("input")
             # input_state is an ImplementationState Pydantic model from LangGraph.
@@ -359,7 +351,6 @@ class StreamEventEmitter:
             workflow_id: The workflow ID.
             output: State updates from the architect node.
         """
-        # In agentic mode, architect sets goal and generates markdown plan
         goal = output.get("goal")
         plan_markdown = output.get("plan_markdown")
 
@@ -406,8 +397,6 @@ class StreamEventEmitter:
             workflow_id: The workflow ID.
             output: State updates from the developer node.
         """
-        # In agentic mode, developer works autonomously with tool calls
-        # Emit status updates based on agentic state
         status = output.get("agentic_status")
         final_response = output.get("final_response")
 
@@ -444,7 +433,6 @@ class StreamEventEmitter:
         if not last_reviews:
             return
 
-        # Emit a message for each review in the list
         for review in last_reviews:
             approved = review.approved
             severity = review.severity

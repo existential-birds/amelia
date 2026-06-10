@@ -70,7 +70,6 @@ class ServerLifecycle:
         self._shutting_down = True
         logger.info("Server shutting down...")
 
-        # Wait for blocked workflows with timeout
         active = self._orchestrator.get_active_workflows()
         if active:
             logger.info(f"Waiting for {len(active)} active workflows...")
@@ -82,13 +81,11 @@ class ServerLifecycle:
             except TimeoutError:
                 logger.warning("Shutdown timeout - cancelling remaining workflows")
 
-        # Cancel any still-running workflows
         await self._orchestrator.cancel_all_workflows()
 
         # Persist final state (already done via repository on each update)
         logger.info("Final state persisted to database")
 
-        # Run log retention cleanup
         cleanup_result = await self._log_retention.cleanup_on_shutdown()
         logger.info(
             "Cleanup complete",

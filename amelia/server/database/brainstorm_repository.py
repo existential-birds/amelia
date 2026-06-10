@@ -38,9 +38,6 @@ class BrainstormRepository:
         """
         self._db = db
 
-    # =========================================================================
-    # Session Operations
-    # =========================================================================
 
     async def create_session(self, session: BrainstormingSession) -> None:
         """Create a new brainstorming session.
@@ -191,9 +188,6 @@ class BrainstormRepository:
             updated_at=row["updated_at"],
         )
 
-    # =========================================================================
-    # Message Operations
-    # =========================================================================
 
     async def save_message(self, message: Message) -> None:
         """Save a message.
@@ -205,7 +199,6 @@ class BrainstormRepository:
         if message.parts:
             parts_data = [p.model_dump() for p in message.parts]
 
-        # Extract usage fields if present
         input_tokens = message.usage.input_tokens if message.usage else None
         output_tokens = message.usage.output_tokens if message.usage else None
         cost_usd = message.usage.cost_usd if message.usage else None
@@ -284,7 +277,6 @@ class BrainstormRepository:
             # JSONB codec returns list directly
             parts = [MessagePart(**p) for p in row["parts"]]
 
-        # Load usage if present
         usage = None
         if row["input_tokens"] is not None:
             usage = MessageUsage(
@@ -304,9 +296,6 @@ class BrainstormRepository:
             created_at=row["created_at"],
         )
 
-    # =========================================================================
-    # Artifact Operations
-    # =========================================================================
 
     async def save_artifact(self, artifact: Artifact) -> None:
         """Save an artifact.
@@ -361,9 +350,6 @@ class BrainstormRepository:
             created_at=row["created_at"],
         )
 
-    # =========================================================================
-    # Usage Aggregation
-    # =========================================================================
 
     async def get_session_usage(self, session_id: uuid.UUID) -> SessionUsageSummary | None:
         """Aggregate token usage for all messages in a brainstorm session.
