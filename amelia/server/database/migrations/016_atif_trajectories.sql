@@ -7,5 +7,5 @@ ALTER TABLE workflows
     ADD COLUMN total_duration_ms BIGINT;
 
 -- Trajectory files are the only run history — drop the dead stores.
-DROP TABLE workflow_log;
-DROP TABLE token_usage;
+DROP TABLE IF EXISTS workflow_log;
+DROP TABLE IF EXISTS token_usage;
