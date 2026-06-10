@@ -6,9 +6,11 @@ import base64
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
+from harbor.models.trajectories import Trajectory
 from loguru import logger
 from pydantic_core import ValidationError
 
@@ -43,16 +45,26 @@ from amelia.server.models.responses import (
 from amelia.server.models.state import ServerExecutionState, WorkflowStatus
 from amelia.server.models.tokens import TokenSummary
 from amelia.server.orchestrator.service import OrchestratorService
+from amelia.trajectory import (
+    load as load_trajectory,
+    trajectory_to_events,
+    trajectory_to_token_summary,
+)
 
 
-def _to_workflow_summary(
-    workflow: ServerExecutionState, token_summary: TokenSummary | None
-) -> WorkflowSummary:
-    """Convert a workflow and its token summary into a WorkflowSummary response.
+# Cap on projected history entries in the detail response; mirrors the
+# previous get_recent_events(limit=50) wire behavior.
+RECENT_EVENT_LIMIT = 50
+
+
+def _to_workflow_summary(workflow: ServerExecutionState) -> WorkflowSummary:
+    """Convert a workflow into a WorkflowSummary response.
+
+    Cost/token/duration totals come from the trajectory index columns on the
+    workflow row (written once at trajectory finalize).
 
     Args:
         workflow: The workflow execution state.
-        token_summary: Aggregated token usage for this workflow, or None.
 
     Returns:
         WorkflowSummary suitable for list responses.
@@ -65,13 +77,9 @@ def _to_workflow_summary(
         status=workflow.workflow_status,
         created_at=workflow.created_at,
         started_at=workflow.started_at,
-        total_cost_usd=token_summary.total_cost_usd if token_summary else None,
-        total_tokens=(
-            token_summary.total_input_tokens + token_summary.total_output_tokens
-            if token_summary
-            else None
-        ),
-        total_duration_ms=token_summary.total_duration_ms if token_summary else None,
+        total_cost_usd=workflow.total_cost_usd,
+        total_tokens=workflow.total_tokens,
+        total_duration_ms=workflow.total_duration_ms,
         pipeline_type=workflow.workflow_type,
         pr_number=workflow.issue_cache.get("pr_number") if workflow.issue_cache else None,
         pr_title=workflow.issue_cache.get("pr_title") if workflow.issue_cache else None,
@@ -236,14 +244,8 @@ async def list_workflows(
 
     total = await repository.count_workflows(status=status, worktree_path=resolved_worktree)
 
-    # Fetch all token summaries in a single batch query (solves N+1 problem)
-    workflow_ids = [w.id for w in workflows]
-    token_summaries = await repository.get_token_summaries_batch(workflow_ids)
-
     return WorkflowListResponse(
-        workflows=[
-            _to_workflow_summary(w, token_summaries.get(w.id)) for w in workflows
-        ],
+        workflows=[_to_workflow_summary(w) for w in workflows],
         total=total,
         cursor=next_cursor,
         has_more=has_more,
@@ -271,14 +273,8 @@ async def list_active_workflows(
 
     workflows = await repository.list_active(worktree_path=resolved_worktree)
 
-    # Fetch all token summaries in a single batch query (solves N+1 problem)
-    workflow_ids = [w.id for w in workflows]
-    token_summaries = await repository.get_token_summaries_batch(workflow_ids)
-
     return WorkflowListResponse(
-        workflows=[
-            _to_workflow_summary(w, token_summaries.get(w.id)) for w in workflows
-        ],
+        workflows=[_to_workflow_summary(w) for w in workflows],
         total=len(workflows),
         has_more=False,
     )
@@ -308,29 +304,53 @@ async def start_batch(
 async def get_workflow(
     workflow_id: uuid.UUID,
     repository: WorkflowRepository = Depends(get_repository),
+    orchestrator: OrchestratorService = Depends(get_orchestrator),
 ) -> WorkflowDetailResponse:
     """Get workflow by ID.
+
+    History and token usage are projections of the workflow's ATIF
+    trajectory: active workflows project from the live in-memory recorder,
+    finished ones from the trajectory file referenced by ``trajectory_path``.
 
     Args:
         workflow_id: Unique workflow identifier.
         repository: Workflow repository dependency.
+        orchestrator: Orchestrator service dependency (live recorder lookup).
 
     Returns:
         WorkflowDetailResponse with full workflow details.
 
     Raises:
         WorkflowNotFoundError: If workflow doesn't exist.
+        HTTPException: 500 if the recorded trajectory file cannot be read.
     """
     workflow = await repository.get(workflow_id)
     if workflow is None:
         raise WorkflowNotFoundError(workflow_id=workflow_id)
 
-    # Fetch token usage summary
-    token_usage = await repository.get_token_summary(workflow_id)
+    recorder = orchestrator.get_recorder(workflow_id)
+    trajectory: Trajectory | None = None
+    if recorder is not None:
+        trajectory = recorder.snapshot()
+    elif workflow.trajectory_path is not None:
+        try:
+            trajectory = load_trajectory(Path(workflow.trajectory_path))
+        except (OSError, ValueError) as e:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Failed to load trajectory file {workflow.trajectory_path} "
+                    f"for workflow {workflow_id}: {e}"
+                ),
+            ) from e
 
-    # Fetch recent events from database
-    events = await repository.get_recent_events(workflow_id, limit=50)
-    recent_events = [event.model_dump(mode="json") for event in events]
+    token_usage: TokenSummary | None = None
+    recent_events: list[dict[str, Any]] = []
+    if trajectory is not None:
+        events = trajectory_to_events(trajectory, workflow_id)[-RECENT_EVENT_LIMIT:]
+        recent_events = [event.model_dump(mode="json") for event in events]
+        summary = trajectory_to_token_summary(trajectory)
+        token_usage = summary if summary.breakdown else None
 
     # Extract plan data from plan_cache
     goal: str | None = None

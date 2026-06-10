@@ -184,6 +184,22 @@ class ServerExecutionState(BaseModel):
         default=None,
         description="Git branch name created or used for this workflow",
     )
+    trajectory_path: str | None = Field(
+        default=None,
+        description="Canonical ATIF trajectory file path (index column, set at finalize)",
+    )
+    total_cost_usd: float | None = Field(
+        default=None,
+        description="Total run cost in USD from the trajectory index",
+    )
+    total_tokens: int | None = Field(
+        default=None,
+        description="Total prompt+completion tokens from the trajectory index",
+    )
+    total_duration_ms: int | None = Field(
+        default=None,
+        description="Workflow duration in milliseconds from the trajectory index",
+    )
 
     model_config = {
         "json_schema_extra": {

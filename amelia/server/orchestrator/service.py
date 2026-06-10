@@ -146,6 +146,22 @@ class OrchestratorService:
         self._recorders[workflow_id] = recorder
         return recorder
 
+    def get_recorder(
+        self, workflow_id: uuid.UUID
+    ) -> WorkflowTrajectoryRecorder | None:
+        """Return the live trajectory recorder for a workflow, if registered.
+
+        Used by the API layer to project history for active workflows
+        directly from the in-memory recorder instead of the trajectory file.
+
+        Args:
+            workflow_id: Workflow whose recorder to look up.
+
+        Returns:
+            The registered recorder, or None when the workflow is not active.
+        """
+        return self._recorders.get(workflow_id)
+
     async def _ensure_recorder_for_state(self, workflow: ServerExecutionState) -> None:
         """Best-effort recorder registration from a persisted workflow row.
 

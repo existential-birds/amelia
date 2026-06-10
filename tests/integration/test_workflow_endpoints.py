@@ -16,6 +16,7 @@ Real components:
 - Exception handlers
 """
 
+import json
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -26,8 +27,10 @@ import httpx
 import pytest
 from fastapi import status
 
+from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.state import WorkflowStatus
+from amelia.trajectory import WorkflowTrajectoryRecorder
 from tests.integration.conftest import create_test_workflow
 
 
@@ -487,3 +490,117 @@ class TestListActiveWorkflowsEndpoint:
         assert data["workflows"] == []
         assert data["total"] == 0
         assert data["has_more"] is False
+
+
+@pytest.mark.integration
+class TestGetWorkflowDetailEndpoint:
+    """Tests for GET /api/workflows/{id} serving history from trajectories.
+
+    Seeds a real trajectory file plus the trajectory_path index column and
+    asserts the detail response projects events/tokens from that file.
+    """
+
+    async def test_detail_serves_history_and_tokens_from_trajectory_file(
+        self,
+        test_client: httpx.AsyncClient,
+        test_repository: WorkflowRepository,
+        tmp_path: Path,
+    ) -> None:
+        """recent_events and token_usage are projected from the seeded file."""
+        workflow = await create_test_workflow(
+            test_repository, issue_id="TEST-TRAJ-1", workflow_status="completed"
+        )
+
+        recorder = WorkflowTrajectoryRecorder(
+            workflow_id=workflow.id,
+            trajectory_dir=tmp_path,
+            profile_snapshot={"profile_id": "test", "issue_id": "TEST-TRAJ-1"},
+        )
+        inv = recorder.begin_invocation("developer", model="claude-x")
+        inv.record_prompt(instructions="You are the developer.", prompt="Fix the bug.")
+        inv.record_messages([
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="write_file",
+                tool_input={"path": "a.py", "content": "print('hi')"},
+                tool_call_id="c1",
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="write_file",
+                tool_output="ok",
+                tool_call_id="c1",
+            ),
+            AgenticMessage(type=AgenticMessageType.RESULT, content="fixed"),
+        ])
+        inv.close(
+            usage=DriverUsage(input_tokens=10, output_tokens=5), cost_usd=0.01
+        )
+        path = await recorder.finalize(status="completed")
+        await test_repository.set_trajectory_index(
+            workflow.id, path, recorder.final_metrics
+        )
+
+        response = await test_client.get(f"/api/workflows/{workflow.id}")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        events = data["recent_events"]
+        assert events, "history must be projected from the trajectory file"
+        event_types = [e["event_type"] for e in events]
+        assert "claude_tool_call" in event_types
+        assert "claude_tool_result" in event_types
+        assert "agent_output" in event_types
+        tool_event = next(
+            e for e in events if e["event_type"] == "claude_tool_call"
+        )
+        assert tool_event["agent"] == "developer"
+        assert tool_event["tool_name"] == "write_file"
+
+        # Token summary matches the file's subagent final metrics.
+        file_data = json.loads(Path(path).read_text())
+        file_metrics = file_data["subagent_trajectories"][0]["final_metrics"]
+        token_usage = data["token_usage"]
+        assert token_usage is not None
+        assert token_usage["total_input_tokens"] == file_metrics["total_prompt_tokens"]
+        assert token_usage["total_output_tokens"] == file_metrics["total_completion_tokens"]
+        assert token_usage["total_cost_usd"] == pytest.approx(
+            file_metrics["total_cost_usd"], rel=1e-9
+        )
+        assert [u["agent"] for u in token_usage["breakdown"]] == ["developer"]
+
+    async def test_detail_with_missing_trajectory_file_returns_500(
+        self,
+        test_client: httpx.AsyncClient,
+        test_repository: WorkflowRepository,
+        tmp_path: Path,
+    ) -> None:
+        """A non-null trajectory_path pointing nowhere is a 500 naming the path."""
+        workflow = await create_test_workflow(
+            test_repository, issue_id="TEST-TRAJ-2", workflow_status="completed"
+        )
+        missing = tmp_path / str(workflow.id) / "trajectory.json"
+        await test_repository.set_trajectory_index(workflow.id, missing, None)
+
+        response = await test_client.get(f"/api/workflows/{workflow.id}")
+
+        assert response.status_code == 500
+        assert str(missing) in response.json()["detail"]
+
+    async def test_detail_with_null_trajectory_path_returns_empty_history(
+        self,
+        test_client: httpx.AsyncClient,
+        test_repository: WorkflowRepository,
+    ) -> None:
+        """Rows without a trajectory yield empty events and no token summary."""
+        workflow = await create_test_workflow(
+            test_repository, issue_id="TEST-TRAJ-3", workflow_status="completed"
+        )
+
+        response = await test_client.get(f"/api/workflows/{workflow.id}")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["recent_events"] == []
+        assert data["token_usage"] is None

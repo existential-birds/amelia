@@ -120,10 +120,22 @@ class AgentInvocationRecorder:
             raise ValueError(
                 f"invocation {self.trajectory_id!r} must be closed before build()"
             )
+        return self.snapshot()
+
+    def snapshot(self) -> Trajectory:
+        """Build a read-only view of the invocation as recorded so far.
+
+        Unlike :meth:`build`, this works on open invocations (live
+        projection); an invocation with no steps yet gets a placeholder
+        system step (ATIF requires at least one step per trajectory).
+        """
+        steps = self._steps or [
+            Step(step_id=1, source="system", message="(no messages recorded)")
+        ]
         return Trajectory(
             trajectory_id=self.trajectory_id,
             agent=self._agent,
-            steps=self._steps,
+            steps=steps,
             final_metrics=self._final_metrics,
         )
 
@@ -212,6 +224,29 @@ class WorkflowTrajectoryRecorder:
             )
         )
         return inv
+
+    def snapshot(self) -> Trajectory:
+        """Build a read-only trajectory of the current recording state.
+
+        Used to project live history for active workflows without closing
+        invocations or touching disk. Open invocations contribute their
+        partial steps; no outcome or final metrics are stamped.
+        """
+        subagents = self._prior_subagents + [
+            inv.snapshot() for inv in self._invocations
+        ]
+        parent_steps = self._parent_steps or [
+            Step(step_id=1, source="system", message="No agent invocations recorded")
+        ]
+        return Trajectory(
+            session_id=str(self._workflow_id),
+            agent=Agent(
+                name="amelia", version=amelia.__version__, model_name="orchestrator"
+            ),
+            steps=parent_steps,
+            extra={"outcome": {"status": "in_progress"}, **self._profile_snapshot},
+            subagent_trajectories=subagents or None,
+        )
 
     async def finalize(
         self,

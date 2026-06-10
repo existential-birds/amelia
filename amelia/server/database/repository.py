@@ -30,7 +30,8 @@ _WORKFLOW_COLUMNS = (
     "id, issue_id, worktree_path, status, "
     "created_at, started_at, completed_at, failure_reason, "
     "workflow_type, profile_id, plan_cache, issue_cache, "
-    "base_commit, branch"
+    "base_commit, branch, "
+    "trajectory_path, total_cost_usd, total_tokens, total_duration_ms"
 )
 
 _ACTIVE_STATUS_SQL = "status IN ('pending', 'in_progress', 'blocked')"
@@ -129,6 +130,10 @@ class WorkflowRepository:
             failure_reason=row["failure_reason"],
             base_commit=row["base_commit"],
             branch=row["branch"],
+            trajectory_path=row["trajectory_path"],
+            total_cost_usd=row["total_cost_usd"],
+            total_tokens=row["total_tokens"],
+            total_duration_ms=row["total_duration_ms"],
         )
 
     async def create(self, state: ServerExecutionState) -> None:
