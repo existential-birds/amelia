@@ -7,6 +7,7 @@ directly and assert observable behavior (astream inputs, status transitions,
 backoff delays) — not bookkeeping between components.
 """
 
+import asyncio
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -543,3 +544,43 @@ class TestFinalizeTrajectoryRetention:
 
         mock_repository.set_trajectory_index.assert_not_awaited()
         assert wf_id in runner._recorders
+
+    async def test_concurrent_finalize_writes_index_once(
+        self,
+        runner: GraphRunner,
+        mock_repository: AsyncMock,
+        real_recorder: Any,
+    ) -> None:
+        """Two terminal seams racing into finalize must write the index once.
+
+        The in-flight marker has to be acquired before the first ``await`` (the
+        verdict fetch); if it is set only afterwards, both callers pass the
+        guard while the first is suspended and the trajectory is finalized
+        twice. Forces the interleaving with a gated verdict fetch.
+        """
+        wf_id = real_recorder._workflow_id
+        runner._recorders[wf_id] = real_recorder
+
+        gate = asyncio.Event()
+        verdict_calls = 0
+
+        async def gated_verdicts(_wid: Any) -> list[Any]:
+            nonlocal verdict_calls
+            verdict_calls += 1
+            await gate.wait()
+            return []
+
+        runner._get_review_verdicts = gated_verdicts  # type: ignore[method-assign]
+
+        first = asyncio.create_task(runner.finalize_trajectory(wf_id, status="completed"))
+        second = asyncio.create_task(runner.finalize_trajectory(wf_id, status="completed"))
+        for _ in range(4):
+            await asyncio.sleep(0)  # let both reach the guard / first reach the await
+        gate.set()
+        await asyncio.gather(first, second)
+
+        # Second caller short-circuited at the marker, so verdicts (the first
+        # await past the guard) ran once and the index was written once.
+        assert verdict_calls == 1
+        mock_repository.set_trajectory_index.assert_awaited_once()
+        assert wf_id not in runner._recorders

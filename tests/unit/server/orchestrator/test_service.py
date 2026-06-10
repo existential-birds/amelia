@@ -532,6 +532,100 @@ async def test_reject_workflow_success(
     assert "rejected" in approval_rejected[0].message.lower()
 
 
+async def test_reject_finalizes_recorder_and_forgets_sequence(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """Rejecting a blocked workflow finalizes the kept-alive recorder.
+
+    A blocked workflow's task already exited at the interrupt, so no
+    done-callback fires on rejection. Without an explicit finalize the
+    recorder (deliberately retained across the pause) would never be written
+    and its captured steps would be lost.
+    """
+    from amelia.trajectory import WorkflowTrajectoryRecorder
+    from amelia.trajectory.store import trajectory_path
+
+    wf_id = uuid4()
+    recorder = WorkflowTrajectoryRecorder(
+        workflow_id=wf_id,
+        trajectory_dir=tmp_path,
+        profile_snapshot={"profile_id": "test"},
+    )
+    orchestrator._runner._recorders[wf_id] = recorder
+    orchestrator._events._sequence_counters[wf_id] = 7
+
+    mock_repository.get.return_value = ServerExecutionState(
+        id=wf_id,
+        issue_id="ISSUE-1",
+        worktree_path="/path/to/worktree",
+        workflow_status=WorkflowStatus.BLOCKED,
+        started_at=datetime.now(UTC),
+        profile_id="test",
+    )
+
+    with patch.object(orchestrator._runner, "record_rejection", new=AsyncMock()):
+        await orchestrator.reject_workflow(wf_id, feedback="Plan no good")
+
+    # Consequence: the trajectory is written and the recorder dropped.
+    assert wf_id not in orchestrator._runner._recorders
+    assert trajectory_path(tmp_path, wf_id).exists()
+    # The terminal rejection also drops the per-workflow sequence state.
+    assert wf_id not in orchestrator._events._sequence_counters
+
+
+async def test_post_task_cleanup_keeps_sequence_while_blocked(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+) -> None:
+    """An approval pause must not forget the event sequence or finalize.
+
+    The post-approval resume continues recording into the same recorder and
+    must keep numbering events monotonically; forgetting here would restart the
+    per-workflow sequence at 1 on resume.
+    """
+    wf_id = uuid4()
+    orchestrator._events._sequence_counters[wf_id] = 3
+    mock_repository.get.return_value = ServerExecutionState(
+        id=wf_id,
+        issue_id="ISSUE-1",
+        worktree_path="/wt",
+        workflow_status=WorkflowStatus.BLOCKED,
+        started_at=datetime.now(UTC),
+        profile_id="test",
+    )
+
+    with patch.object(orchestrator._runner, "finalize_trajectory", new=AsyncMock()) as fin:
+        await orchestrator._post_task_cleanup(wf_id)
+
+    assert orchestrator._events._sequence_counters[wf_id] == 3
+    fin.assert_not_awaited()
+
+
+async def test_post_task_cleanup_forgets_sequence_on_terminal(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+) -> None:
+    """A terminal exit drops the event sequence and finalizes the recorder."""
+    wf_id = uuid4()
+    orchestrator._events._sequence_counters[wf_id] = 3
+    mock_repository.get.return_value = ServerExecutionState(
+        id=wf_id,
+        issue_id="ISSUE-1",
+        worktree_path="/wt",
+        workflow_status=WorkflowStatus.FAILED,
+        started_at=datetime.now(UTC),
+        profile_id="test",
+    )
+
+    with patch.object(orchestrator._runner, "finalize_trajectory", new=AsyncMock()) as fin:
+        await orchestrator._post_task_cleanup(wf_id)
+
+    assert wf_id not in orchestrator._events._sequence_counters
+    fin.assert_awaited_once()
+
+
 class TestRejectWorkflowGraphState:
     """Test reject_workflow updates LangGraph state."""
 

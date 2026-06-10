@@ -186,37 +186,39 @@ class OrchestratorService:
                 exc_info=True,
             )
 
-    def _schedule_recorder_drain(self, workflow_id: uuid.UUID) -> None:
-        """Schedule a best-effort drain of an un-finalized recorder.
+    def _schedule_post_task_cleanup(self, workflow_id: uuid.UUID) -> None:
+        """Schedule status-aware cleanup after a workflow task exits.
 
-        Called from the task done-callback. No-op when the recorder was
-        already finalized (and popped) at a terminal seam.
+        Deferred to an async task because the terminal-vs-paused decision needs
+        the persisted status: a task also "completes" when it pauses for human
+        approval, and a pause must keep both the recorder and the event-sequence
+        state alive for the post-approval resume.
 
         Args:
-            workflow_id: Workflow whose recorder may need draining.
+            workflow_id: Workflow whose task just exited.
         """
-        if workflow_id not in self._recorders:
-            return
-        task = asyncio.create_task(self._drain_recorder(workflow_id))
+        task = asyncio.create_task(self._post_task_cleanup(workflow_id))
         self._drain_tasks.add(task)
         task.add_done_callback(self._drain_tasks.discard)
 
-    async def _drain_recorder(self, workflow_id: uuid.UUID) -> None:
-        """Drain an un-finalized recorder after its workflow task exited.
+    async def _post_task_cleanup(self, workflow_id: uuid.UUID) -> None:
+        """Finalize the trajectory and drop sequence state after a task exits.
 
-        Blocked/pending workflows keep their recorder registered — the
-        post-approval resume continues recording into it. Anything else is
-        finalized with the workflow's terminal status (defaulting to
-        ``failed`` for unexpected exits) so captured steps are never lost.
+        Blocked/pending workflows are mid-pause: the post-approval resume keeps
+        recording into the same recorder and continues the same event sequence,
+        so nothing is cleaned up. Any terminal exit forgets the per-workflow
+        sequence counter and finalizes the recorder with the workflow's status
+        (defaulting to ``failed`` for unexpected exits) so steps are never lost.
 
         Args:
-            workflow_id: Workflow whose recorder to drain.
+            workflow_id: Workflow whose task just exited.
         """
         try:
             workflow = await self._repository.get(workflow_id)
             status = workflow.workflow_status if workflow is not None else None
             if status in (WorkflowStatus.PENDING, WorkflowStatus.BLOCKED):
-                return  # Awaiting approval/start — recorder keeps accumulating
+                return  # Awaiting approval/start — keep recorder and sequence
+            self._events.forget(workflow_id)
             terminal_status = {
                 WorkflowStatus.COMPLETED: "completed",
                 WorkflowStatus.CANCELLED: "cancelled",
@@ -231,7 +233,7 @@ class OrchestratorService:
             )
         except Exception:
             logger.exception(
-                "Failed to drain trajectory recorder",
+                "Failed to finalize trajectory after task exit",
                 workflow_id=workflow_id,
             )
 
@@ -244,16 +246,16 @@ class OrchestratorService:
 
         Args:
             worktree_path: The worktree key in ``_active_tasks``.
-            workflow_id: The workflow whose sequence state should be purged.
+            workflow_id: The workflow whose post-task cleanup to schedule.
 
         Returns:
             A callback suitable for ``Task.add_done_callback``.
         """
         def _cleanup(_: asyncio.Task[None]) -> None:
             self._active_tasks.pop(worktree_path, None)
-            self._events.forget(workflow_id)
-            # Drain any un-finalized trajectory recorder (crash/unexpected exit).
-            self._schedule_recorder_drain(workflow_id)
+            # A pause for approval keeps the recorder and event sequence alive;
+            # only a terminal exit finalizes and forgets them (status-aware).
+            self._schedule_post_task_cleanup(workflow_id)
             logger.debug(
                 "Workflow task completed",
                 workflow_id=workflow_id,
@@ -1129,6 +1131,13 @@ class OrchestratorService:
         await self._runner.record_rejection(
             workflow_id, workflow.profile_id, workflow.worktree_path
         )
+
+        # Rejection is terminal and resumes no task, so finalize the recorder
+        # that was kept alive across the pause and drop the sequence state here.
+        await self._runner.finalize_trajectory(
+            workflow_id, status="failed", failure_reason=feedback
+        )
+        self._events.forget(workflow_id)
 
     async def recover_interrupted_workflows(self) -> None:
         """Recover workflows that were running when server restarted.

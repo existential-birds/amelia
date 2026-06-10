@@ -97,6 +97,58 @@ class TestTrajectorySweep:
         # Two execute calls: UPDATE to NULL index columns, then DELETE old rows
         assert mock_db.execute.call_count == 2
 
+    async def test_rmtree_failure_keeps_index_for_retry(
+        self,
+        mock_db: AsyncMock,
+        mock_checkpointer: AsyncMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A directory that can't be removed keeps its index — no orphan.
+
+        Clearing the index for a workflow whose directory deletion failed would
+        strand that directory on disk with no row pointing at it, so no future
+        sweep could ever find or delete it. Only successfully-removed rows get
+        their index NULLed.
+        """
+        ok_path = _make_trajectory_file(tmp_path, "wf-ok")
+        stuck_path = _make_trajectory_file(tmp_path, "wf-stuck")
+        service = LogRetentionService(
+            db=mock_db,
+            config=MockConfig(checkpoint_retention_days=-1),
+            checkpointer=mock_checkpointer,
+        )
+        mock_db.fetch_all.return_value = [
+            {"id": "wf-ok", "trajectory_path": str(ok_path)},
+            {"id": "wf-stuck", "trajectory_path": str(stuck_path)},
+        ]
+        mock_db.execute.return_value = 1
+
+        import shutil
+
+        real_rmtree = shutil.rmtree
+
+        def flaky_rmtree(path: object, *args: object, **kwargs: object) -> None:
+            if "wf-stuck" in str(path):
+                raise OSError("device or resource busy")
+            real_rmtree(path)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(
+            "amelia.server.lifecycle.retention.shutil.rmtree", flaky_rmtree
+        )
+
+        result = await service.cleanup_on_shutdown()
+
+        # The deletable row was swept; the stuck directory survives on disk.
+        assert result.trajectories_deleted == 1
+        assert not ok_path.exists()
+        assert stuck_path.exists()
+        # The UPDATE clears only the successfully-removed row's index.
+        update_call = next(
+            c for c in mock_db.execute.call_args_list if "UPDATE" in c.args[0]
+        )
+        assert update_call.args[1] == ["wf-ok"]
+
     async def test_no_old_trajectories_skips_update(
         self, mock_db: AsyncMock, mock_checkpointer: AsyncMock
     ) -> None:

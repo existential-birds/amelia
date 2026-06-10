@@ -529,12 +529,12 @@ class GraphRunner:
         recorder = self._recorders.get(workflow_id)
         if recorder is None or workflow_id in self._finalizing:
             return
-        outcome_extra: dict[str, Any] = {"pipeline": pipeline}
-        verdicts = await self._get_review_verdicts(workflow_id)
-        if verdicts:
-            outcome_extra["reviews"] = verdicts
         self._finalizing.add(workflow_id)
         try:
+            outcome_extra: dict[str, Any] = {"pipeline": pipeline}
+            verdicts = await self._get_review_verdicts(workflow_id)
+            if verdicts:
+                outcome_extra["reviews"] = verdicts
             succeeded = await finalize_and_index(
                 recorder,
                 workflow_id,

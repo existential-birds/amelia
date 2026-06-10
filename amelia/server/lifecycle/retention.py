@@ -131,12 +131,27 @@ class LogRetentionService:
         if not rows:
             return 0, []
 
+        cleared_ids: list[Any] = []
         for row in rows:
             path = Path(row["trajectory_path"])
             # One directory per workflow — remove the whole directory so
-            # nothing (temp files included) outlives the trajectory.
+            # nothing (temp files included) outlives the trajectory. A row whose
+            # directory can't be removed keeps its index so a later sweep retries
+            # rather than orphaning the directory with no pointer to it.
             if path.parent.is_dir():
-                shutil.rmtree(path.parent, ignore_errors=True)
+                try:
+                    shutil.rmtree(path.parent)
+                except OSError:
+                    logger.warning(
+                        "Failed to remove trajectory directory; keeping index",
+                        workflow_id=row["id"],
+                        path=str(path.parent),
+                    )
+                    continue
+            cleared_ids.append(row["id"])
+
+        if not cleared_ids:
+            return 0, []
 
         cleared = await self._db.execute(
             """
@@ -145,18 +160,16 @@ class LogRetentionService:
                 total_cost_usd = NULL,
                 total_tokens = NULL,
                 total_duration_ms = NULL
-            WHERE status IN ('completed', 'failed', 'cancelled')
-            AND completed_at < $1
-            AND trajectory_path IS NOT NULL
+            WHERE id = ANY($1::uuid[])
             """,
-            cutoff_date,
+            cleared_ids,
         )
         logger.debug(
             "Swept trajectory files for finished workflows",
             count=cleared,
             cutoff=cutoff_date,
         )
-        return cleared, [row["id"] for row in rows]
+        return cleared, cleared_ids
 
     async def _delete_old_workflow_rows(
         self, cutoff_date: datetime, just_swept_ids: list[Any]
