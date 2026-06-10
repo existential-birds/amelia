@@ -284,6 +284,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         github_pr_service=GitHubPRService("."),
         workflow_repo=repository,
         metrics_repo=metrics_repo,
+        trajectory_dir=config.trajectory_dir,
     )
     pr_poller = PRCommentPoller(
         profile_repo=profile_repo,

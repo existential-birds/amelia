@@ -9,13 +9,16 @@ Mocks at external boundaries: LLM driver, git operations, GitHub API.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from harbor.utils.trajectory_validator import validate_trajectory
 
 from amelia.agents.schemas.classifier import (
     ClassificationOutput,
@@ -34,6 +37,7 @@ from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage
 from amelia.pipelines.pr_auto_fix.graph import create_pr_auto_fix_graph
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.pipelines.pr_auto_fix.state import GroupFixStatus, PRAutoFixState
+from amelia.server.database.connection import Database
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from tests.conftest import create_mock_execute_agentic
@@ -152,6 +156,11 @@ def _mock_unified_driver(comment_ids: list[int]) -> MagicMock:
     driver.execute_agentic = create_mock_execute_agentic([
         AgenticMessage(type=AgenticMessageType.RESULT, content="Applied fix."),
     ])
+    # High-fidelity defaults: return production types, not MagicMock auto-attrs
+    # (the trajectory RecordingDriver reads these when wrapping the driver).
+    driver.model = "test-model"
+    driver.get_usage = MagicMock(return_value=None)
+    driver.get_tool_definitions = MagicMock(return_value=None)
     return driver
 
 
@@ -1939,3 +1948,206 @@ class TestTokenUsageEndToEnd:
         assert token_summary.total_input_tokens >= 1000
         assert token_summary.total_output_tokens >= 200
         assert token_summary.total_cost_usd > 0
+
+
+# ---------------------------------------------------------------------------
+# Test: ATIF trajectory recording for fix cycles (requires PostgreSQL)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestTrajectoryRecording:
+    """Each fix cycle produces one canonical ATIF trajectory file + index columns."""
+
+    @staticmethod
+    def _make_orchestrator(
+        event_bus: EventBus,
+        test_repository: WorkflowRepository,
+        trajectory_dir: Path,
+    ) -> PRAutoFixOrchestrator:
+        github_pr = MagicMock()
+        github_pr.create_issue_comment = AsyncMock()
+        return PRAutoFixOrchestrator(
+            event_bus=event_bus,
+            github_pr_service=github_pr,
+            workflow_repo=test_repository,
+            trajectory_dir=trajectory_dir,
+        )
+
+    async def test_completed_fix_cycle_writes_trajectory_and_index(
+        self,
+        test_repository: WorkflowRepository,
+        test_db: Database,
+        profile: Profile,
+        comments: list[PRReviewComment],
+        event_bus: EventBus,
+        tmp_path: Path,
+    ) -> None:
+        """A successful cycle finalizes a valid ATIF file (status=completed,
+        pipeline=pr_auto_fix) with classifier + developer subagent
+        trajectories, and persists the thin index columns."""
+        orchestrator = self._make_orchestrator(
+            event_bus, test_repository, tmp_path / "trajectories"
+        )
+
+        mock_driver = _mock_unified_driver([100, 101])
+        mock_driver.get_usage = MagicMock(return_value=DriverUsage(
+            input_tokens=500,
+            output_tokens=100,
+            cache_read_tokens=20,
+            cost_usd=0.003,
+            model="test-model",
+        ))
+
+        mock_git_ops = MagicMock()
+        mock_git_ops.has_changes = AsyncMock(return_value=True)
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "sha1", "M src/app.py", "sha2"])
+        mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
+        mock_git_ops.safe_push = AsyncMock()
+
+        mock_github_service = MagicMock()
+        mock_github_service.reply_to_comment = AsyncMock()
+        mock_github_service.resolve_thread = AsyncMock()
+
+        workflow_id = uuid4()
+
+        with (
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.agents._driver_init.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
+                return_value=mock_git_ops,
+            ),
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService",
+                return_value=mock_github_service,
+            ),
+        ):
+            await orchestrator.trigger_fix_cycle(
+                pr_number=42,
+                repo="owner/repo",
+                profile=profile,
+                head_branch="",  # no worktree: run the pipeline in-place
+                comments=comments,
+                workflow_id=workflow_id,
+            )
+
+        row = await test_db.fetch_one(
+            """
+            SELECT status, trajectory_path, total_cost_usd, total_tokens, total_duration_ms
+            FROM workflows WHERE id = $1
+            """,
+            workflow_id,
+        )
+        assert row is not None
+        assert row["status"] == "completed"
+        assert row["trajectory_path"], "trajectory_path index column was not set"
+
+        data = json.loads(Path(row["trajectory_path"]).read_text())
+        assert validate_trajectory(data)
+        assert data["session_id"] == str(workflow_id)
+
+        outcome = data["extra"]["outcome"]
+        assert outcome["status"] == "completed"
+        assert outcome["pipeline"] == "pr_auto_fix"
+
+        # Profile snapshot recorded on the parent trajectory
+        assert data["extra"]["profile_id"] == profile.name
+        assert data["extra"]["issue_id"] == "PR-42"
+
+        agents = [s["agent"]["name"] for s in data["subagent_trajectories"]]
+        assert "classifier" in agents
+        assert "developer" in agents
+
+        # Classifier recorded as a generate()-style invocation:
+        # system prompt step, user prompt step, then the structured result.
+        classifier = next(
+            s for s in data["subagent_trajectories"] if s["agent"]["name"] == "classifier"
+        )
+        assert [step["source"] for step in classifier["steps"]] == [
+            "system", "user", "agent",
+        ]
+
+        # Developer invocation captured its resolved prompts and result
+        developer = next(
+            s for s in data["subagent_trajectories"] if s["agent"]["name"] == "developer"
+        )
+        assert [step["source"] for step in developer["steps"][:2]] == ["system", "user"]
+
+        # Index columns mirror the file's final metrics
+        assert row["total_cost_usd"] == data["final_metrics"]["total_cost_usd"]
+        assert row["total_tokens"] == (
+            data["final_metrics"]["total_prompt_tokens"]
+            + data["final_metrics"]["total_completion_tokens"]
+        )
+        assert row["total_duration_ms"] is not None
+
+    async def test_failed_fix_cycle_finalizes_trajectory(
+        self,
+        test_repository: WorkflowRepository,
+        test_db: Database,
+        profile: Profile,
+        comments: list[PRReviewComment],
+        event_bus: EventBus,
+        tmp_path: Path,
+    ) -> None:
+        """A failing cycle still finalizes the trajectory (status=failed) with
+        the steps captured before the failure."""
+        orchestrator = self._make_orchestrator(
+            event_bus, test_repository, tmp_path / "trajectories"
+        )
+
+        mock_driver = MagicMock()
+        mock_driver.model = "test-model"
+        mock_driver.generate = AsyncMock(side_effect=RuntimeError("classifier exploded"))
+        mock_driver.get_usage = MagicMock(return_value=None)
+        mock_driver.get_tool_definitions = MagicMock(return_value=None)
+
+        workflow_id = uuid4()
+
+        with (
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.agents._driver_init.get_driver",
+                return_value=mock_driver,
+            ),
+        ):
+            await orchestrator.trigger_fix_cycle(
+                pr_number=42,
+                repo="owner/repo",
+                profile=profile,
+                head_branch="",
+                comments=comments,
+                workflow_id=workflow_id,
+            )
+
+        row = await test_db.fetch_one(
+            "SELECT status, trajectory_path FROM workflows WHERE id = $1",
+            workflow_id,
+        )
+        assert row is not None
+        assert row["status"] == "failed"
+        assert row["trajectory_path"], "failed cycle must still index its trajectory"
+
+        data = json.loads(Path(row["trajectory_path"]).read_text())
+        assert validate_trajectory(data)
+
+        outcome = data["extra"]["outcome"]
+        assert outcome["status"] == "failed"
+        assert outcome["pipeline"] == "pr_auto_fix"
+        assert "classifier exploded" in outcome["failure_reason"]
+
+        # The classifier invocation captured its prompts before the failure
+        classifier = next(
+            s for s in data["subagent_trajectories"] if s["agent"]["name"] == "classifier"
+        )
+        assert [step["source"] for step in classifier["steps"][:2]] == ["system", "user"]

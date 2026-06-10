@@ -37,6 +37,7 @@ from amelia.services.classifier import (
 )
 from amelia.services.github_pr import GitHubPRService
 from amelia.tools.git_utils import GitOperations
+from amelia.trajectory import RecordingDriver
 
 
 async def classify_node(
@@ -58,6 +59,7 @@ async def classify_node(
     _event_bus, workflow_id, profile = extract_config_params(config)
     configurable = config.get("configurable", {})
     repository = configurable.get("repository")
+    recorder = configurable.get("trajectory_recorder")
 
     # Create driver for classification using full developer agent config
     agent_config = profile.get_agent_config("developer")
@@ -87,7 +89,7 @@ async def classify_node(
     # LLM classification
     try:
         classifications = await classify_comments(
-            filtered, driver, state.autofix_config,
+            filtered, driver, state.autofix_config, recorder=recorder,
         )
     finally:
         try:
@@ -233,6 +235,7 @@ async def develop_node(
     _event_bus, workflow_id, profile = extract_config_params(config)
     configurable = config.get("configurable", {})
     repository = configurable.get("repository")
+    recorder = configurable.get("trajectory_recorder")
 
     # Build classification lookup from state
     classifications: dict[int, CommentClassification] = {
@@ -288,6 +291,11 @@ async def develop_node(
                     "developer.system": PROMPT_DEFAULTS["developer.pr_fix.system"].content,
                 },
             )
+
+            # P1: record this per-group invocation into the cycle trajectory
+            if recorder is not None:
+                inv = recorder.begin_invocation("developer", model=agent_config.model)
+                dev.driver = RecordingDriver(dev.driver, inv)
 
             # Create temporary ImplementationState for Developer.run()
             impl_state = ImplementationState(

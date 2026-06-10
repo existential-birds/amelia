@@ -7,6 +7,7 @@ Prevents race conditions, infinite loops, and branch corruption.
 import asyncio
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -15,6 +16,7 @@ from loguru import logger
 from amelia.core.types import PRAutoFixConfig, Profile, PRReviewComment
 from amelia.pipelines.pr_auto_fix.pipeline import PRAutoFixPipeline
 from amelia.pipelines.pr_auto_fix.state import GroupFixStatus
+from amelia.server.config import ServerConfig
 from amelia.server.database import MetricsRepository, WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.models.events import EventType, WorkflowEvent
@@ -26,6 +28,7 @@ from amelia.server.models.state import (
 from amelia.services.classifier import get_prompt_hash
 from amelia.services.github_pr import GitHubPRService
 from amelia.tools.git_utils import GitOperations, LocalWorktree
+from amelia.trajectory import WorkflowTrajectoryRecorder
 
 
 # Maximum divergence retries per trigger (2 retries = 3 total attempts)
@@ -54,11 +57,16 @@ class PRAutoFixOrchestrator:
         github_pr_service: GitHubPRService,
         workflow_repo: WorkflowRepository | None = None,
         metrics_repo: MetricsRepository | None = None,
+        trajectory_dir: Path | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._github_pr_service = github_pr_service
         self._workflow_repo = workflow_repo
         self._metrics_repo = metrics_repo
+        # Root directory for ATIF trajectory files (one per fix cycle).
+        self._trajectory_dir = (
+            trajectory_dir if trajectory_dir is not None else ServerConfig().trajectory_dir
+        )
 
         # Per-PR concurrency control (keyed by (repo, pr_number))
         self._pr_locks: dict[tuple[str, int], asyncio.Lock] = {}
@@ -385,6 +393,20 @@ class PRAutoFixOrchestrator:
         if self._workflow_repo is not None:
             await self._workflow_repo.create(state)
 
+        # Record this fix cycle's ATIF trajectory (one recorder per cycle).
+        recorder = WorkflowTrajectoryRecorder(
+            workflow_id=workflow_id,
+            trajectory_dir=self._trajectory_dir,
+            profile_snapshot={
+                "profile_id": profile.name,
+                "issue_id": f"PR-{pr_number}",
+                "agents": {
+                    name: {"driver": cfg.driver, "model": cfg.model}
+                    for name, cfg in profile.agents.items()
+                },
+            },
+        )
+
         # Emit started event
         self._emit_event(
             EventType.PR_AUTO_FIX_STARTED,
@@ -424,6 +446,7 @@ class PRAutoFixOrchestrator:
                         "repository": self._workflow_repo,
                         "metrics_repo": self._metrics_repo,
                         "metrics_run_id": str(metrics_run_id),
+                        "trajectory_recorder": recorder,
                     },
                 },
             )
@@ -482,6 +505,10 @@ class PRAutoFixOrchestrator:
             )
             if self._workflow_repo is not None:
                 await self._workflow_repo.update(state)
+
+            # Finalize the cycle's trajectory after completed_at is persisted
+            # (the index derives duration from the workflow timestamps).
+            await self._finalize_trajectory(recorder, workflow_id, status="completed")
 
             # Persist run metrics (isolated -- failure does not crash pipeline)
             if self._metrics_repo is not None:
@@ -596,6 +623,11 @@ class PRAutoFixOrchestrator:
             if self._workflow_repo is not None:
                 await self._workflow_repo.update(state)
 
+            # Finalize the trajectory with whatever was captured before the failure
+            await self._finalize_trajectory(
+                recorder, workflow_id, status="failed", failure_reason=str(exc)
+            )
+
             # Emit failure event so dashboard gets notified
             self._emit_event(
                 EventType.PR_AUTO_FIX_FAILED,
@@ -610,6 +642,47 @@ class PRAutoFixOrchestrator:
                 workflow_id=workflow_id,
             )
             raise
+
+    async def _finalize_trajectory(
+        self,
+        recorder: WorkflowTrajectoryRecorder,
+        workflow_id: UUID,
+        status: str,
+        failure_reason: str | None = None,
+    ) -> None:
+        """Finalize the fix cycle's trajectory and persist its index columns.
+
+        Best-effort: errors are logged and never propagate — trajectory
+        finalization must not mask the cycle's own success or failure.
+
+        Args:
+            recorder: The cycle's trajectory recorder.
+            workflow_id: Workflow row the index columns belong to.
+            status: Terminal outcome status (``completed``/``failed``).
+            failure_reason: Outcome failure reason for failed cycles.
+        """
+        try:
+            path = await recorder.finalize(
+                status=status,
+                failure_reason=failure_reason,
+                outcome_extra={"pipeline": "pr_auto_fix"},
+            )
+            if self._workflow_repo is not None:
+                await self._workflow_repo.set_trajectory_index(
+                    workflow_id, path, recorder.final_metrics
+                )
+            logger.info(
+                "Trajectory finalized",
+                workflow_id=str(workflow_id),
+                status=status,
+                path=str(path),
+            )
+        except Exception:
+            logger.exception(
+                "Failed to finalize PR auto-fix trajectory",
+                workflow_id=str(workflow_id),
+                status=status,
+            )
 
     def _build_pr_comments(self, final_state: Any) -> list[dict[str, Any]]:
         """Build pr_comments list from pipeline final state.
