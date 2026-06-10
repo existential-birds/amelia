@@ -21,7 +21,7 @@
   - Codex CLI (for `codex` driver)
 
 > [!NOTE]
-> **Model selection matters.** The `api` driver requires models with reliable tool-calling capabilities. See [Troubleshooting](https://existential-birds.github.io/amelia/guide/troubleshooting#api-driver-agent-fails-to-create-plan-file) for details.
+> **Model selection matters.** The `api` driver requires models with reliable tool-calling capabilities. See the [documentation](https://existentialbirds.com/projects/amelia) for details.
 
 ## Quick Start
 
@@ -74,7 +74,7 @@ amelia config profile create github-dev --driver api --model "minimax/minimax-m2
 amelia start 123
 ```
 
-You can also configure profiles in the dashboard at `localhost:8420/settings`. See **[Configuration](https://existential-birds.github.io/amelia/guide/configuration)** for all options including Jira integration and per-agent model settings.
+You can also configure profiles in the dashboard at `localhost:8420/settings`. See the **[documentation](https://existentialbirds.com/projects/amelia)** for all options including Jira integration and per-agent model settings.
 
 ## Alternative Installation
 
@@ -102,7 +102,7 @@ Amelia orchestrates three specialized agents through a LangGraph state machine:
 - **Developer** — executes the plan, writing code and running commands
 - **Reviewer** — reviews the Developer's changes and requests fixes if needed
 
-See [Architecture](https://existential-birds.github.io/amelia/architecture/overview) and [Concepts](https://existential-birds.github.io/amelia/architecture/concepts) for details.
+See the [documentation](https://existentialbirds.com/projects/amelia) for architecture and concepts details.
 
 ## CLI Commands
 
@@ -132,13 +132,13 @@ See [Architecture](https://existential-birds.github.io/amelia/architecture/overv
 |---------|-------------|
 | `amelia review --local` | Review uncommitted changes |
 
-See the **[Usage Guide](https://existential-birds.github.io/amelia/guide/usage)** for the complete CLI reference.
+See the **[documentation](https://existentialbirds.com/projects/amelia)** for the complete CLI reference.
 
 ## Configuration
 
 Configuration is stored in PostgreSQL and managed via CLI (`amelia config`) or the dashboard at `localhost:8420/settings`.
 
-See [Configuration Reference](https://existential-birds.github.io/amelia/guide/configuration) for profile setup, server settings, and Jira integration.
+See the [documentation](https://existentialbirds.com/projects/amelia) for profile setup, server settings, and Jira integration.
 
 ## License
 

@@ -62,4 +62,4 @@ Use `agent-browser` for web automation: `agent-browser open <url>`, then `agent-
 
 ## Release Process
 
-Use `/gen-release-notes <previous-tag>` to generate notes and bump versions in `pyproject.toml`, `amelia/__init__.py`, `dashboard/package.json`, `docs/site/package.json`, and `CHANGELOG.md`. All version files must stay in sync. Then create a release branch/PR, merge, tag with `vX.Y.Z`, and the GitHub Action creates the release.
+Use `/gen-release-notes <previous-tag>` to generate notes and bump versions in `pyproject.toml`, `amelia/__init__.py`, `dashboard/package.json`, and `CHANGELOG.md`. All version files must stay in sync. Then create a release branch/PR, merge, tag with `vX.Y.Z`, and the GitHub Action creates the release.

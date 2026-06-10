@@ -135,11 +135,7 @@ amelia/server/static/*
 docs/_build/
 docs/.doctrees/
 /site/
-docs/site/.vitepress/dist/
-docs/site/.vitepress/cache/
 node_modules/
-docs/site/node_modules/
-docs/site/logs/
 
 # Distribution
 *.tar.gz

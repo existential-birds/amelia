@@ -62,7 +62,7 @@ git checkout -b "chore/release-${VERSION}"
 Commit all updated version files:
 
 ```bash
-git add CHANGELOG.md pyproject.toml amelia/__init__.py dashboard/package.json docs/site/package.json
+git add CHANGELOG.md pyproject.toml amelia/__init__.py dashboard/package.json
 git commit -m "chore(release): bump version to ${VERSION}"
 ```
 

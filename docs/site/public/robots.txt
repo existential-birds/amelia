@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /amelia/
-Disallow: /amelia/.vitepress/
-
-Sitemap: https://existential-birds.github.io/amelia/sitemap.xml

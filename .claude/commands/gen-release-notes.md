@@ -228,23 +228,12 @@ cd dashboard && npm version X.Y.Z --no-git-tag-version && cd ..
 # Or manually edit: "version": "X.Y.Z"
 ```
 
-### 6d. VitePress docs site (docs/site/package.json)
-
-Update the version field in the docs site package:
-
-```bash
-# docs/site/package.json
-cd docs/site && npm version X.Y.Z --no-git-tag-version && cd ..
-# Or manually edit: "version": "X.Y.Z"
-```
-
 **Verify all versions match** after updating:
 
 ```bash
 echo "pyproject.toml: $(grep '^version = ' pyproject.toml)"
 echo "amelia/__init__.py: $(grep '__version__' amelia/__init__.py)"
 echo "dashboard/package.json: $(grep '\"version\"' dashboard/package.json)"
-echo "docs/site/package.json: $(grep '\"version\"' docs/site/package.json)"
 ```
 
 ## Step 7: Output Summary
@@ -258,7 +247,6 @@ After updating the files, provide:
    - `pyproject.toml`
    - `amelia/__init__.py`
    - `dashboard/package.json`
-   - `docs/site/package.json`
 5. Next steps for the release:
 
 ```text
