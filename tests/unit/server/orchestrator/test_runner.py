@@ -93,11 +93,6 @@ def runner(
     )
 
 
-# =============================================================================
-# Checkpoint Resume Tests (Bug #199: Infinite Loop) — relocated from test_service
-# =============================================================================
-
-
 class TestRunWorkflowCheckpointResume:
     """run_workflow must resume from an existing checkpoint instead of restarting.
 
@@ -203,11 +198,6 @@ class TestRunWorkflowCheckpointResume:
         assert first_arg is not None, "Expected astream called with initial_state"
         assert isinstance(first_arg, dict), "Expected initial_state to be a dict"
         assert first_arg.get("profile_id") == "test"
-
-
-# =============================================================================
-# Exponential Backoff / Retry Tests — relocated from test_service
-# =============================================================================
 
 
 class TestRunWorkflowWithRetry:
@@ -437,11 +427,6 @@ class TestRunWorkflowWithRetry:
             if len(c[0]) >= 2 and c[0][1] == WorkflowStatus.FAILED
         ]
         assert len(failed_calls) == 1
-
-
-# =============================================================================
-# Plan Sync Tests — relocated from test_service (driver-owned helper)
-# =============================================================================
 
 
 class TestSyncPlanFromCheckpoint:

@@ -26,7 +26,6 @@ interface UsageCardProps {
  * @returns The usage card UI or null if no data
  */
 export function UsageCard({ tokenUsage, className }: UsageCardProps) {
-  // Don't render if no token usage data
   if (!tokenUsage) {
     return null;
   }

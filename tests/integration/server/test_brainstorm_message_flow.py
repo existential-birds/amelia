@@ -50,11 +50,6 @@ async def test_client(
         yield client
 
 
-# =============================================================================
-# Test Classes
-# =============================================================================
-
-
 @pytest.mark.integration
 class TestBrainstormMessageFlow:
     """Test full message flow from HTTP request to persistence."""

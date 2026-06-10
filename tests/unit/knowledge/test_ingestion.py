@@ -15,11 +15,6 @@ from amelia.knowledge.models import Document, DocumentStatus
 from amelia.knowledge.repository import ChunkData, KnowledgeRepository
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
 # A long, realistic chunk body that comfortably exceeds the 64-token floor
 # enforced by `MIN_CHUNK_TOKENS`. Tests use this so chunks are not silently
 # dropped by the new tiny-chunk filter.
@@ -120,11 +115,6 @@ def pipeline(mock_repo: AsyncMock, mock_embedding: AsyncMock) -> IngestionPipeli
         tag_derivation_model=None,
         tag_derivation_driver="api",
     )
-
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -502,11 +492,6 @@ async def test_concurrency_semaphore(
     assert snapshot <= 2, f"Expected at most 2 concurrent, got {snapshot}"
 
 
-# ---------------------------------------------------------------------------
-# New chunker contract: contextualize + min-token filter
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_drops_chunks_below_min_tokens(
     pipeline: IngestionPipeline,
@@ -709,11 +694,6 @@ async def test_embeds_contextualized_text(
     assert inserted[0]["token_count"] == 120
 
 
-# ---------------------------------------------------------------------------
-# Tag Extraction Helper Tests
-# ---------------------------------------------------------------------------
-
-
 def test_prepare_tag_extraction_input_truncates_long_text(
     pipeline: IngestionPipeline,
 ) -> None:
@@ -838,11 +818,6 @@ def test_build_tag_extraction_prompt(
     assert "lowercase" in prompt
 
 
-# ---------------------------------------------------------------------------
-# Tag Derivation Method Tests
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_derive_tags_success(
     pipeline: IngestionPipeline,
@@ -922,11 +897,6 @@ async def test_derive_tags_handles_llm_failure(
 
     assert result == []
     mock_extract.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# Tag Derivation Integration Tests
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

@@ -18,16 +18,12 @@ from amelia.server.database.metrics_repository import MetricsRepository
 from amelia.server.orchestrator.service import OrchestratorService
 
 
-# Module-level config instance
 _config: ServerConfig | None = None
 
-# Module-level database instance
 _database: Database | None = None
 
-# Module-level knowledge service instance
 _knowledge_service: KnowledgeService | None = None
 
-# Module-level orchestrator instance
 _orchestrator: OrchestratorService | None = None
 
 

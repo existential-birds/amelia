@@ -53,7 +53,6 @@ interface TitleProps extends TypographyProps {
  * @returns An h2 element with display font styling.
  */
 function Title({ children, title, className }: TitleProps) {
-  // Use explicit title prop if provided, otherwise fall back to children if it's a string
   const tooltipText = title ?? (typeof children === 'string' ? children : undefined);
 
   return (
@@ -198,7 +197,6 @@ interface PageHeaderProps {
  * ```
  */
 function PageHeader({ children, className }: PageHeaderProps) {
-  // Extract slot children by displayName
   let leftSlot: ReactNode = null;
   let centerSlot: ReactNode = null;
   let rightSlot: ReactNode = null;
@@ -220,7 +218,6 @@ function PageHeader({ children, className }: PageHeaderProps) {
     }
   });
 
-  // Determine grid columns based on which slots are present
   const hasCenter = centerSlot !== null;
   const hasRight = rightSlot !== null;
 
@@ -252,7 +249,6 @@ function PageHeader({ children, className }: PageHeaderProps) {
   );
 }
 
-// Attach sub-components
 PageHeader.Left = Left;
 PageHeader.Center = Center;
 PageHeader.Right = Right;

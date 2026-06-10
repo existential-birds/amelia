@@ -1,4 +1,3 @@
-# amelia/server/events/connection_manager.py
 """WebSocket connection manager with subscription filtering."""
 from __future__ import annotations
 
@@ -102,10 +101,8 @@ class ConnectionManager:
         targets: list[WebSocket] = []
         async with self._lock:
             if is_trace:
-                # Trace events go to ALL clients
                 targets = list(self._connections.keys())
             else:
-                # Regular events filtered by workflow subscription
                 wid_str = str(event.workflow_id) if event.workflow_id else None
                 for ws, subscribed_ids in self._connections.items():
                     # Empty set = subscribed to all workflows
@@ -136,7 +133,6 @@ class ConnectionManager:
                 "timestamp": event.timestamp.isoformat(),
             }
         else:
-            # Workflow events use wrapped format
             payload = {
                 "type": "event",
                 "payload": event.model_dump(mode="json"),
@@ -146,7 +142,6 @@ class ConnectionManager:
             *(self._send_to_client(ws, payload) for ws in targets)
         )
 
-        # Remove failed connections
         failed = [ws for ws, success in results if not success]
         succeeded = len(targets) - len(failed)
         logger.debug(

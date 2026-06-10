@@ -20,10 +20,6 @@ import packageJson from '../../package.json';
 /** Current application version from package.json. */
 export const APP_VERSION = packageJson.version;
 
-// =============================================================================
-// Driver Model Lists
-// =============================================================================
-
 /** Default models (Claude CLI) */
 export const CLAUDE_MODELS = ['opus', 'sonnet', 'haiku'] as const;
 
@@ -96,10 +92,6 @@ export const AGENT_MODEL_REQUIREMENTS: Record<string, AgentRequirements> = {
   },
 };
 
-// =============================================================================
-// Agent Definitions
-// =============================================================================
-
 export interface AgentDefinition {
   key: string;
   label: string;
@@ -111,7 +103,6 @@ export interface AgentDefinition {
 
 /** All agents in the system with their metadata. */
 export const AGENT_DEFINITIONS: AgentDefinition[] = [
-  // Primary agents - always visible
   {
     key: 'architect',
     label: 'Architect',
@@ -136,7 +127,6 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
     defaultModel: 'sonnet',
     category: 'primary',
   },
-  // Utility agents - collapsed by default
   {
     key: 'plan_validator',
     label: 'Plan Validator',

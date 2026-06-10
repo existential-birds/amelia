@@ -10,7 +10,6 @@ const UUID_PATTERN = /^(.+?)-([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]
  * "brainstorm-12d73bed-8687-49b2-b761-099bb70eaa01" -> "brainstorm-12d73bed...a01".
  */
 export function truncateWorkflowId(id: string, maxPrefixLength = 20): string {
-  // Short IDs don't need truncation
   if (id.length <= 30) {
     return id;
   }
@@ -28,7 +27,6 @@ export function truncateWorkflowId(id: string, maxPrefixLength = 20): string {
       ? prefix.slice(0, safePrefixLength - 1) + '…'
       : prefix;
 
-    // Last 3 chars of the full UUID
     const lastChars = uuidLastSegment.slice(-3);
 
     return `${displayPrefix}-${uuidFirstSegment}...${lastChars}`;

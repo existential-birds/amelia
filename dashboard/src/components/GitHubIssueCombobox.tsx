@@ -87,7 +87,6 @@ export function GitHubIssueCombobox({ id, profile, onSelect, value, onClear }: G
     [profile],
   );
 
-  // Fetch on mount and when profile changes
   useEffect(() => {
     fetchIssues();
     return () => {

@@ -52,7 +52,6 @@ import {
 import type { BrainstormArtifact } from "@/types/api";
 import type { ConfigProfileInfo } from "@/types";
 
-// Extract profile info from config, preferring brainstormer agent config
 async function fetchProfileInfo(
   activeProfile: string | null,
   fallbackInfo: ConfigProfileInfo | null,
@@ -135,7 +134,6 @@ function SpecBuilderPageContent() {
     prevIsStreamingRef.current = isStreaming;
   }, [isStreaming, messages]);
 
-  // Load sessions and config on mount
   useEffect(() => {
     let mounted = true;
 
@@ -192,11 +190,9 @@ function SpecBuilderPageContent() {
         if (activeSessionId) {
           await sendMessage(content);
         } else {
-          // Create new session with first message using active profile from config
           await createSession(activeProfileRef.current, content);
         }
         textInput.clear();
-        // Return focus to input after submit
         textareaRef.current?.focus();
       } catch {
         // Restore input on error
@@ -211,17 +207,14 @@ function SpecBuilderPageContent() {
 
   const handleQuestionAnswer = useCallback(
     async (messageId: string, answers: Record<string, string | string[]>) => {
-      // Format answers as readable text
       const content = formatQuestionAnswers(answers);
 
       // Disable card during submission to prevent double-submits
       setAnsweringQuestionId(messageId);
 
-      // Mark question as answered in store
       updateMessage(messageId, (m) => ({ ...m, questionAnswered: true }));
 
       try {
-        // Send formatted answer as a chat message
         await sendMessage(content);
       } catch (err) {
         // Revert state on failure
@@ -261,7 +254,6 @@ function SpecBuilderPageContent() {
       try {
         const result = await handoff(handoffArtifact.path, issueTitle);
         setHandoffArtifact(null);
-        // Navigate to the new workflow
         navigate(`/workflows/${result.workflow_id}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";

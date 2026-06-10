@@ -22,11 +22,6 @@ from amelia.server.orchestrator.runner import GraphRunner
 from amelia.server.orchestrator.service import OrchestratorService
 
 
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-
 @pytest.fixture
 def git_mocks():
     """Patch git functions to simulate git state without touching the real tree.
@@ -81,11 +76,6 @@ def mock_graph():
         GraphRunner, "create_server_graph", return_value=mock
     ):
         yield mock
-
-
-# =============================================================================
-# Orchestrator-level tests
-# =============================================================================
 
 
 @pytest.mark.integration
@@ -329,11 +319,6 @@ class TestSandboxSkipsBranch:
         state = await test_orchestrator._repository.get(workflow_id)
         assert state is not None
         assert state.branch is None
-
-
-# =============================================================================
-# API endpoint test
-# =============================================================================
 
 
 @pytest.mark.integration

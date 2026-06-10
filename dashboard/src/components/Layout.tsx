@@ -23,7 +23,6 @@ import { useWebSocket } from '@/hooks/useWebSocket';
 export function Layout() {
   const navigation = useNavigation();
 
-  // Initialize WebSocket connection
   useWebSocket();
 
   const isNavigating = navigation.state !== 'idle';

@@ -8,22 +8,18 @@ import type {
 } from "@/types/api";
 
 interface BrainstormState {
-  // Session management
   sessions: BrainstormingSession[];
   activeSessionId: string | null;
   activeProfile: ProfileInfo | null;
   sessionUsage: SessionUsageSummary | null;
 
-  // Current conversation
   messages: BrainstormMessage[];
   artifacts: BrainstormArtifact[];
 
-  // UI state
   isStreaming: boolean;
   streamingMessageId: string | null;
   drawerOpen: boolean;
 
-  // Session actions
   setSessions: (sessions: BrainstormingSession[]) => void;
   addSession: (session: BrainstormingSession) => void;
   updateSession: (
@@ -35,7 +31,6 @@ interface BrainstormState {
   setActiveProfile: (profile: ProfileInfo | null) => void;
   setSessionUsage: (usage: SessionUsageSummary | null) => void;
 
-  // Message actions
   setMessages: (messages: BrainstormMessage[]) => void;
   addMessage: (message: BrainstormMessage) => void;
   removeMessage: (messageId: string) => void;
@@ -49,20 +44,16 @@ interface BrainstormState {
   clearStaleStreaming: () => void;
   clearMessages: () => void;
 
-  // Artifact actions
   setArtifacts: (artifacts: BrainstormArtifact[]) => void;
   addArtifact: (artifact: BrainstormArtifact) => void;
 
-  // UI actions
   setStreaming: (streaming: boolean, messageId: string | null) => void;
   setDrawerOpen: (open: boolean) => void;
 
-  // WebSocket actions
   handleWebSocketDisconnect: () => void;
 }
 
 export const useBrainstormStore = create<BrainstormState>()((set) => ({
-  // Initial state
   sessions: [],
   activeSessionId: null,
   activeProfile: null,
@@ -73,7 +64,6 @@ export const useBrainstormStore = create<BrainstormState>()((set) => ({
   streamingMessageId: null,
   drawerOpen: false,
 
-  // Session actions
   setSessions: (sessions) => set({ sessions }),
 
   addSession: (session) =>
@@ -99,7 +89,6 @@ export const useBrainstormStore = create<BrainstormState>()((set) => ({
 
   setSessionUsage: (usage) => set({ sessionUsage: usage }),
 
-  // Message actions
   setMessages: (messages) => set({ messages }),
 
   addMessage: (message) =>
@@ -149,7 +138,6 @@ export const useBrainstormStore = create<BrainstormState>()((set) => ({
 
   clearMessages: () => set({ messages: [], artifacts: [] }),
 
-  // Artifact actions
   setArtifacts: (artifacts) => set({ artifacts }),
 
   addArtifact: (artifact) =>
@@ -159,13 +147,11 @@ export const useBrainstormStore = create<BrainstormState>()((set) => ({
         : [...state.artifacts, artifact],
     })),
 
-  // UI actions
   setStreaming: (streaming, messageId) =>
     set({ isStreaming: streaming, streamingMessageId: messageId }),
 
   setDrawerOpen: (open) => set({ drawerOpen: open }),
 
-  // WebSocket actions
   handleWebSocketDisconnect: () =>
     set((state) => {
       if (!state.streamingMessageId) {

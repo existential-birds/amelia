@@ -270,7 +270,6 @@ class Reviewer:
             Tuple of (ReviewResult, session_id from driver).
 
         """
-        # Build the task prompt using shared helper
         task_context = self._extract_task_context(state) or "Review the code changes."
 
         if diff_path:
@@ -289,7 +288,6 @@ The changes are against commit: {base_commit}"""
 
 The changes are in git - diff against commit: {base_commit}"""
 
-        # Build system prompt with base_commit, review_guidelines, and diff_path
         system_prompt = self.agentic_prompt.format(
             base_commit=base_commit,
             review_guidelines=self._review_guidelines,
@@ -351,7 +349,6 @@ The changes are in git - diff against commit: {base_commit}"""
                 instructions=system_prompt,
                 submit_tools=[submit_tool],
             ):
-                # Emit stream events for visibility using to_workflow_event()
                 if self._event_bus is not None and msg.type != AgenticMessageType.RESULT:
                     event = msg.to_workflow_event(workflow_id=workflow_id, agent=self._agent_name)
                     self._event_bus.emit(event)
@@ -374,7 +371,6 @@ The changes are in git - diff against commit: {base_commit}"""
                             workflow_id=workflow_id,
                         )
 
-                # Capture final result from RESULT message
                 if msg.type == AgenticMessageType.RESULT:
                     attempt_session_id = msg.session_id
                     attempt_result = msg.content
@@ -423,7 +419,6 @@ The changes are in git - diff against commit: {base_commit}"""
             severity_str = None
 
         if severity_str is not None:
-            # Validate severity
             try:
                 severity = Severity(severity_str)
             except ValueError:
@@ -475,7 +470,6 @@ The changes are in git - diff against commit: {base_commit}"""
                 severity=Severity.MAJOR if result.severity in (Severity.NONE, Severity.MINOR) else result.severity,
             )
 
-        # Emit completion event
         self._emit_review_completion(
             workflow_id,
             result.approved,
@@ -551,12 +545,10 @@ The changes are in git - diff against commit: {base_commit}"""
             re.MULTILINE,
         )
 
-        # Determine current section by tracking headers
         current_severity: str | None = None
         for line in output.split("\n"):
             line_stripped = line.strip().lower()
 
-            # Detect severity section headers
             if "### critical" in line_stripped or "critical (blocking)" in line_stripped:
                 current_severity = "critical"
             elif "### major" in line_stripped or "major (should fix)" in line_stripped:
@@ -568,7 +560,6 @@ The changes are in git - diff against commit: {base_commit}"""
             elif line_stripped.startswith("## verdict"):
                 current_severity = None
 
-            # Match issues in current section
             if current_severity:
                 issue_match = issue_pattern.match(line)
                 if issue_match:
@@ -580,7 +571,6 @@ The changes are in git - diff against commit: {base_commit}"""
                         issue_text = f"[{current_severity}] {title}"
                     issues.append((current_severity, issue_text))
 
-        # Decide approval based on verdict match or fallback heuristic
         if verdict_match:
             verdict_text = verdict_match.group(1).lower()
             approved = verdict_text == "yes"
@@ -610,7 +600,6 @@ The changes are in git - diff against commit: {base_commit}"""
                 workflow_id=workflow_id,
             )
 
-        # Determine overall severity from highest issue severity
         severity_priority = {"critical": 3, "major": 2, "minor": 1}
         if issues:
             max_severity_value = max(severity_priority.get(sev, 0) for sev, _ in issues)
@@ -624,7 +613,6 @@ The changes are in git - diff against commit: {base_commit}"""
         else:
             overall_severity = Severity.NONE if approved else Severity.MINOR
 
-        # Extract just the issue text for comments
         comments = [issue_text for _, issue_text in issues]
 
         if not comments and not approved:

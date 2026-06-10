@@ -47,10 +47,6 @@ describe("settings API", () => {
     expect(err).toMatchObject({ status: 404, message: "Profile not found" });
   });
 
-  // ===========================================================================
-  // Server Settings
-  // ===========================================================================
-
   describe("getServerSettings", () => {
     it("fetches server settings", async () => {
       const mockSettings: ServerSettings = {
@@ -116,10 +112,6 @@ describe("settings API", () => {
       expect(result).toEqual(mockSettings);
     });
   });
-
-  // ===========================================================================
-  // Profiles
-  // ===========================================================================
 
   describe("getProfiles", () => {
     it("fetches all profiles", async () => {

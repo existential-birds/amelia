@@ -24,15 +24,13 @@ export function useElapsedTime(workflow: WorkflowDetail | null): string {
   const [elapsed, setElapsed] = useState(() => formatElapsedTime(workflow));
 
   useEffect(() => {
-    // Re-compute immediately when workflow changes
     setElapsed(formatElapsedTime(workflow));
 
-    // Only set up interval for active (in_progress/blocked) workflows
     if (!workflow || (workflow.status !== 'in_progress' && workflow.status !== 'blocked')) return;
 
     const interval = setInterval(() => {
       setElapsed(formatElapsedTime(workflow));
-    }, 60_000); // Update every 60 seconds
+    }, 60_000);
 
     return () => clearInterval(interval);
   }, [workflow]);

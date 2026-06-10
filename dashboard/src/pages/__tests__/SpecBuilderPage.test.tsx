@@ -44,7 +44,6 @@ function renderPage() {
  */
 async function renderPageAndWaitForInit() {
   const result = renderPage();
-  // Wait for loadSessions to be called (which means the init effect ran)
   await waitFor(() => {
     expect(brainstormApi.listSessions).toHaveBeenCalled();
   });
@@ -189,11 +188,9 @@ describe("SpecBuilderPage", () => {
 
     const { container } = renderPage();
 
-    // Should show the message content
     await waitFor(() => {
       expect(screen.getByText(/Here is my response/)).toBeInTheDocument();
     });
-    // Should have the expandable Reasoning component
     const collapsible = container.querySelector('[data-slot="collapsible"]');
     expect(collapsible).toBeInTheDocument();
   });
@@ -241,13 +238,11 @@ describe("SpecBuilderPage", () => {
 
     renderPage();
 
-    // Click the handoff button on the artifact card
     const handoffButton = await screen.findByRole("button", {
       name: /hand off to implementation/i,
     });
     await userEvent.click(handoffButton);
 
-    // Fill in the dialog and confirm
     const titleInput = await screen.findByLabelText(/issue title/i);
     await userEvent.clear(titleInput);
     await userEvent.type(titleInput, "Implement design");
@@ -331,12 +326,10 @@ describe("SpecBuilderPage", () => {
     await userEvent.type(textarea, "Test message");
     await userEvent.keyboard("{Enter}");
 
-    // Verify message was sent
     await waitFor(() => {
       expect(brainstormApi.sendMessage).toHaveBeenCalledWith("s1", "Test message");
     });
 
-    // Verify input was cleared and focus is maintained
     await waitFor(() => {
       expect(textarea).toHaveValue("");
       expect(document.activeElement).toBe(textarea);
@@ -366,10 +359,8 @@ describe("SpecBuilderPage", () => {
     renderPage();
 
     const textarea = screen.getByPlaceholderText(/what would you like to design/i);
-    // While streaming, textarea is disabled and not focused
     expect(textarea).toBeDisabled();
 
-    // Simulate streaming ending
     act(() => {
       useBrainstormStore.setState({ isStreaming: false });
     });

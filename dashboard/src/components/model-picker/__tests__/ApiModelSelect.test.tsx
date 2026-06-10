@@ -30,7 +30,6 @@ function ControlledApiModelSelect({
   );
 }
 
-// Mock the store
 vi.mock('@/store/useModelsStore');
 
 // Mock useRecentModels hook with vi.fn() so it can be overridden per-test
@@ -49,7 +48,6 @@ describe('ApiModelSelect', () => {
     vi.clearAllMocks();
     addRecentModel = vi.fn<(modelId: string) => void>();
 
-    // Default useRecentModels return value; override per-test as needed
     mockUseRecentModels.mockReturnValue({
       recentModelIds: ['claude-sonnet-4'],
       addRecentModel,
@@ -75,7 +73,6 @@ describe('ApiModelSelect', () => {
       />
     );
 
-    // When a model is selected, the Select shows the model name from the matching SelectItem
     expect(screen.getByText('Claude Sonnet 4')).toBeInTheDocument();
   });
 
@@ -100,7 +97,6 @@ describe('ApiModelSelect', () => {
       />
     );
 
-    // Open dropdown
     fireEvent.click(screen.getByRole('combobox'));
 
     expect(screen.getByText('Claude Sonnet 4')).toBeInTheDocument();
@@ -116,10 +112,8 @@ describe('ApiModelSelect', () => {
       />
     );
 
-    // Open dropdown
     fireEvent.click(screen.getByRole('combobox'));
 
-    // Select model
     fireEvent.click(screen.getByText('Claude Sonnet 4'));
 
     expect(onChange).toHaveBeenCalledWith('claude-sonnet-4');
@@ -149,7 +143,6 @@ describe('ApiModelSelect', () => {
       />
     );
 
-    // "Browse all models..." is a SelectItem inside the dropdown
     fireEvent.click(screen.getByRole('combobox'));
     fireEvent.click(screen.getByText(/browse all models/i));
 
@@ -213,7 +206,6 @@ describe('ApiModelSelect', () => {
       />
     );
 
-    // Open dropdown and click "Browse all models..."
     fireEvent.click(screen.getByRole('combobox'));
     fireEvent.click(screen.getByText(/browse all models/i));
 

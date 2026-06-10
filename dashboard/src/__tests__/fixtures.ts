@@ -12,10 +12,6 @@ import {
 } from '../types';
 import { type Profile, type SandboxConfig } from '../api/settings';
 
-// ============================================================================
-// Factory Functions
-// ============================================================================
-
 /**
  * Creates a mock WorkflowSummary with sensible defaults.
  * @param overrides - Optional partial object to override default values
@@ -140,7 +136,6 @@ export function createMockWorkflowDetail(
     pr_title: null,
     pr_comment_count: null,
     token_usage: null,
-    // Agentic execution fields
     goal: 'Test goal for implementation',
     plan_markdown: null,
     plan_path: null,

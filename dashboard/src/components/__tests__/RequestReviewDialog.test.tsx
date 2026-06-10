@@ -62,7 +62,6 @@ describe('RequestReviewDialog', () => {
     await user.click(securityBtn);
     expect(securityBtn.className).toContain('border-primary');
 
-    // Deselect security
     await user.click(securityBtn);
     expect(securityBtn.className).not.toContain('bg-primary/10');
   });
@@ -89,7 +88,6 @@ describe('RequestReviewDialog', () => {
     await user.click(screen.getByText('Security'));
     await user.click(screen.getByText('Review & Fix'));
 
-    // Click the submit button (the one inside the dialog, not the trigger)
     const submitButtons = screen.getAllByRole('button', { name: /Request Review/i });
     const submitBtn = submitButtons.at(-1)!;
     await user.click(submitBtn);
@@ -110,7 +108,6 @@ describe('RequestReviewDialog', () => {
 
     await user.click(screen.getByText('Request Review'));
 
-    // Deselect the default 'general' type
     await user.click(screen.getByText('General'));
 
     const submitButtons = screen.getAllByRole('button', { name: /Request Review/i });

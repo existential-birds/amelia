@@ -336,14 +336,12 @@ class OrchestratorService:
         """
         profile = await self._resolve_profile(profile_name, worktree_path)
 
-        # Branch creation for local (non-sandbox) workflows
         created_branch: str | None = None
         if profile.sandbox.mode not in (SandboxMode.DAYTONA, SandboxMode.CONTAINER):
             created_branch = await self._setup_workflow_branch(
                 worktree_path, issue_id, branch,
             )
 
-        # Construct issue from provided title or fetch from tracker
         if task_title is not None:
             issue = Issue(
                 id=issue_id,
@@ -351,27 +349,21 @@ class OrchestratorService:
                 description=task_description or task_title,
             )
         else:
-            # Fetch issue from tracker
             tracker = create_tracker(profile)
             issue = tracker.get_issue(issue_id, cwd=worktree_path)
 
-        # Get current HEAD to track changes
         base_commit = await get_git_head(worktree_path)
 
-        # Load design from artifact path if provided
         design = None
         if artifact_path:
-            # Resolve worktree path to canonical form for validation
             worktree_resolved = Path(worktree_path).resolve()
             artifact_as_path = Path(artifact_path)
 
-            # Handle both absolute and relative paths
             if artifact_as_path.is_absolute():
                 resolved_artifact = artifact_as_path.resolve()
                 # Check if absolute path is within worktree (e.g., from LLM write_design_doc)
                 try:
                     resolved_artifact.relative_to(worktree_resolved)
-                    # Path is within worktree, use it directly
                     full_artifact_path = resolved_artifact
                 except ValueError:
                     # Absolute path outside worktree - treat as worktree-relative
@@ -379,7 +371,6 @@ class OrchestratorService:
                     relative_artifact = artifact_path.removeprefix("/")
                     full_artifact_path = (worktree_resolved / relative_artifact).resolve()
             else:
-                # Relative path: resolve against worktree
                 full_artifact_path = (worktree_resolved / artifact_path).resolve()
 
             # Validate the resolved path stays within the worktree
@@ -396,7 +387,6 @@ class OrchestratorService:
 
             design = Design.from_file(full_artifact_path)
 
-        # Create ImplementationState with all required fields
         execution_state = ImplementationState(
             workflow_id=workflow_id,
             profile_id=profile.name,
@@ -440,7 +430,6 @@ class OrchestratorService:
 
         current_branch = await get_current_branch(worktree_path)
 
-        # Validate we're on a default branch (or detached HEAD is an error)
         if current_branch is None:
             raise ValueError(
                 "Currently in detached HEAD state. "
@@ -465,7 +454,6 @@ class OrchestratorService:
                 f"or pass --branch to use the current branch as-is."
             )
 
-        # Determine target branch name
         target_branch = branch if branch else f"amelia/{issue_id}"
 
         await create_and_checkout_branch(worktree_path, target_branch)
@@ -612,8 +600,6 @@ class OrchestratorService:
 
             workflow_id = uuid4()
 
-            # Prepare issue and execution state using the helper
-            # This also loads the profile from the database
             _, loaded_profile, execution_state, created_branch = await self._prepare_workflow_state(
                 workflow_id=workflow_id,
                 worktree_path=resolved_path,
@@ -645,10 +631,8 @@ class OrchestratorService:
                     raise WorkflowConflictError(resolved_path, "existing") from e
                 raise
 
-            # Record the run's ATIF trajectory from the first agent invocation
             self._ensure_recorder(workflow_id, issue_id, loaded_profile)
 
-            # Start async task with retry wrapper for transient failures
             task = asyncio.create_task(self._runner.run_workflow_with_retry(workflow_id, state))
             self._active_tasks[resolved_path] = (workflow_id, task)
 
@@ -673,14 +657,12 @@ class OrchestratorService:
             InvalidWorktreeError: If worktree doesn't exist or isn't a git repo.
             ValueError: If settings are invalid or profile not found.
         """
-        # Validate and resolve worktree path securely
         worktree = self._validate_worktree_path(request.worktree_path)
         resolved_path = str(worktree)
 
         # Generate workflow ID before preparing state (required by ImplementationState)
         workflow_id = uuid4()
 
-        # Prepare common workflow state (settings, profile, issue, execution_state)
         resolved_path, profile, execution_state, created_branch = await self._prepare_workflow_state(
             workflow_id=workflow_id,
             worktree_path=resolved_path,
@@ -692,7 +674,6 @@ class OrchestratorService:
             branch=request.branch,
         )
 
-        # Handle external plan if provided
         plan_cache: PlanCache | None = None
         if request.plan_file is not None or request.plan_content is not None:
             working_dir = Path(profile.repo_root)
@@ -704,7 +685,6 @@ class OrchestratorService:
                 working_dir,
             )
 
-            # Import and validate external plan (regex extraction)
             plan_result = await import_external_plan(
                 plan_file=request.plan_file,
                 plan_content=request.plan_content,
@@ -713,7 +693,6 @@ class OrchestratorService:
                 workflow_id=workflow_id,
             )
 
-            # Update execution state with plan data and external flag
             execution_state = execution_state.model_copy(
                 update={
                     "external_plan": True,
@@ -734,7 +713,6 @@ class OrchestratorService:
                 external_plan=True,
             )
 
-        # Create ServerExecutionState in pending status (not started)
         # execution_state.issue is always set by _prepare_workflow_state
         assert execution_state.issue is not None
         state = ServerExecutionState(
@@ -750,10 +728,8 @@ class OrchestratorService:
             # No started_at - workflow hasn't started
         )
 
-        # Save to database
         await self._repository.create(state)
 
-        # Emit created event
         await self._events.emit(
             workflow_id,
             EventType.WORKFLOW_CREATED,
@@ -836,7 +812,6 @@ class OrchestratorService:
 
             await self._repository.create(state)
 
-            # Start with review graph instead of full graph
             task = asyncio.create_task(
                 self._runner.run_review_workflow(
                     new_id, state, execution_state,
@@ -869,7 +844,6 @@ class OrchestratorService:
             WorkflowConflictError: If worktree already has active workflow.
             ConcurrencyLimitError: If at max concurrent workflows.
         """
-        # Validate and resolve worktree path securely
         # Note: review workflow doesn't require .git, so we do minimal validation
         try:
             worktree = Path(worktree_path).expanduser().resolve()
@@ -881,7 +855,6 @@ class OrchestratorService:
 
         loaded_profile = await self._resolve_profile(profile, resolved_path)
 
-        # Create dummy issue for review context
         dummy_issue = Issue(
             id="LOCAL-REVIEW",
             title="Local Code Review",
@@ -920,7 +893,6 @@ class OrchestratorService:
         if not workflow:
             raise WorkflowNotFoundError(workflow_id)
 
-        # Check if workflow is in a cancellable state (not terminal)
         cancellable_states = {WorkflowStatus.PENDING, WorkflowStatus.IN_PROGRESS, WorkflowStatus.BLOCKED}
         if workflow.workflow_status not in cancellable_states:
             raise InvalidStateError(
@@ -929,7 +901,6 @@ class OrchestratorService:
                 current_status=workflow.workflow_status,
             )
 
-        # Cancel the in-memory task if running
         if workflow.worktree_path in self._active_tasks:
             _, task = self._active_tasks[workflow.worktree_path]
             task.cancel()
@@ -937,7 +908,6 @@ class OrchestratorService:
         if workflow_id in self._planning_tasks:
             self._planning_tasks[workflow_id].cancel()
 
-        # Persist the cancelled status to database
         await self._repository.set_status(workflow_id, WorkflowStatus.CANCELLED)
 
         # Finalize the trajectory with the cancelled outcome (no-op if the
@@ -987,7 +957,6 @@ class OrchestratorService:
                     current_status=workflow.workflow_status,
                 )
 
-            # Clear error state and transition to IN_PROGRESS
             workflow.failure_reason = None
             workflow.completed_at = None
             workflow.workflow_status = WorkflowStatus.IN_PROGRESS
@@ -1003,7 +972,6 @@ class OrchestratorService:
             # Continue the trajectory: an existing file is loaded and appended to
             await self._ensure_recorder_for_state(workflow)
 
-            # Launch workflow task (same as start_workflow)
             task = asyncio.create_task(
                 self._runner.run_workflow_with_retry(workflow_id, workflow)
             )
@@ -1027,7 +995,6 @@ class OrchestratorService:
                 with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                     await asyncio.wait_for(task, timeout=timeout)
 
-        # Cancel any active planning tasks
         for _workflow_id, task in list(self._planning_tasks.items()):
             task.cancel()
             with contextlib.suppress(TimeoutError, asyncio.CancelledError):
@@ -1053,7 +1020,6 @@ class OrchestratorService:
         Returns:
             Workflow state if found, None otherwise.
         """
-        # Use cached workflow_id for O(1) lookup
         entry = self._active_tasks.get(worktree_path)
         if not entry:
             return None
@@ -1134,12 +1100,10 @@ class OrchestratorService:
             WorkflowNotFoundError: If workflow doesn't exist.
             InvalidStateError: If workflow is not in "blocked" state.
         """
-        # Validate workflow exists and get current state
         workflow = await self._repository.get(workflow_id)
         if not workflow:
             raise WorkflowNotFoundError(workflow_id)
 
-        # Validate workflow is in blocked state
         if workflow.workflow_status != WorkflowStatus.BLOCKED:
             raise InvalidStateError(
                 f"Cannot reject workflow in '{workflow.workflow_status}' state",
@@ -1148,7 +1112,6 @@ class OrchestratorService:
             )
 
         async with self._approval_lock:
-            # Update workflow status to failed with feedback
             await self._repository.set_status(
                 workflow_id, WorkflowStatus.FAILED, failure_reason=feedback
             )
@@ -1158,7 +1121,6 @@ class OrchestratorService:
                 f"Plan rejected: {feedback}",
             )
 
-            # Cancel the waiting task
             if workflow.worktree_path in self._active_tasks:
                 _, task = self._active_tasks[workflow.worktree_path]
                 task.cancel()
@@ -1177,7 +1139,6 @@ class OrchestratorService:
         failed_count = 0
         blocked_count = 0
 
-        # Handle IN_PROGRESS workflows — mark as FAILED
         in_progress = await self._repository.find_by_status([WorkflowStatus.IN_PROGRESS])
         for wf in in_progress:
             await self._repository.set_status(
@@ -1194,7 +1155,6 @@ class OrchestratorService:
             logger.info("Recovered interrupted workflow", workflow_id=wf.id)
             failed_count += 1
 
-        # Handle BLOCKED workflows — re-emit approval events
         blocked = await self._repository.find_by_status([WorkflowStatus.BLOCKED])
         for wf in blocked:
             await self._events.emit(
@@ -1265,10 +1225,8 @@ class OrchestratorService:
             # Note: started_at is None - workflow hasn't started yet
         )
 
-        # Save initial state
         await self._repository.create(state)
 
-        # Emit workflow created event
         await self._events.emit(
             workflow_id,
             EventType.WORKFLOW_CREATED,
@@ -1276,16 +1234,13 @@ class OrchestratorService:
             data={"issue_id": request.issue_id, "queued": True, "planning": True},
         )
 
-        # Planning runs the architect — record it into the workflow trajectory
         self._ensure_recorder(workflow_id, request.issue_id, profile)
 
-        # Spawn planning task in background (non-blocking)
         task = asyncio.create_task(
             self._runner.run_planning_task(workflow_id, state, execution_state, profile)
         )
         self._planning_tasks[workflow_id] = task
 
-        # Cleanup on completion
         def cleanup_planning(_: asyncio.Task[None]) -> None:
             self._planning_tasks.pop(workflow_id, None)
 
@@ -1310,12 +1265,10 @@ class OrchestratorService:
             ConcurrencyLimitError: If at max concurrent workflows.
         """
         async with self._start_lock:
-            # Get workflow from repository
             workflow = await self._repository.get(workflow_id)
             if not workflow:
                 raise WorkflowNotFoundError(workflow_id)
 
-            # Validate workflow is in pending state
             if workflow.workflow_status != WorkflowStatus.PENDING:
                 raise InvalidStateError(
                     f"Cannot start workflow in '{workflow.workflow_status}' state",
@@ -1323,7 +1276,6 @@ class OrchestratorService:
                     current_status=workflow.workflow_status,
                 )
 
-            # Check for worktree conflict - another active workflow on same worktree
             active_on_worktree = await self._repository.get_by_worktree(
                 workflow.worktree_path
             )
@@ -1332,10 +1284,8 @@ class OrchestratorService:
                     workflow.worktree_path, active_on_worktree.id
                 )
 
-            # Also check in-memory tasks for worktree conflict and limit
             self._assert_can_acquire_worktree(workflow.worktree_path)
 
-            # Checkout the workflow branch if one was persisted
             if workflow.branch:
                 from amelia.tools.git_utils import checkout_branch  # noqa: PLC0415
 
@@ -1354,10 +1304,8 @@ class OrchestratorService:
             workflow.started_at = datetime.now(UTC)
             await self._repository.update(workflow)
 
-            # Record the run's ATIF trajectory (best-effort profile resolution)
             await self._ensure_recorder_for_state(workflow)
 
-            # Spawn execution task
             task = asyncio.create_task(
                 self._runner.run_workflow_with_retry(workflow_id, workflow)
             )
@@ -1384,15 +1332,11 @@ class OrchestratorService:
         started: list[str] = []
         errors: dict[str, str] = {}
 
-        # Determine which workflows to start
         if request.workflow_ids:
-            # Start specific workflow IDs
             workflow_ids = request.workflow_ids
         else:
-            # Get all pending workflows
             pending_workflows = await self._repository.find_by_status([WorkflowStatus.PENDING])
 
-            # Filter by worktree_path if specified
             if request.worktree_path:
                 pending_workflows = [
                     w for w in pending_workflows
@@ -1401,7 +1345,6 @@ class OrchestratorService:
 
             workflow_ids = [str(w.id) for w in pending_workflows]
 
-        # Attempt to start each workflow
         for workflow_id in workflow_ids:
             try:
                 await self.start_pending_workflow(uuid.UUID(workflow_id))
@@ -1494,14 +1437,12 @@ class OrchestratorService:
                 "Plan already exists. Use force=true to overwrite."
             )
 
-        # Ensure profile_id exists
         if workflow.profile_id is None:
             raise InvalidStateError(
                 "Cannot set plan: workflow has no profile_id",
                 workflow_id=workflow_id,
             )
 
-        # Get profile for plan path resolution
         profile = await self._runner.get_profile_or_fail(
             workflow_id,
             workflow.profile_id,
@@ -1512,13 +1453,11 @@ class OrchestratorService:
 
         profile = update_profile_repo_root(profile, workflow.worktree_path)
 
-        # Resolve target plan path
         working_dir = Path(profile.repo_root)
         target_path = self._resolve_target_plan_path(
             plan_file, profile.plan_path_pattern, workflow.issue_id, working_dir
         )
 
-        # Delegate to import_external_plan for read, write, extract, validate
         plan_result = await import_external_plan(
             plan_file=plan_file,
             plan_content=plan_content,
@@ -1527,7 +1466,6 @@ class OrchestratorService:
             workflow_id=workflow_id,
         )
 
-        # Save PlanCache with goal populated
         plan_cache = PlanCache(
             goal=plan_result.goal,
             plan_markdown=plan_result.plan_markdown,
@@ -1537,7 +1475,6 @@ class OrchestratorService:
         )
         await self._repository.update_plan_cache(workflow_id, plan_cache)
 
-        # Emit validation event and build response
         result = await self._runner.emit_plan_validation_event(workflow_id, plan_result)
 
         logger.info(
@@ -1618,11 +1555,8 @@ class OrchestratorService:
             empty_plan_cache = PlanCache()
             await self._repository.update_plan_cache(workflow_id, empty_plan_cache)
 
-            # Transition to PENDING
             await self._repository.set_status(workflow_id, WorkflowStatus.PENDING)
 
-            # Reconstruct ImplementationState for graph input
-            # Parse issue from issue_cache
             issue = None
             if workflow.issue_cache:
                 issue = Issue.model_validate(workflow.issue_cache)
@@ -1631,7 +1565,6 @@ class OrchestratorService:
                 tracker = create_tracker(profile)
                 issue = tracker.get_issue(workflow.issue_id, cwd=workflow.worktree_path)
 
-            # Get current HEAD as base commit
             base_commit = await get_git_head(workflow.worktree_path)
 
             execution_state = ImplementationState(
@@ -1654,11 +1587,9 @@ class OrchestratorService:
                 data={"stage": "architect", "replan": True},
             )
 
-            # Replanning re-runs the architect — keep recording into the trajectory
             self._ensure_recorder(workflow_id, workflow.issue_id, profile)
 
-            # Spawn planning task in background (reuses existing runner.run_planning_task).
-            # Note: workflow/execution_state are only used as initial graph input
+            # workflow/execution_state are only used as initial graph input
             # (see runner.run_planning_task docstring). The reconstructed execution_state
             # seeds a fresh planning run. The task re-fetches from the repository
             # before any mutations, so staleness is safe.
@@ -1732,7 +1663,6 @@ class OrchestratorService:
                 workflow_id=workflow_id,
             )
 
-        # Get diff content
         diff_content = ""
         if base_commit:
             try:

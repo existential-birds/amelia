@@ -71,7 +71,6 @@ class TestGenerate:
         assert result == "Test response from model"
         assert session_id is None
 
-        # Verify create_deep_agent was called correctly
         mock_deepagents_filesystem.create_deep_agent.assert_called_once()
         call_kwargs = mock_deepagents_filesystem.create_deep_agent.call_args.kwargs
         assert call_kwargs["system_prompt"] == "You are a helpful assistant"
@@ -93,7 +92,6 @@ class TestGenerate:
         assert result.message == "parsed response"
         assert session_id is None
 
-        # Verify response_format was passed to create_deep_agent with correct schema
         call_kwargs = mock_deepagents_filesystem.create_deep_agent.call_args.kwargs
         assert "response_format" in call_kwargs
         response_format = call_kwargs["response_format"]
@@ -214,7 +212,6 @@ class TestExecuteAgentic:
         async for msg in driver.execute_agentic(prompt="test", cwd="/test/path"):
             collected.append(msg)
 
-        # List content yields THINKING, plain string only yields RESULT at end
         thinking_msgs = [m for m in collected if m.type == AgenticMessageType.THINKING]
         result_msgs = [m for m in collected if m.type == AgenticMessageType.RESULT]
 
@@ -367,7 +364,6 @@ class TestLocalSandbox:
         """
         sandbox = LocalSandbox(root_dir=str(tmp_path), virtual_mode=True)
 
-        # Test that write() puts file under cwd, not at filesystem root
         result = sandbox.write("/docs/plans/test.md", "# Test Plan")
         assert result.error is None
         assert result.path == "/docs/plans/test.md"
@@ -385,7 +381,6 @@ class TestLocalSandbox:
         """virtual_mode=True should read files relative to cwd."""
         sandbox = LocalSandbox(root_dir=str(tmp_path), virtual_mode=True)
 
-        # Create a file under cwd
         (tmp_path / "subdir").mkdir()
         (tmp_path / "subdir" / "file.txt").write_text("content here")
 
@@ -516,14 +511,12 @@ class TestExecuteAgenticYieldsAgenticMessage:
 
         results = [msg async for msg in api_driver.execute_agentic("test prompt", cwd="/test/path")]
 
-        # Should have all types
         types = [m.type for m in results]
         assert AgenticMessageType.THINKING in types
         assert AgenticMessageType.TOOL_CALL in types
         assert AgenticMessageType.TOOL_RESULT in types
         assert AgenticMessageType.RESULT in types
 
-        # All should be AgenticMessage instances
         assert all(isinstance(m, AgenticMessage) for m in results)
 
 
@@ -560,18 +553,14 @@ class TestIncompleteTaskDetection:
             {"messages": [final_msg]},
         ]
 
-        # Patch logger to capture warning calls
         with patch("amelia.drivers.api.deepagents.logger") as mock_logger:
             results = [msg async for msg in api_driver.execute_agentic("test prompt", cwd="/test/path")]
 
-        # Should have yielded the result
         result_msgs = [m for m in results if m.type == AgenticMessageType.RESULT]
         assert len(result_msgs) == 1
 
-        # Should have logged warning about incomplete tasks
         warning_calls = mock_logger.warning.call_args_list
         assert len(warning_calls) >= 1
-        # Check that at least one warning mentions premature termination
         # Access the actual message from the call args (first positional argument)
         warning_messages = [call.args[0] if call.args else "" for call in warning_calls]
         assert any("premature termination" in msg for msg in warning_messages)
@@ -600,15 +589,12 @@ class TestIncompleteTaskDetection:
             {"messages": [final_msg]},
         ]
 
-        # Patch logger to capture warning calls
         with patch("amelia.drivers.api.deepagents.logger") as mock_logger:
             results = [msg async for msg in api_driver.execute_agentic("test prompt", cwd="/test/path")]
 
-        # Should have yielded the result
         result_msgs = [m for m in results if m.type == AgenticMessageType.RESULT]
         assert len(result_msgs) == 1
 
-        # Should NOT have logged warning about incomplete tasks (no premature termination warning)
         warning_calls = mock_logger.warning.call_args_list
         # Access the actual message from the call args (first positional argument)
         warning_messages = [call.args[0] if call.args else "" for call in warning_calls]
@@ -640,15 +626,12 @@ class TestIncompleteTaskDetection:
             {"messages": [final_msg]},
         ]
 
-        # Patch logger to capture warning calls
         with patch("amelia.drivers.api.deepagents.logger") as mock_logger:
             results = [msg async for msg in api_driver.execute_agentic("test prompt", cwd="/test/path")]
 
-        # Should have yielded the result
         result_msgs = [m for m in results if m.type == AgenticMessageType.RESULT]
         assert len(result_msgs) == 1
 
-        # Should have logged warning about no write_file
         warning_calls = mock_logger.warning.call_args_list
         # Access the actual message from the call args (first positional argument)
         warning_messages = [call.args[0] if call.args else "" for call in warning_calls]

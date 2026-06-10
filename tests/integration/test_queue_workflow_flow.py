@@ -36,11 +36,6 @@ from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.state import ServerExecutionState
 
 
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-
 @pytest.fixture
 def test_client(orchestrator_test_client: httpx.AsyncClient) -> httpx.AsyncClient:
     """Alias shared orchestrator_test_client fixture for local use."""
@@ -92,11 +87,6 @@ async def create_pending_workflow(
     )
     await repository.create(workflow)
     return workflow
-
-
-# =============================================================================
-# Test Classes
-# =============================================================================
 
 
 @pytest.mark.integration

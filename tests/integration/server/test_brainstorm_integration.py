@@ -28,11 +28,6 @@ from amelia.server.services.brainstorm import BrainstormService
 from .conftest import AsyncClientFactory, noop_lifespan
 
 
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-
 @pytest.fixture
 async def test_client(
     test_brainstorm_service: BrainstormService,
@@ -59,11 +54,6 @@ async def test_client(
 
     async with async_client_factory(app) as client:
         yield client
-
-
-# =============================================================================
-# Test Classes
-# =============================================================================
 
 
 @pytest.mark.integration

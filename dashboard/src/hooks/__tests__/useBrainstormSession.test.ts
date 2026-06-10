@@ -147,7 +147,6 @@ describe("useBrainstormSession", () => {
       });
 
       expect(brainstormApi.sendMessage).toHaveBeenCalledWith("s1", "Hello");
-      // User message should be optimistically added, plus assistant placeholder
       expect(useBrainstormStore.getState().messages).toHaveLength(2);
       expect(useBrainstormStore.getState().messages[0]!.role).toBe("user");
       expect(useBrainstormStore.getState().messages[1]!.role).toBe("assistant");
@@ -190,7 +189,6 @@ describe("useBrainstormSession", () => {
 
   describe("handleWebSocketDisconnect", () => {
     it("marks streaming message as error on WebSocket disconnect", () => {
-      // Setup: message is streaming
       useBrainstormStore.setState({
         messages: [
           {
@@ -208,13 +206,11 @@ describe("useBrainstormSession", () => {
         streamingMessageId: "m1",
       });
 
-      // Simulate disconnect by calling the handler
       const { handleWebSocketDisconnect } = useBrainstormStore.getState();
       act(() => {
         handleWebSocketDisconnect();
       });
 
-      // Verify message status changed to error
       const state = useBrainstormStore.getState();
       const message = state.messages.find((m) => m.id === "m1");
       expect(message?.status).toBe("error");
@@ -223,7 +219,6 @@ describe("useBrainstormSession", () => {
     });
 
     it("does nothing if no streaming message", () => {
-      // Setup: no streaming message
       useBrainstormStore.setState({
         messages: [
           {
@@ -240,13 +235,11 @@ describe("useBrainstormSession", () => {
         streamingMessageId: null,
       });
 
-      // Calling disconnect should not throw
       const { handleWebSocketDisconnect } = useBrainstormStore.getState();
       act(() => {
         handleWebSocketDisconnect();
       });
 
-      // Message should be unchanged
       const state = useBrainstormStore.getState();
       const message = state.messages.find((m) => m.id === "m1");
       expect(message?.status).toBeUndefined();

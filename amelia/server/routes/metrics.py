@@ -36,14 +36,12 @@ def _resolve_date_range(
     Raises:
         HTTPException: 400 on invalid combinations.
     """
-    # Validate mutual exclusivity
     if preset is not None and (start is not None or end is not None):
         raise HTTPException(
             status_code=400,
             detail="Provide either start/end or preset, not both.",
         )
 
-    # Validate date parameters
     if bool(start) != bool(end):
         raise HTTPException(
             status_code=400,
@@ -55,7 +53,6 @@ def _resolve_date_range(
             detail="Start date must be on or before end date.",
         )
 
-    # Determine date range
     if start and end:
         return start, end
 
@@ -76,7 +73,6 @@ def _resolve_date_range(
         start_date = end_date - timedelta(days=days - 1)
         return start_date, end_date
 
-    # Default to 30d
     end_date = datetime.now(UTC).date()
     start_date = end_date - timedelta(days=29)
     return start_date, end_date

@@ -134,7 +134,6 @@ export function PromptEditModal({
   // Get agent-specific accent styles (always defined due to fallback)
   const accentStyle = getAgentAccentStyle(agent);
 
-  // Load prompt content when modal opens
   useEffect(() => {
     if (!open || !promptId) {
       return;
@@ -143,14 +142,11 @@ export function PromptEditModal({
     const loadContent = async () => {
       setIsLoading(true);
       try {
-        // Get default content
         const defaultContent = await api.getPromptDefault(promptId);
         setDefaultData(defaultContent);
 
-        // Get current version if exists
         const prompt = await api.getPrompt(promptId);
         if (prompt.current_version_id) {
-          // Fetch the current version content
           const currentVersion = await api.getPromptVersion(
             promptId,
             prompt.current_version_id
@@ -158,7 +154,6 @@ export function PromptEditModal({
           setContent(currentVersion.content);
           setOriginalContent(currentVersion.content);
         } else {
-          // No custom version, use default
           setContent(defaultContent.content);
           setOriginalContent(defaultContent.content);
         }
@@ -173,7 +168,6 @@ export function PromptEditModal({
     loadContent();
   }, [open, promptId]);
 
-  // Reset state when modal closes
   useEffect(() => {
     if (!open) {
       setContent('');

@@ -21,7 +21,6 @@ from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.types import Command
 
 
-# Tool description for the write_design_doc tool (markdown-only write)
 WRITE_DESIGN_DOC_DESCRIPTION = """Write a design document (markdown file) to the filesystem.
 
 Usage:
@@ -77,7 +76,6 @@ def _write_design_doc_tool_generator(
         runtime: ToolRuntime[None, FilesystemState],
     ) -> Command[Any] | str:
         """Synchronous write_design_doc implementation."""
-        # Validate markdown extension
         if not file_path.lower().endswith(".md"):
             return (
                 f"Error: write_design_doc only allows markdown files (.md). "
@@ -95,7 +93,6 @@ def _write_design_doc_tool_generator(
         runtime: ToolRuntime[None, FilesystemState],
     ) -> Command[Any] | str:
         """Asynchronous write_design_doc implementation."""
-        # Validate markdown extension
         if not file_path.lower().endswith(".md"):
             return (
                 f"Error: write_design_doc only allows markdown files (.md). "
@@ -115,7 +112,6 @@ def _write_design_doc_tool_generator(
     )
 
 
-# Custom restricted filesystem prompt for brainstormer
 BRAINSTORMER_FILESYSTEM_PROMPT = """## Filesystem Tools
 
 You have access to: `ls`, `read_file`, `glob`, `grep`, `write_design_doc`
@@ -129,7 +125,6 @@ You have access to: `ls`, `read_file`, `glob`, `grep`, `write_design_doc`
 Use the read tools to understand the codebase. Use `write_design_doc` to save your final design."""
 
 
-# System prompt for the brainstormer agent - defines role and behavior
 BRAINSTORMER_SYSTEM_PROMPT = """# Role
 
 You are a design collaborator that helps turn ideas into fully formed designs through natural dialogue.
@@ -176,7 +171,6 @@ You are a design collaborator that helps turn ideas into fully formed designs th
 - **Design documents only - no implementation code**
 """
 
-# User prompt template for the first message in a session
 BRAINSTORMER_USER_PROMPT_TEMPLATE = "Help me design: {idea}"
 
 

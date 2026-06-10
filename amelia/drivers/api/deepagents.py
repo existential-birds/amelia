@@ -270,7 +270,6 @@ class ApiDriver(DriverInterface):
             # Use FilesystemBackend for non-agentic generation - no shell execution needed
             backend = FilesystemBackend(root_dir=self.cwd or ".", virtual_mode=False)
 
-            # Configure structured output via ToolStrategy when schema is provided
             agent_kwargs: dict[str, Any] = {
                 "model": chat_model,
                 "system_prompt": system_prompt or "",
@@ -283,7 +282,6 @@ class ApiDriver(DriverInterface):
 
             result = await agent.ainvoke({"messages": [HumanMessage(content=prompt)]})
 
-            # If schema is provided, extract from structured_response
             output: Any
             if schema:
                 structured_response = result.get("structured_response")
@@ -294,7 +292,6 @@ class ApiDriver(DriverInterface):
                         schema=schema.__name__,
                     )
                 else:
-                    # Log diagnostic info for debugging structured output failures
                     messages = result.get("messages", [])
                     last_msg_type = type(messages[-1]).__name__ if messages else "None"
                     logger.warning(
@@ -311,7 +308,6 @@ class ApiDriver(DriverInterface):
                         original_message=f"Last message type: {last_msg_type}",
                     )
             else:
-                # No schema - extract text from messages
                 messages = result.get("messages", [])
                 if not messages:
                     raise RuntimeError("No response messages from agent")
@@ -404,7 +400,6 @@ class ApiDriver(DriverInterface):
                 "Use ClaudeCliDriver for tool-restricted execution."
             )
 
-        # Extract optional parameters from kwargs
         tools: list[Any] | None = kwargs.get("tools")
         middleware: list[AgentMiddleware] | None = kwargs.get("middleware")
         required_tool: str | None = kwargs.get("required_tool")
@@ -434,7 +429,6 @@ class ApiDriver(DriverInterface):
             if required_tool is None and lc_submit_tools:
                 required_tool = submit_tools[0].name
 
-        # Initialize usage tracking
         start_time = time.perf_counter()
         total_input = 0
         total_output = 0
@@ -485,7 +479,6 @@ class ApiDriver(DriverInterface):
                         session_id=current_session_id,
                     )
 
-            # Use session_id as thread_id for checkpointing
             thread_id = current_session_id
 
             # LLM APIs are stateless - always pass system prompt with every request
@@ -510,15 +503,13 @@ class ApiDriver(DriverInterface):
             )
 
             last_message: AIMessage | None = None
-            tool_call_count = 0  # DEBUG: Track tool calls
-            last_write_todos_input: dict[str, Any] | None = None  # Track incomplete tasks
-            all_tool_names: list[str] = []  # Track all tool calls for debugging
+            tool_call_count = 0
+            last_write_todos_input: dict[str, Any] | None = None
+            all_tool_names: list[str] = []
             continuation_count = 0
 
-            # Config for checkpointing
             config = {"configurable": {"thread_id": thread_id}}
 
-            # Initial message
             current_input: dict[str, Any] = {"messages": [HumanMessage(content=prompt)]}
 
             # Continuation loop - keeps going until required file is created or max attempts
@@ -543,7 +534,6 @@ class ApiDriver(DriverInterface):
                             seen_message_ids.add(msg_id)
                             num_turns += 1
 
-                            # Extract token usage from usage_metadata
                             usage_meta = getattr(message, "usage_metadata", None)
                             if usage_meta:
                                 total_input += usage_meta.get("input_tokens", 0)
@@ -592,7 +582,6 @@ class ApiDriver(DriverInterface):
                                     )
                                     log_claude_result(result_type="assistant", content=thinking_text)
 
-                        # Tool calls
                         for tool_call in message.tool_calls or []:
                             tool_raw_name = tool_call["name"]
                             # Normalize tool name to standard format
@@ -627,7 +616,6 @@ class ApiDriver(DriverInterface):
                             log_claude_result(result_type="tool_use", tool_name=tool_normalized, tool_input=tool_args)
 
                     elif isinstance(message, ToolMessage):
-                        # Normalize tool name to standard format
                         result_raw_name = message.name
                         result_normalized: str | None = (
                             normalize_tool_name(result_raw_name)
@@ -643,16 +631,13 @@ class ApiDriver(DriverInterface):
                             model=self.model,
                         )
 
-                # After inner loop: check if we need to continue
                 needs_continuation = False
                 continuation_reason = ""
 
-                # Check if required tool was called
                 if required_tool and required_tool not in all_tool_names:
                     needs_continuation = True
                     continuation_reason = "required tool not called"
 
-                # If required_file_path is specified, verify file exists with content
                 if required_file_path and not needs_continuation:
                     file_path = backend.cwd / required_file_path
                     if not file_path.exists():
@@ -675,7 +660,6 @@ class ApiDriver(DriverInterface):
                         )
                         break
 
-                    # Extract agent's final response for debugging
                     agent_response = _extract_text_content(last_message.content) if last_message else ""
 
                     response_preview = agent_response[:500] if agent_response else "EMPTY"
@@ -699,7 +683,6 @@ class ApiDriver(DriverInterface):
                 else:
                     break  # Done - required tool was called and file exists
 
-            # Store accumulated usage before yielding result
             duration_ms = int((time.perf_counter() - start_time) * 1000)
             self._usage = DriverUsage(
                 input_tokens=total_input if total_input > 0 else None,
@@ -710,8 +693,6 @@ class ApiDriver(DriverInterface):
                 model=self.model,
             )
 
-            # Final result from last AI message
-            # Check for incomplete tasks in write_todos
             incomplete_tasks: list[str] = []
             if last_write_todos_input:
                 todos = last_write_todos_input.get("todos", [])
@@ -719,7 +700,6 @@ class ApiDriver(DriverInterface):
                     if isinstance(todo, dict) and todo.get("status") == "in_progress":
                         incomplete_tasks.append(todo.get("content", "unknown task"))
 
-            # Log comprehensive summary
             logger.info(
                 "API driver execution complete",
                 total_tool_calls=tool_call_count,
@@ -729,7 +709,6 @@ class ApiDriver(DriverInterface):
                 incomplete_tasks_count=len(incomplete_tasks),
             )
 
-            # Warn if agent terminated with incomplete tasks
             if incomplete_tasks:
                 logger.warning(
                     "Agent terminated with in_progress tasks - possible premature termination",
@@ -750,7 +729,6 @@ class ApiDriver(DriverInterface):
             if last_message:
                 final_content = _extract_text_content(last_message.content)
 
-                # Log the model's final response to understand why it stopped
                 preview = final_content[:500] if final_content else "EMPTY"
                 logger.info(
                     "Agent final response",

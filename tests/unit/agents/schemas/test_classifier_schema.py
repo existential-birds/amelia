@@ -13,11 +13,6 @@ from amelia.agents.schemas.classifier import (
 from amelia.core.types import AggressivenessLevel, PRAutoFixConfig
 
 
-# ---------------------------------------------------------------------------
-# CommentCategory enum
-# ---------------------------------------------------------------------------
-
-
 class TestCommentCategory:
     """CommentCategory is a StrEnum with 6 values."""
 
@@ -34,12 +29,6 @@ class TestCommentCategory:
 
     def test_is_str_subclass(self) -> None:
         assert isinstance(CommentCategory.BUG, str)
-
-
-
-# ---------------------------------------------------------------------------
-# CommentClassification model
-# ---------------------------------------------------------------------------
 
 
 class TestCommentClassification:
@@ -93,11 +82,6 @@ class TestCommentClassification:
         assert c.confidence == value
 
 
-# ---------------------------------------------------------------------------
-# ClassificationOutput
-# ---------------------------------------------------------------------------
-
-
 class TestClassificationOutput:
     """ClassificationOutput wraps a list of CommentClassification."""
 
@@ -118,11 +102,6 @@ class TestClassificationOutput:
         ]
         out = ClassificationOutput(classifications=items)
         assert len(out.classifications) == 3
-
-
-# ---------------------------------------------------------------------------
-# CATEGORY_THRESHOLD mapping
-# ---------------------------------------------------------------------------
 
 
 class TestCategoryThreshold:
@@ -149,11 +128,6 @@ class TestCategoryThreshold:
     def test_all_categories_mapped(self) -> None:
         for cat in CommentCategory:
             assert cat in CATEGORY_THRESHOLD
-
-
-# ---------------------------------------------------------------------------
-# is_actionable helper
-# ---------------------------------------------------------------------------
 
 
 class TestIsActionable:
@@ -227,11 +201,6 @@ class TestIsActionable:
             CommentCategory.SUGGESTION,
             CommentCategory.QUESTION,
         }
-
-
-# ---------------------------------------------------------------------------
-# PRAutoFixConfig.confidence_threshold
-# ---------------------------------------------------------------------------
 
 
 class TestPRAutoFixConfigConfidenceThreshold:

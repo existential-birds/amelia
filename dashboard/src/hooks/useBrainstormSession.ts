@@ -47,14 +47,12 @@ export function useBrainstormSession() {
 
   const createSession = useCallback(
     async (profileId: string, firstMessage: string) => {
-      // Create session with first message as topic
       const { session, profile } = await brainstormApi.createSession(profileId, firstMessage);
       addSession(session);
       setActiveSessionId(session.id);
       setActiveProfile(profile ?? null);
       clearMessages();
       setArtifacts([]);
-      // Initialize usage to zeros for new sessions
       setSessionUsage({
         total_input_tokens: 0,
         total_output_tokens: 0,
@@ -62,7 +60,6 @@ export function useBrainstormSession() {
         message_count: 0,
       });
 
-      // Add optimistic user message
       const userMessage = {
         id: nanoid(),
         session_id: session.id,
@@ -95,7 +92,6 @@ export function useBrainstormSession() {
         replaceMessageId(tempAssistantId, response.message_id);
         setStreaming(true, response.message_id);
       } catch (error) {
-        // Rollback optimistic messages
         removeMessage(tempAssistantId);
         removeMessage(userMessage.id);
         setStreaming(false, null);
@@ -129,7 +125,6 @@ export function useBrainstormSession() {
         addMessage(userMessage);
         clearStaleStreaming();
 
-        // Get updated count after user message was added
         const newLength = useBrainstormStore.getState().messages.length;
         const assistantMessage = {
           id: tempAssistantId,
@@ -148,7 +143,6 @@ export function useBrainstormSession() {
         replaceMessageId(tempAssistantId, response.message_id);
         setStreaming(true, response.message_id);
       } catch (error) {
-        // Rollback optimistic messages
         removeMessage(tempAssistantId);
         removeMessage(optimisticId);
         setStreaming(false, null);

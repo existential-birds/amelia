@@ -21,14 +21,10 @@ def slugify(text: str, max_length: int = 15) -> str:
         raise ValueError(f"max_length must be >= 0, got {max_length}")
     if max_length == 0:
         return ""
-    # Lowercase and replace non-alphanumeric with dashes
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower())
-    # Strip leading/trailing dashes
     slug = slug.strip("-")
-    # Truncate at dash boundary if possible
     if len(slug) > max_length:
         truncated = slug[:max_length]
-        # Try to break at last dash within limit
         # Break at last dash to avoid trailing dash and mid-word cuts
         last_dash = truncated.rfind("-")
         slug = truncated[:last_dash] if last_dash > 0 else truncated

@@ -66,31 +66,24 @@ export default function SettingsPage() {
   const { prompts } = useLoaderData<typeof promptsLoader>();
   const revalidator = useRevalidator();
 
-  // Edit modal state
   const [editPromptId, setEditPromptId] = useState<string | null>(null);
   const [editPromptName, setEditPromptName] = useState('');
   const [editPromptAgent, setEditPromptAgent] = useState('');
 
-  // Reset confirmation state
   const [resetPromptId, setResetPromptId] = useState<string | null>(null);
   const [resetPromptName, setResetPromptName] = useState('');
   const [isResetting, setIsResetting] = useState(false);
 
-  // Group prompts by agent
   const groupedPrompts = useMemo(() => groupPromptsByAgent(prompts), [prompts]);
 
-  // Get ordered agents that exist in our data (plus always-show agents)
   const orderedAgents = useMemo(() => {
     const existingAgents = Object.keys(groupedPrompts);
-    // Combine existing agents with always-show agents
     const allAgents = [...new Set([...existingAgents, ...ALWAYS_SHOW_AGENTS])];
-    // First include agents in defined order, then any remaining agents
     const ordered = AGENT_ORDER.filter((agent) => allAgents.includes(agent));
     const remaining = allAgents.filter((agent) => !AGENT_ORDER.includes(agent));
     return [...ordered, ...remaining];
   }, [groupedPrompts]);
 
-  // Handle edit button click
   const handleEdit = useCallback((promptId: string) => {
     const prompt = prompts.find((p) => p.id === promptId);
     if (prompt) {
@@ -101,7 +94,6 @@ export default function SettingsPage() {
     }
   }, [prompts]);
 
-  // Handle reset button click
   const handleResetClick = useCallback((promptId: string) => {
     const prompt = prompts.find((p) => p.id === promptId);
     if (prompt) {
@@ -110,7 +102,6 @@ export default function SettingsPage() {
     }
   }, [prompts]);
 
-  // Confirm reset
   const handleResetConfirm = useCallback(async () => {
     if (!resetPromptId) return;
 
@@ -129,12 +120,10 @@ export default function SettingsPage() {
     }
   }, [resetPromptId, revalidator]);
 
-  // Handle save from edit modal
   const handleSave = useCallback(() => {
     revalidator.revalidate();
   }, [revalidator]);
 
-  // Count custom prompts
   const customCount = prompts.filter((p) => p.current_version_id !== null).length;
 
   return (

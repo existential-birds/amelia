@@ -238,7 +238,6 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
 
     Profiles now use agents dict for per-agent driver/model configuration.
     """
-    # Create a shared temp directory for all profiles in this test session
     base_tmp = tmp_path_factory.mktemp("workdir")
 
     def _create(
@@ -248,11 +247,9 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
         agents: dict[str, AgentConfig] | None = None,
         **kwargs: Any
     ) -> Profile:
-        # Use temp directory for repo_root unless explicitly overridden
         if "repo_root" not in kwargs:
             kwargs["repo_root"] = str(base_tmp)
 
-        # Default agents configuration if not provided
         if agents is None:
             if preset == "cli_single":
                 agents = {
@@ -269,7 +266,6 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
                 }
                 return Profile(name="test_api", tracker="noop", agents=agents, **kwargs)
             else:
-                # Default: all agents use claude
                 agents = {
                     "architect": AgentConfig(driver="claude", model="sonnet"),
                     "developer": AgentConfig(driver="claude", model="sonnet"),
@@ -319,10 +315,8 @@ def mock_execution_state_factory(
         if issue is None:
             issue = mock_issue_factory()
 
-        # Extract profile_id from profile
         profile_id = kwargs.pop("profile_id", profile.name)
 
-        # Provide defaults for required BasePipelineState fields
         workflow_id = kwargs.pop("workflow_id", uuid4())
         created_at = kwargs.pop("created_at", datetime.now(UTC))
         status = kwargs.pop("status", "pending")
@@ -521,7 +515,6 @@ def langgraph_mock_factory(
             astream_items
         )
 
-        # Mock checkpointer: passed directly to OrchestratorService(checkpointer=...)
         mock_saver = AsyncMock()
         mock_saver.adelete_thread = AsyncMock()
 

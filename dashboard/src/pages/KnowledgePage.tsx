@@ -206,9 +206,8 @@ function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<Knowledge
   return [
     {
       id: 'expand',
-      size: 40, // Fixed narrow width
+      size: 40,
       cell: ({ row }) => {
-        // Disable expand for processing/failed status
         const canExpand = row.original.status === 'ready';
 
         return (
@@ -292,10 +291,8 @@ export default function KnowledgePage() {
   const loaderData = useLoaderData() as KnowledgeLoaderData;
   const revalidator = useRevalidator();
 
-  // Local state: merge loader data with real-time updates from WebSocket
   const [documents, setDocuments] = useState<KnowledgeDocument[]>(loaderData.documents);
 
-  // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -306,7 +303,6 @@ export default function KnowledgePage() {
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
 
-  // Upload dialog state
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadName, setUploadName] = useState('');
@@ -315,7 +311,6 @@ export default function KnowledgePage() {
 
   const executeSearch = useCallback(
     async (query: string) => {
-      // Cancel any in-flight search request
       abortControllerRef.current?.abort();
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -348,7 +343,6 @@ export default function KnowledgePage() {
     const query = searchQuery.trim();
     if (!query) return;
 
-    // Clear any pending debounced search
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
@@ -363,7 +357,6 @@ export default function KnowledgePage() {
         const query = searchQuery.trim();
         if (!query) return;
 
-        // Clear any pending debounced search
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current);
           debounceTimerRef.current = null;
@@ -413,18 +406,15 @@ export default function KnowledgePage() {
 
   const columns = getDocumentColumns(handleDelete);
 
-  // Sync local state when loader data changes
   useEffect(() => {
     setDocuments(loaderData.documents);
   }, [loaderData.documents]);
 
-  // Listen for knowledge domain events from WebSocket
   useEffect(() => {
     const handleKnowledgeEvent = (event: Event) => {
       const customEvent = event as CustomEvent<import('../types').WorkflowEvent>;
       const { domain, workflow_id: documentId, event_type, data } = customEvent.detail;
 
-      // Only handle knowledge domain events
       if (domain !== 'knowledge') return;
 
       switch (event_type) {
@@ -478,14 +468,12 @@ export default function KnowledgePage() {
     };
   }, []);
 
-  // Focus search input when switching to search tab
   useEffect(() => {
     if (activeTab === 'search') {
       searchInputRef.current?.focus();
     }
   }, [activeTab]);
 
-  // Cleanup: abort pending search and clear debounce timer on unmount
   useEffect(() => {
     return () => {
       isMountedRef.current = false;

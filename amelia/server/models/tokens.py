@@ -70,7 +70,6 @@ STATIC_FALLBACK_PRICING: dict[str, ModelPricing] = {
     "haiku": ModelPricing(input=1.0, output=5.0, cache_read=0.1, cache_write=1.25),
 }
 
-# Module-level cache state
 _cached_pricing: dict[str, ModelPricing] = {}
 _cache_expires_at: float = 0.0
 _cache_lock: asyncio.Lock = asyncio.Lock()
@@ -200,7 +199,6 @@ async def get_pricing(model: str) -> ModelPricing | None:
             _cached_pricing = new_pricing
         _cache_expires_at = time.time() + 86400  # 24-hour TTL
 
-    # Look up model in cached pricing, then static fallback
     if model in _cached_pricing:
         return _cached_pricing[model]
     return STATIC_FALLBACK_PRICING.get(model)

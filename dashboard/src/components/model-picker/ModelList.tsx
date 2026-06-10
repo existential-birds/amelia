@@ -111,7 +111,6 @@ export function ModelList({
     return <EmptyState />;
   }
 
-  // Split into recent and all models
   const recentModels = recentModelIds
     .map((id) => models.find((m) => m.id === id))
     .filter((m): m is ModelInfo => m !== undefined);

@@ -106,7 +106,6 @@ export default function AnalyticsPage() {
     setSearchParams({ preset });
   };
 
-  // Calculate cost delta
   const costDelta = calculateDelta(
     usage.summary.total_cost_usd,
     usage.summary.previous_period_cost_usd
@@ -118,7 +117,6 @@ export default function AnalyticsPage() {
     [usage.by_model]
   );
 
-  // Create color lookup based on cost rank
   const modelColorMap = useMemo(() => {
     const map: Record<string, string> = {};
     sortedModels.forEach((model, index) => {
@@ -127,7 +125,6 @@ export default function AnalyticsPage() {
     return map;
   }, [sortedModels]);
 
-  // Table columns for costs breakdown
   const columns: ColumnDef<UsageByModel>[] = useMemo(
     () => [
       {
@@ -331,7 +328,6 @@ function CostsTabContent({
   modelColorMap: Record<string, string>;
   onPresetChange: (preset: string) => void;
 }) {
-  // Empty state
   if (usage.summary.total_workflows === 0) {
     return (
       <div className="pt-4">

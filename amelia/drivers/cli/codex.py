@@ -222,7 +222,7 @@ class CodexCliDriver(DriverInterface):
                         line=line,
                         error=str(e),
                     )
-                    continue  # skip malformed lines
+                    continue
                 except ValidationError as e:
                     logger.debug(
                         "Skipping invalid codex stream event",
@@ -306,7 +306,7 @@ class CodexCliDriver(DriverInterface):
                     except json.JSONDecodeError:
                         continue
                     if isinstance(obj, dict) and obj.get("type") in _LIFECYCLE_EVENT_TYPES:
-                        continue  # skip turn.completed, etc.
+                        continue
                     return obj
                 # All parseable lines were lifecycle events — return the last one
                 # and let the caller deal with validation.
@@ -382,10 +382,8 @@ class CodexCliDriver(DriverInterface):
         else:
             data = parsed
 
-        # Validate against schema if provided
         if schema:
             try:
-                # If data is a string, parse it as JSON first
                 if isinstance(data, str):
                     data = json.loads(data)
 
@@ -421,7 +419,6 @@ class CodexCliDriver(DriverInterface):
                     original_message=str(data)[:500],
                 ) from e
 
-        # For non-schema case, convert to string if needed
         text = json.dumps(data) if not isinstance(data, str) else data
         return (text, None)
 
@@ -471,7 +468,6 @@ class CodexCliDriver(DriverInterface):
 
         captured_thread_id: str | None = None
 
-        # Use streaming mode - iterate asynchronously
         # Update self._usage incrementally after each turn.completed event
         # so usage data is available even if the consumer breaks early or
         # an exception interrupts streaming.

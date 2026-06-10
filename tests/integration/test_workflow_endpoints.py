@@ -35,20 +35,10 @@ from amelia.trajectory import WorkflowTrajectoryRecorder
 from tests.integration.conftest import create_test_workflow
 
 
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-
 @pytest.fixture
 def test_client(orchestrator_test_client: httpx.AsyncClient) -> httpx.AsyncClient:
     """Alias shared orchestrator_test_client fixture for local use."""
     return orchestrator_test_client
-
-
-# =============================================================================
-# Test Classes
-# =============================================================================
 
 
 @pytest.mark.integration

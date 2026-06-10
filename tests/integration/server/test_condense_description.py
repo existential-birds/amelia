@@ -23,11 +23,6 @@ from tests.integration.server.conftest import noop_lifespan
 pytestmark = pytest.mark.integration
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture
 def profile_repo(test_db: Database) -> ProfileRepository:
     """Real profile repository backed by test database."""
@@ -87,11 +82,6 @@ def _mock_driver(condensed_text: str) -> MagicMock:
     driver = MagicMock()
     driver.generate = AsyncMock(return_value=(condensed_text, "session-123"))
     return driver
-
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 
 class TestCondenseDescriptionIntegration:

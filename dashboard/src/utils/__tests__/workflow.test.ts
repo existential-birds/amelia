@@ -75,7 +75,6 @@ describe('getActiveWorkflow', () => {
   });
 
   it('should work correctly regardless of array order', () => {
-    // Test with completed workflows listed first (like in the bug scenario)
     const workflows = [
       createMockWorkflowSummary({ id: 'completed-1', status: 'completed', started_at: '2025-01-01T10:00:00Z' }),
       createMockWorkflowSummary({ id: 'completed-2', status: 'completed', started_at: '2025-01-01T12:00:00Z' }),
@@ -83,14 +82,9 @@ describe('getActiveWorkflow', () => {
       createMockWorkflowSummary({ id: 'running-newest', status: 'in_progress', started_at: '2025-01-01T01:00:00Z' }),
       createMockWorkflowSummary({ id: 'blocked', status: 'blocked', started_at: '2025-01-01T02:00:00Z' }),
     ];
-    // Should select the most recent running workflow (running-oldest), not the first in array
     expect(getActiveWorkflow(workflows)?.id).toBe('running-oldest');
   });
 });
-
-// ============================================================================
-// Formatting Functions
-// ============================================================================
 
 describe('formatTokens', () => {
   it.each([

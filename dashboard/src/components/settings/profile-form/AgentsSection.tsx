@@ -38,10 +38,6 @@ const AGENT_COLORS: Record<string, { line: string; icon: string }> = {
   brainstormer: { line: 'bg-muted-foreground/40', icon: 'text-muted-foreground' },
 };
 
-// =============================================================================
-// Agent Row
-// =============================================================================
-
 interface AgentRowProps {
   agent: AgentDefinition;
   config: AgentFormData;
@@ -113,10 +109,6 @@ function AgentRow({ agent, config, error, onChange }: AgentRowProps) {
     </div>
   );
 }
-
-// =============================================================================
-// Bulk Apply
-// =============================================================================
 
 interface BulkApplyProps {
   onApply: (driver: string, model: string, targets: 'all' | 'primary' | 'utility') => void;
@@ -226,10 +218,6 @@ function BulkApply({ onApply }: BulkApplyProps) {
     </Collapsible>
   );
 }
-
-// =============================================================================
-// Agents Section
-// =============================================================================
 
 interface AgentsSectionProps {
   agents: Record<string, AgentFormData>;

@@ -214,7 +214,6 @@ export interface UseProfileForm {
  * ignore_authors.
  */
 function isProfileFormDataEqual(a: ProfileFormData, b: ProfileFormData): boolean {
-  // Scalar top-level fields.
   if (
     a.id !== b.id ||
     a.tracker !== b.tracker ||
@@ -225,7 +224,6 @@ function isProfileFormDataEqual(a: ProfileFormData, b: ProfileFormData): boolean
     return false;
   }
 
-  // agents: Record<string, {driver, model}>
   const aKeys = Object.keys(a.agents);
   const bKeys = Object.keys(b.agents);
   if (aKeys.length !== bKeys.length) return false;
@@ -237,7 +235,6 @@ function isProfileFormDataEqual(a: ProfileFormData, b: ProfileFormData): boolean
     }
   }
 
-  // sandbox
   const as = a.sandbox;
   const bs = b.sandbox;
   if (
@@ -261,7 +258,6 @@ function isProfileFormDataEqual(a: ProfileFormData, b: ProfileFormData): boolean
     return false;
   }
 
-  // pr_autofix
   if (a.pr_autofix === null && b.pr_autofix === null) return true;
   if (a.pr_autofix === null || b.pr_autofix === null) return false;
   const ap = a.pr_autofix;

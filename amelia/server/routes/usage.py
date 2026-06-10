@@ -21,7 +21,6 @@ from amelia.trajectory import aggregate_usage, load as load_trajectory
 
 router = APIRouter(prefix="/usage", tags=["usage"])
 
-# Valid preset values
 PRESETS = {"7d": 7, "30d": 30, "90d": 90, "all": 365 * 10}  # 'all' = 10 years
 
 
@@ -49,14 +48,12 @@ async def get_usage(
     Raises:
         HTTPException: 400 if invalid preset or date combination.
     """
-    # Validate mutual exclusivity
     if preset is not None and (start is not None or end is not None):
         raise HTTPException(
             status_code=400,
             detail="Provide either start/end or preset, not both.",
         )
 
-    # Validate date parameters
     if bool(start) != bool(end):
         raise HTTPException(
             status_code=400,
@@ -68,7 +65,6 @@ async def get_usage(
             detail="Start date must be on or before end date.",
         )
 
-    # Determine date range
     if start and end:
         start_date = start
         end_date = end
@@ -88,7 +84,6 @@ async def get_usage(
         end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=days - 1)
     else:
-        # Default to 30d
         end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=29)
 

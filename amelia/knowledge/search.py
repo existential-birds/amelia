@@ -39,7 +39,6 @@ async def knowledge_search(
         similarity_threshold=similarity_threshold,
     )
 
-    # Log similarity scores for debugging
     if results:
         similarities = [r.similarity for r in results]
         logger.info(

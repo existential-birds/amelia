@@ -137,7 +137,6 @@ const POLL_ERROR_TOAST_INTERVAL_MS = 30_000;
  * @returns WebSocket URL (ws://host/ws/events or wss://host/ws/events)
  */
 function deriveWebSocketUrl(): string {
-  // Handle SSR/tests where window might not exist
   if (typeof window === 'undefined') {
     return 'ws://localhost:8420/ws/events';
   }
@@ -156,12 +155,12 @@ const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || deriveWebSocketUrl();
 /**
  * Maximum delay between reconnection attempts in milliseconds (30 seconds).
  */
-const MAX_RECONNECT_DELAY = 30000; // 30 seconds
+const MAX_RECONNECT_DELAY = 30000;
 
 /**
  * Initial delay for the first reconnection attempt in milliseconds (1 second).
  */
-const INITIAL_RECONNECT_DELAY = 1000; // 1 second
+const INITIAL_RECONNECT_DELAY = 1000;
 
 /**
  * Handle incoming brainstorm streaming events.
@@ -172,7 +171,6 @@ const INITIAL_RECONNECT_DELAY = 1000; // 1 second
 export function handleBrainstormMessage(msg: BrainstormStreamEvent): void {
   const state = useBrainstormStore.getState();
 
-  // Ignore events for different sessions
   if (msg.session_id !== state.activeSessionId) return;
 
   switch (msg.event_type) {
@@ -215,7 +213,6 @@ export function handleBrainstormMessage(msg: BrainstormStreamEvent): void {
           ),
         }));
       }
-      // Update session usage totals
       if (sessionUsage) {
         state.setSessionUsage(sessionUsage);
       }
@@ -352,7 +349,6 @@ export function useWebSocket() {
       const workflowId = event.workflow_id;
       const lastSequence = lastSequenceRef.current.get(workflowId);
 
-      // Detect sequence gaps
       if (lastSequence !== undefined && event.sequence !== lastSequence + 1) {
         logger.warn('Sequence gap detected', {
           workflow_id: workflowId,
@@ -361,13 +357,10 @@ export function useWebSocket() {
         });
       }
 
-      // Update sequence tracker
       lastSequenceRef.current.set(workflowId, event.sequence);
 
-      // Add to store
       addEvent(event);
 
-      // Show deduplicated toast for pr_poll_error events
       if (event.event_type === 'pr_poll_error') {
         const now = Date.now();
         if (now - lastPollErrorToastMs > POLL_ERROR_TOAST_INTERVAL_MS) {
@@ -376,7 +369,6 @@ export function useWebSocket() {
         }
       }
 
-      // Dispatch custom event for revalidation hints
       window.dispatchEvent(
         new CustomEvent('workflow-event', {
           detail: event,
@@ -391,12 +383,10 @@ export function useWebSocket() {
    * Uses connectRef to avoid circular dependency with connect.
    */
   const scheduleReconnect = useCallback(() => {
-    // Clear any existing timeout
     if (reconnectTimeoutRef.current !== null) {
       clearTimeout(reconnectTimeoutRef.current);
     }
 
-    // Calculate delay with exponential backoff (1s, 2s, 4s, 8s, ..., max 30s)
     const delay = Math.min(
       INITIAL_RECONNECT_DELAY * Math.pow(2, reconnectAttemptRef.current),
       MAX_RECONNECT_DELAY
@@ -413,28 +403,23 @@ export function useWebSocket() {
    * Connect to WebSocket server.
    */
   const connect = useCallback(() => {
-    // Build URL with optional ?since= parameter for backfill
     let url = WS_BASE_URL;
     const currentLastEventId = useWorkflowStore.getState().lastEventId;
     if (currentLastEventId) {
       url += `?since=${encodeURIComponent(currentLastEventId)}`;
     }
 
-    // Create WebSocket
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
-    // Connection opened
     ws.onopen = () => {
       logger.info('WebSocket connected');
       setConnected(true);
-      reconnectAttemptRef.current = 0; // Reset reconnect counter
+      reconnectAttemptRef.current = 0;
 
-      // Subscribe to all workflows
       ws.send(JSON.stringify({ type: 'subscribe_all' }));
     };
 
-    // Message received
     ws.onmessage = (event) => {
       try {
         const message: WebSocketMessage = JSON.parse(event.data);
@@ -469,13 +454,11 @@ export function useWebSocket() {
       }
     };
 
-    // Connection closed
     ws.onclose = (event) => {
       logger.info('WebSocket disconnected', { code: event.code, reason: event.reason });
       setConnected(false);
       wsRef.current = null;
 
-      // Mark any streaming messages as errored
       useBrainstormStore.getState().handleWebSocketDisconnect();
 
       // Reconnect unless it was a normal closure
@@ -484,14 +467,12 @@ export function useWebSocket() {
       }
     };
 
-    // Error occurred
     ws.onerror = (error) => {
       logger.error('WebSocket error', error);
       setConnected(false, 'WebSocket error');
     };
   }, [handleEvent, scheduleReconnect, setConnected, setLastEventId]);
 
-  // Keep connectRef in sync with connect
   connectRef.current = connect;
 
   /**
@@ -505,17 +486,14 @@ export function useWebSocket() {
     connect();
   }, [connect]);
 
-  // Connect on mount, disconnect on unmount
   useEffect(() => {
     connect();
 
     return () => {
-      // Clear reconnect timeout
       if (reconnectTimeoutRef.current !== null) {
         clearTimeout(reconnectTimeoutRef.current);
       }
 
-      // Close WebSocket
       if (wsRef.current) {
         wsRef.current.close();
       }

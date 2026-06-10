@@ -1,4 +1,3 @@
-# amelia/agents/prompts/models.py
 """Pydantic models for prompt configuration.
 
 Provides data models for prompts, versions, and resolution results.

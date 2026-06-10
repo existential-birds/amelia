@@ -81,7 +81,6 @@ describe('PRCommentSection', () => {
 
   it('handles empty comments array gracefully', () => {
     renderComments([]);
-    // Should render without crashing, showing zero counts
     expect(screen.getByText('0 fixed')).toBeInTheDocument();
     expect(screen.getByText('0 failed')).toBeInTheDocument();
     expect(screen.getByText('0 skipped')).toBeInTheDocument();
@@ -96,7 +95,6 @@ describe('PRCommentSection', () => {
     renderComments();
     // The failed comment (3rd row, index 2) has status_reason 'Circular dependency detected'
     const triggers = screen.getAllByRole('button');
-    // Click the 3rd trigger to expand the failed comment
     await triggers[2]!.click();
     expect(screen.getByText(/Circular dependency detected/)).toBeInTheDocument();
   });

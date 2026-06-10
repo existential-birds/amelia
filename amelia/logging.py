@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from loguru import Record
 
 
-# Dashboard color palette (from amelia-dashboard-dark.html)
 COLORS = {
     "gold": "#FFC857",  # Active, warnings, primary accent
     "sage_green": "#5B8A72",  # Success, completed
@@ -31,7 +30,6 @@ COLORS = {
     "sage_pending": "#4A5C54",  # Pending states
 }
 
-# ANSI reset code
 RESET = "\033[0m"
 
 
@@ -49,7 +47,6 @@ def _log_format(record: "Record") -> str:
     """
     level = record["level"].name
 
-    # Color mappings using loguru's color tag syntax
     level_colors = {
         "TRACE": f"<fg {COLORS['sage_pending']}>",
         "DEBUG": f"<fg {COLORS['sage_muted']}>",
@@ -77,10 +74,8 @@ def _log_format(record: "Record") -> str:
         f"<fg {COLORS['cream']}>{{message}}{close}"
     )
 
-    # Add structured fields if present
     extra = record["extra"]
     if extra:
-        # Format extra fields as key=value pairs
         extra_str = " ".join(f"{k}={v!r}" for k, v in extra.items())
         # Escape braces to prevent Loguru format string injection
         extra_str = extra_str.replace("{", "{{").replace("}", "}}")
@@ -88,7 +83,6 @@ def _log_format(record: "Record") -> str:
 
     fmt += "\n"
 
-    # Add exception formatting if present
     if record["exception"]:
         fmt += "{exception}\n"
 
@@ -107,10 +101,8 @@ def _plain_log_format(record: "Record") -> str:
     Returns:
         Plain formatted string without color codes.
     """
-    # Format: timestamp | level | module | message [extra]
     fmt = "{time:HH:mm:ss} │ {level: <8} │ {name}:{message}"
 
-    # Add structured fields if present
     extra = record["extra"]
     if extra:
         extra_str = " ".join(f"{k}={v!r}" for k, v in extra.items())
@@ -119,7 +111,6 @@ def _plain_log_format(record: "Record") -> str:
 
     fmt += "\n"
 
-    # Add exception formatting if present
     if record["exception"]:
         fmt += "{exception}\n"
 
@@ -135,14 +126,11 @@ def configure_logging(level: str = "INFO") -> None:
     Args:
         level: Minimum log level to display (e.g., "DEBUG", "INFO", "WARNING").
     """
-    # Remove default handler
     logger.remove()
 
-    # Detect if stderr is a TTY (terminal) or piped
     # When piped (e.g., under `amelia dev` subprocess), use plain format
     is_tty = sys.stderr.isatty()
 
-    # Add custom formatted handler with explicit flushing for piped output
     logger.add(
         sys.stderr,
         level=level,
@@ -165,7 +153,6 @@ def log_server_startup(host: str, port: int, database_url: str, version: str) ->
         database_url: PostgreSQL connection URL.
         version: Application version string.
     """
-    # Log configuration details with consistent styling
     gold = "\033[38;2;255;200;87m"
     sage = "\033[38;2;91;138;114m"
     blue = "\033[38;2;91;155;213m"
@@ -225,7 +212,6 @@ def log_claude_result(
         num_turns: Number of conversation turns from result events.
         cost_usd: Total cost in USD from result events.
     """
-    # ANSI color codes from palette
     gold = _ansi_color(COLORS["gold"])
     sage = _ansi_color(COLORS["sage_green"])
     blue = _ansi_color(COLORS["blue"])
@@ -234,27 +220,22 @@ def log_claude_result(
     cream = _ansi_color(COLORS["cream"])
     pending = _ansi_color(COLORS["sage_pending"])
 
-    # Box drawing character for visual structure
     vertical = "│"
 
     lines: list[str] = []
 
     if result_type == "assistant":
-        # Claude's thinking/response - use cream for main text
         header = f"{blue}◆ Claude{RESET}"
         lines.append(f"  {header}")
         if content:
-            # Wrap content at ~80 chars and indent
             for line in content.split("\n"):
                 wrapped = line[:120] + ("…" if len(line) > 120 else "")
                 lines.append(f"  {muted}{vertical}{RESET} {cream}{wrapped}{RESET}")
 
     elif result_type == "tool_use":
-        # Tool execution - use gold for emphasis
         header = f"{gold}⚡ Tool: {tool_name or 'unknown'}{RESET}"
         lines.append(f"  {header}")
         if tool_input:
-            # Pretty-print tool input with truncation
             try:
                 input_str = json.dumps(tool_input, indent=2)
                 input_lines = input_str.split("\n")
@@ -267,14 +248,12 @@ def log_claude_result(
                 lines.append(f"  {muted}{vertical}{RESET} {pending}{str(tool_input)[:200]}{RESET}")
 
     elif result_type == "result":
-        # Completion result - use sage green for success, rust for error
         is_success = subtype == "success"
         status_color = sage if is_success else rust
         status_icon = "✓" if is_success else "✗"
         header = f"{status_color}{status_icon} Result{RESET}"
         lines.append(f"  {header}")
 
-        # Stats line with duration, turns, and cost
         stats_parts = []
         if duration_ms is not None:
             duration_sec = duration_ms / 1000
@@ -294,14 +273,11 @@ def log_claude_result(
             )
             lines.append(f"  {muted}{vertical}{RESET} {stats}")
 
-        # Session ID (truncated)
         if session_id:
             short_session = session_id[:8] + "…" if len(session_id) > 8 else session_id
             lines.append(f"  {muted}{vertical}{RESET} {muted}session:{RESET} {blue}{short_session}{RESET}")
 
-        # Result text preview (first ~200 chars, first line only)
         if result_text:
-            # Get first non-empty line
             first_line = result_text.strip().split("\n")[0]
             total_lines = len(result_text.strip().split("\n"))
             preview = first_line[:200] + ("…" if len(first_line) > 200 else "")
@@ -310,21 +286,18 @@ def log_claude_result(
                 lines.append(f"  {muted}{vertical} ({total_lines} lines total){RESET}")
 
     elif result_type == "error":
-        # Error - use rust red
         header = f"{rust}✗ Error{RESET}"
         lines.append(f"  {header}")
         if content:
-            for line in content.split("\n")[:5]:  # Limit error lines
+            for line in content.split("\n")[:5]:
                 lines.append(f"  {muted}{vertical}{RESET} {rust}{line}{RESET}")
 
     elif result_type == "system":
-        # System message - use muted sage
         header = f"{muted}○ System{RESET}"
         lines.append(f"  {header}")
         if content:
             lines.append(f"  {muted}{vertical} {content}{RESET}")
 
-    # Output to stderr (same as loguru)
     if lines:
         sys.stderr.write("\n".join(lines) + "\n")
         sys.stderr.flush()

@@ -19,7 +19,6 @@ vi.mock('@/store/workflowStore', () => ({
   }),
 }));
 
-// Mock modules
 vi.mock('@/utils/workflow', () => ({
   formatElapsedTime: vi.fn(() => '1h 30m'),
 }));
@@ -65,7 +64,6 @@ function renderWithRouter(loaderData: { workflow: typeof mockWorkflow | null }) 
 describe('WorkflowDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset mock state
     Object.keys(mockEventsByWorkflow).forEach(key => delete mockEventsByWorkflow[key]);
   });
 

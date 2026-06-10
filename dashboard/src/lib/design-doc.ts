@@ -10,7 +10,6 @@
  * // Returns: 'Queue Workflows'
  */
 export function extractTitle(markdown: string): string {
-  // Match first H1 heading: # Title (strip common document-type suffixes)
   const match = markdown.match(/^#\s+(.+?)(?:\s+(?:Design|Plan|Spec|RFC|Proposal))?\s*$/mi);
   if (!match || !match[1]) {
     return 'Untitled';
@@ -26,9 +25,7 @@ export function extractTitle(markdown: string): string {
  * // Returns: 'queue-workflows-design'
  */
 export function extractTitleFromFilename(filename: string): string {
-  // Remove extension
   const withoutExt = filename.replace(/\.[^.]+$/, '');
-  // Remove date prefix (YYYY-MM-DD-)
   const withoutDate = withoutExt.replace(/^\d{4}-\d{2}-\d{2}-/, '');
   return withoutDate;
 }

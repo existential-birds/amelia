@@ -222,7 +222,6 @@ def _resolve_globs(
                 if _should_exclude_non_git(abs_path, resolved_dir):
                     continue
 
-            # Apply exclude patterns
             if exclude_patterns:
                 excluded = False
                 for ep in exclude_patterns:

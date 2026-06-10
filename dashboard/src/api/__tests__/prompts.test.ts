@@ -2,12 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { api } from '../client';
 import { mockFetchSuccess, mockFetchError } from '@/test/mocks/fetch';
 
-// Mock fetch globally
 global.fetch = vi.fn();
-
-// ============================================================================
-// Tests
-// ============================================================================
 
 describe('Prompts API', () => {
   beforeEach(() => {

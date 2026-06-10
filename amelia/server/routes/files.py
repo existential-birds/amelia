@@ -38,7 +38,6 @@ def _validate_and_resolve_path(user_path: str, working_dir: Path) -> Path:
     """
     path = Path(user_path)
 
-    # Resolve relative paths against the working directory
     if not path.is_absolute():
         path = working_dir / path
 
@@ -68,7 +67,6 @@ def _validate_and_resolve_path(user_path: str, working_dir: Path) -> Path:
             "Path not accessible (outside working directory)", "PATH_NOT_ACCESSIBLE"
         )
 
-    # Check file exists
     if not resolved_path.exists():
         raise FileOperationError("File not found", "FILE_NOT_FOUND", status_code=404)
 
@@ -131,7 +129,6 @@ async def read_file(
     Raises:
         FileOperationError: If path is invalid, outside working_dir, or file doesn't exist.
     """
-    # Determine base directory
     if worktree_path:
         base_dir = Path(worktree_path)
         if not base_dir.is_absolute():
@@ -185,7 +182,6 @@ async def list_files(
     Raises:
         FileOperationError: If directory is outside base directory or base directory doesn't exist.
     """
-    # Determine base directory
     if worktree_path:
         base_dir = Path(worktree_path)
         if not base_dir.is_absolute():
@@ -234,7 +230,6 @@ async def list_files(
                     modified_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
                 )
             )
-        # Sort by modification time, newest first
         result.sort(key=lambda e: e.modified_at, reverse=True)
         return result
 
@@ -266,7 +261,6 @@ async def get_file(
     Raises:
         FileOperationError: If path is invalid, outside working_dir, or file doesn't exist.
     """
-    # Determine base directory
     if worktree_path:
         base_dir = Path(worktree_path)
         if not base_dir.is_absolute():
@@ -284,13 +278,11 @@ async def get_file(
     # Validate and resolve path - returns only after all security checks pass
     resolved_path = _validate_and_resolve_path(file_path, base_dir)
 
-    # Read content
     try:
         content = await asyncio.to_thread(resolved_path.read_text, encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         raise FileOperationError(f"Failed to read file: {e}", "READ_ERROR") from e
 
-    # Determine content type based on extension
     suffix = resolved_path.suffix.lower()
     content_type = {
         ".md": "text/markdown",

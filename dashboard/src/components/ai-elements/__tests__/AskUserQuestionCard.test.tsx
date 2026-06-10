@@ -143,9 +143,7 @@ describe("AskUserQuestionCard", () => {
       <AskUserQuestionCard payload={singleSelectPayload} onAnswer={onAnswer} />
     );
 
-    // Select an option first
     await user.click(screen.getByText("Option A"));
-    // Then also type in Other
     const otherInput = screen.getByPlaceholderText("Other...");
     await user.type(otherInput, "Custom answer");
     await user.click(screen.getByRole("button", { name: /submit/i }));
@@ -251,7 +249,6 @@ describe("AskUserQuestionCard", () => {
 
     expect(screen.getByText("First")).toBeInTheDocument();
     expect(screen.getByText("Second")).toBeInTheDocument();
-    // Ensure no description elements are rendered
     expect(screen.queryByText(/description/i)).not.toBeInTheDocument();
   });
 
