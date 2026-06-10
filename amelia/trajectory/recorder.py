@@ -52,6 +52,14 @@ class AgentInvocationRecorder:
     def _next_id(self) -> int:
         return len(self._steps) + 1
 
+    def set_tool_definitions(self, tool_definitions: list[dict[str, Any]]) -> None:
+        """Attach the driver's tool definitions to the subagent's agent metadata.
+
+        Args:
+            tool_definitions: Tool definitions as reported by the driver.
+        """
+        self._agent.tool_definitions = tool_definitions
+
     def record_prompt(self, *, instructions: str | None, prompt: str) -> None:
         """Record the resolved prompts: a system step (if instructions) then a user step.
 

@@ -47,7 +47,8 @@ class AgenticMessage(BaseModel):
     - ApiDriver: langchain_core.messages.BaseMessage
 
     Attributes:
-        type: Type of agentic message (thinking, tool_call, tool_result, result).
+        type: Type of agentic message (thinking, tool_call, tool_result,
+            result, usage).
         content: Text content for thinking or result messages.
         tool_name: Name of the tool being called or returning.
         tool_input: Input parameters for tool calls.
@@ -55,6 +56,8 @@ class AgenticMessage(BaseModel):
         tool_call_id: Unique identifier for the tool call.
         session_id: Session identifier for conversation continuity.
         is_error: Whether this message represents an error.
+        model: Model that produced this message, when known.
+        usage: Driver usage snapshot carried by usage messages.
     """
 
     type: AgenticMessageType
@@ -232,6 +235,15 @@ class DriverInterface(Protocol):
     def get_usage(self) -> DriverUsage | None:
         """Return accumulated usage from last execution, or None if unavailable."""
         ...
+
+    def get_tool_definitions(self) -> list[dict[str, Any]] | None:
+        """Return the tool definitions exposed to the model, or None if unknown.
+
+        Optional capability with default-None semantics: drivers that
+        materialize their tool list may override this so trajectory recording
+        can attach it as ``agent.tool_definitions``. The default returns None.
+        """
+        return None
 
     async def cleanup_session(self, session_id: str) -> bool:
         """Clean up driver-specific session state.
