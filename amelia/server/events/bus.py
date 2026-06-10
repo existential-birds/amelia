@@ -32,7 +32,7 @@ class EventBus:
 
     """
 
-    def __init__(self, buffer_size: int = 1000) -> None:
+    def __init__(self, buffer_size: int = 10_000) -> None:
         self._subscribers: list[Callable[[WorkflowEvent], None]] = []
         self._connection_manager: ConnectionManager | None = None
         self._broadcast_tasks: set[asyncio.Task[None]] = set()
@@ -95,25 +95,27 @@ class EventBus:
             self._broadcast_tasks.add(task)
             task.add_done_callback(self._handle_broadcast_done)
 
-    def events_after(self, event_id: UUID) -> list[WorkflowEvent]:
+    def events_after(self, event_id: UUID) -> list[WorkflowEvent] | None:
         """Return buffered events emitted after the given event id.
 
-        Used for WebSocket reconnect backfill. If the id is not in the
-        buffer (never seen or already evicted), returns an empty list —
-        the client treats an empty backfill with a gap as a signal to
-        refetch full state via GET.
+        Used for WebSocket reconnect backfill.
 
         Args:
             event_id: The id of the last event the client received.
 
         Returns:
-            Events emitted after event_id, oldest first; empty if unknown.
+            Events emitted after event_id, oldest first, when the anchor
+            is found in the buffer (may be an empty list if nothing follows).
+            Returns None when the anchor id is not present — either because
+            it was evicted by the ring buffer or was never emitted — signalling
+            that the client must refetch full state via GET rather than assume
+            it is up-to-date.
         """
         events = list(self._buffer)
         for index, event in enumerate(events):
             if event.id == event_id:
                 return events[index + 1:]
-        return []
+        return None
 
     async def wait_for_broadcasts(self) -> None:
         """Wait for all pending broadcast tasks to complete.

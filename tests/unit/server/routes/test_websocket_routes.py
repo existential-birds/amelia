@@ -18,6 +18,7 @@ class TestWebSocketEndpoint:
         """Mock ConnectionManager wired to a real EventBus."""
         manager = AsyncMock(spec=ConnectionManager)
         manager.get_event_bus.return_value = event_bus
+        manager.get_subscriptions.return_value = set()
         return manager
 
     @pytest.fixture
@@ -69,10 +70,10 @@ class TestWebSocketEndpoint:
         assert [p["id"] for p in event_payloads] == [str(e2.id), str(e3.id)]
         assert {"type": "backfill_complete", "count": 2} in sent
 
-    async def test_websocket_backfill_empty_when_id_not_in_buffer(
+    async def test_websocket_backfill_expired_when_id_not_in_buffer(
         self, mock_connection_manager, event_bus: EventBus, mock_websocket, event_factory
     ) -> None:
-        """Unknown/evicted since id yields an empty backfill (client refetches via GET)."""
+        """Unknown/evicted since id yields backfill_expired (client must do a full refresh)."""
         event_bus.emit(event_factory(id=uuid4(), sequence=1))
         mock_websocket.receive_json.side_effect = Exception("disconnect")
 
@@ -81,7 +82,8 @@ class TestWebSocketEndpoint:
 
         sent = [call.args[0] for call in mock_websocket.send_json.call_args_list]
         assert not any(msg.get("type") == "event" for msg in sent)
-        assert {"type": "backfill_complete", "count": 0} in sent
+        assert any(msg.get("type") == "backfill_expired" for msg in sent)
+        assert not any(msg.get("type") == "backfill_complete" for msg in sent)
 
     async def test_websocket_sends_backfill_expired_on_malformed_since(
         self, mock_connection_manager, mock_websocket

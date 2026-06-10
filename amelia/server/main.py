@@ -162,7 +162,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     repository = WorkflowRepository(database)
     profile_repo = ProfileRepository(database)
 
-    event_bus = EventBus()
+    event_bus = EventBus(buffer_size=config.event_bus_buffer_size)
     # Wire WebSocket broadcasting and reconnect backfill
     event_bus.set_connection_manager(connection_manager)
     connection_manager.set_event_bus(event_bus)

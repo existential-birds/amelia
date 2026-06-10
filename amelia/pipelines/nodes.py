@@ -17,10 +17,9 @@ from amelia.agents.developer import Developer
 from amelia.agents.reviewer import Reviewer
 from amelia.core.types import ReviewResult
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.pipelines.utils import extract_node_config
+from amelia.pipelines.utils import extract_node_config, wrap_with_recording
 from amelia.skills.review import REVIEW_TYPE_SKILLS, detect_stack, load_skills
 from amelia.tools.git_utils import get_current_commit
-from amelia.trajectory import RecordingDriver
 
 
 if TYPE_CHECKING:
@@ -140,9 +139,7 @@ async def call_developer_node(
     agent_config = nc.profile.get_agent_config("developer")
     developer = Developer(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
 
-    if nc.recorder is not None:
-        inv = nc.recorder.begin_invocation("developer", model=agent_config.model)
-        developer.driver = RecordingDriver(developer.driver, inv)
+    wrap_with_recording(developer, nc.recorder, "developer", agent_config.model)
 
     final_state = state
     try:
@@ -314,9 +311,7 @@ async def call_reviewer_node(
                 review_guidelines=guidelines,
             )
 
-            if nc.recorder is not None:
-                inv = nc.recorder.begin_invocation(agent_name, model=agent_config.model)
-                reviewer.driver = RecordingDriver(reviewer.driver, inv)
+            wrap_with_recording(reviewer, nc.recorder, agent_name, agent_config.model)
 
             review_result, session_id = await reviewer.agentic_review(
                 state, base_commit, nc.profile,

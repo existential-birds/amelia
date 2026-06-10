@@ -43,12 +43,18 @@ class AgentInvocationRecorder:
         self._agent = Agent(name=agent_name, version=amelia.__version__, model_name=model)
         self._steps: list[Step] = []
         self._final_metrics: FinalMetrics | None = None
+        self._duration_ms: int | None = None
         self._closed = False
 
     @property
     def closed(self) -> bool:
         """Whether ``close`` has been called."""
         return self._closed
+
+    @property
+    def duration_ms(self) -> int | None:
+        """Agent execution time in milliseconds, as reported by the driver."""
+        return self._duration_ms
 
     def _next_id(self) -> int:
         return len(self._steps) + 1
@@ -111,6 +117,7 @@ class AgentInvocationRecorder:
                 total_cost_usd=cost_usd if cost_usd is not None else usage.cost_usd,
                 total_steps=len(self._steps),
             )
+            self._duration_ms = usage.duration_ms
         else:
             self._final_metrics = FinalMetrics(total_steps=len(self._steps))
 
@@ -157,6 +164,7 @@ class WorkflowTrajectoryRecorder:
         self._invocations: list[AgentInvocationRecorder] = []
         self._prior_subagents: list[Trajectory] = []
         self._final_metrics: FinalMetrics | None = None
+        self._total_duration_ms: int | None = None
         self._load_existing()
 
     def _load_existing(self) -> None:
@@ -186,6 +194,15 @@ class WorkflowTrajectoryRecorder:
     def final_metrics(self) -> FinalMetrics | None:
         """Parent final metrics computed by the most recent ``finalize`` call."""
         return self._final_metrics
+
+    @property
+    def total_duration_ms(self) -> int | None:
+        """Sum of driver-reported execution times across all invocations.
+
+        Populated after ``finalize`` is called. Returns ``None`` when no
+        invocation reported a duration (e.g. drivers that do not track it).
+        """
+        return self._total_duration_ms
 
     def begin_invocation(
         self, agent_name: str, *, model: str | None = None
@@ -273,6 +290,9 @@ class WorkflowTrajectoryRecorder:
             if not inv.closed:
                 inv.close()
         subagents = self._prior_subagents + [inv.build() for inv in self._invocations]
+        self._total_duration_ms = _sum_present(
+            inv.duration_ms for inv in self._invocations
+        )
 
         outcome: dict[str, Any] = {"status": status}
         if failure_reason is not None:

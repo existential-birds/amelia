@@ -70,7 +70,8 @@ class TestTrajectorySweep:
         assert result.trajectories_deleted == 1
         assert not path.exists()
         assert not path.parent.exists()
-        update_query = mock_db.execute.call_args.args[0]
+        # First execute call is the UPDATE; second is the DELETE
+        update_query = mock_db.execute.call_args_list[0].args[0]
         assert "trajectory_path = NULL" in update_query
         assert "total_cost_usd = NULL" in update_query
         assert "total_tokens = NULL" in update_query
@@ -93,12 +94,13 @@ class TestTrajectorySweep:
         result = await service.cleanup_on_shutdown()
 
         assert result.trajectories_deleted == 1
-        mock_db.execute.assert_called_once()
+        # Two execute calls: UPDATE to NULL index columns, then DELETE old rows
+        assert mock_db.execute.call_count == 2
 
     async def test_no_old_trajectories_skips_update(
         self, mock_db: AsyncMock, mock_checkpointer: AsyncMock
     ) -> None:
-        """No rows past the cutoff means no UPDATE is issued."""
+        """No rows past the cutoff means no UPDATE is issued (only DELETE runs)."""
         service = LogRetentionService(
             db=mock_db,
             config=MockConfig(checkpoint_retention_days=-1),
@@ -108,7 +110,79 @@ class TestTrajectorySweep:
         result = await service.cleanup_on_shutdown()
 
         assert result.trajectories_deleted == 0
-        mock_db.execute.assert_not_called()
+        # No UPDATE is issued; only the DELETE for already-swept rows is called
+        update_calls = [
+            c for c in mock_db.execute.call_args_list
+            if "UPDATE" in c.args[0]
+        ]
+        assert update_calls == []
+
+
+class TestWorkflowRowDeletion:
+    """Workflow row deletion for swept finished workflows past the cutoff."""
+
+    async def test_deletes_rows_with_null_trajectory(
+        self, mock_db: AsyncMock, mock_checkpointer: AsyncMock
+    ) -> None:
+        """Issues DELETE for finished rows whose trajectory_path is already NULL."""
+        service = LogRetentionService(
+            db=mock_db,
+            config=MockConfig(checkpoint_retention_days=-1),
+            checkpointer=mock_checkpointer,
+        )
+        # No rows need trajectory sweep; one row is ready for deletion
+        mock_db.fetch_all.return_value = []
+        mock_db.execute.return_value = 1
+
+        result = await service.cleanup_on_shutdown()
+
+        assert result.workflows_deleted == 1
+        delete_call = mock_db.execute.call_args_list[0]
+        query = delete_call.args[0]
+        assert "DELETE FROM workflows" in query
+        assert "trajectory_path IS NULL" in query
+
+    async def test_no_rows_to_delete(
+        self, mock_db: AsyncMock, mock_checkpointer: AsyncMock
+    ) -> None:
+        """Returns 0 when DELETE matches no rows."""
+        service = LogRetentionService(
+            db=mock_db,
+            config=MockConfig(checkpoint_retention_days=-1),
+            checkpointer=mock_checkpointer,
+        )
+        mock_db.fetch_all.return_value = []
+        mock_db.execute.return_value = 0
+
+        result = await service.cleanup_on_shutdown()
+
+        assert result.workflows_deleted == 0
+
+    async def test_sweep_and_delete_same_cycle(
+        self, mock_db: AsyncMock, mock_checkpointer: AsyncMock, tmp_path: Path
+    ) -> None:
+        """Both UPDATE (sweep) and DELETE (row removal) run in the same cycle."""
+        path = _make_trajectory_file(tmp_path, "wf-old")
+        service = LogRetentionService(
+            db=mock_db,
+            config=MockConfig(checkpoint_retention_days=-1),
+            checkpointer=mock_checkpointer,
+        )
+        mock_db.fetch_all.return_value = [
+            {"id": "wf-old", "trajectory_path": str(path)},
+        ]
+        # UPDATE returns 1 swept, DELETE returns 1 deleted (a previously-swept row)
+        mock_db.execute.side_effect = [1, 1]
+
+        result = await service.cleanup_on_shutdown()
+
+        assert result.trajectories_deleted == 1
+        assert result.workflows_deleted == 1
+        assert mock_db.execute.call_count == 2
+        update_query = mock_db.execute.call_args_list[0].args[0]
+        assert "trajectory_path = NULL" in update_query
+        delete_query = mock_db.execute.call_args_list[1].args[0]
+        assert "DELETE FROM workflows" in delete_query
 
 
 class TestCheckpointCleanup:

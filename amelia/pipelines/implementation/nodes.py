@@ -28,10 +28,9 @@ from amelia.pipelines.implementation.utils import (
     extract_task_count,
     validate_plan_structure,
 )
-from amelia.pipelines.utils import extract_node_config
+from amelia.pipelines.utils import extract_node_config, wrap_with_recording
 from amelia.tools.write_plan import execute_write_plan
 from amelia.tools.write_plan_schema import WritePlanInput
-from amelia.trajectory import RecordingDriver
 
 
 async def _resolve_plan_from_tool_calls(
@@ -331,9 +330,7 @@ async def call_architect_node(
     agent_config = nc.profile.get_agent_config("architect")
     architect = Architect(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
 
-    if nc.recorder is not None:
-        inv = nc.recorder.begin_invocation("architect", model=agent_config.model)
-        architect.driver = RecordingDriver(architect.driver, inv)
+    wrap_with_recording(architect, nc.recorder, "architect", agent_config.model)
 
     # Ensure the plan directory exists before the architect runs
     plan_rel_path = resolve_plan_path(nc.profile.plan_path_pattern, state.issue.id)

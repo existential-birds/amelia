@@ -2,7 +2,9 @@
 
 Trajectory files are the only persistent run history. Retention removes the
 trajectory file (and its per-workflow directory) for finished workflows past
-the cutoff and NULLs the thin index columns on ``workflows``.
+the cutoff, NULLs the thin index columns on ``workflows``, and then deletes
+``workflows`` rows whose index columns are already NULL (swept in a prior
+cycle) and whose ``completed_at`` is before the cutoff.
 """
 
 import asyncio
@@ -49,6 +51,7 @@ class CleanupResult(BaseModel):
     """Result of cleanup operation."""
 
     trajectories_deleted: int
+    workflows_deleted: int = 0
     checkpoints_deleted: int = 0
 
 
@@ -89,15 +92,19 @@ class LogRetentionService:
             days=self._config.log_retention_days
         )
 
-        trajectories_deleted = await self._cleanup_trajectories(cutoff_date)
+        trajectories_deleted, swept_ids = await self._cleanup_trajectories(cutoff_date)
+        workflows_deleted = await self._delete_old_workflow_rows(cutoff_date, swept_ids)
         checkpoints_deleted = await self._cleanup_checkpoints()
 
         return CleanupResult(
             trajectories_deleted=trajectories_deleted,
+            workflows_deleted=workflows_deleted,
             checkpoints_deleted=checkpoints_deleted,
         )
 
-    async def _cleanup_trajectories(self, cutoff_date: datetime) -> int:
+    async def _cleanup_trajectories(
+        self, cutoff_date: datetime
+    ) -> tuple[int, list[Any]]:
         """Remove trajectory files for finished workflows past the cutoff.
 
         Paths come from the thin index (``workflows.trajectory_path``). A
@@ -108,7 +115,9 @@ class LogRetentionService:
             cutoff_date: Workflows completed before this moment are swept.
 
         Returns:
-            Number of workflows whose trajectory index was cleared.
+            Number of workflows whose trajectory index was cleared, and their
+            ids — row deletion must skip these so a swept row survives until
+            the next cleanup cycle.
         """
         rows = await self._db.fetch_all(
             """
@@ -120,7 +129,7 @@ class LogRetentionService:
             cutoff_date,
         )
         if not rows:
-            return 0
+            return 0, []
 
         for row in rows:
             path = Path(row["trajectory_path"])
@@ -147,7 +156,45 @@ class LogRetentionService:
             count=cleared,
             cutoff=cutoff_date,
         )
-        return cleared
+        return cleared, [row["id"] for row in rows]
+
+    async def _delete_old_workflow_rows(
+        self, cutoff_date: datetime, just_swept_ids: list[Any]
+    ) -> int:
+        """Delete workflow rows that were swept in a prior cycle and are past the cutoff.
+
+        Rows are only deleted once their ``trajectory_path`` is NULL (meaning
+        the trajectory sweep has already run for them) — excluding rows swept
+        in this same cycle, ensuring the two-phase approach: first sweep files
+        + NULL index columns, then on a later shutdown cycle delete the bare
+        rows.
+
+        Args:
+            cutoff_date: Workflows completed before this moment are deleted.
+            just_swept_ids: Workflow ids swept by this cycle's trajectory
+                cleanup; these survive until the next cycle.
+
+        Returns:
+            Number of workflow rows deleted.
+        """
+        deleted = await self._db.execute(
+            """
+            DELETE FROM workflows
+            WHERE status IN ('completed', 'failed', 'cancelled')
+            AND completed_at < $1
+            AND trajectory_path IS NULL
+            AND NOT (id = ANY($2::uuid[]))
+            """,
+            cutoff_date,
+            just_swept_ids,
+        )
+        if deleted:
+            logger.debug(
+                "Deleted old workflow rows",
+                count=deleted,
+                cutoff=cutoff_date,
+            )
+        return deleted
 
     async def _cleanup_checkpoints(self) -> int:
         """Delete LangGraph checkpoints for finished workflows based on retention.

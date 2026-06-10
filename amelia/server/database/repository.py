@@ -368,18 +368,23 @@ class WorkflowRepository:
         workflow_id: uuid.UUID,
         path: Path,
         final_metrics: "FinalMetrics | None",
+        execution_duration_ms: int | None = None,
     ) -> None:
         """Persist the thin trajectory index columns for a finalized workflow.
 
-        Single UPDATE writing ``trajectory_path``, ``total_cost_usd``, and
-        ``total_tokens`` from the trajectory's final metrics.
-        ``total_duration_ms`` is derived from the workflow's own
-        ``started_at``/``completed_at`` timestamps.
+        Single UPDATE writing ``trajectory_path``, ``total_cost_usd``,
+        ``total_tokens``, and ``total_duration_ms`` from the trajectory's
+        final metrics and driver-reported execution time.
 
         Args:
             workflow_id: Workflow whose index columns to set.
             path: Canonical trajectory file path.
             final_metrics: Parent trajectory final metrics, if available.
+            execution_duration_ms: Sum of driver-reported agent execution times
+                in milliseconds. Stored directly as ``total_duration_ms``; when
+                ``None`` (drivers that do not track duration) the column falls
+                back to wall-clock ``completed_at - started_at``, so callers
+                must persist ``completed_at`` before indexing.
 
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist.
@@ -399,16 +404,16 @@ class WorkflowRepository:
                 trajectory_path = $1,
                 total_cost_usd = $2,
                 total_tokens = $3,
-                total_duration_ms = CASE
-                    WHEN completed_at IS NOT NULL AND started_at IS NOT NULL
-                    THEN (EXTRACT(EPOCH FROM (completed_at - started_at)) * 1000)::BIGINT
-                    ELSE NULL
-                END
-            WHERE id = $4
+                total_duration_ms = COALESCE(
+                    $4::bigint,
+                    (EXTRACT(EPOCH FROM (completed_at - started_at)) * 1000)::bigint
+                )
+            WHERE id = $5
             """,
             str(path),
             total_cost,
             total_tokens,
+            execution_duration_ms,
             workflow_id,
         )
         if rows_affected == 0:

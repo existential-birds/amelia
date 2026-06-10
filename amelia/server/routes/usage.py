@@ -6,6 +6,7 @@ window for period-over-period comparison), each file is loaded, and the
 aggregation happens in Python via ``aggregate_usage``.
 """
 
+import asyncio
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -93,20 +94,23 @@ async def get_usage(
     query_start = start_date - timedelta(days=period_days)
     rows = await repository.list_trajectory_paths(query_start, end_date)
 
-    items: list[tuple[Trajectory, date, int | None]] = []
-    skipped = 0
-    for path_str, completed_on, duration_ms in rows:
+    async def _load_one(
+        path_str: str, completed_on: date, duration_ms: int | None
+    ) -> tuple[Trajectory, date, int | None] | None:
         try:
-            trajectory = load_trajectory(Path(path_str))
+            trajectory = await asyncio.to_thread(load_trajectory, Path(path_str))
         except (OSError, ValueError) as exc:
-            skipped += 1
             logger.warning(
                 "Skipping unreadable trajectory file in usage aggregation",
                 path=path_str,
                 error=str(exc),
             )
-            continue
-        items.append((trajectory, completed_on, duration_ms))
+            return None
+        return (trajectory, completed_on, duration_ms)
+
+    results = await asyncio.gather(*(_load_one(*row) for row in rows))
+    items: list[tuple[Trajectory, date, int | None]] = [r for r in results if r is not None]
+    skipped = len(results) - len(items)
     if skipped:
         logger.warning(
             "Usage aggregation skipped unreadable trajectory files",

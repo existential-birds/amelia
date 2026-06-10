@@ -27,8 +27,8 @@ def map_messages(messages: list[AgenticMessage], start_id: int) -> list[Step]:
         ATIF steps, all with ``source="agent"``. A TOOL_CALL opens a step;
         a TOOL_RESULT with matching ``tool_call_id`` attaches to that step's
         observation. A TOOL_RESULT without a ``tool_call_id`` attaches to the
-        most recently opened tool step (drivers that omit ids pair calls and
-        results by stream order). THINKING maps to ``reasoning_content``;
+        oldest still-open tool step (drivers that omit ids pair calls and
+        results by stream order, FIFO). THINKING maps to ``reasoning_content``;
         RESULT maps to ``message`` (``extra["is_error"]`` set when the result
         is an error). USAGE messages are skipped — metrics are handled by the
         recorder.
@@ -38,7 +38,7 @@ def map_messages(messages: list[AgenticMessage], start_id: int) -> list[Step]:
     """
     steps: list[Step] = []
     open_tool_steps: dict[str, Step] = {}
-    last_tool_step: Step | None = None
+    open_tool_steps_ordered: list[Step] = []
 
     for msg in messages:
         if msg.type == AgenticMessageType.USAGE:
@@ -61,19 +61,21 @@ def map_messages(messages: list[AgenticMessage], start_id: int) -> list[Step]:
             )
             steps.append(step)
             open_tool_steps[call_id] = step
-            last_tool_step = step
+            open_tool_steps_ordered.append(step)
 
         elif msg.type == AgenticMessageType.TOOL_RESULT:
             if msg.tool_call_id is not None:
                 step = open_tool_steps.get(msg.tool_call_id)
             else:
-                step = last_tool_step
+                step = open_tool_steps_ordered[0] if open_tool_steps_ordered else None
             if step is None:
                 raise ValueError(
                     f"TOOL_RESULT with tool_call_id={msg.tool_call_id!r} has no "
                     "matching TOOL_CALL in this message stream"
                 )
             assert step.tool_calls is not None  # opened by a TOOL_CALL above
+            if step in open_tool_steps_ordered:
+                open_tool_steps_ordered.remove(step)
             result = ObservationResult(
                 source_call_id=msg.tool_call_id or step.tool_calls[0].tool_call_id,
                 content=msg.tool_output,

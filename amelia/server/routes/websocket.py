@@ -8,6 +8,7 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from loguru import logger
 
 from amelia.server.events.connection_manager import ConnectionManager
+from amelia.server.models.events import TRACE_TYPES
 
 
 router = APIRouter(tags=["websocket"])
@@ -56,21 +57,40 @@ async def websocket_endpoint(
                     logger.warning("backfill_expired", since_event_id=since)
                 else:
                     # Replay missed events from the in-memory ring buffer.
-                    # An evicted/unknown id yields an empty backfill — the
-                    # client treats empty-with-gap as "refetch via GET".
+                    # None means the anchor id was evicted or never seen —
+                    # the client must refetch full state via GET.
                     events = bus.events_after(since_id)
 
-                    for event in events:
+                    if events is None:
                         await websocket.send_json({
-                            "type": "event",
-                            "payload": event.model_dump(mode="json"),
+                            "type": "backfill_expired",
+                            "message": "Event id not in buffer (evicted). Full refresh required.",
                         })
+                        logger.warning("backfill_expired", since_event_id=str(since_id))
+                    else:
+                        # Apply the same subscription filtering used by broadcast():
+                        # trace events go to everyone; other events are filtered by
+                        # workflow subscription (empty set == subscribed to all).
+                        subscribed_ids = await connection_manager.get_subscriptions(websocket)
+                        sent = 0
+                        for event in events:
+                            is_trace = event.event_type in TRACE_TYPES
+                            wid_str = str(event.workflow_id) if event.workflow_id else None
+                            if not is_trace and subscribed_ids and (
+                                wid_str is None or wid_str not in subscribed_ids
+                            ):
+                                continue
+                            await websocket.send_json({
+                                "type": "event",
+                                "payload": event.model_dump(mode="json"),
+                            })
+                            sent += 1
 
-                    await websocket.send_json({
-                        "type": "backfill_complete",
-                        "count": len(events),
-                    })
-                    logger.info("backfill_complete", count=len(events))
+                        await websocket.send_json({
+                            "type": "backfill_complete",
+                            "count": sent,
+                        })
+                        logger.info("backfill_complete", count=sent)
             else:
                 logger.warning("backfill_unavailable", reason="event_bus_not_initialized")
 

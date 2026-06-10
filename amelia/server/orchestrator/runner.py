@@ -500,6 +500,7 @@ class GraphRunner:
         workflow_id: uuid.UUID,
         status: str,
         failure_reason: str | None = None,
+        pipeline: str = "implementation",
     ) -> None:
         """Finalize and index the workflow's trajectory, if one is recording.
 
@@ -513,12 +514,14 @@ class GraphRunner:
             workflow_id: Workflow whose recorder to finalize.
             status: Terminal outcome status (``completed``/``failed``/``cancelled``).
             failure_reason: Outcome failure reason for failed workflows.
+            pipeline: Pipeline label written into outcome metadata
+                (``"implementation"`` or ``"review"``).
         """
         recorder = self._recorders.pop(workflow_id, None)
         if recorder is None:
             return
         try:
-            outcome_extra: dict[str, Any] = {"pipeline": "implementation"}
+            outcome_extra: dict[str, Any] = {"pipeline": pipeline}
             verdicts = await self._get_review_verdicts(workflow_id)
             if verdicts:
                 outcome_extra["reviews"] = verdicts
@@ -528,7 +531,8 @@ class GraphRunner:
                 outcome_extra=outcome_extra,
             )
             await self._repository.set_trajectory_index(
-                workflow_id, path, recorder.final_metrics
+                workflow_id, path, recorder.final_metrics,
+                execution_duration_ms=recorder.total_duration_ms,
             )
             logger.info(
                 "Trajectory finalized",
@@ -1051,6 +1055,12 @@ class GraphRunner:
                             WorkflowStatus.FAILED,
                             failure_reason="Unexpected interrupt in review workflow",
                         )
+                        await self.finalize_trajectory(
+                            workflow_id,
+                            status="failed",
+                            failure_reason="Unexpected interrupt in review workflow",
+                            pipeline="review",
+                        )
                         return
                     await self._events.handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
@@ -1060,6 +1070,7 @@ class GraphRunner:
                     "Review workflow completed",
                 )
                 await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
+                await self.finalize_trajectory(workflow_id, status="completed", pipeline="review")
 
             except Exception as e:
                 logger.exception("Review workflow failed", workflow_id=workflow_id)
@@ -1071,6 +1082,9 @@ class GraphRunner:
                 )
                 await self._repository.set_status(
                     workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
+                )
+                await self.finalize_trajectory(
+                    workflow_id, status="failed", failure_reason=str(e), pipeline="review"
                 )
         finally:
             if sandbox_provider is not None:

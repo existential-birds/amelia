@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.runnables.config import RunnableConfig
 
 from amelia.core.types import Profile
+from amelia.trajectory import RecordingDriver
 
 
 if TYPE_CHECKING:
@@ -35,6 +36,23 @@ class NodeConfigParams:
     prompts: dict[str, Any]
     sandbox_provider: "SandboxProvider | None"
     recorder: "WorkflowTrajectoryRecorder | None"
+
+
+def wrap_with_recording(agent: Any, recorder: "WorkflowTrajectoryRecorder | None", agent_name: str, model: str) -> None:
+    """Wrap an agent's driver with RecordingDriver if a recorder is active.
+
+    This is the single canonical recording-seam guard used at every node site.
+    When ``recorder`` is None (CLI / non-server mode) the call is a no-op.
+
+    Args:
+        agent: An agent instance that exposes a ``driver`` attribute.
+        recorder: The active WorkflowTrajectoryRecorder, or None.
+        agent_name: Logical name for the invocation (e.g. ``"developer"``).
+        model: Model identifier string from the agent's config.
+    """
+    if recorder is not None:
+        inv = recorder.begin_invocation(agent_name, model=model)
+        agent.driver = RecordingDriver(agent.driver, inv)
 
 
 def extract_config_params(

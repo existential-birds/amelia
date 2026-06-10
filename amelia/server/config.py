@@ -44,3 +44,13 @@ class ServerConfig(BaseSettings):
         default_factory=lambda: Path.home() / ".amelia" / "trajectories",
         description="Directory where ATIF trajectory files are written",
     )
+    event_bus_buffer_size: int = Field(
+        default=10_000,
+        ge=1,
+        description=(
+            "Capacity of the in-memory ring buffer used for WebSocket reconnect "
+            "backfill. Events are evicted oldest-first once the buffer is full. "
+            "Increase this if frequent buffer misses are observed on busy servers "
+            "running many concurrent workflows."
+        ),
+    )

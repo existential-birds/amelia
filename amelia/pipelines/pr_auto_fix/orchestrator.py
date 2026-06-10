@@ -658,7 +658,8 @@ class PRAutoFixOrchestrator:
             )
             if self._workflow_repo is not None:
                 await self._workflow_repo.set_trajectory_index(
-                    workflow_id, path, recorder.final_metrics
+                    workflow_id, path, recorder.final_metrics,
+                    execution_duration_ms=recorder.total_duration_ms,
                 )
             logger.info(
                 "Trajectory finalized",

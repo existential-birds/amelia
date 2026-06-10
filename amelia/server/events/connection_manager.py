@@ -62,6 +62,15 @@ class ConnectionManager:
             if websocket in self._connections:
                 self._connections[websocket] = set()
 
+    async def get_subscriptions(self, websocket: WebSocket) -> set[str]:
+        """Return the subscription set for a connection (snapshot).
+
+        An empty set means "subscribed to all workflows".
+        Returns an empty set if the websocket is not found.
+        """
+        async with self._lock:
+            return set(self._connections.get(websocket, set()))
+
 
     async def _send_to_client(
         self, ws: WebSocket, payload: dict[str, Any], timeout: float = 5.0

@@ -27,7 +27,7 @@ from amelia.pipelines.pr_auto_fix.state import (
     PRAutoFixState,
     ResolutionResult,
 )
-from amelia.pipelines.utils import extract_config_params
+from amelia.pipelines.utils import extract_config_params, wrap_with_recording
 from amelia.services.classifier import (
     classify_comments,
     filter_comments,
@@ -36,7 +36,6 @@ from amelia.services.classifier import (
 )
 from amelia.services.github_pr import GitHubPRService
 from amelia.tools.git_utils import GitOperations
-from amelia.trajectory import RecordingDriver
 
 
 async def classify_node(
@@ -271,9 +270,7 @@ async def develop_node(
                 },
             )
 
-            if recorder is not None:
-                inv = recorder.begin_invocation("developer", model=agent_config.model)
-                dev.driver = RecordingDriver(dev.driver, inv)
+            wrap_with_recording(dev, recorder, "developer", agent_config.model)
 
             impl_state = ImplementationState(
                 workflow_id=state.workflow_id,
