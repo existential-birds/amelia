@@ -6,7 +6,7 @@ mocked at the external boundary only), projects it into harbor's export
 layout, then drives the **actual** ``harbor traces export`` CLI as a
 subprocess — the production-entrypoint test for the interchange contract.
 
-Layout + command come from Task 0 (``SPIKE-FINDINGS.md``):
+Layout + command were verified against harbor 0.13.1:
 
 - trial dir = any dir containing ``agent/``; ``result.json`` sits beside it
   and its ``agent.name`` must be a harbor ``AgentName`` enum value with
@@ -47,15 +47,14 @@ from tests.integration.test_trajectory_end_to_end import (  # noqa: F401
 pytestmark = pytest.mark.integration
 
 
-# Exact command verified in Task 0: `uv run harbor traces export --path <root> --verbose`
 EXPORT_ARGS = ("--verbose", "--path")
 
 
 def arrange_harbor_layout(trajectory_run_dir: Path) -> Path:
     """Project amelia's canonical trajectory into harbor's export layout.
 
-    Builds ``<root>/trial-1/{result.json,agent/trajectory.json}`` per Task 0
-    findings and writes each embedded subagent trajectory to a sibling
+    Builds ``<root>/trial-1/{result.json,agent/trajectory.json}`` and writes
+    each embedded subagent trajectory to a sibling
     ``agent/trajectory.<trajectory_id>.json`` (the CLI only exports subagent
     rows from sibling files, never from the embedded list).
 
