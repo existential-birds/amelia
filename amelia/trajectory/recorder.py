@@ -1,0 +1,231 @@
+"""Per-workflow ATIF trajectory assembly.
+
+``WorkflowTrajectoryRecorder`` owns one parent trajectory per workflow. Each
+agent invocation (``begin_invocation``) adds a parent step that references an
+embedded subagent trajectory, recorded through ``AgentInvocationRecorder``.
+``finalize`` drains any still-open invocations, stamps the outcome, and writes
+the file atomically via :mod:`amelia.trajectory.store`.
+"""
+import asyncio
+import uuid
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Any
+
+from harbor.models.trajectories import (
+    Agent,
+    FinalMetrics,
+    Observation,
+    ObservationResult,
+    Step,
+    SubagentTrajectoryRef,
+    Trajectory,
+)
+
+import amelia
+from amelia.drivers.base import AgenticMessage, DriverUsage
+from amelia.trajectory.mapping import map_messages, usage_to_metrics
+from amelia.trajectory.store import trajectory_path, write_atomic
+
+
+def _sum_present[Num: (int, float)](values: Iterable[Num | None]) -> Num | None:
+    """Sum the non-None values, or return None if none are present."""
+    present = [v for v in values if v is not None]
+    return sum(present) if present else None
+
+
+class AgentInvocationRecorder:
+    """Records one agent invocation as an embedded subagent trajectory."""
+
+    def __init__(self, agent_name: str, model: str | None, trajectory_id: str) -> None:
+        self.trajectory_id = trajectory_id
+        self._agent = Agent(name=agent_name, version=amelia.__version__, model_name=model)
+        self._steps: list[Step] = []
+        self._final_metrics: FinalMetrics | None = None
+        self._closed = False
+
+    @property
+    def closed(self) -> bool:
+        """Whether ``close`` has been called."""
+        return self._closed
+
+    def _next_id(self) -> int:
+        return len(self._steps) + 1
+
+    def record_prompt(self, *, instructions: str | None, prompt: str) -> None:
+        """Record the resolved prompts: a system step (if instructions) then a user step.
+
+        Args:
+            instructions: Resolved agent instructions; skipped when None.
+            prompt: Resolved task prompt for the agent.
+        """
+        if instructions is not None:
+            self._steps.append(
+                Step(step_id=self._next_id(), source="system", message=instructions)
+            )
+        self._steps.append(Step(step_id=self._next_id(), source="user", message=prompt))
+
+    def record_messages(self, messages: list[AgenticMessage]) -> None:
+        """Append driver messages as ATIF steps (verbatim, untruncated).
+
+        Args:
+            messages: Driver messages in stream order.
+        """
+        self._steps.extend(map_messages(messages, start_id=self._next_id()))
+
+    def close(
+        self, usage: DriverUsage | None = None, cost_usd: float | None = None
+    ) -> None:
+        """Close the invocation, setting final metrics and last-step metrics.
+
+        Idempotent — subsequent calls are no-ops. An invocation with no
+        recorded steps gets a placeholder system step (ATIF requires at least
+        one step per trajectory).
+
+        Args:
+            usage: Accumulated driver usage, if available.
+            cost_usd: Resolved cost in USD; falls back to ``usage.cost_usd``.
+        """
+        if self._closed:
+            return
+        self._closed = True
+        if not self._steps:
+            self._steps.append(
+                Step(step_id=1, source="system", message="(no messages recorded)")
+            )
+        if usage is not None:
+            self._steps[-1].metrics = usage_to_metrics(usage, cost_usd)
+            self._final_metrics = FinalMetrics(
+                total_prompt_tokens=usage.input_tokens,
+                total_completion_tokens=usage.output_tokens,
+                total_cached_tokens=usage.cache_read_tokens,
+                total_cost_usd=cost_usd if cost_usd is not None else usage.cost_usd,
+                total_steps=len(self._steps),
+            )
+        else:
+            self._final_metrics = FinalMetrics(total_steps=len(self._steps))
+
+    def build(self) -> Trajectory:
+        """Build the embedded subagent trajectory. The invocation must be closed."""
+        if not self._closed:
+            raise ValueError(
+                f"invocation {self.trajectory_id!r} must be closed before build()"
+            )
+        return Trajectory(
+            trajectory_id=self.trajectory_id,
+            agent=self._agent,
+            steps=self._steps,
+            final_metrics=self._final_metrics,
+        )
+
+
+class WorkflowTrajectoryRecorder:
+    """Assembles one canonical ATIF trajectory per workflow run."""
+
+    def __init__(
+        self,
+        *,
+        workflow_id: uuid.UUID,
+        trajectory_dir: Path,
+        profile_snapshot: dict[str, Any],
+    ) -> None:
+        self._workflow_id = workflow_id
+        self._trajectory_dir = trajectory_dir
+        self._profile_snapshot = profile_snapshot
+        self._parent_steps: list[Step] = []
+        self._invocations: list[AgentInvocationRecorder] = []
+
+    def begin_invocation(
+        self, agent_name: str, *, model: str | None = None
+    ) -> AgentInvocationRecorder:
+        """Start recording an agent invocation.
+
+        Adds a parent step whose observation references a new embedded
+        subagent trajectory with a unique ``trajectory_id``.
+
+        Args:
+            agent_name: Name of the invoked agent (e.g. ``"developer"``).
+            model: Model the agent is configured with, if known.
+
+        Returns:
+            The invocation recorder for the agent's driver stream.
+        """
+        trajectory_id = f"{agent_name}-inv-{len(self._invocations) + 1}"
+        inv = AgentInvocationRecorder(agent_name, model, trajectory_id)
+        self._invocations.append(inv)
+        self._parent_steps.append(
+            Step(
+                step_id=len(self._parent_steps) + 1,
+                source="agent",
+                message=f"Invoked {agent_name}",
+                llm_call_count=0,
+                observation=Observation(
+                    results=[
+                        ObservationResult(
+                            subagent_trajectory_ref=[
+                                SubagentTrajectoryRef(trajectory_id=trajectory_id)
+                            ]
+                        )
+                    ]
+                ),
+            )
+        )
+        return inv
+
+    async def finalize(self, status: str, failure_reason: str | None = None) -> Path:
+        """Close open invocations, assemble the parent trajectory, and write it.
+
+        Args:
+            status: Terminal workflow status (e.g. ``"completed"``, ``"failed"``).
+            failure_reason: Reason recorded in the outcome when the workflow failed.
+
+        Returns:
+            Path of the written ``trajectory.json``.
+
+        Raises:
+            Exception: Write errors propagate — never swallowed into a
+                half-written file.
+        """
+        for inv in self._invocations:
+            if not inv.closed:
+                inv.close()
+        subagents = [inv.build() for inv in self._invocations]
+
+        outcome: dict[str, Any] = {"status": status}
+        if failure_reason is not None:
+            outcome["failure_reason"] = failure_reason
+
+        parent_steps = self._parent_steps or [
+            Step(step_id=1, source="system", message="No agent invocations recorded")
+        ]
+        trajectory = Trajectory(
+            session_id=str(self._workflow_id),
+            agent=Agent(
+                name="amelia", version=amelia.__version__, model_name="orchestrator"
+            ),
+            steps=parent_steps,
+            final_metrics=FinalMetrics(
+                total_prompt_tokens=_sum_present(
+                    s.final_metrics.total_prompt_tokens if s.final_metrics else None
+                    for s in subagents
+                ),
+                total_completion_tokens=_sum_present(
+                    s.final_metrics.total_completion_tokens if s.final_metrics else None
+                    for s in subagents
+                ),
+                total_cached_tokens=_sum_present(
+                    s.final_metrics.total_cached_tokens if s.final_metrics else None
+                    for s in subagents
+                ),
+                total_cost_usd=_sum_present(
+                    s.final_metrics.total_cost_usd if s.final_metrics else None
+                    for s in subagents
+                ),
+                total_steps=len(parent_steps),
+            ),
+            extra={"outcome": outcome, **self._profile_snapshot},
+            subagent_trajectories=subagents or None,
+        )
+        path = trajectory_path(self._trajectory_dir, self._workflow_id)
+        await asyncio.to_thread(write_atomic, path, trajectory)
+        return path
