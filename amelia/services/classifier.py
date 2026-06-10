@@ -222,35 +222,30 @@ async def classify_comments(
             count=len(comments),
         )
 
-    # Build prompts
     system_prompt_template = PROMPT_DEFAULTS["classifier.system"].content
     system_prompt = system_prompt_template.format(
         aggressiveness_level=config.aggressiveness.name,
     )
     user_prompt = _build_user_prompt(comments)
 
-    # P1 (generate()-style): record the classification call as one invocation
     if recorder is not None:
         invocation = recorder.begin_invocation(
             "classifier", model=getattr(driver, "model", None)
         )
         driver = RecordingDriver(driver, invocation)
 
-    # Call LLM
     output, _session_id = await driver.generate(
         prompt=user_prompt,
         system_prompt=system_prompt,
         schema=ClassificationOutput,
     )
 
-    # Process classifications
     result: dict[int, CommentClassification] = {}
     classification_output: ClassificationOutput = output
 
     for classification in classification_output.classifications:
         final = classification
 
-        # Apply confidence threshold
         if classification.confidence < config.confidence_threshold:
             logger.debug(
                 "Classification below confidence threshold",
@@ -261,7 +256,6 @@ async def classify_comments(
             if final.actionable:
                 final = final.model_copy(update={"actionable": False})
 
-        # Apply aggressiveness filter
         if final.actionable and not is_actionable(
             final.category, config.aggressiveness
         ):

@@ -138,12 +138,10 @@ def start_command(
         stream: If True, stream workflow events to terminal until completion.
         branch: Branch override. None=auto-create, empty=use current.
     """
-    # Validate --description requires --title
     if description and not title:
         console.print("[red]Error:[/red] --description requires --title to be set")
         raise typer.Exit(1)
 
-    # Validate --plan requires --queue
     if plan and not queue:
         console.print("[red]Error:[/red] --plan requires --queue flag")
         raise typer.Exit(1)
@@ -204,18 +202,15 @@ def reject_command(
     Args:
         reason: Detailed reason for rejecting the plan to guide replanning.
     """
-    # Detect worktree context
     try:
         worktree_path, _ = get_worktree_context()
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1) from None
 
-    # Find workflow in this worktree
     client = AmeliaClient()
 
     async def _reject() -> str:
-        # Get workflows for this worktree
         result = await client.get_active_workflows(worktree_path=worktree_path)
 
         if not result.workflows:
@@ -225,7 +220,6 @@ def reject_command(
 
         workflow = result.workflows[0]
 
-        # Reject it
         try:
             await client.reject_workflow(workflow_id=workflow.id, reason=reason)
             console.print(f"[yellow]✗[/yellow] Plan rejected for workflow [bold]{workflow.id}[/bold]")
@@ -261,18 +255,15 @@ def approve_command(
     Auto-detects the active workflow from the current git worktree context
     and approves the pending plan, allowing execution to continue.
     """
-    # Detect worktree context
     try:
         worktree_path, _ = get_worktree_context()
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1) from None
 
-    # Find workflow in this worktree
     client = AmeliaClient()
 
     async def _approve() -> str:
-        # Get workflows for this worktree
         result = await client.get_active_workflows(worktree_path=worktree_path)
 
         if not result.workflows:
@@ -282,7 +273,6 @@ def approve_command(
 
         workflow = result.workflows[0]
 
-        # Approve it
         try:
             await client.approve_workflow(workflow_id=workflow.id)
             console.print(f"[green]✓[/green] Plan approved for workflow [bold]{workflow.id}[/bold]")
@@ -332,7 +322,6 @@ def status_command(
             console.print(f"[red]Error:[/red] {e}")
             raise typer.Exit(1) from None
 
-    # Get workflows via API
     client = AmeliaClient()
 
     async def _status() -> None:
@@ -346,7 +335,6 @@ def status_command(
                 console.print("\n[yellow]Start a workflow:[/yellow] amelia start ISSUE-123")
             return
 
-        # Display workflows in a table
         table = Table(title="Active Workflows", show_header=True)
         table.add_column("Workflow ID", style="cyan", no_wrap=True)
         table.add_column("Issue", style="magenta")
@@ -388,14 +376,12 @@ def cancel_command(
     Args:
         force: If True, skip the confirmation prompt.
     """
-    # Detect worktree context
     try:
         worktree_path, _ = get_worktree_context()
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1) from None
 
-    # Find workflow in this worktree
     client = AmeliaClient()
 
     async def _get_workflow() -> WorkflowSummary:
@@ -483,12 +469,10 @@ async def _get_profile_from_server(profile_name: str | None) -> Profile:
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             if profile_name:
-                # Get specific profile
                 response = await client.get(f"{base_url}/api/profiles/{profile_name}")
                 if response.status_code == 404:
                     raise ValueError(f"Profile '{profile_name}' not found")
             else:
-                # Get active profile via config endpoint
                 response = await client.get(f"{base_url}/api/config")
                 if response.status_code != 200:
                     raise ValueError("Failed to get server config")
@@ -496,15 +480,12 @@ async def _get_profile_from_server(profile_name: str | None) -> Profile:
                 active_profile_id = config_data.get("active_profile")
                 if not active_profile_id:
                     raise ValueError("No active profile set. Create one via the dashboard.")
-                # Now get the full profile
                 response = await client.get(f"{base_url}/api/profiles/{active_profile_id}")
 
             if response.status_code != 200:
                 raise ValueError(f"Failed to get profile: {response.text}")
 
             data = response.json()
-            # Convert API response to Profile type
-            # Parse agents dict from API response
             from amelia.core.types import AgentConfig  # noqa: PLC0415
 
             agents: dict[str, AgentConfig] = {}
@@ -557,7 +538,6 @@ def plan_command(
         title: Optional task title for none tracker (bypasses issue lookup).
         description: Optional task description (requires --title to be set).
     """
-    # Validate --description requires --title
     if description and not title:
         console.print("[red]Error:[/red] --description requires --title to be set")
         raise typer.Exit(1)
@@ -565,10 +545,8 @@ def plan_command(
     worktree_path, _ = _get_worktree_context()
 
     async def _generate_plan() -> ImplementationState:
-        # Get profile from server
         profile = await _get_profile_from_server(profile_name)
 
-        # Update profile with worktree path
         profile = profile.model_copy(update={"repo_root": worktree_path})
 
         # Get issue: construct directly if title provided with noop tracker, else use tracker
@@ -584,11 +562,9 @@ def plan_command(
                 f"--title requires noop tracker, but profile uses '{profile.tracker}'"
             )
         else:
-            # Fetch issue using tracker
             tracker = create_tracker(profile)
             issue = tracker.get_issue(issue_id, cwd=worktree_path)
 
-        # Create minimal implementation state
         from datetime import UTC, datetime  # noqa: PLC0415
 
         state = ImplementationState(
@@ -599,7 +575,6 @@ def plan_command(
             issue=issue,
         )
 
-        # Create architect with agent config
         agent_config = profile.get_agent_config("architect")
         architect = Architect(agent_config)
 
@@ -621,7 +596,6 @@ def plan_command(
         console.print("\n[green]✓[/green] Plan generated successfully!")
         console.print(f"  Saved to: [bold]{final_state.plan_path}[/bold]\n")
 
-        # Show preview of the plan
         if final_state.plan_path and Path(final_state.plan_path).exists():
             plan_lines = Path(final_state.plan_path).read_text().splitlines()[:30]
             console.print("\n".join(plan_lines))
@@ -659,7 +633,6 @@ def run_command(
     client = AmeliaClient()
 
     if workflow_id:
-        # Start specific workflow
         async def _start_one() -> dict[str, str]:
             return await client.start_workflow(workflow_id)
 
@@ -679,7 +652,6 @@ def run_command(
             raise typer.Exit(1) from None
 
     else:
-        # Batch start
         async def _start_batch() -> BatchStartResponse:
             return await client.start_batch(
                 workflow_ids=None,

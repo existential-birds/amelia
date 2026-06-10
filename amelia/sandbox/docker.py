@@ -232,7 +232,6 @@ class DockerSandboxProvider(SandboxProvider):
         Attempts to restart an existing stopped container first. If no
         container exists, creates a new one with ``docker run``.
         """
-        # Try restarting an existing stopped container first.
         restart = await asyncio.create_subprocess_exec(
             "docker", "start", self.container_name,
             stdout=asyncio.subprocess.DEVNULL,

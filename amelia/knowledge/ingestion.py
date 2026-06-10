@@ -23,7 +23,6 @@ class IngestionError(Exception):
         super().__init__(user_message, *args)
 
 
-# Supported MIME types
 _SUPPORTED_TYPES = {"application/pdf", "text/markdown"}
 
 # Max text length for tag extraction (~2000 tokens)
@@ -154,7 +153,6 @@ class IngestionPipeline:
                     chunk_texts, progress_callback=embed_progress
                 )
 
-                # Build ChunkData list
                 chunk_data: list[ChunkData] = []
                 total_tokens = 0
                 for i, ((chunk, text, n_tokens), embedding) in enumerate(
@@ -186,7 +184,6 @@ class IngestionPipeline:
                         driver_type=self.tag_derivation_driver,
                     )
 
-                    # Merge derived tags with existing user-provided tags
                     if derived_tags:
                         try:
                             existing_doc = await self.repository.get_document(document_id)
@@ -345,7 +342,6 @@ class IngestionPipeline:
         Returns:
             Tuple of (text_excerpt, unique_heading_paths).
         """
-        # Extract unique heading paths from chunks
         unique_headings: list[list[str]] = []
         seen_paths = set()
         for chunk in chunk_data:
@@ -354,7 +350,6 @@ class IngestionPipeline:
                 unique_headings.append(chunk["heading_path"])
                 seen_paths.add(path_tuple)
 
-        # Truncate text if needed
         text_excerpt = raw_text[:MAX_RAW_TEXT_FOR_TAGS]
         if len(raw_text) > MAX_RAW_TEXT_FOR_TAGS:
             text_excerpt += "\n\n[... content truncated for tag extraction ...]"
@@ -377,7 +372,6 @@ class IngestionPipeline:
         Returns:
             Prompt string for LLM tag extraction.
         """
-        # Format heading tree
         heading_tree = ""
         if heading_paths:
             for path in heading_paths:
@@ -417,14 +411,11 @@ Return 5-10 tags that best describe this document's content and purpose."""
         seen = set()
 
         for tag in tags:
-            # Strip whitespace and lowercase
             tag = tag.strip().lower()
 
-            # Skip empty or very long tags
             if not tag or len(tag) > 50:
                 continue
 
-            # Deduplicate (case-insensitive)
             if tag not in seen:
                 cleaned.append(tag)
                 seen.add(tag)
@@ -455,17 +446,14 @@ Return 5-10 tags that best describe this document's content and purpose."""
             Failures are logged but not raised - returns empty list on error.
         """
         try:
-            # Prepare input (truncate text, extract headings)
             text_excerpt, heading_paths = self._prepare_tag_extraction_input(
                 raw_text, chunk_data, document_name
             )
 
-            # Build prompt
             prompt = self._build_tag_extraction_prompt(
                 text_excerpt, heading_paths, document_name
             )
 
-            # Extract structured output using LLM
             from amelia.core.extraction import extract_structured  # noqa: PLC0415
             from amelia.knowledge.models import TagExtractionOutput  # noqa: PLC0415
 
@@ -476,7 +464,6 @@ Return 5-10 tags that best describe this document's content and purpose."""
                 driver_type=driver_type,
             )
 
-            # Validate and clean tags
             tags = self._validate_tags(result.tags)
 
             logger.info(

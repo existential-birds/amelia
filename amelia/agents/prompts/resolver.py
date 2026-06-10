@@ -1,4 +1,3 @@
-# amelia/agents/prompts/resolver.py
 """Prompt resolution for agents.
 
 Provides the PromptResolver that returns current prompt content,

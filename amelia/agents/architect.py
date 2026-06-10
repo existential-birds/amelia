@@ -132,7 +132,6 @@ Before planning, discover:
         if not state.issue:
             raise ValueError("Cannot generate plan: no issue in ImplementationState")
 
-        # Build user prompt from state (simplified - no codebase scan)
         user_prompt = self._build_agentic_prompt(state, profile)
 
         cwd = profile.repo_root
@@ -148,7 +147,6 @@ Before planning, discover:
             plan_path=plan_path,
         )
 
-        # Build kwargs for driver execution
         driver_kwargs: dict[str, Any] = {
             "required_file_path": plan_path,
         }
@@ -183,7 +181,6 @@ Before planning, discover:
                         tool_input=message.tool_input or {},
                     )
                     tool_calls.append(call)
-                    # Log tool call details with explicit tool name in message
                     input_keys = list(message.tool_input.keys()) if message.tool_input else []
                     logger.debug(
                         "Architect tool call",
@@ -221,7 +218,6 @@ Before planning, discover:
                         tool_calls_count=len(tool_calls),
                     )
 
-                    # Log all tool calls at completion
                     logger.debug(
                         "Architect completed",
                         tool_calls_summary=[
@@ -231,7 +227,6 @@ Before planning, discover:
                         raw_output_preview=raw_output[:300] if raw_output else None,
                     )
 
-                    # Extract plan_path from write_plan or write_file tool calls
                     # Note: CLI driver normalizes "Write" to "write_file" (ToolName.WRITE_FILE)
                     extracted_plan_path: Path | None = None
                     for tc in tool_calls:
@@ -298,7 +293,6 @@ Before planning, discover:
         parts.append(f"**Title:** {state.issue.title}")
         parts.append(f"**Description:**\n{state.issue.description}")
 
-        # Include design document if present (from brainstorming handoff)
         if state.design is not None:
             parts.append("\n## Design Document")
             parts.append(
@@ -316,7 +310,6 @@ Before planning, discover:
             "then create a detailed implementation plan for this issue."
         )
 
-        # Add output instruction with resolved plan path
         # IMPORTANT: Explicitly require writing to file - without this,
         # the LLM may just output the plan as text instead of writing to the file.
         plan_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
@@ -335,7 +328,6 @@ Before planning, discover:
             "The workflow will fail if you don't create the plan file."
         )
 
-        # Task-specific formatting templates
         parts.append("""
 ## Plan Document Header
 

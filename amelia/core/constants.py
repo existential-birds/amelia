@@ -1,4 +1,3 @@
-# amelia/core/constants.py
 """Constants used across the Amelia codebase."""
 
 from datetime import date

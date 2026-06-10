@@ -164,17 +164,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     sub = parser.add_subparsers(dest="mode", required=True)
 
-    # Shared arguments
     shared = argparse.ArgumentParser(add_help=False)
     shared.add_argument("--prompt-file", required=True, help="Path to prompt file")
     shared.add_argument("--model", required=True, help="LLM model identifier")
 
-    # agentic subcommand
     agentic = sub.add_parser("agentic", parents=[shared])
     agentic.add_argument("--cwd", required=True, help="Working directory")
     agentic.add_argument("--instructions", help="System instructions")
 
-    # generate subcommand
     generate = sub.add_parser("generate", parents=[shared])
     generate.add_argument("--schema", help="Schema as module:ClassName")
 
@@ -276,13 +273,11 @@ async def _run_agentic(args: argparse.Namespace) -> None:
         message = messages[-1]
         num_turns += 1
 
-        # Track usage
         if hasattr(message, "usage_metadata") and message.usage_metadata:
             total_input += message.usage_metadata.get("input_tokens", 0)
             total_output += message.usage_metadata.get("output_tokens", 0)
 
         if isinstance(message, AIMessage):
-            # Emit thinking for text content
             content = message.content
             if isinstance(content, list):
                 for block in content:
@@ -299,7 +294,6 @@ async def _run_agentic(args: argparse.Namespace) -> None:
                     model=args.model,
                 ))
 
-            # Emit tool calls
             for tc in message.tool_calls:
                 _emit_line(AgenticMessage(
                     type=AgenticMessageType.TOOL_CALL,
@@ -319,11 +313,9 @@ async def _run_agentic(args: argparse.Namespace) -> None:
                 model=args.model,
             ))
 
-    # Verify agent produced output
     if num_turns == 0:
         raise RuntimeError("Agent stream yielded no messages")
 
-    # Final result — last AI message content
     final_content = ""
     for msg in reversed(chunk.get("messages", [])):
         if isinstance(msg, AIMessage):
@@ -380,7 +372,6 @@ async def _run_generate(args: argparse.Namespace) -> None:
         )
         result = await agent.ainvoke({"messages": [HumanMessage(content=prompt)]})
 
-        # Extract structured output — prefer structured_response key
         structured = result.get("structured_response")
         if structured is not None:
             content = structured.model_dump_json() if isinstance(structured, BaseModel) else str(structured)
@@ -400,7 +391,6 @@ async def _run_generate(args: argparse.Namespace) -> None:
         result = await chat_model.ainvoke([HumanMessage(content=prompt)])
         content = result.content if hasattr(result, "content") else str(result)
 
-    # Track usage
     total_input = 0
     total_output = 0
     for msg in result.get("messages", []) if isinstance(result, dict) else [result]:

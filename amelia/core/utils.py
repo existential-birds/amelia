@@ -2,7 +2,6 @@
 import re
 
 
-# ANSI escape code pattern
 # Matches:
 # - CSI sequences: \x1b[<params><command> (e.g., \x1b[31m for red, \x1b[2K for clear line)
 # - OSC sequences: \x1b]<params>\x07 (e.g., \x1b]0;Title\x07 for terminal title)

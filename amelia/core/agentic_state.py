@@ -86,14 +86,11 @@ class AgenticState(BaseModel):
     goal: str
     system_prompt: str | None = None
 
-    # Tool execution history
     tool_calls: tuple[ToolCall, ...] = ()
     tool_results: tuple[ToolResult, ...] = ()
 
-    # Completion state
     final_response: str | None = None
     status: AgenticStatus = AgenticStatus.RUNNING
     error: str | None = None
 
-    # Session continuity
     session_id: uuid.UUID | None = None

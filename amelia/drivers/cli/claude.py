@@ -139,7 +139,6 @@ def _is_clarification_request(text: str) -> bool:
     """
     text_lower = text.lower()
 
-    # Check for clarification phrases
     if any(phrase in text_lower for phrase in _CLARIFICATION_PHRASES):
         return True
 
@@ -342,12 +341,10 @@ class ClaudeCliDriver(DriverInterface):
         Returns:
             Configured ClaudeAgentOptions instance.
         """
-        # Determine permission mode
         permission_mode: Literal["default", "acceptEdits", "plan", "bypassPermissions"] | None = None
         if bypass_permissions or self.skip_permissions:
             permission_mode = "bypassPermissions"
 
-        # Build output format for schema if provided
         # Note: SDK expects "schema" key, not "json_schema"
         output_format = None
         if schema:
@@ -366,7 +363,6 @@ class ClaudeCliDriver(DriverInterface):
             # Resuming: use preset without append to skip --system-prompt flag
             effective_system_prompt = SystemPromptPreset(type="preset", preset="claude_code")
 
-        # Map canonical tool names to CLI SDK names
         cli_allowed_tools: list[str] | None = None
         if allowed_tools is not None:
             cli_allowed_tools = []
@@ -436,7 +432,6 @@ class ClaudeCliDriver(DriverInterface):
         options.stderr = lambda line: stderr_lines.append(line)
 
         try:
-            # Collect all messages
             result_message: ResultMessage | None = None
             assistant_content: list[str] = []
 
@@ -475,7 +470,6 @@ class ClaudeCliDriver(DriverInterface):
             if result_message.is_error:
                 raise RuntimeError(f"Claude SDK reported error: {result_message.result}")
 
-            # Handle structured output
             if schema:
                 # Try structured_output first (preferred for schema requests)
                 if result_message.structured_output is not None:
@@ -524,7 +518,6 @@ class ClaudeCliDriver(DriverInterface):
                         original_message=str(e),
                     ) from e
             else:
-                # Return raw text result
                 if result_message.result:
                     return (result_message.result, session_id_result)
                 elif assistant_content:
@@ -670,10 +663,8 @@ class ClaudeCliDriver(DriverInterface):
                                     model=self.model,
                                 )
                             elif isinstance(block, ToolUseBlock):
-                                # Track tool calls in history
                                 self.tool_call_history.append(block)
                                 last_tool_name = block.name
-                                # Normalize tool name to standard format
                                 normalized_name = normalize_tool_name(block.name)
                                 yield AgenticMessage(
                                     type=AgenticMessageType.TOOL_CALL,
@@ -684,7 +675,6 @@ class ClaudeCliDriver(DriverInterface):
                                 )
                             elif isinstance(block, ToolResultBlock):
                                 content = block.content if isinstance(block.content, str) else str(block.content)
-                                # Normalize tool name to standard format
                                 result_tool_name: str | None = None
                                 if last_tool_name:
                                     result_tool_name = normalize_tool_name(last_tool_name)
@@ -703,7 +693,6 @@ class ClaudeCliDriver(DriverInterface):
                             for block in message.content:
                                 if isinstance(block, ToolResultBlock):
                                     content = block.content if isinstance(block.content, str) else str(block.content)
-                                    # Normalize tool name to standard format
                                     result_tool_name = None
                                     if last_tool_name:
                                         result_tool_name = normalize_tool_name(last_tool_name)

@@ -1,4 +1,3 @@
-# amelia/agents/prompts/defaults.py
 """Hardcoded default prompts for all agents.
 
 These serve as:

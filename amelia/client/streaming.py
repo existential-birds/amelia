@@ -200,7 +200,6 @@ async def stream_workflow_events(
 
                 event_type = event.get("event_type")
 
-                # Collect summary data from stage_completed events
                 if event_type == "stage_completed":
                     event_data = event.get("data", {}) or {}
                     result = event_data.get("result", {}) or {}
@@ -212,12 +211,10 @@ async def stream_workflow_events(
                     elif status == "failed":
                         failed += 1
 
-                # Collect commit SHA from workflow_completed
                 if event_type == "workflow_completed":
                     event_data = event.get("data", {}) or {}
                     commit_sha = event_data.get("commit_sha") or None
 
-                # Collect commit SHA from pr_auto_fix_completed
                 if event_type == "pr_auto_fix_completed":
                     event_data = event.get("data", {}) or {}
                     commit_sha = event_data.get("commit_sha") or None
@@ -255,7 +252,6 @@ def _display_event(console: Console, event: dict[str, Any]) -> None:
         _CUSTOM_FORMATTERS[event_type](console, event)
         return
 
-    # Check for simple format configurations
     if event_type in _SIMPLE_EVENT_FORMATS:
         fmt = _SIMPLE_EVENT_FORMATS[event_type]
         text = fmt.prefix + (message if fmt.include_message else "")
@@ -263,5 +259,4 @@ def _display_event(console: Console, event: dict[str, Any]) -> None:
         console.print(f"{newline}[{fmt.style}]{text}[/{fmt.style}]")
         return
 
-    # Default: show other events with less emphasis
     console.print(f"[dim]{event_type}: {message}[/dim]")

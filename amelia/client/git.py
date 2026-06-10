@@ -30,7 +30,6 @@ def get_worktree_context() -> tuple[str, str]:
         >>> get_worktree_context()
         ('/home/user/myproject', 'detached-abc1234')
     """
-    # Check if we're in a git repo at all
     result = subprocess.run(
         ["git", "rev-parse", "--is-inside-work-tree"],
         capture_output=True,
@@ -58,7 +57,6 @@ def get_worktree_context() -> tuple[str, str]:
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"Failed to determine worktree root: {e.stderr}") from e
 
-    # Get branch name for display
     try:
         branch = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],

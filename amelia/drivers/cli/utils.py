@@ -16,13 +16,10 @@ def strip_markdown_fences(text: str) -> str:
     """
     stripped = text.strip()
 
-    # Check for fenced code block pattern
     if stripped.startswith("```"):
         lines = stripped.split("\n")
 
-        # Find the opening fence (first line starting with ```)
         if lines and lines[0].startswith("```"):
-            # Find the closing fence
             end_idx = -1
             for i in range(len(lines) - 1, 0, -1):
                 if lines[i].strip() == "```":
@@ -30,7 +27,6 @@ def strip_markdown_fences(text: str) -> str:
                     break
 
             if end_idx > 0:
-                # Extract content between fences
                 content_lines = lines[1:end_idx]
                 return "\n".join(content_lines).strip()
 

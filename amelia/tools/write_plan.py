@@ -59,7 +59,6 @@ async def execute_write_plan(
         WritePlanValidationError: If tool_input fails schema validation.
         ValueError: If the resolved path escapes root_dir.
     """
-    # Validate structured input
     try:
         plan = WritePlanInput(**tool_input)
     except ValidationError as exc:
@@ -70,10 +69,8 @@ async def execute_write_plan(
         logger.warning("write_plan validation failed", errors=errors)
         raise WritePlanValidationError(errors, exc) from exc
 
-    # Render to markdown
     markdown = render_plan_markdown(plan)
 
-    # Resolve file path
     file_path = Path(plan.file_path)
     root = Path(root_dir)
     if file_path.is_absolute() and file_path.is_relative_to(root):
@@ -94,10 +91,8 @@ async def execute_write_plan(
             f"which is outside root_dir {root_resolved}"
         )
 
-    # Ensure parent directory exists
     await asyncio.to_thread(resolved.parent.mkdir, parents=True, exist_ok=True)
 
-    # Write markdown file
     await asyncio.to_thread(resolved.write_text, markdown, encoding="utf-8")
     logger.info(
         "write_plan: wrote plan file",
