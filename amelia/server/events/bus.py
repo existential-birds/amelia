@@ -1,8 +1,10 @@
 """Event bus implementation for pub/sub workflow events."""
 import asyncio
 import contextlib
+from collections import deque
 from collections.abc import Callable
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from loguru import logger
 
@@ -20,6 +22,9 @@ class EventBus:
     Exceptions in subscribers are logged but don't prevent other
     subscribers from receiving events.
 
+    Keeps a bounded in-memory ring buffer of the most recent events
+    for WebSocket reconnect backfill (see events_after()).
+
     Warning:
         All subscribers MUST be non-blocking. Since emit() runs
         synchronously in the caller's context, blocking operations
@@ -27,10 +32,11 @@ class EventBus:
 
     """
 
-    def __init__(self) -> None:
+    def __init__(self, buffer_size: int = 1000) -> None:
         self._subscribers: list[Callable[[WorkflowEvent], None]] = []
         self._connection_manager: ConnectionManager | None = None
         self._broadcast_tasks: set[asyncio.Task[None]] = set()
+        self._buffer: deque[WorkflowEvent] = deque(maxlen=buffer_size)
 
     def subscribe(self, callback: Callable[[WorkflowEvent], None]) -> None:
         self._subscribers.append(callback)
@@ -70,6 +76,8 @@ class EventBus:
         Args:
             event: The workflow event to broadcast.
         """
+        self._buffer.append(event)
+
         for callback in self._subscribers:
             try:
                 callback(event)
@@ -86,6 +94,26 @@ class EventBus:
             task = asyncio.create_task(self._connection_manager.broadcast(event))
             self._broadcast_tasks.add(task)
             task.add_done_callback(self._handle_broadcast_done)
+
+    def events_after(self, event_id: UUID) -> list[WorkflowEvent]:
+        """Return buffered events emitted after the given event id.
+
+        Used for WebSocket reconnect backfill. If the id is not in the
+        buffer (never seen or already evicted), returns an empty list —
+        the client treats an empty backfill with a gap as a signal to
+        refetch full state via GET.
+
+        Args:
+            event_id: The id of the last event the client received.
+
+        Returns:
+            Events emitted after event_id, oldest first; empty if unknown.
+        """
+        events = list(self._buffer)
+        for index, event in enumerate(events):
+            if event.id == event_id:
+                return events[index + 1:]
+        return []
 
     async def wait_for_broadcasts(self) -> None:
         """Wait for all pending broadcast tasks to complete.

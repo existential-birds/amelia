@@ -1,6 +1,7 @@
 """WebSocket endpoint for real-time event streaming."""
 import asyncio
 import contextlib
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
@@ -45,12 +46,21 @@ async def websocket_endpoint(
     try:
         # Handle backfill if reconnecting
         if since:
-            repository = connection_manager.get_repository()
-            if repository:
+            bus = connection_manager.get_event_bus()
+            if bus:
                 try:
-                    # Replay missed events from database (limit to prevent memory exhaustion)
-                    import uuid as _uuid  # noqa: PLC0415
-                    events = await repository.get_events_after(_uuid.UUID(since), limit=1000)
+                    since_id = uuid.UUID(since)
+                except ValueError:
+                    await websocket.send_json({
+                        "type": "backfill_expired",
+                        "message": "Invalid event id. Full refresh required.",
+                    })
+                    logger.warning("backfill_expired", since_event_id=since)
+                else:
+                    # Replay missed events from the in-memory ring buffer.
+                    # An evicted/unknown id yields an empty backfill — the
+                    # client treats empty-with-gap as "refetch via GET".
+                    events = bus.events_after(since_id)
 
                     for event in events:
                         await websocket.send_json({
@@ -63,15 +73,8 @@ async def websocket_endpoint(
                         "count": len(events),
                     })
                     logger.info("backfill_complete", count=len(events))
-                except ValueError:
-                    # Event was cleaned up by retention - client needs full refresh
-                    await websocket.send_json({
-                        "type": "backfill_expired",
-                        "message": "Requested event no longer exists. Full refresh required.",
-                    })
-                    logger.warning("backfill_expired", since_event_id=since)
             else:
-                logger.warning("backfill_unavailable", reason="repository_not_initialized")
+                logger.warning("backfill_unavailable", reason="event_bus_not_initialized")
 
         # Start heartbeat task
         heartbeat_task = asyncio.create_task(_heartbeat_loop(websocket))

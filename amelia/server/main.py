@@ -171,9 +171,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Create event bus
     event_bus = EventBus()
-    # Wire WebSocket broadcasting and repository
+    # Wire WebSocket broadcasting and reconnect backfill
     event_bus.set_connection_manager(connection_manager)
-    connection_manager.set_repository(repository)
+    connection_manager.set_event_bus(event_bus)
 
     # Bridge events to server console via loguru
     from amelia.server.events.log_subscriber import log_event_to_console  # noqa: PLC0415

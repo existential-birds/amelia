@@ -14,7 +14,7 @@ from amelia.server.models.events import PERSISTED_TYPES, EventDomain, WorkflowEv
 
 
 if TYPE_CHECKING:
-    from amelia.server.database.repository import WorkflowRepository
+    from amelia.server.events.bus import EventBus
 
 
 class ConnectionManager:
@@ -31,13 +31,13 @@ class ConnectionManager:
     def __init__(self) -> None:
         self._connections: dict[WebSocket, set[str]] = {}
         self._lock = asyncio.Lock()
-        self._repository: WorkflowRepository | None = None
+        self._event_bus: EventBus | None = None
 
-    def set_repository(self, repository: WorkflowRepository) -> None:
-        self._repository = repository
+    def set_event_bus(self, event_bus: EventBus) -> None:
+        self._event_bus = event_bus
 
-    def get_repository(self) -> WorkflowRepository | None:
-        return self._repository
+    def get_event_bus(self) -> EventBus | None:
+        return self._event_bus
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
