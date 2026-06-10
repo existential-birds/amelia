@@ -72,7 +72,6 @@ class PRAutoFixOrchestrator:
         self._pr_locks: dict[tuple[str, int], asyncio.Lock] = {}
         self._pr_pending: dict[tuple[str, int], dict[str, Any]] = {}
 
-        # Cooldown interruption
         self._cooldown_events: dict[tuple[str, int], asyncio.Event] = {}
 
         # Repo-level git serialization (keyed by repo_path)
@@ -132,7 +131,6 @@ class PRAutoFixOrchestrator:
                 "effective_config": effective_config,
                 "workflow_id": workflow_id,
             }
-            # If in cooldown, reset the timer
             if key in self._cooldown_events:
                 self._cooldown_events[key].set()
                 self._emit_event(
@@ -223,12 +221,10 @@ class PRAutoFixOrchestrator:
                         comments=comments,
                         workflow_id=workflow_id,
                     )
-                    return  # Success
+                    return
 
-                # Create isolated worktree for this PR fix cycle
                 worktree_id = f"pr-{pr_number}-{int(time.time())}"
                 async with LocalWorktree(profile.repo_root, head_branch, worktree_id) as worktree_path:
-                    # Override profile.repo_root to point at worktree
                     wt_profile = profile.model_copy(update={"repo_root": str(worktree_path)})
                     await self._execute_pipeline(
                         pr_number,
@@ -240,7 +236,7 @@ class PRAutoFixOrchestrator:
                         comments=comments,
                         workflow_id=workflow_id,
                     )
-                    return  # Success
+                    return
 
             except ValueError as exc:
                 if "diverged" not in str(exc).lower():
@@ -407,7 +403,6 @@ class PRAutoFixOrchestrator:
             },
         )
 
-        # Emit started event
         self._emit_event(
             EventType.PR_AUTO_FIX_STARTED,
             pr_number,
@@ -418,7 +413,6 @@ class PRAutoFixOrchestrator:
         )
 
         try:
-            # Run the pipeline with timing
             start_time = time.monotonic()
 
             # Generate metrics run_id upfront so classify_node and
@@ -467,7 +461,6 @@ class PRAutoFixOrchestrator:
             issue_cache["comment_count"] = len(comments_raw)
             issue_cache["pr_comments"] = pr_comments
 
-            # Emit PR_COMMENTS_RESOLVED if any threads were resolved
             resolved_count = sum(
                 1
                 for r in resolution_results_raw
@@ -495,7 +488,6 @@ class PRAutoFixOrchestrator:
                     workflow_id=workflow_id,
                 )
 
-            # Update workflow record as completed
             state = state.model_copy(
                 update={
                     "workflow_status": WorkflowStatus.COMPLETED,
@@ -524,7 +516,6 @@ class PRAutoFixOrchestrator:
                         else []
                     )
 
-                    # Count per-comment (iterate comment_ids, not groups -- Pitfall 3)
                     fixed = 0
                     failed = 0
                     no_changes = 0
@@ -601,7 +592,6 @@ class PRAutoFixOrchestrator:
                         error=str(metrics_exc),
                     )
 
-            # Emit completed event
             self._emit_event(
                 EventType.PR_AUTO_FIX_COMPLETED,
                 pr_number,
@@ -612,7 +602,6 @@ class PRAutoFixOrchestrator:
             )
 
         except Exception as exc:
-            # Update workflow record as failed
             state = state.model_copy(
                 update={
                     "workflow_status": WorkflowStatus.FAILED,
@@ -703,7 +692,6 @@ class PRAutoFixOrchestrator:
         group_results = final_state.get("group_results", [])
         resolution_results = final_state.get("resolution_results", [])
 
-        # Build lookup maps
         # comment_id -> group fix status
         comment_fix_status: dict[int, str] = {}
         # comment_id -> reason string (why the comment was skipped/failed/etc.)
@@ -902,7 +890,6 @@ class PRAutoFixOrchestrator:
         """
         state = final_state if isinstance(final_state, dict) else {}
 
-        # classify_node completed
         self._emit_event(
             EventType.STAGE_COMPLETED,
             pr_number,
@@ -938,7 +925,6 @@ class PRAutoFixOrchestrator:
                     workflow_id=workflow_id,
                 )
 
-        # commit_push_node completed
         commit_sha = state.get("commit_sha")
         self._emit_event(
             EventType.STAGE_COMPLETED,
@@ -952,7 +938,6 @@ class PRAutoFixOrchestrator:
             workflow_id=workflow_id,
         )
 
-        # reply_resolve_node completed
         self._emit_event(
             EventType.STAGE_COMPLETED,
             pr_number,

@@ -58,25 +58,20 @@ class BasePipelineState(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    # Identity (immutable, self-describing for serialization)
     workflow_id: uuid.UUID
     pipeline_type: str
     profile_id: str
     created_at: datetime
 
-    # Lifecycle
     status: Literal["pending", "running", "paused", "completed", "failed"]
 
-    # Human interaction
     pending_user_input: bool = False
     user_message: str | None = None
 
-    # Agentic execution
     driver_session_id: str | None = None
     final_response: str | None = None
     error: str | None = None
 
-    # Oracle consultations (append-only)
     oracle_consultations: Annotated[
         list[OracleConsultation], operator.add
     ] = Field(default_factory=list)

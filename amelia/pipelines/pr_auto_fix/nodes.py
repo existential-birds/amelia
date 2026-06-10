@@ -68,7 +68,6 @@ async def classify_node(
         profile_name=agent_config.profile_name,
     )
 
-    # Build thread context by grouping comments by thread_id
     all_thread_comments: dict[str, list[PRReviewComment]] = {}
     for comment in state.comments:
         if comment.thread_id is not None:
@@ -84,7 +83,6 @@ async def classify_node(
     if not filtered:
         return {"classified_comments": [], "file_groups": {}}
 
-    # LLM classification
     classifications = await classify_comments(
         filtered, driver, state.autofix_config, recorder=recorder,
     )
@@ -107,10 +105,8 @@ async def classify_node(
                 "prompt_hash": prompt_hash,
             })
 
-    # Group by file path
     file_group_comments = group_comments_by_file(state.comments, classifications)
 
-    # Convert from dict[path, list[PRReviewComment]] to dict[path, list[int]]
     file_groups: dict[str | None, list[int]] = {
         path: [c.id for c in comments]
         for path, comments in file_group_comments.items()
@@ -192,7 +188,6 @@ def _build_developer_goal(
             parts.append(f"**Reason:** {cls.reason}")
         parts.append("")
 
-    # Constraints
     parts.append("## Constraints")
     if file_path:
         parts.append(f"- Only modify files related to {file_path}")
@@ -225,12 +220,10 @@ async def develop_node(
     configurable = config.get("configurable", {})
     recorder = configurable.get("trajectory_recorder")
 
-    # Build classification lookup from state
     classifications: dict[int, CommentClassification] = {
         cls.comment_id: cls for cls in state.classified_comments
     }
 
-    # Build comment lookup from state
     comments_by_id: dict[int, PRReviewComment] = {
         c.id: c for c in state.comments
     }
@@ -242,7 +235,6 @@ async def develop_node(
     for file_path, comment_ids in state.file_groups.items():
         comments = [comments_by_id[cid] for cid in comment_ids if cid in comments_by_id]
 
-        # Build goal with full context, anchoring paths to the worktree CWD
         goal_text = _build_developer_goal(
             file_path, comments, classifications,
             state.pr_number, state.head_branch,
@@ -271,7 +263,6 @@ async def develop_node(
             baseline_files = set(baseline_status.strip().splitlines()) if baseline_status.strip() else set()
             baseline_head = await git_ops._run_git("rev-parse", "HEAD")
 
-            # Create Developer with PR-fix system prompt
             agent_config = profile.get_agent_config("developer")
             dev = Developer(
                 config=agent_config,
@@ -280,12 +271,10 @@ async def develop_node(
                 },
             )
 
-            # P1: record this per-group invocation into the cycle trajectory
             if recorder is not None:
                 inv = recorder.begin_invocation("developer", model=agent_config.model)
                 dev.driver = RecordingDriver(dev.driver, inv)
 
-            # Create temporary ImplementationState for Developer.run()
             impl_state = ImplementationState(
                 workflow_id=state.workflow_id,
                 pipeline_type="implementation",
@@ -296,7 +285,6 @@ async def develop_node(
                 plan_markdown=goal_text,  # Required by Developer._build_prompt
             )
 
-            # Run Developer and iterate to completion
             final_state = impl_state
             async for updated_state, _event in dev.run(
                 final_state, profile=profile, workflow_id=workflow_id,
@@ -351,7 +339,6 @@ async def develop_node(
                 comment_ids=comment_ids,
             ))
 
-    # Determine overall status
     any_fixed = any(r.status == GroupFixStatus.FIXED for r in group_results)
     all_no_changes = all(r.status == GroupFixStatus.NO_CHANGES for r in group_results)
     agentic_status = (
@@ -417,12 +404,10 @@ async def commit_push_node(
     try:
         git_ops = GitOperations(profile.repo_root)
 
-        # Check if there are changes to commit
         if not await git_ops.has_changes():
             logger.info("No changes to commit, skipping")
             return {"status": "completed", "commit_sha": None}
 
-        # Build commit message
         message = _build_commit_message(
             state.autofix_config.commit_prefix,
             state.group_results,
@@ -503,7 +488,6 @@ async def reply_resolve_node(
 
     github_service = GitHubPRService(profile.repo_root)
 
-    # Build comment lookup
     comments_by_id: dict[int, PRReviewComment] = {
         c.id: c for c in state.comments
     }
@@ -560,7 +544,6 @@ async def reply_resolve_node(
             resolved = False
             error_msg: str | None = None
 
-            # Post reply
             body = _build_reply_body(
                 group_result.status,
                 comment.author,
@@ -583,7 +566,6 @@ async def reply_resolve_node(
                 )
                 error_msg = str(e)
 
-            # Determine if we should resolve
             should_resolve = (
                 group_result.status == GroupFixStatus.FIXED
                 or (
@@ -592,7 +574,6 @@ async def reply_resolve_node(
                 )
             )
 
-            # Resolve thread (only if reply was successfully posted)
             if should_resolve and replied:
                 if comment.thread_id:
                     try:

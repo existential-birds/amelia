@@ -38,7 +38,6 @@ def extract_task_count(plan_markdown: str) -> int:
     matches = re.findall(pattern, plan_markdown, re.MULTILINE)
     count = len(matches) if matches else 1
 
-    # Debug: Log task extraction details (without plan content)
     logger.debug(
         "extract_task_count analysis",
         pattern=pattern,
@@ -78,14 +77,12 @@ def validate_plan_structure(
             "with headers like '### Task 1: Component Name'."
         )
 
-    # Check for goal
     if not goal or goal == "Implementation plan":
         issues.append(
             "No goal found. Plan must include a clear goal statement "
             "(e.g. '**Goal:** Add user authentication')."
         )
 
-    # Check minimum content length
     if len(plan_markdown.strip()) < 200:
         issues.append(
             "Plan content is too short to be a complete implementation plan. "
@@ -143,11 +140,9 @@ def _looks_like_plan(text: str) -> bool:
     if not text or len(text) < 100:
         return False
 
-    # Count plan indicators
     indicators = 0
     lower_text = text.lower()
 
-    # Check for common plan headers/sections
     plan_markers = [
         "# ",  # Markdown headers
         "## ",
@@ -164,7 +159,6 @@ def _looks_like_plan(text: str) -> bool:
         if marker in lower_text:
             indicators += 1
 
-    # Need at least 3 indicators to consider it a plan
     if indicators < 3:
         return False
 
@@ -197,23 +191,19 @@ def _extract_goal_from_plan(plan_content: str) -> str:
     Returns:
         Extracted goal or a default placeholder.
     """
-    # Try to find **Goal:** pattern (multi-line: capture until blank line, heading, or bold)
     # Use [^\n] with explicit \n to avoid polynomial backtracking with re.DOTALL
     goal_match = re.search(
         r"\*\*Goal:\*\*[ \t]*([^\n](?:[^\n]|\n(?!\n|#|\*\*))*)",
         plan_content,
     )
     if goal_match:
-        # Normalize whitespace: collapse newlines and multiple spaces
         goal = re.sub(r"\s+", " ", goal_match.group(1)).strip()
         logger.debug("Goal extracted from **Goal:** pattern", goal=goal)
         return goal
 
-    # Try to find first # header as title
     title_match = re.search(r"^#\s+(.+?)(?:\n|$)", plan_content, re.MULTILINE)
     if title_match:
         title = title_match.group(1).strip()
-        # Remove "Implementation Plan" suffix if present
         title = re.sub(r"\s*Implementation Plan\s*$", "", title, flags=re.IGNORECASE)
         logger.debug("Goal extracted from heading fallback", title=title)
         return f"Implement {title}" if title else "Implementation plan"
@@ -281,7 +271,6 @@ def extract_task_section(plan_markdown: str, task_index: int) -> str:
         Markdown containing header context plus the specific task section.
         Falls back to full plan if extraction fails.
     """
-    # Split into lines for processing
     lines = plan_markdown.split("\n")
 
     # Find header section (before first ## Phase or ---)
@@ -296,7 +285,6 @@ def extract_task_section(plan_markdown: str, task_index: int) -> str:
 
     header_lines = lines[:header_end]
 
-    # Find all task boundaries using regex
     task_pattern = re.compile(r"^### Task \d+(\.\d+)?:")
     phase_pattern = re.compile(r"^## Phase \d+:")
 
@@ -315,7 +303,6 @@ def extract_task_section(plan_markdown: str, task_index: int) -> str:
         # No tasks found or index out of range, return full plan
         return plan_markdown
 
-    # Get the task section boundaries
     task_start = task_starts[task_index]
     task_end = (
         task_starts[task_index + 1]
@@ -323,26 +310,21 @@ def extract_task_section(plan_markdown: str, task_index: int) -> str:
         else len(lines)
     )
 
-    # Get the phase header for this task
     phase_header = ""
     for idx, header in phase_for_task:
         if idx == task_index:
             phase_header = header
             break
 
-    # Build the extracted section
     result_parts = []
 
-    # Add header context
     result_parts.append("\n".join(header_lines).strip())
     result_parts.append("\n---\n")
 
-    # Add phase header if available
     if phase_header:
         result_parts.append(phase_header)
         result_parts.append("\n\n")
 
-    # Add the task section
     task_section = "\n".join(lines[task_start:task_end]).strip()
     result_parts.append(task_section)
 
@@ -424,7 +406,6 @@ async def commit_task_changes(state: ImplementationState, config: RunnableConfig
     # Disable git prompts to prevent hangs in headless/server contexts
     git_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
 
-    # Stage all changes
     try:
         await _run_git(["add", "-A"], cwd=working_dir, env=git_env)
     except TimeoutError:
@@ -453,7 +434,6 @@ async def commit_task_changes(state: ImplementationState, config: RunnableConfig
             return False
         # returncode 1 means changes exist — continue to commit
 
-    # Commit with task reference
     issue_key = state.issue.id if state.issue else "unknown"
     commit_msg = f"feat({issue_key}): complete task {task_number}"
 
@@ -487,7 +467,6 @@ async def commit_task_changes(state: ImplementationState, config: RunnableConfig
             task=task_number,
         )
 
-        # Re-stage all changes
         try:
             await _run_git(["add", "-A"], cwd=working_dir, env=git_env)
         except TimeoutError:
@@ -500,7 +479,6 @@ async def commit_task_changes(state: ImplementationState, config: RunnableConfig
             )
             return False
 
-        # Retry commit
         try:
             await _run_git(["commit", "-m", commit_msg], cwd=working_dir, env=git_env)
             logger.info(

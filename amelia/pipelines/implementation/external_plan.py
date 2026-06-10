@@ -73,7 +73,6 @@ async def read_plan_content(
     else:
         content = plan_content or ""
 
-    # Validate content is not empty
     if not content.strip():
         raise ValueError("Plan content is empty")
 
@@ -186,7 +185,6 @@ async def import_external_plan(
     # Establish working directory as security boundary
     working_dir = Path(profile.repo_root).expanduser().resolve()
 
-    # Read content
     content = await read_plan_content(
         plan_file=plan_file,
         plan_content=plan_content,
@@ -201,7 +199,6 @@ async def import_external_plan(
             source_path = working_dir / plan_file
         source_path = source_path.expanduser().resolve()
 
-    # Write to target
     await write_plan_to_target(
         content=content,
         target_path=target_path,
@@ -209,13 +206,10 @@ async def import_external_plan(
         source_path=source_path,
     )
 
-    # Extract structured fields
     result = extract_plan_fields(content)
 
-    # Run structural validation
     validation_result = validate_plan_structure(result.goal, content)
 
-    # Resolve target_path for the result
     resolved_target = target_path.expanduser().resolve()
 
     logger.info(

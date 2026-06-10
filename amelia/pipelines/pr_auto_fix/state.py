@@ -83,29 +83,23 @@ class PRAutoFixState(BasePipelineState):
 
     model_config = ConfigDict(frozen=True)
 
-    # Pipeline identity
     pipeline_type: Literal["pr_auto_fix"] = "pr_auto_fix"
     status: Literal["pending", "running", "paused", "completed", "failed"] = "pending"
 
-    # PR context
     pr_number: int
     head_branch: str
     repo: str
 
-    # Classification
     classified_comments: list[CommentClassification] = Field(default_factory=list)
     file_groups: dict[str | None, list[int]] = Field(default_factory=dict)
 
-    # Agentic execution
     goal: str | None = None
     agentic_status: AgenticStatus = AgenticStatus.RUNNING
 
-    # Results
     commit_sha: str | None = None
     group_results: list[GroupFixResult] = Field(default_factory=list)
     resolution_results: list[ResolutionResult] = Field(default_factory=list)
 
-    # Configuration
     autofix_config: PRAutoFixConfig = Field(default_factory=PRAutoFixConfig)
     comments: list[PRReviewComment] = Field(default_factory=list)
 

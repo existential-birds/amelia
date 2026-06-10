@@ -49,12 +49,10 @@ class ImplementationState(BasePipelineState):
     # Override pipeline_type with literal
     pipeline_type: Literal["implementation"] = "implementation"
 
-    # Agentic execution tracking (from agent interactions)
     tool_calls: Annotated[list[ToolCall], operator.add] = Field(default_factory=list)
     tool_results: Annotated[list[ToolResult], operator.add] = Field(default_factory=list)
     agentic_status: AgenticStatus = AgenticStatus.RUNNING
 
-    # Domain data (from planning phase)
     issue: Issue | None = None
     design: Design | None = None
     goal: str | None = None
@@ -67,37 +65,30 @@ class ImplementationState(BasePipelineState):
     plan_path: Path | None = None
     key_files: list[str] = Field(default_factory=list)
 
-    # Human approval (plan review)
     human_approved: bool | None = None
     human_feedback: str | None = None
 
-    # Code review tracking
     last_reviews: list[ReviewResult] = Field(default_factory=list)
     code_changes_for_review: str | None = None
 
-    # Review iteration tracking
     review_iteration: int = 0
 
     # Plan validation feedback loop (mirrors last_reviews + task_review_iteration)
     plan_validation_result: PlanValidationResult | None = None
     plan_revision_count: int = 0
 
-    # Task-based execution (multi-task plans)
     total_tasks: int = 1
     current_task_index: int = 0
     task_review_iteration: int = 0
 
-    # Structured review workflow
     evaluation_result: EvaluationResult | None = None
     approved_items: list[int] = Field(default_factory=list)
     review_pass: int = 0
     review_mode: str | None = None
     max_review_passes: int = 3
 
-    # Structured plan data (from write_plan JSON sidecar)
     plan_structured: WritePlanInput | None = None
 
-    # External plan tracking
     external_plan: bool = False
     """True if plan was imported externally (bypasses Architect)."""
 

@@ -119,7 +119,6 @@ async def call_developer_node(
     if not state.goal:
         raise ValueError("Developer node has no goal. The architect should have generated a goal first.")
 
-    # Extract all config params in one call
     nc = extract_node_config(config)
 
     # Capture current HEAD so the next reviewer only diffs against this point
@@ -141,7 +140,6 @@ async def call_developer_node(
     agent_config = nc.profile.get_agent_config("developer")
     developer = Developer(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
 
-    # P1: record this invocation into the workflow trajectory (server mode only)
     if nc.recorder is not None:
         inv = nc.recorder.begin_invocation("developer", model=agent_config.model)
         developer.driver = RecordingDriver(developer.driver, inv)
@@ -200,7 +198,6 @@ async def call_reviewer_node(
     """
     logger.info(f"Orchestrator: Calling Reviewer for issue {state.issue.id if state.issue else 'N/A'}")
 
-    # Extract all config params in one call
     nc = extract_node_config(config)
 
     # Use "task_reviewer" only for non-final tasks in task-based execution
@@ -211,7 +208,6 @@ async def call_reviewer_node(
         agent_config = nc.profile.get_agent_config(agent_name)
     except ValueError:
         agent_config = nc.profile.get_agent_config("reviewer")
-    # Compute base_commit if not in state
     base_commit = state.base_commit
     if not base_commit:
         computed_commit = await _resolve_commit(nc.profile.repo_root, nc.sandbox_provider)
@@ -223,7 +219,6 @@ async def call_reviewer_node(
                 base_commit=base_commit,
             )
         else:
-            # Fallback to HEAD if get_current_commit fails
             base_commit = "HEAD"
             logger.warning(
                 "Could not compute base_commit, falling back to HEAD",
@@ -236,7 +231,6 @@ async def call_reviewer_node(
             base_commit=base_commit,
         )
 
-    # Detect stack and load review skills
     config_review_types = (config or {}).get("configurable", {}).get("review_types")
     raw_review_types = config_review_types or agent_config.options.get("review_types", ["general"])
     if not isinstance(raw_review_types, list) or not raw_review_types:
@@ -247,7 +241,6 @@ async def call_reviewer_node(
         raw_review_types = ["general"]
     review_types: list[str] = [str(rt) for rt in raw_review_types]
 
-    # Warn about unknown review types
     unknown_types = [rt for rt in review_types if rt not in REVIEW_TYPE_SKILLS]
     if unknown_types:
         logger.warning(
@@ -321,7 +314,6 @@ async def call_reviewer_node(
                 review_guidelines=guidelines,
             )
 
-            # P1: one trajectory invocation per review pass (server mode only)
             if nc.recorder is not None:
                 inv = nc.recorder.begin_invocation(agent_name, model=agent_config.model)
                 reviewer.driver = RecordingDriver(reviewer.driver, inv)
@@ -332,7 +324,6 @@ async def call_reviewer_node(
                 diff_path=str(diff_path),
             )
 
-            # Tag result with the review type as reviewer_persona
             review_result = review_result.model_copy(update={"reviewer_persona": review_type})
             reviews.append(review_result)
             new_session_id = session_id
@@ -348,7 +339,6 @@ async def call_reviewer_node(
 
         next_iteration = state.review_iteration + 1
 
-        # Build return dict with all review results
         result_dict: dict[str, Any] = {
             "last_reviews": reviews,
             "driver_session_id": new_session_id,
@@ -356,7 +346,6 @@ async def call_reviewer_node(
             "task_review_iteration": state.task_review_iteration + 1,
         }
 
-        # Debug: Log the full state update being returned
         logger.debug(
             "call_reviewer_node returning state update",
             review_count=len(reviews),

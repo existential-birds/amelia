@@ -192,7 +192,6 @@ async def plan_validator_node(
         workflow_id=nc.workflow_id,
     )
 
-    # Read plan file - fail fast if not found
     if not plan_path.exists():
         raise ValueError(f"Plan file not found at {plan_path}")
 
@@ -264,7 +263,6 @@ async def plan_validator_node(
         key_files = _extract_key_files_from_plan(plan_content)
         total_tasks = extract_task_count(plan_content)
 
-    # Run structural validation
     validation_result = validate_plan_structure(goal, plan_content)
 
     revision_count = state.plan_revision_count
@@ -328,15 +326,11 @@ async def call_architect_node(
     if state.issue is None:
         raise ValueError("Cannot call Architect: no issue provided in state.")
 
-    # Extract all config params in one call
     nc = extract_node_config(config)
 
     agent_config = nc.profile.get_agent_config("architect")
     architect = Architect(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
 
-    # P1: record this invocation into the workflow trajectory (server mode only).
-    # Note: plan_validator_node performs regex-only validation (no driver call),
-    # so the architect is the only P1 seam in this module today.
     if nc.recorder is not None:
         inv = nc.recorder.begin_invocation("architect", model=agent_config.model)
         architect.driver = RecordingDriver(architect.driver, inv)
@@ -368,7 +362,6 @@ async def call_architect_node(
             tool_calls_count=len(final_state.tool_calls),
         )
 
-        # Log all tool calls for diagnosis
         logger.debug(
             "All tool calls from architect",
             tool_calls_detail=[
@@ -460,7 +453,6 @@ async def human_approval_node(
     approved = typer.confirm("Do you approve this plan to proceed with development?", default=True)
     comment = typer.prompt("Add an optional comment for the audit log (press Enter to skip)", default="")
 
-    # Log the approval decision
     logger.info(
         "Human approval received",
         approved=approved,
