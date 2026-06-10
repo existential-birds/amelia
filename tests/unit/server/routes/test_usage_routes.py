@@ -1,36 +1,73 @@
-"""Tests for usage API routes."""
+"""Tests for usage API routes serving aggregates from trajectory files."""
 
+import uuid
 from datetime import date
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from harbor.models.trajectories import Agent, FinalMetrics, Step, Trajectory
 
+import amelia
 from amelia.server.dependencies import get_repository
+from amelia.trajectory import trajectory_path, write_atomic
+
+
+def make_trajectory(model: str, cost: float, tokens: tuple[int, int], status: str) -> Trajectory:
+    """Build a minimal finalized workflow trajectory with one subagent."""
+    prompt, completion = tokens
+    metrics = FinalMetrics(
+        total_prompt_tokens=prompt,
+        total_completion_tokens=completion,
+        total_cost_usd=cost,
+        total_steps=1,
+    )
+    sub = Trajectory(
+        trajectory_id="developer-inv-1",
+        agent=Agent(name="developer", version=amelia.__version__, model_name=model),
+        steps=[Step(step_id=1, source="agent", message="done")],
+        final_metrics=metrics,
+    )
+    return Trajectory(
+        session_id=str(uuid.uuid4()),
+        agent=Agent(name="amelia", version=amelia.__version__, model_name="orchestrator"),
+        steps=[Step(step_id=1, source="agent", message="Invoked developer")],
+        final_metrics=metrics,
+        extra={"outcome": {"status": status}},
+        subagent_trajectories=[sub],
+    )
+
+
+def seed_trajectory_file(
+    trajectory_dir: Path,
+    *,
+    model: str = "claude-x",
+    cost: float = 1.0,
+    tokens: tuple[int, int] = (10, 5),
+    status: str = "completed",
+) -> Path:
+    """Write a trajectory file to disk and return its path."""
+    path = trajectory_path(trajectory_dir, uuid.uuid4())
+    write_atomic(path, make_trajectory(model, cost, tokens, status))
+    return path
 
 
 @pytest.fixture
-def mock_repo() -> MagicMock:
-    """Create mock repository."""
+def mock_repo(tmp_path: Path) -> MagicMock:
+    """Mock repository whose list_trajectory_paths filters seeded rows by date.
+
+    ``repo.rows`` holds ``(path_str, completed_date, duration_ms)`` tuples;
+    the side effect mimics the SQL ``completed_at::date`` range filter.
+    """
     repo = MagicMock()
-    repo.get_usage_summary = AsyncMock(return_value={
-        "total_cost_usd": 127.43,
-        "total_workflows": 24,
-        "total_tokens": 1_200_000,
-        "total_duration_ms": 2_820_000,
-        "previous_period_cost_usd": 98.12,
-        "successful_workflows": 22,
-        "success_rate": 0.9167,
-    })
-    repo.get_usage_trend = AsyncMock(return_value=[
-        {"date": "2026-01-15", "cost_usd": 12.34, "workflows": 3, "by_model": {"claude-sonnet-4": 12.34}},
-        {"date": "2026-01-16", "cost_usd": 15.67, "workflows": 4, "by_model": {"claude-opus-4": 15.67}},
-    ])
-    repo.get_usage_by_model = AsyncMock(return_value=[
-        {"model": "claude-sonnet-4", "workflows": 18, "tokens": 892_000, "cost_usd": 42.17, "trend": [12.34, 0.0], "successful_workflows": 17, "success_rate": 0.9444},
-        {"model": "claude-opus-4", "workflows": 6, "tokens": 340_000, "cost_usd": 85.26, "trend": [0.0, 15.67], "successful_workflows": 5, "success_rate": 0.8333},
-    ])
+    repo.rows = []
+
+    async def list_trajectory_paths(start_date: date, end_date: date) -> list[tuple]:
+        return [r for r in repo.rows if start_date <= r[1] <= end_date]
+
+    repo.list_trajectory_paths = AsyncMock(side_effect=list_trajectory_paths)
     return repo
 
 
@@ -41,49 +78,120 @@ def client(mock_repo: MagicMock) -> TestClient:
 
     app = FastAPI()
     app.include_router(router, prefix="/api")
-
-    # Override dependencies
     app.dependency_overrides[get_repository] = lambda: mock_repo
 
     return TestClient(app)
 
 
-def test_get_usage_with_preset(client: TestClient, mock_repo: MagicMock) -> None:
-    """GET /api/usage?preset=30d returns usage data."""
-    response = client.get("/api/usage?preset=30d")
+def test_get_usage_aggregates_seeded_trajectory_files(
+    client: TestClient, mock_repo: MagicMock, tmp_path: Path
+) -> None:
+    """GET /api/usage sums totals across the trajectory files in range."""
+    p1 = seed_trajectory_file(tmp_path, cost=1.0, tokens=(100, 50), status="completed")
+    p2 = seed_trajectory_file(tmp_path, cost=2.0, tokens=(200, 100), status="failed")
+    mock_repo.rows = [
+        (str(p1), date(2026, 6, 1), 1000),
+        (str(p2), date(2026, 6, 2), 2000),
+    ]
+
+    response = client.get("/api/usage?start=2026-06-01&end=2026-06-03")
 
     assert response.status_code == 200
     data = response.json()
+    assert data["summary"]["total_cost_usd"] == 3.0
+    assert data["summary"]["total_workflows"] == 2
+    assert data["summary"]["total_tokens"] == 450
+    assert data["summary"]["total_duration_ms"] == 3000
+    assert data["summary"]["successful_workflows"] == 1
+    assert data["summary"]["success_rate"] == 0.5
+    assert [p["date"] for p in data["trend"]] == ["2026-06-01", "2026-06-02"]
+    assert [m["model"] for m in data["by_model"]] == ["claude-x"]
+    assert data["by_model"][0]["cost_usd"] == 3.0
+    assert data["by_model"][0]["workflows"] == 2
 
-    assert data["summary"]["total_cost_usd"] == 127.43
-    assert data["summary"]["total_workflows"] == 24
-    assert len(data["trend"]) == 2
-    assert len(data["by_model"]) == 2
+
+def test_get_usage_date_filter_excludes_out_of_range_workflow(
+    client: TestClient, mock_repo: MagicMock, tmp_path: Path
+) -> None:
+    """A workflow completed outside the requested range contributes nothing."""
+    p1 = seed_trajectory_file(tmp_path, cost=1.0)
+    p2 = seed_trajectory_file(tmp_path, cost=2.0)
+    p3 = seed_trajectory_file(tmp_path, cost=8.0)
+    mock_repo.rows = [
+        (str(p1), date(2026, 6, 1), 1000),
+        (str(p2), date(2026, 6, 2), 1000),
+        (str(p3), date(2026, 7, 20), 1000),  # outside range and previous window
+    ]
+
+    response = client.get("/api/usage?start=2026-06-01&end=2026-06-05")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summary"]["total_cost_usd"] == 3.0
+    assert data["summary"]["total_workflows"] == 2
 
 
-def test_get_usage_with_date_range(client: TestClient, mock_repo: MagicMock) -> None:
-    """GET /api/usage with start/end dates uses those dates."""
+def test_get_usage_previous_period_cost_from_pre_window_files(
+    client: TestClient, mock_repo: MagicMock, tmp_path: Path
+) -> None:
+    """Files completed in the immediately preceding window feed the comparison."""
+    prev = seed_trajectory_file(tmp_path, cost=4.0)
+    current = seed_trajectory_file(tmp_path, cost=1.0)
+    mock_repo.rows = [
+        (str(prev), date(2026, 5, 29), 1000),
+        (str(current), date(2026, 6, 2), 1000),
+    ]
+
+    response = client.get("/api/usage?start=2026-06-01&end=2026-06-05")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summary"]["total_cost_usd"] == 1.0
+    assert data["summary"]["previous_period_cost_usd"] == 4.0
+
+
+def test_get_usage_skips_unreadable_trajectory_file(
+    client: TestClient, mock_repo: MagicMock, tmp_path: Path
+) -> None:
+    """A missing or corrupt file is skipped; the endpoint still answers."""
+    good = seed_trajectory_file(tmp_path, cost=1.0)
+    missing = tmp_path / "gone" / "trajectory.json"
+    corrupt = tmp_path / "corrupt" / "trajectory.json"
+    corrupt.parent.mkdir(parents=True)
+    corrupt.write_text("not json{")
+    mock_repo.rows = [
+        (str(good), date(2026, 6, 1), 1000),
+        (str(missing), date(2026, 6, 2), 1000),
+        (str(corrupt), date(2026, 6, 2), 1000),
+    ]
+
+    response = client.get("/api/usage?start=2026-06-01&end=2026-06-03")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summary"]["total_cost_usd"] == 1.0
+    assert data["summary"]["total_workflows"] == 1
+
+
+def test_get_usage_with_date_range_queries_previous_window_too(
+    client: TestClient, mock_repo: MagicMock
+) -> None:
+    """The single SQL query spans the requested range plus the previous period."""
     response = client.get("/api/usage?start=2026-01-01&end=2026-01-15")
 
     assert response.status_code == 200
-
-    # Verify repo was called with correct dates
-    call_args = mock_repo.get_usage_summary.call_args
-    assert call_args[1]["start_date"] == date(2026, 1, 1)
-    assert call_args[1]["end_date"] == date(2026, 1, 15)
+    call_args = mock_repo.list_trajectory_paths.call_args
+    # 15-day range → query extends 15 days back for previous-period cost.
+    assert call_args[0] == (date(2025, 12, 17), date(2026, 1, 15))
 
 
 def test_get_usage_preset_7d(client: TestClient, mock_repo: MagicMock) -> None:
-    """preset=7d calculates correct date range."""
+    """preset=7d queries a 7-day range plus the 7-day previous window."""
     response = client.get("/api/usage?preset=7d")
 
     assert response.status_code == 200
-
-    # Verify dates are within 7 days of today
-    call_args = mock_repo.get_usage_summary.call_args
-    end_date = call_args[1]["end_date"]
-    start_date = call_args[1]["start_date"]
-    assert (end_date - start_date).days == 6  # 7 days inclusive
+    query_start, query_end = mock_repo.list_trajectory_paths.call_args[0]
+    assert (query_end - query_start).days == 13  # 7 current + 7 previous, inclusive
 
 
 def test_get_usage_invalid_preset(client: TestClient) -> None:
@@ -93,14 +201,19 @@ def test_get_usage_invalid_preset(client: TestClient) -> None:
     assert response.status_code == 400
 
 
-def test_get_usage_missing_params_uses_30d(client: TestClient, mock_repo: MagicMock) -> None:
-    """No params defaults to preset=30d."""
+def test_get_usage_preset_and_dates_is_400(client: TestClient) -> None:
+    """Providing both preset and explicit dates is rejected."""
+    response = client.get("/api/usage?preset=7d&start=2026-01-01&end=2026-01-15")
+
+    assert response.status_code == 400
+
+
+def test_get_usage_missing_params_uses_30d(
+    client: TestClient, mock_repo: MagicMock
+) -> None:
+    """No params defaults to preset=30d (plus the 30-day previous window)."""
     response = client.get("/api/usage")
 
     assert response.status_code == 200
-
-    # Should use 30 day range
-    call_args = mock_repo.get_usage_summary.call_args
-    end_date = call_args[1]["end_date"]
-    start_date = call_args[1]["start_date"]
-    assert (end_date - start_date).days == 29  # 30 days inclusive
+    query_start, query_end = mock_repo.list_trajectory_paths.call_args[0]
+    assert (query_end - query_start).days == 59  # 30 current + 30 previous, inclusive

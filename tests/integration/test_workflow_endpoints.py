@@ -18,6 +18,7 @@ Real components:
 
 import json
 import tempfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -604,3 +605,97 @@ class TestGetWorkflowDetailEndpoint:
         data = response.json()
         assert data["recent_events"] == []
         assert data["token_usage"] is None
+
+
+@pytest.mark.integration
+class TestUsageEndpoint:
+    """Tests for GET /api/usage aggregating from real trajectory files.
+
+    Exercises the real SQL date filter (``completed_at`` + non-null
+    ``trajectory_path``) and the file-based aggregation in one pass.
+    """
+
+    @staticmethod
+    async def _seed_finished_workflow(
+        repository: WorkflowRepository,
+        trajectory_dir: Path,
+        *,
+        issue_id: str,
+        completed_at: datetime,
+        cost: float,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> None:
+        """Create a completed workflow with a finalized trajectory file."""
+        workflow = await create_test_workflow(
+            repository, issue_id=issue_id, workflow_status="completed"
+        )
+        workflow.started_at = completed_at - timedelta(minutes=5)
+        workflow.completed_at = completed_at
+        await repository.update(workflow)
+
+        recorder = WorkflowTrajectoryRecorder(
+            workflow_id=workflow.id,
+            trajectory_dir=trajectory_dir,
+            profile_snapshot={"profile_id": "test", "issue_id": issue_id},
+        )
+        inv = recorder.begin_invocation("developer", model="claude-x")
+        inv.record_prompt(instructions="You are the developer.", prompt="Fix it.")
+        inv.record_messages([AgenticMessage(type=AgenticMessageType.RESULT, content="done")])
+        inv.close(
+            usage=DriverUsage(input_tokens=input_tokens, output_tokens=output_tokens),
+            cost_usd=cost,
+        )
+        path = await recorder.finalize(status="completed")
+        await repository.set_trajectory_index(workflow.id, path, recorder.final_metrics)
+
+    async def test_usage_totals_from_trajectory_files_with_date_filter(
+        self,
+        test_client: httpx.AsyncClient,
+        test_repository: WorkflowRepository,
+        tmp_path: Path,
+    ) -> None:
+        """Two in-range workflows are summed; out-of-range ones are excluded."""
+        await self._seed_finished_workflow(
+            test_repository, tmp_path, issue_id="TEST-USAGE-1",
+            completed_at=datetime(2026, 6, 1, 12, 0, tzinfo=UTC),
+            cost=1.0, input_tokens=10, output_tokens=5,
+        )
+        await self._seed_finished_workflow(
+            test_repository, tmp_path, issue_id="TEST-USAGE-2",
+            completed_at=datetime(2026, 6, 2, 12, 0, tzinfo=UTC),
+            cost=2.0, input_tokens=20, output_tokens=10,
+        )
+        # In the previous window: feeds the comparison, not the totals.
+        await self._seed_finished_workflow(
+            test_repository, tmp_path, issue_id="TEST-USAGE-3",
+            completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
+            cost=4.0, input_tokens=40, output_tokens=20,
+        )
+        # Far outside range and previous window: contributes nothing.
+        await self._seed_finished_workflow(
+            test_repository, tmp_path, issue_id="TEST-USAGE-4",
+            completed_at=datetime(2026, 7, 20, 12, 0, tzinfo=UTC),
+            cost=8.0, input_tokens=80, output_tokens=40,
+        )
+
+        response = await test_client.get("/api/usage?start=2026-06-01&end=2026-06-05")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        summary = data["summary"]
+        assert summary["total_cost_usd"] == pytest.approx(3.0)
+        assert summary["total_workflows"] == 2
+        assert summary["total_tokens"] == 45
+        assert summary["total_duration_ms"] == 600_000  # 2 × 5 minutes
+        assert summary["previous_period_cost_usd"] == pytest.approx(4.0)
+        assert summary["successful_workflows"] == 2
+        assert summary["success_rate"] == 1.0
+
+        assert [p["date"] for p in data["trend"]] == ["2026-06-01", "2026-06-02"]
+        assert [p["cost_usd"] for p in data["trend"]] == [pytest.approx(1.0), pytest.approx(2.0)]
+
+        assert [m["model"] for m in data["by_model"]] == ["claude-x"]
+        assert data["by_model"][0]["workflows"] == 2
+        assert data["by_model"][0]["cost_usd"] == pytest.approx(3.0)
+        assert data["by_model"][0]["tokens"] == 45

@@ -1,17 +1,22 @@
-"""Usage metrics routes."""
+"""Usage metrics routes.
+
+``GET /usage`` is a projection of trajectory files: one SQL fetches the
+trajectory index rows for the date range (plus the immediately preceding
+window for period-over-period comparison), each file is loaded, and the
+aggregation happens in Python via ``aggregate_usage``.
+"""
 
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from harbor.models.trajectories import Trajectory
+from loguru import logger
 
 from amelia.server.database import WorkflowRepository
 from amelia.server.dependencies import get_repository
-from amelia.server.models.usage import (
-    UsageByModel,
-    UsageResponse,
-    UsageSummary,
-    UsageTrendPoint,
-)
+from amelia.server.models.usage import UsageResponse
+from amelia.trajectory import aggregate_usage, load as load_trajectory
 
 
 router = APIRouter(prefix="/usage", tags=["usage"])
@@ -87,22 +92,31 @@ async def get_usage(
         end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=29)
 
-    # Fetch all usage data
-    summary_data = await repository.get_usage_summary(
-        start_date=start_date,
-        end_date=end_date,
-    )
-    trend_data = await repository.get_usage_trend(
-        start_date=start_date,
-        end_date=end_date,
-    )
-    by_model_data = await repository.get_usage_by_model(
-        start_date=start_date,
-        end_date=end_date,
-    )
+    # One SQL over the requested range plus the immediately preceding window
+    # of equal length (feeds previous_period_cost_usd in the aggregation).
+    period_days = (end_date - start_date).days + 1
+    query_start = start_date - timedelta(days=period_days)
+    rows = await repository.list_trajectory_paths(query_start, end_date)
 
-    return UsageResponse(
-        summary=UsageSummary(**summary_data),
-        trend=[UsageTrendPoint(**t) for t in trend_data],
-        by_model=[UsageByModel(**m) for m in by_model_data],
-    )
+    items: list[tuple[Trajectory, date, int | None]] = []
+    skipped = 0
+    for path_str, completed_on, duration_ms in rows:
+        try:
+            trajectory = load_trajectory(Path(path_str))
+        except (OSError, ValueError) as exc:
+            skipped += 1
+            logger.warning(
+                "Skipping unreadable trajectory file in usage aggregation",
+                path=path_str,
+                error=str(exc),
+            )
+            continue
+        items.append((trajectory, completed_on, duration_ms))
+    if skipped:
+        logger.warning(
+            "Usage aggregation skipped unreadable trajectory files",
+            skipped=skipped,
+            total=len(rows),
+        )
+
+    return aggregate_usage(items, start_date, end_date)

@@ -1,5 +1,6 @@
 """Tests for projecting ATIF trajectories into dashboard wire models."""
 import uuid
+from datetime import date
 
 from harbor.models.trajectories import (
     Agent,
@@ -14,7 +15,11 @@ from harbor.models.trajectories import (
 
 import amelia
 from amelia.server.models.events import EventType
-from amelia.trajectory.projection import trajectory_to_events, trajectory_to_token_summary
+from amelia.trajectory.projection import (
+    aggregate_usage,
+    trajectory_to_events,
+    trajectory_to_token_summary,
+)
 
 
 WF_ID = uuid.UUID("00000000-0000-0000-0000-00000000a11a")
@@ -177,6 +182,138 @@ def test_token_summary_from_trajectory():
     assert summary.total_cache_read_tokens == 2
     assert {u.agent for u in summary.breakdown} == {"developer"}
     assert summary.breakdown[0].model == "claude-x"
+
+
+def make_usage_trajectory(
+    subs: list[tuple[str, str, int, int, float]],
+    status: str,
+) -> Trajectory:
+    """Build a finalized workflow trajectory for usage aggregation tests.
+
+    Each entry in ``subs`` is ``(agent_name, model, prompt_tokens,
+    completion_tokens, cost_usd)``. Parent final metrics are the sums,
+    matching what ``WorkflowTrajectoryRecorder.finalize`` writes.
+    """
+    subagents = [
+        make_subagent(
+            name,
+            f"{name}-inv-{i}",
+            model=model,
+            final_metrics=FinalMetrics(
+                total_prompt_tokens=prompt,
+                total_completion_tokens=completion,
+                total_cost_usd=cost,
+                total_steps=5,
+            ),
+        )
+        for i, (name, model, prompt, completion, cost) in enumerate(subs, start=1)
+    ]
+    return Trajectory(
+        session_id=str(uuid.uuid4()),
+        agent=Agent(name="amelia", version=amelia.__version__, model_name="orchestrator"),
+        steps=[
+            make_parent_step(i, name, f"{name}-inv-{i}")
+            for i, (name, _, _, _, _) in enumerate(subs, start=1)
+        ],
+        final_metrics=FinalMetrics(
+            total_prompt_tokens=sum(s[2] for s in subs),
+            total_completion_tokens=sum(s[3] for s in subs),
+            total_cost_usd=sum(s[4] for s in subs),
+            total_steps=len(subs),
+        ),
+        extra={"outcome": {"status": status}},
+        subagent_trajectories=subagents,
+    )
+
+
+def test_aggregate_usage_sums_totals_buckets_days_and_splits_models():
+    t1 = make_usage_trajectory(
+        [("developer", "claude-sonnet", 100, 50, 1.0)], status="completed"
+    )
+    t2 = make_usage_trajectory(
+        [
+            ("developer", "claude-sonnet", 200, 100, 2.0),
+            ("reviewer", "claude-opus", 300, 150, 4.0),
+        ],
+        status="failed",
+    )
+
+    response = aggregate_usage(
+        [
+            (t1, date(2026, 6, 1), 1000),
+            (t2, date(2026, 6, 2), 2000),
+        ],
+        start=date(2026, 6, 1),
+        end=date(2026, 6, 3),
+    )
+
+    summary = response.summary
+    assert summary.total_cost_usd == 7.0
+    assert summary.total_workflows == 2
+    assert summary.total_tokens == 900
+    assert summary.total_duration_ms == 3000
+    assert summary.previous_period_cost_usd == 0.0
+    assert summary.successful_workflows == 1
+    assert summary.success_rate == 0.5
+
+    # One trend bucket per day with data, in date order.
+    assert [p.date for p in response.trend] == ["2026-06-01", "2026-06-02"]
+    assert [p.cost_usd for p in response.trend] == [1.0, 6.0]
+    assert [p.workflows for p in response.trend] == [1, 1]
+    assert response.trend[1].by_model == {"claude-sonnet": 2.0, "claude-opus": 4.0}
+
+    # by_model splits on subagent agent.model_name, ordered by cost desc.
+    assert [m.model for m in response.by_model] == ["claude-opus", "claude-sonnet"]
+    opus, sonnet = response.by_model
+    assert opus.workflows == 1
+    assert opus.tokens == 450
+    assert opus.cost_usd == 4.0
+    assert opus.trend == [0.0, 4.0, 0.0]
+    assert opus.successful_workflows == 0
+    assert opus.success_rate == 0.0
+    assert sonnet.workflows == 2
+    assert sonnet.tokens == 450
+    assert sonnet.cost_usd == 3.0
+    assert sonnet.trend == [1.0, 2.0, 0.0]
+    assert sonnet.successful_workflows == 1
+    assert sonnet.success_rate == 0.5
+
+
+def test_aggregate_usage_counts_pre_window_items_as_previous_period_only():
+    prev = make_usage_trajectory(
+        [("developer", "claude-sonnet", 10, 5, 5.0)], status="completed"
+    )
+    current = make_usage_trajectory(
+        [("developer", "claude-sonnet", 100, 50, 1.0)], status="completed"
+    )
+
+    response = aggregate_usage(
+        [
+            (prev, date(2026, 5, 31), 500),
+            (current, date(2026, 6, 1), 1000),
+        ],
+        start=date(2026, 6, 1),
+        end=date(2026, 6, 2),
+    )
+
+    assert response.summary.previous_period_cost_usd == 5.0
+    assert response.summary.total_cost_usd == 1.0
+    assert response.summary.total_workflows == 1
+    assert response.summary.total_duration_ms == 1000
+    assert [p.date for p in response.trend] == ["2026-06-01"]
+    assert [m.cost_usd for m in response.by_model] == [1.0]
+
+
+def test_aggregate_usage_empty_input_returns_zero_summary():
+    response = aggregate_usage([], start=date(2026, 6, 1), end=date(2026, 6, 3))
+
+    assert response.summary.total_cost_usd == 0.0
+    assert response.summary.total_workflows == 0
+    assert response.summary.total_tokens == 0
+    assert response.summary.total_duration_ms == 0
+    assert response.summary.success_rate == 0.0
+    assert response.trend == []
+    assert response.by_model == []
 
 
 def test_token_summary_skips_subagents_without_metrics_and_handles_empty():

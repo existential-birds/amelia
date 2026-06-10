@@ -417,6 +417,36 @@ class WorkflowRepository:
         if rows_affected == 0:
             raise WorkflowNotFoundError(workflow_id)
 
+    async def list_trajectory_paths(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> list[tuple[str, date, int | None]]:
+        """List trajectory index rows for workflows completed in a date range.
+
+        Args:
+            start_date: First completion date (inclusive).
+            end_date: Last completion date (inclusive).
+
+        Returns:
+            ``(trajectory_path, completed_date, total_duration_ms)`` per
+            workflow with a non-null ``trajectory_path``, ordered by
+            completion time.
+        """
+        rows = await self._db.fetch_all(
+            """
+            SELECT trajectory_path, completed_at::date, total_duration_ms
+            FROM workflows
+            WHERE trajectory_path IS NOT NULL
+              AND completed_at::date >= $1
+              AND completed_at::date <= $2
+            ORDER BY completed_at
+            """,
+            start_date,
+            end_date,
+        )
+        return [(row[0], row[1], row[2]) for row in rows]
+
     async def list_active(
         self, worktree_path: str | None = None
     ) -> list[ServerExecutionState]:
