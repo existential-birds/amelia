@@ -200,7 +200,6 @@ export default function SettingsProfilesPage() {
     )[0];
   };
 
-  // Filter profiles
   const filteredProfiles = profiles.filter((p) => {
     if (search && !p.id.toLowerCase().includes(search.toLowerCase())) {
       return false;
@@ -215,7 +214,6 @@ export default function SettingsProfilesPage() {
     return true;
   });
 
-  // Sort: active first, then by name
   const sortedProfiles = [...filteredProfiles].sort((a, b) => {
     if (a.is_active && !b.is_active) return -1;
     if (!a.is_active && b.is_active) return 1;
@@ -265,7 +263,6 @@ export default function SettingsProfilesPage() {
     setDriverFilter('all');
   };
 
-  // Show empty state if no profiles exist
   if (profiles.length === 0) {
     return (
       <div className="container mx-auto py-6 px-4">

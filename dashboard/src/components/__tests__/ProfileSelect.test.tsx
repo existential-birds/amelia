@@ -8,7 +8,6 @@ import { ProfileSelect } from '../ProfileSelect';
 import { getProfiles } from '@/api/settings';
 import { mockProfiles } from '@/__tests__/fixtures';
 
-// Mock the settings API
 vi.mock('@/api/settings', () => ({
   getProfiles: vi.fn(),
 }));
@@ -52,10 +51,8 @@ describe('ProfileSelect', () => {
     it('renders profiles after loading', async () => {
       await renderReady();
 
-      // Open the select dropdown
       fireEvent.click(screen.getByRole('combobox'));
 
-      // Check that profiles are rendered
       await waitFor(() => {
         expect(screen.getByText('work')).toBeInTheDocument();
         expect(screen.getByText('personal')).toBeInTheDocument();
@@ -124,7 +121,6 @@ describe('ProfileSelect', () => {
 
       // Find the "None" option in the dropdown (not the trigger)
       await waitFor(() => {
-        // The dropdown content has role="listbox"
         const listbox = screen.getByRole('listbox');
         const noneOption = within(listbox).getByText('None (use server default)');
         expect(noneOption).toBeInTheDocument();
@@ -142,7 +138,6 @@ describe('ProfileSelect', () => {
     it('displays selected profile value', async () => {
       await renderReady({ value: 'work' });
 
-      // The combobox should display the selected profile
       await waitFor(() => {
         expect(screen.getByRole('combobox')).toHaveTextContent('work');
       });
@@ -163,13 +158,10 @@ describe('ProfileSelect', () => {
       try {
         await renderReady();
 
-        // Wait for the error to be processed - the component should still be functional
         await waitFor(() => {
-          // The select should be enabled after loading fails
           expect(screen.getByRole('combobox')).not.toBeDisabled();
         });
 
-        // Verify error message is displayed to the user
         expect(screen.getByText('Failed to load profiles')).toBeInTheDocument();
 
         expect(consoleSpy).toHaveBeenCalledWith(
@@ -188,32 +180,25 @@ describe('ProfileSelect', () => {
       try {
         await renderReady();
 
-        // Wait for error state
         await waitFor(() => {
           expect(screen.getByText('Failed to load profiles')).toBeInTheDocument();
         });
 
-        // Verify retry button is shown
         const retryButton = screen.getByRole('button', { name: 'Retry' });
         expect(retryButton).toBeInTheDocument();
 
-        // Mock successful response for retry
         vi.mocked(getProfiles).mockResolvedValueOnce(mockProfiles);
 
-        // Click retry
         fireEvent.click(retryButton);
 
-        // Verify profiles are fetched again
         await waitFor(() => {
           expect(getProfiles).toHaveBeenCalledTimes(2);
         });
 
-        // Verify error message is cleared and profiles are loaded
         await waitFor(() => {
           expect(screen.queryByText('Failed to load profiles')).not.toBeInTheDocument();
         });
 
-        // Verify profiles are now available
         fireEvent.click(screen.getByRole('combobox'));
         await waitFor(() => {
           expect(screen.getByText('work')).toBeInTheDocument();
@@ -231,7 +216,6 @@ describe('ProfileSelect', () => {
       const combobox = screen.getByRole('combobox');
       expect(combobox).toHaveAttribute('id', 'test-profile');
 
-      // Label should be associated
       expect(screen.getByText('Profile')).toBeInTheDocument();
     });
 

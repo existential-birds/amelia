@@ -26,10 +26,8 @@ describe("SessionInfoBar", () => {
       />
     );
 
-    // Should render message count
     expect(screen.getByText("5")).toBeInTheDocument();
 
-    // Should not render cost
     expect(screen.queryByText(/\$\d+\.\d{2}/)).not.toBeInTheDocument();
   });
 
@@ -43,7 +41,6 @@ describe("SessionInfoBar", () => {
       />
     );
 
-    // Should render the total cost
     expect(screen.getByText("$0.42")).toBeInTheDocument();
   });
 
@@ -62,7 +59,6 @@ describe("SessionInfoBar", () => {
       />
     );
 
-    // Should not render cost when it's 0
     expect(screen.queryByText(/\$\d+\.\d{2}/)).not.toBeInTheDocument();
   });
 
@@ -76,7 +72,6 @@ describe("SessionInfoBar", () => {
     );
 
     // Should render formatted model name (formatModel capitalizes and adds spaces)
-    // "claude-sonnet-4.5" -> "Claude Sonnet 4.5"
     expect(screen.getByText("Claude Sonnet 4.5")).toBeInTheDocument();
 
     // Should render formatted driver (formatDriver returns "CLAUDE" for non-prefixed strings)
@@ -152,11 +147,9 @@ describe("SessionInfoBar", () => {
       />
     );
 
-    // Should still render status and message count
     expect(screen.getByText("Active")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
 
-    // Should not render model or driver
     expect(screen.queryByText("Claude Sonnet 4.5")).not.toBeInTheDocument();
     // Note: "Claude" might appear elsewhere, so we check for the model specifically
   });

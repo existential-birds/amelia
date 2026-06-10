@@ -55,10 +55,6 @@ function planToMarkdown(plan: MockPlan): string {
   return md;
 }
 
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
 /**
  * Generate a deterministic UUID from a string seed.
  * Uses a simple hash to create consistent UUIDs for demos.
@@ -124,13 +120,8 @@ const PR_DEFAULTS = {
   pr_comment_count: null as number | null,
 };
 
-// ============================================================================
-// Active Workflows (8 items - includes completed ones)
-// ============================================================================
-
 export function getMockActiveWorkflows(): WorkflowSummary[] {
   return ([
-    // Completed workflows first (most recent first)
     {
       id: generateUUID('NAV-777'),
       issue_id: 'NAV-777',
@@ -170,7 +161,6 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       total_tokens: 240000,
       total_duration_ms: 90000,
     },
-    // Running workflows
     {
       id: generateUUID('INFRA-2847'),
       issue_id: 'INFRA-2847',
@@ -210,7 +200,6 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       total_tokens: 822000,
       total_duration_ms: 154000,
     },
-    // Blocked workflows at bottom
     {
       id: generateUUID('DEVOPS-∞'),
       issue_id: 'DEVOPS-∞',
@@ -239,10 +228,6 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
     },
   ] as Omit<WorkflowSummary, keyof typeof PR_DEFAULTS>[]).map(w => ({ ...PR_DEFAULTS, ...w }));
 }
-
-// ============================================================================
-// Past Workflows (10 items)
-// ============================================================================
 
 export function getMockHistoryWorkflows(): WorkflowSummary[] {
   return ([
@@ -378,10 +363,6 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
     },
   ] as Omit<WorkflowSummary, keyof typeof PR_DEFAULTS>[]).map(w => ({ ...PR_DEFAULTS, ...w }));
 }
-
-// ============================================================================
-// Execution Plans for Batch Visualization
-// ============================================================================
 
 /**
  * Execution plan for INFRA-2847 (heat shields)
@@ -583,10 +564,6 @@ function getEscapeVelocityExecutionPlan(): MockPlan {
   };
 }
 
-// ============================================================================
-// Token Usage
-// ============================================================================
-
 /**
  * Creates a TokenUsage entry for a specific agent.
  */
@@ -621,7 +598,6 @@ function createTokenUsage(
 function getTokenUsage(workflowId: string, issueId: string): TokenSummary | null {
   const breakdown: TokenUsage[] = [];
 
-  // Different token counts based on the workflow theme
   switch (issueId) {
     case 'INFRA-2847':
       breakdown.push(createTokenUsage(workflowId, 'architect', 100000, 23456, 6.17, 45000, 4));
@@ -652,7 +628,6 @@ function getTokenUsage(workflowId: string, issueId: string): TokenSummary | null
     return null;
   }
 
-  // Calculate totals from breakdown
   const totalInputTokens = breakdown.reduce((sum, u) => sum + u.input_tokens, 0);
   const totalOutputTokens = breakdown.reduce((sum, u) => sum + u.output_tokens, 0);
   const totalCacheReadTokens = breakdown.reduce((sum, u) => sum + u.cache_read_tokens, 0);
@@ -671,10 +646,6 @@ function getTokenUsage(workflowId: string, issueId: string): TokenSummary | null
   };
 }
 
-// ============================================================================
-// Workflow Detail Generator
-// ============================================================================
-
 export function getMockWorkflowDetail(id: string): WorkflowDetail | null {
   const activeWorkflows = getMockActiveWorkflows();
   const historyWorkflows = getMockHistoryWorkflows();
@@ -685,7 +656,6 @@ export function getMockWorkflowDetail(id: string): WorkflowDetail | null {
     return null;
   }
 
-  // Generate detailed information based on issue_id
   let executionPlan: MockPlan | null = null;
   let completedAt: string | null = null;
   let failureReason: string | null = null;
@@ -693,7 +663,6 @@ export function getMockWorkflowDetail(id: string): WorkflowDetail | null {
   const startedAt = summary.started_at || new Date().toISOString();
 
   switch (summary.issue_id) {
-    // Active workflows
     case 'INFRA-2847':
       executionPlan = getHeatShieldsExecutionPlan();
       break;
@@ -746,7 +715,6 @@ export function getMockWorkflowDetail(id: string): WorkflowDetail | null {
       break;
 
     default:
-      // Generic completed workflow
       completedAt = new Date(new Date(startedAt).getTime() + 1 * 60 * 60 * 1000).toISOString();
   }
 
@@ -756,7 +724,6 @@ export function getMockWorkflowDetail(id: string): WorkflowDetail | null {
     completed_at: completedAt,
     failure_reason: failureReason,
     token_usage: getTokenUsage(id, summary.issue_id),
-    // Agentic execution fields
     goal: executionPlan?.goal ?? null,
     plan_markdown: executionPlan ? planToMarkdown(executionPlan) : null,
     plan_path: executionPlan ? `/docs/plans/${summary.issue_id.toLowerCase()}-plan.md` : null,

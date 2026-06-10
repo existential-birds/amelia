@@ -4,7 +4,6 @@ import userEvent from "@testing-library/user-event";
 import { MessageMetadata } from "../MessageMetadata";
 import type { MessageUsage } from "@/types/api";
 
-// Mock the copyToClipboard utility
 vi.mock("@/lib/utils", async () => {
   const actual = await vi.importActual("@/lib/utils");
   return {
@@ -13,7 +12,6 @@ vi.mock("@/lib/utils", async () => {
   };
 });
 
-// Import the mocked function for assertions
 import { copyToClipboard } from "@/lib/utils";
 
 beforeEach(() => {
@@ -35,12 +33,10 @@ describe("MessageMetadata", () => {
       />
     );
 
-    // Should render the copy button
     expect(
       screen.getByRole("button", { name: /copy message/i })
     ).toBeInTheDocument();
 
-    // Should not render token count or cost
     expect(screen.queryByText(/tok$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\$\d+\.\d+/)).not.toBeInTheDocument();
   });
@@ -54,15 +50,12 @@ describe("MessageMetadata", () => {
       />
     );
 
-    // Should render total tokens (input + output = 12400 -> "12.4K tok")
     expect(screen.getByText("12.4K tok")).toBeInTheDocument();
 
-    // Should render cost
     expect(screen.getByText("$0.05")).toBeInTheDocument();
   });
 
   it("formats tokens with K notation for thousands", () => {
-    // Test 1500 tokens -> "1.5K tok"
     const { rerender } = render(
       <MessageMetadata
         timestamp="2026-01-18T10:00:00Z"
@@ -82,7 +75,6 @@ describe("MessageMetadata", () => {
     );
     expect(screen.getByText("500 tok")).toBeInTheDocument();
 
-    // Test exactly 1000 tokens -> "1.0K tok"
     rerender(
       <MessageMetadata
         timestamp="2026-01-18T10:00:00Z"
@@ -102,10 +94,8 @@ describe("MessageMetadata", () => {
       />
     );
 
-    // The diamond separator character should not be present
     expect(screen.queryByText("◈")).not.toBeInTheDocument();
 
-    // Token and cost text should not be present
     expect(screen.queryByText(/tok$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
   });
@@ -149,7 +139,6 @@ describe("MessageMetadata", () => {
     const copyButton = screen.getByRole("button", { name: /copy message/i });
     await user.click(copyButton);
 
-    // After clicking, the button label should change to "Copied"
     expect(
       screen.getByRole("button", { name: /copied/i })
     ).toBeInTheDocument();

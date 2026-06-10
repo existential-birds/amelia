@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useWorkflowStore, resetBatchState } from '../workflowStore';
 import { createMockEvent } from '../../__tests__/fixtures';
 
-// Mock sessionStorage
 const sessionStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
@@ -132,14 +131,12 @@ describe('workflowStore', () => {
       useWorkflowStore.getState().addEvent(event2);
       flushEvents();
 
-      // Try to add duplicate of first event
       useWorkflowStore.getState().addEvent(event1);
       flushEvents();
 
       // lastEventId should remain evt-2, not revert to evt-1
       expect(useWorkflowStore.getState().lastEventId).toBe('evt-2');
 
-      // Verify no duplicate was added
       const events = useWorkflowStore.getState().eventsByWorkflow['wf-1'];
       expect(events).toHaveLength(2);
     });
@@ -155,7 +152,6 @@ describe('workflowStore', () => {
       // Create distinct object with same id (simulates JSON deserialization)
       const event2 = { ...event1, message: 'Cloned event' };
 
-      // Verify they are different object references
       expect(event1).not.toBe(event2);
       expect(event1.id).toBe(event2.id);
 
@@ -255,7 +251,6 @@ describe('workflowStore', () => {
 
   describe('persistence', () => {
     it('should persist lastEventId but NOT events', () => {
-      // Add an event to update lastEventId
       useWorkflowStore.getState().addEvent(
         createMockEvent({
           id: 'evt-999',
@@ -269,7 +264,6 @@ describe('workflowStore', () => {
       expect(stored).not.toBeNull();
       const parsed = JSON.parse(stored!);
 
-      // Should persist lastEventId
       expect(parsed.state.lastEventId).toBe('evt-999');
 
       // Should NOT persist events
@@ -299,10 +293,8 @@ describe('workflowStore', () => {
       const stateBeforeFlush = useWorkflowStore.getState();
       expect(stateBeforeFlush.eventsByWorkflow['wf-1'] ?? []).toHaveLength(0);
 
-      // Flush the batch
       vi.advanceTimersByTime(100);
 
-      // After flush, all events should be in store
       const stateAfterFlush = useWorkflowStore.getState();
       expect(stateAfterFlush.eventsByWorkflow['wf-1']).toHaveLength(40);
     });
@@ -335,10 +327,8 @@ describe('workflowStore', () => {
       const MAX_WORKFLOWS = 100;
       const store = useWorkflowStore.getState();
 
-      // Add events for 101 workflows with increasing timestamps
       // Using ISO format that sorts correctly: 2026-01-01T00:00:00Z, etc.
       for (let i = 0; i <= MAX_WORKFLOWS; i++) {
-        // Generate unique, sortable timestamps
         const day = String(Math.floor(i / 24) + 1).padStart(2, '0');
         const hour = String(i % 24).padStart(2, '0');
         store.addEvent({
@@ -357,13 +347,11 @@ describe('workflowStore', () => {
       const state = useWorkflowStore.getState();
       const workflowIds = Object.keys(state.eventsByWorkflow);
 
-      // Should have evicted the oldest workflow (wf-0)
       expect(workflowIds).toHaveLength(MAX_WORKFLOWS);
       expect(workflowIds).not.toContain('wf-0');
       expect(workflowIds).toContain('wf-1');
       expect(workflowIds).toContain(`wf-${MAX_WORKFLOWS}`);
 
-      // Timestamp tracking should also be cleaned up
       expect(state.lastEventTimestampByWorkflow['wf-0']).toBeUndefined();
       expect(state.eventIdsByWorkflow['wf-0']).toBeUndefined();
     });
@@ -395,7 +383,6 @@ describe('workflowStore', () => {
       flushEvents();
 
       const state = useWorkflowStore.getState();
-      // Should have the latest timestamp
       expect(state.lastEventTimestampByWorkflow['wf-1']).toBe('2026-01-01T11:00:00Z');
     });
   });

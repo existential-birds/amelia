@@ -4,14 +4,9 @@
  * Keep in sync with amelia/server/models/*.py
  */
 
-// Re-export all types from Plan 08 Task 8
 export * from './index';
 
 import type { WorkflowSummary, WorkflowDetail } from './index';
-
-// ============================================================================
-// React Router Loader Data Types
-// ============================================================================
 
 /**
  * Data returned by the workflows list route loader.
@@ -51,10 +46,6 @@ export interface WorkflowDetailLoaderData {
   workflow: WorkflowDetail;
 }
 
-// ============================================================================
-// React Router Action Result Types
-// ============================================================================
-
 /**
  * Result object returned by React Router actions (approve, reject, cancel).
  * Indicates whether the action succeeded and which action was performed.
@@ -89,10 +80,6 @@ export interface ActionResult {
   /** Error message if the action failed, otherwise undefined. */
   error?: string;
 }
-
-// ============================================================================
-// Brainstorming Types
-// ============================================================================
 
 /** Token usage for a single message. */
 export interface MessageUsage {

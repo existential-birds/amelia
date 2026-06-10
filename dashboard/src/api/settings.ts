@@ -6,10 +6,6 @@
 
 import { request } from './utils';
 
-// =============================================================================
-// Types
-// =============================================================================
-
 /**
  * Server-wide settings configuration.
  */
@@ -126,10 +122,6 @@ export interface ProfileUpdate {
   pr_autofix?: PRAutoFixConfig | null;
 }
 
-// =============================================================================
-// Settings API
-// =============================================================================
-
 /**
  * Retrieves current server settings.
  *
@@ -164,10 +156,6 @@ export async function updateServerSettings(
 ): Promise<ServerSettings> {
   return request<ServerSettings>("/settings", { method: "PUT", body: updates });
 }
-
-// =============================================================================
-// Profiles API
-// =============================================================================
 
 /**
  * Retrieves all profiles.

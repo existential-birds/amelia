@@ -44,9 +44,7 @@ function formatChartDate(dateStr: string): string {
 export function CostsTrendChart({ data, className }: CostsTrendChartProps) {
   const [chartType, setChartType] = useState<ChartType>('stacked');
 
-  // Extract unique models sorted by total cost descending
   const { models, chartData, chartConfig } = useMemo(() => {
-    // Aggregate total cost per model across all days
     const modelTotals: Record<string, number> = {};
     for (const point of data) {
       if (point.by_model) {
@@ -56,12 +54,10 @@ export function CostsTrendChart({ data, className }: CostsTrendChartProps) {
       }
     }
 
-    // Sort models by total cost descending
     const sortedModels = Object.entries(modelTotals)
       .sort((a, b) => b[1] - a[1])
       .map(([model]) => model);
 
-    // If no by_model data, fall back to single series
     if (sortedModels.length === 0) {
       return {
         models: [],
@@ -75,7 +71,6 @@ export function CostsTrendChart({ data, className }: CostsTrendChartProps) {
       };
     }
 
-    // Transform data for recharts (flatten by_model into top-level keys)
     const transformedData = data.map((point) => ({
       date: point.date,
       ...Object.fromEntries(
@@ -83,7 +78,6 @@ export function CostsTrendChart({ data, className }: CostsTrendChartProps) {
       ),
     }));
 
-    // Build chart config for legend
     const config: ChartConfig = {};
     sortedModels.forEach((model, index) => {
       config[model] = {
@@ -111,7 +105,6 @@ export function CostsTrendChart({ data, className }: CostsTrendChartProps) {
     );
   }
 
-  // Single series fallback (no by_model data)
   if (models.length === 0) {
     return (
       <div data-slot="costs-trend-chart" className={className}>
@@ -169,7 +162,6 @@ export function CostsTrendChart({ data, className }: CostsTrendChartProps) {
     );
   }
 
-  // Multi-model chart
   return (
     <div data-slot="costs-trend-chart" className={className}>
       <div className="flex justify-end mb-4">

@@ -62,7 +62,6 @@ const breakdownChartConfig: ChartConfig = {
 export function PRFixMetricsTab({ metrics, preset }: PRFixMetricsTabProps) {
   const { summary, daily, by_aggressiveness } = metrics;
 
-  // Empty state when no data
   if (daily.length === 0 && by_aggressiveness.length === 0 && summary.total_runs === 0) {
     return (
       <div className="flex flex-col gap-6">

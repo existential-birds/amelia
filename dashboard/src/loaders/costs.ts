@@ -42,7 +42,6 @@ export async function costsLoader({
   const start = url.searchParams.get('start');
   const end = url.searchParams.get('end');
 
-  // Determine API params
   let apiParams: { preset?: string; start?: string; end?: string };
   if (start && end) {
     apiParams = { start, end };

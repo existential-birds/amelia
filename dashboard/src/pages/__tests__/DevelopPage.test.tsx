@@ -45,14 +45,12 @@ vi.mock('@/components/ProfileSelect', () => ({
   ),
 }));
 
-// Mock PlanImportSection
 vi.mock('@/components/PlanImportSection', () => ({
   PlanImportSection: () => <div data-testid="plan-import-section" />,
 }));
 
 const LONG_BODY = 'x'.repeat(2001);
 
-// Mock GitHubIssueCombobox
 vi.mock('@/components/GitHubIssueCombobox', () => ({
   GitHubIssueCombobox: ({
     onSelect,
@@ -86,14 +84,12 @@ vi.mock('@/components/GitHubIssueCombobox', () => ({
   ),
 }));
 
-// Mock settings API for profile tracker lookup
 vi.mock('@/api/settings', () => ({
   getProfiles: vi.fn().mockResolvedValue([
     { id: 'test', tracker: 'github', repo_root: '/tmp/repo', is_active: true },
   ]),
 }));
 
-// Mock toast
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
@@ -167,7 +163,6 @@ describe('DevelopPage', () => {
       expect(screen.getByLabelText(/description/i)).toHaveValue('Login crashes on submit');
     });
 
-    // Fields should be read-only after issue selection
     expect(screen.getByLabelText(/task id/i)).toHaveAttribute('readonly');
     expect(screen.getByLabelText(/task title/i)).toHaveAttribute('readonly');
     expect(screen.getByLabelText(/description/i)).toHaveAttribute('readonly');
@@ -186,7 +181,6 @@ describe('DevelopPage', () => {
     await user.selectOptions(screen.getByTestId('profile-select'), 'test');
     await waitFor(() => expect(screen.getByTestId('issue-combobox')).toBeInTheDocument());
 
-    // Select an issue
     await user.click(screen.getByTestId('issue-combobox'));
 
     await waitFor(() => {
@@ -194,7 +188,6 @@ describe('DevelopPage', () => {
       expect(screen.getByLabelText(/task id/i)).toHaveAttribute('readonly');
     });
 
-    // Click the clear button exposed by mock
     await user.click(screen.getByTestId('clear-issue-btn'));
 
     await waitFor(() => {
@@ -287,14 +280,12 @@ describe('DevelopPage', () => {
     await user.selectOptions(screen.getByTestId('profile-select'), 'test');
     await waitFor(() => expect(screen.getByTestId('issue-combobox-long')).toBeInTheDocument());
 
-    // Select long issue and condense
     await user.click(screen.getByTestId('issue-combobox-long'));
     await waitFor(() => expect(screen.getByRole('button', { name: /condense with ai/i })).toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: /condense with ai/i }));
     await waitFor(() => expect(screen.getByRole('button', { name: /restore original/i })).toBeInTheDocument());
 
-    // Select a new (short) issue — restore button should disappear
     await user.click(screen.getByTestId('issue-combobox'));
 
     await waitFor(() => {

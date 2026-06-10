@@ -37,7 +37,6 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   const timeoutSignal = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
 
-  // Combine timeout signal with optional abort signal
   const signal = abortSignal
     ? AbortSignal.any([timeoutSignal, abortSignal])
     : timeoutSignal;

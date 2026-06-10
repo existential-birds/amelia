@@ -7,7 +7,6 @@ import userEvent from '@testing-library/user-event';
 import { PendingWorkflowControls } from '../PendingWorkflowControls';
 import { api } from '@/api/client';
 
-// Mock react-router-dom's useRevalidator
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
   return {
@@ -19,7 +18,6 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-// Mock the API client
 vi.mock('@/api/client', () => ({
   api: {
     startWorkflow: vi.fn(),
@@ -38,7 +36,6 @@ vi.mock('@/api/client', () => ({
   },
 }));
 
-// Mock sonner toast
 vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
@@ -102,7 +99,6 @@ describe('PendingWorkflowControls', () => {
 
       await user.click(screen.getByRole('button', { name: /set plan/i }));
 
-      // Modal should open
       await waitFor(() => {
         expect(screen.getByRole('dialog')).toBeInTheDocument();
       });
@@ -114,7 +110,6 @@ describe('PendingWorkflowControls', () => {
 
       await user.click(screen.getByRole('button', { name: /set plan/i }));
 
-      // Modal should show workflow-specific content
       await waitFor(() => {
         expect(screen.getByRole('dialog')).toBeInTheDocument();
       });
@@ -126,7 +121,6 @@ describe('PendingWorkflowControls', () => {
 
       await user.click(screen.getByRole('button', { name: /set plan/i }));
 
-      // Modal should have overwrite checkbox since hasPlan is true
       await waitFor(() => {
         expect(screen.getByLabelText(/overwrite/i)).toBeInTheDocument();
       });
@@ -145,7 +139,6 @@ describe('PendingWorkflowControls', () => {
 
       await user.click(screen.getByRole('button', { name: /set plan/i }));
 
-      // Select a file via combobox
       await waitFor(() => {
         expect(screen.getByRole('combobox')).toBeInTheDocument();
       });
@@ -155,13 +148,11 @@ describe('PendingWorkflowControls', () => {
       });
       await user.click(screen.getByText('plan.md'));
 
-      // Apply the plan
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /apply/i })).not.toBeDisabled();
       });
       await user.click(screen.getByRole('button', { name: /apply/i }));
 
-      // Modal should close
       await waitFor(() => {
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       });

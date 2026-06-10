@@ -17,7 +17,6 @@ export function RootErrorBoundary() {
   const error = useRouteError();
   const navigate = useNavigate();
 
-  // Handle HTTP error responses (404, 500, etc.)
   if (isRouteErrorResponse(error)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8">
@@ -43,7 +42,6 @@ export function RootErrorBoundary() {
     );
   }
 
-  // Handle JavaScript errors
   const errorMessage = error instanceof Error ? error.message : 'Unknown error';
   const errorStack = error instanceof Error ? error.stack : undefined;
 

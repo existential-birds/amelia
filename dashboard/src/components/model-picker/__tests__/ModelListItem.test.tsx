@@ -39,7 +39,6 @@ describe('ModelListItem', () => {
   it('should render capability icons', () => {
     render(<ModelListItem model={mockModel} onSelect={vi.fn()} />);
 
-    // Check for capability indicators (using aria-labels)
     expect(screen.getByLabelText('Tool calling')).toBeInTheDocument();
     expect(screen.getByLabelText('Reasoning')).toBeInTheDocument();
     expect(screen.getByLabelText('Structured output')).toBeInTheDocument();
@@ -48,7 +47,6 @@ describe('ModelListItem', () => {
   it('should show details when expanded', () => {
     render(<ModelListItem model={mockModel} onSelect={vi.fn()} isExpanded />);
 
-    // Shows pricing details when expanded
     expect(screen.getByText('$3.00 / 1M')).toBeInTheDocument();
     expect(screen.getByText('$15.00 / 1M')).toBeInTheDocument();
   });
@@ -68,7 +66,6 @@ describe('ModelListItem', () => {
     const onSelect = vi.fn();
     render(<ModelListItem model={mockModel} onSelect={onSelect} isExpanded />);
 
-    // Click select (already expanded)
     fireEvent.click(screen.getByRole('button', { name: /select/i }));
 
     expect(onSelect).toHaveBeenCalledWith('claude-sonnet-4');

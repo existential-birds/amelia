@@ -36,7 +36,6 @@ describe('extractDocumentPreview', () => {
   });
 
   it('truncates at word boundary when no clear break found', () => {
-    // Create a long text without sentence breaks
     const text = 'a'.repeat(500);
     const result = extractDocumentPreview(text, 100);
     expect(result.length).toBeLessThanOrEqual(100);

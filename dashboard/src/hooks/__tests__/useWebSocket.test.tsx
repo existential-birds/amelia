@@ -7,7 +7,6 @@ import { createMockEvent } from '../../__tests__/fixtures';
 import { suppressConsoleLogs } from '@/test/helpers';
 import type { WebSocketMessage } from '../../types';
 
-// Mock WebSocket
 class MockWebSocket {
   static CONNECTING = 0;
   static OPEN = 1;
@@ -23,7 +22,6 @@ class MockWebSocket {
 
   constructor(url: string) {
     this.url = url;
-    // Store instance for test access
     MockWebSocket.instances.push(this);
   }
 
@@ -32,7 +30,6 @@ class MockWebSocket {
     this.readyState = MockWebSocket.CLOSED;
   });
 
-  // Test helpers
   static instances: MockWebSocket[] = [];
   static clearInstances() {
     MockWebSocket.instances = [];
@@ -56,7 +53,6 @@ class MockWebSocket {
   }
 }
 
-// Install mock
 global.WebSocket = MockWebSocket as unknown as typeof WebSocket;
 
 describe('useWebSocket', () => {
@@ -151,21 +147,18 @@ describe('useWebSocket', () => {
 
     expect(useWorkflowStore.getState().isConnected).toBe(false);
 
-    // First reconnect after 1s
     vi.advanceTimersByTime(1000);
     expect(MockWebSocket.instances.length).toBe(2);
 
     const ws2 = MockWebSocket.getLatestInstance()!;
     ws2.triggerClose(1006, 'Abnormal closure');
 
-    // Second reconnect after 2s
     vi.advanceTimersByTime(2000);
     expect(MockWebSocket.instances.length).toBe(3);
 
     const ws3 = MockWebSocket.getLatestInstance()!;
     ws3.triggerClose(1006, 'Abnormal closure');
 
-    // Third reconnect after 4s
     vi.advanceTimersByTime(4000);
     expect(MockWebSocket.instances.length).toBe(4);
   });
@@ -178,7 +171,6 @@ describe('useWebSocket', () => {
     const ws = MockWebSocket.getLatestInstance()!;
     expect(ws.url).toContain('?since=evt-42');
   });
-
 
   it('should handle backfill_expired by clearing lastEventId', () => {
     useWorkflowStore.setState({ lastEventId: 'evt-old' });
@@ -211,7 +203,6 @@ describe('useWebSocket', () => {
       vi.advanceTimersByTime(expectedDelay);
     }
 
-    // Verify the final delay is capped at 30s
     const lastWs = MockWebSocket.getLatestInstance()!;
     lastWs.triggerClose(1006, 'Abnormal closure');
 
@@ -259,16 +250,13 @@ describe('useWebSocket', () => {
   it('should reset reconnect counter on successful connection', () => {
     renderHook(() => useWebSocket());
 
-    // First connection fails
     const ws1 = MockWebSocket.getLatestInstance()!;
     ws1.triggerOpen();
     ws1.triggerClose(1006, 'Abnormal closure');
 
-    // Reconnect after 1s
     vi.advanceTimersByTime(1000);
     expect(MockWebSocket.instances.length).toBe(2);
 
-    // Second connection succeeds
     const ws2 = MockWebSocket.getLatestInstance()!;
     ws2.triggerOpen();
 
@@ -416,7 +404,6 @@ describe('handleBrainstormMessage', () => {
   it('handles artifact_created event', () => {
     const createdAt = new Date().toISOString();
 
-    // Add a session so updateSession has something to update
     useBrainstormStore.setState({
       ...useBrainstormStore.getState(),
       sessions: [

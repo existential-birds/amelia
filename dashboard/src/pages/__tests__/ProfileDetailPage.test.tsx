@@ -10,10 +10,8 @@ import { makeMockModelsStore } from '@/test/mocks/modelsStore';
 import { activateProfile, createProfile, updateProfile } from '@/api/settings';
 import * as toast from '@/components/Toast';
 
-// Mock the models store
 vi.mock('@/store/useModelsStore');
 
-// Mock settings API
 vi.mock('@/api/settings', () => ({
   createProfile: vi.fn(),
   updateProfile: vi.fn(),
@@ -21,13 +19,11 @@ vi.mock('@/api/settings', () => ({
   getProfile: vi.fn(),
 }));
 
-// Mock toast notifications
 vi.mock('@/components/Toast', async () => {
   const actual = await vi.importActual<typeof import('@/components/Toast')>('@/components/Toast');
   return { ...actual, error: vi.fn(), success: vi.fn() };
 });
 
-// Mock useRecentModels
 vi.mock('@/hooks/useRecentModels', () => ({
   useRecentModels: () => ({
     recentModelIds: ['claude-sonnet-4'],

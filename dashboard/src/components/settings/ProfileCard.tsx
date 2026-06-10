@@ -84,7 +84,6 @@ const formatModel = (model: string): string => {
 
 export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
   function ProfileCard({ profile, onConfigure, onDelete, onActivate }, ref) {
-  // Get primary agents configuration
   const primaryAgents = PRIMARY_AGENT_KEYS;
   const agentConfigs = primaryAgents.map(key => ({
     key,
@@ -92,7 +91,6 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
     model: profile.agents?.[key]?.model ?? 'unknown',
   }));
 
-  // Count utility agents for badge
   const utilityAgentCount = Object.keys(profile.agents ?? {}).filter(
     k => !primaryAgents.includes(k as typeof primaryAgents[number])
   ).length;

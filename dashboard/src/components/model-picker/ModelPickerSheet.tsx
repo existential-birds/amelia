@@ -54,7 +54,6 @@ function filterModels(
   minContext: number | null
 ): ModelInfo[] {
   return models.filter((model) => {
-    // Search query (name or provider)
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       const matchesName = model.name.toLowerCase().includes(query);
@@ -64,19 +63,16 @@ function filterModels(
       }
     }
 
-    // User-selected capabilities filter
     for (const cap of capabilities) {
       if (cap === 'reasoning' && !model.capabilities.reasoning) return false;
       if (cap === 'structured_output' && !model.capabilities.structured_output) return false;
     }
 
-    // User-selected price tier filter
     if (priceTier) {
       const modelTier = getPriceTier(model.cost.output);
       if (modelTier !== priceTier) return false;
     }
 
-    // User-selected context size filter
     if (minContext && (model.limit.context === null || model.limit.context < minContext)) {
       return false;
     }
@@ -110,14 +106,12 @@ export function ModelPickerSheet({
   const error = useModelsStore((state) => state.error);
   const refreshModels = useModelsStore((state) => state.refreshModels);
 
-  // Fetch fresh models when sheet opens
   useEffect(() => {
     if (open) {
       refreshModels();
     }
   }, [open, refreshModels]);
 
-  // Get agent-filtered models
   const agentModels = useMemo(() => {
     const requirements = AGENT_MODEL_REQUIREMENTS[agentKey];
     if (!requirements) {
@@ -126,7 +120,6 @@ export function ModelPickerSheet({
     return filterModelsByRequirements(models, requirements);
   }, [agentKey, models]);
 
-  // Apply user filters
   const filteredModels = useMemo(
     () =>
       filterModels(

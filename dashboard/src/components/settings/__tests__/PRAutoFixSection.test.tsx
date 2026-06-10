@@ -68,9 +68,7 @@ describe('PRAutoFixSection', () => {
   it('calls onChange with updated aggressiveness when changed', async () => {
     const user = userEvent.setup();
     const { onChange } = renderSection({ enabled: true, config: DEFAULT_CONFIG });
-    // Open the aggressiveness select
     await user.click(screen.getByRole('combobox'));
-    // Select "Thorough"
     await user.click(screen.getByRole('option', { name: /thorough/i }));
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ aggressiveness: 'thorough' })

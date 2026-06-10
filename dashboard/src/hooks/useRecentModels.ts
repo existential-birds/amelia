@@ -8,7 +8,6 @@ export function useRecentModels() {
   const [recentModelIds, setRecentModelIds] = useState<string[]>([]);
   const [hasParseError, setHasParseError] = useState(false);
 
-  // Load from localStorage on mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem(RECENT_MODELS_KEY);
@@ -19,7 +18,6 @@ export function useRecentModels() {
         }
       }
     } catch (error) {
-      // Invalid JSON, start fresh
       console.warn('Failed to load recent models from localStorage:', error);
       setRecentModelIds([]);
       setHasParseError(true);
@@ -28,12 +26,9 @@ export function useRecentModels() {
 
   const addRecentModel = useCallback((modelId: string) => {
     setRecentModelIds((prev) => {
-      // Remove if already exists (will be added to front)
       const filtered = prev.filter((id) => id !== modelId);
-      // Add to front and limit size
       const updated = [modelId, ...filtered].slice(0, MAX_RECENT_MODELS);
 
-      // Persist to localStorage
       try {
         localStorage.setItem(RECENT_MODELS_KEY, JSON.stringify(updated));
       } catch (error) {

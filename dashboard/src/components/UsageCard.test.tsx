@@ -22,7 +22,6 @@ describe('UsageCard', () => {
       });
       render(<UsageCard tokenUsage={tokenUsage} />);
 
-      // Check summary line content
       expect(screen.getByText('$0.42')).toBeInTheDocument();
       expect(screen.getByText('16.7K tokens')).toBeInTheDocument();
       expect(screen.getByText('2m 34s')).toBeInTheDocument();
@@ -48,10 +47,8 @@ describe('UsageCard', () => {
       render(<UsageCard tokenUsage={tokenUsage} />);
 
       const rows = screen.getAllByRole('row');
-      // Header row + 3 agent rows
       expect(rows).toHaveLength(4);
 
-      // Check agent names are present
       expect(screen.getByText('architect')).toBeInTheDocument();
       expect(screen.getByText('developer')).toBeInTheDocument();
       expect(screen.getByText('reviewer')).toBeInTheDocument();
@@ -61,7 +58,6 @@ describe('UsageCard', () => {
       const tokenUsage = createMockTokenSummary();
       render(<UsageCard tokenUsage={tokenUsage} />);
 
-      // Architect row: claude-sonnet-4-20250514, 2.1K input, 500 output, 1.8K cache, $0.08, 15s
       const architectRow = screen.getByText('architect').closest('tr');
       expect(architectRow).toBeInTheDocument();
       expect(
@@ -78,7 +74,6 @@ describe('UsageCard', () => {
       const tokenUsage = createMockTokenSummary();
       render(<UsageCard tokenUsage={tokenUsage} />);
 
-      // Developer row: 8.4K input, 2.1K output, 6.2K cache, $0.28, 1m 37s
       const developerRow = screen.getByText('developer').closest('tr');
       expect(developerRow).toBeInTheDocument();
       expect(within(developerRow!).getByText('8.4K')).toBeInTheDocument();
@@ -117,7 +112,6 @@ describe('UsageCard', () => {
       expect(screen.getByText('$0.00')).toBeInTheDocument();
       expect(screen.getByText('0 tokens')).toBeInTheDocument();
 
-      // Table should still have header row
       const rows = screen.getAllByRole('row');
       expect(rows).toHaveLength(1); // Just header row
     });
@@ -143,7 +137,6 @@ describe('UsageCard', () => {
       const table = screen.getByRole('table');
       expect(table).toBeInTheDocument();
 
-      // Check for columnheaders
       const columnHeaders = screen.getAllByRole('columnheader');
       expect(columnHeaders).toHaveLength(7);
     });
@@ -152,7 +145,6 @@ describe('UsageCard', () => {
       const tokenUsage = createMockTokenSummary();
       render(<UsageCard tokenUsage={tokenUsage} />);
 
-      // USAGE should be in an h3
       const heading = screen.getByRole('heading', { level: 3 });
       expect(heading).toHaveTextContent('USAGE');
     });

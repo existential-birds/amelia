@@ -89,7 +89,6 @@ export const ToolExecutionStrip = memo(
       return null;
     }
 
-    // Build summary text
     const summaryParts: string[] = [];
     if (stats.completed > 0) {
       summaryParts.push(`${stats.completed} completed`);

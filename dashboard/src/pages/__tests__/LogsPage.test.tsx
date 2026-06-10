@@ -30,12 +30,10 @@ vi.mock('@tanstack/react-virtual', () => ({
   },
 }));
 
-// Helper to wrap component with Router
 const renderWithRouter = (ui: React.ReactElement) => {
   return render(<BrowserRouter>{ui}</BrowserRouter>);
 };
 
-// Helper to create mock debug-level trace events (WorkflowEvent with level: 'debug')
 const createTraceEvent = (
   eventType: EventType,
   overrides?: Partial<WorkflowEvent>
@@ -55,7 +53,6 @@ const createTraceEvent = (
 
 describe('LogsPage', () => {
   beforeEach(() => {
-    // Reset store before each test
     useWorkflowStore.setState({
       eventsByWorkflow: {},
       eventIdsByWorkflow: {},
@@ -124,11 +121,9 @@ describe('LogsPage', () => {
     });
     renderWithRouter(<LogsPage />);
 
-    // Find and click filter dropdown
     const filterSelect = screen.getByDisplayValue(/all events/i);
     fireEvent.change(filterSelect, { target: { value: 'claude_thinking' } });
 
-    // Should only show thinking event content (not the dropdown option)
     expect(screen.getByText(/thinking event content/i)).toBeInTheDocument();
     expect(screen.queryByText(/agent output content/i)).not.toBeInTheDocument();
     expect(screen.getByText(/1 event/i)).toBeInTheDocument();
@@ -145,11 +140,9 @@ describe('LogsPage', () => {
 
     expect(screen.getByText(/1 event/i)).toBeInTheDocument();
 
-    // Click clear button
     const clearButton = screen.getByRole('button', { name: /clear/i });
     fireEvent.click(clearButton);
 
-    // Should now show empty state
     expect(screen.getByText(/no trace events yet/i)).toBeInTheDocument();
   });
 
@@ -206,7 +199,6 @@ describe('LogsPage', () => {
     });
     renderWithRouter(<LogsPage />);
 
-    // Formatted time should be HH:MM:SS (8 chars from the ISO string)
     expect(screen.getByText(/10:30:45/)).toBeInTheDocument();
   });
 
@@ -244,7 +236,6 @@ describe('LogsPage', () => {
     });
     const { container } = renderWithRouter(<LogsPage />);
 
-    // Verify each event type is rendered with stable data-event-type attribute
     expect(container.querySelector('[data-event-type="claude_thinking"]')).toBeInTheDocument();
     expect(container.querySelector('[data-event-type="claude_tool_call"]')).toBeInTheDocument();
     expect(container.querySelector('[data-event-type="claude_tool_result"]')).toBeInTheDocument();
@@ -282,7 +273,6 @@ describe('LogsPage', () => {
     });
     renderWithRouter(<LogsPage />);
 
-    // Should only show debug trace event types, not info or non-trace debug
     expect(screen.getByText(/thinking event/i)).toBeInTheDocument();
     expect(screen.queryByText(/info level event/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/debug level event/i)).not.toBeInTheDocument();
@@ -303,14 +293,12 @@ describe('LogsPage', () => {
       });
       const { container } = renderWithRouter(<LogsPage />);
 
-      // Verify h2 element is rendered within the prose container (markdown content)
       // The page also has an h2 for "Logs" in the header, so we need to be specific
       const proseContainer = container.querySelector('.prose');
       expect(proseContainer).toBeInTheDocument();
       const heading = proseContainer?.querySelector('h2');
       expect(heading).toBeInTheDocument();
       expect(heading).toHaveTextContent('Header Level 2');
-      // Ensure the raw markdown syntax is not visible
       expect(screen.queryByText(/^## Header/)).not.toBeInTheDocument();
     });
 
@@ -327,17 +315,14 @@ describe('LogsPage', () => {
       });
       const { container } = renderWithRouter(<LogsPage />);
 
-      // Verify strong element for bold
       const strongElement = container.querySelector('strong');
       expect(strongElement).toBeInTheDocument();
       expect(strongElement).toHaveTextContent('bold text');
 
-      // Verify code element for inline code
       const codeElement = container.querySelector('code');
       expect(codeElement).toBeInTheDocument();
       expect(codeElement).toHaveTextContent('inline code');
 
-      // Ensure raw markdown syntax is not visible
       expect(screen.queryByText(/\*\*bold text\*\*/)).not.toBeInTheDocument();
       expect(screen.queryByText(/`inline code`/)).not.toBeInTheDocument();
     });
@@ -355,16 +340,13 @@ describe('LogsPage', () => {
       });
       const { container } = renderWithRouter(<LogsPage />);
 
-      // Verify pre element exists for code block
       const preElement = container.querySelector('pre');
       expect(preElement).toBeInTheDocument();
 
-      // Verify code element inside pre
       const codeElement = preElement?.querySelector('code');
       expect(codeElement).toBeInTheDocument();
       expect(codeElement).toHaveTextContent('const x = 1;');
 
-      // Ensure raw backticks are not visible
       expect(screen.queryByText(/```/)).not.toBeInTheDocument();
     });
 
@@ -381,18 +363,15 @@ describe('LogsPage', () => {
       });
       const { container } = renderWithRouter(<LogsPage />);
 
-      // Verify ul element exists
       const ulElement = container.querySelector('ul');
       expect(ulElement).toBeInTheDocument();
 
-      // Verify list items
       const listItems = container.querySelectorAll('li');
       expect(listItems).toHaveLength(3);
       expect(listItems[0]).toHaveTextContent('item 1');
       expect(listItems[1]).toHaveTextContent('item 2');
       expect(listItems[2]).toHaveTextContent('item 3');
 
-      // Ensure raw markdown list syntax is not visible
       expect(screen.queryByText(/^- item/)).not.toBeInTheDocument();
     });
 
@@ -409,11 +388,9 @@ describe('LogsPage', () => {
       });
       const { container } = renderWithRouter(<LogsPage />);
 
-      // Verify ol element exists
       const olElement = container.querySelector('ol');
       expect(olElement).toBeInTheDocument();
 
-      // Verify list items
       const listItems = container.querySelectorAll('li');
       expect(listItems).toHaveLength(3);
       expect(listItems[0]).toHaveTextContent('First step');
@@ -432,13 +409,11 @@ describe('LogsPage', () => {
       });
       const { container } = renderWithRouter(<LogsPage />);
 
-      // Verify anchor element exists with correct href
       const anchor = container.querySelector('a');
       expect(anchor).toBeInTheDocument();
       expect(anchor).toHaveTextContent('this link');
       expect(anchor).toHaveAttribute('href', 'https://example.com');
 
-      // Ensure raw markdown link syntax is not visible
       expect(screen.queryByText(/\[this link\]/)).not.toBeInTheDocument();
     });
 
@@ -484,17 +459,14 @@ function fix() {
       });
       const { container } = renderWithRouter(<LogsPage />);
 
-      // Verify heading within prose container (page has "Logs" h2 in header)
       const proseContainer = container.querySelector('.prose');
       expect(proseContainer).toBeInTheDocument();
       expect(proseContainer?.querySelector('h2')).toHaveTextContent('Analysis Complete');
 
-      // Verify list with bold and inline code
       expect(proseContainer?.querySelector('ul')).toBeInTheDocument();
       expect(proseContainer?.querySelectorAll('strong')).toHaveLength(2);
       expect(proseContainer?.querySelector('code:not(pre code)')).toHaveTextContent('utils.ts');
 
-      // Verify code block
       expect(proseContainer?.querySelector('pre code')).toHaveTextContent('function fix()');
     });
   });

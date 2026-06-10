@@ -79,7 +79,6 @@ function formatToolInput(toolInput: Record<string, unknown>): string {
   for (const [key, value] of Object.entries(toolInput)) {
     if (value === null || value === undefined) continue;
     const strValue = typeof value === 'string' ? value : JSON.stringify(value);
-    // Truncate long values
     const displayValue = strValue.length > 100 ? strValue.slice(0, 100) + '...' : strValue;
     parts.push(`${key}: ${displayValue}`);
   }
@@ -157,7 +156,6 @@ export default function LogsPage() {
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [typeFilter, setTypeFilter] = useState<TraceEventType | 'all'>('all');
 
-  // Collect and filter trace events from all workflows
   const traceEvents = useMemo(() => {
     const allEvents: WorkflowEvent[] = [];
     for (const events of Object.values(eventsByWorkflow)) {
@@ -167,17 +165,14 @@ export default function LogsPage() {
         }
       }
     }
-    // Sort by timestamp, most recent last
     return allEvents.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   }, [eventsByWorkflow]);
 
-  // Filter events by type if filter is active
   const filteredEvents =
     typeFilter === 'all'
       ? traceEvents
       : traceEvents.filter((e) => e.event_type === typeFilter);
 
-  // Clear events function (resets store for all workflows)
   const clearEvents = useCallback(() => {
     useWorkflowStore.setState({
       eventsByWorkflow: {},
@@ -194,7 +189,6 @@ export default function LogsPage() {
     overscan: 5,
   });
 
-  // Get measureElement ref for dynamic row height measurement
   const measureElement = rowVirtualizer.measureElement;
 
   // Auto-scroll to bottom when new events arrive (if already at bottom)
@@ -206,7 +200,6 @@ export default function LogsPage() {
     }
   }, [filteredEvents.length, isAtBottom, rowVirtualizer]);
 
-  // Track scroll position to determine if user is at bottom
   const handleScroll = useCallback(() => {
     if (!parentRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = parentRef.current;

@@ -30,7 +30,6 @@ export async function workflowsLoader({ request, params }: LoaderFunctionArgs): 
   if (isDemo && demoType === 'infinite') {
     const workflows = getMockActiveWorkflows();
     const active = getActiveWorkflow(workflows);
-    // Use id param if provided, otherwise use active workflow
     const targetId = params?.id ?? active?.id;
     const detail = targetId ? getMockWorkflowDetail(targetId) : null;
     return { workflows, detail };
@@ -40,9 +39,6 @@ export async function workflowsLoader({ request, params }: LoaderFunctionArgs): 
 
   const active = getActiveWorkflow(workflows);
 
-  // Determine which workflow detail to fetch:
-  // 1. If id param exists, fetch that specific workflow
-  // 2. Otherwise, fetch the active workflow detail
   const targetId = params?.id ?? active?.id;
   let detail = null;
   let detailError: string | null = null;

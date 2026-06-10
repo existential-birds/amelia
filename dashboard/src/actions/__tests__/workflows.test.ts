@@ -75,7 +75,6 @@ describe('Workflow Actions', () => {
 
     it('should return error if feedback is missing', async () => {
       const formData = new FormData();
-      // No feedback field
 
       const result = await rejectAction(createActionArgs({ id: 'wf-1' }, { body: formData }));
 

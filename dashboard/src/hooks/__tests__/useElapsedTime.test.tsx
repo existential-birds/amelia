@@ -5,7 +5,6 @@ import { createMockWorkflowDetail } from '../../__tests__/fixtures';
 import type { WorkflowDetail } from '../../types';
 import * as workflowUtils from '../../utils/workflow';
 
-// Mock formatElapsedTime to track calls and provide controlled output
 vi.mock('../../utils/workflow', () => ({
   formatElapsedTime: vi.fn(),
 }));
@@ -66,14 +65,12 @@ describe('useElapsedTime', () => {
     expect(result.current).toBe('2h 30m');
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(2);
 
-    // Advance time by 60 seconds
     act(() => {
       vi.advanceTimersByTime(60_000);
     });
     expect(result.current).toBe('2h 31m');
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(3);
 
-    // Advance another 60 seconds
     act(() => {
       vi.advanceTimersByTime(60_000);
     });
@@ -96,7 +93,6 @@ describe('useElapsedTime', () => {
     expect(result.current).toBe('2h 30m');
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(2);
 
-    // Advance time by 60 seconds
     act(() => {
       vi.advanceTimersByTime(60_000);
     });
@@ -123,7 +119,6 @@ describe('useElapsedTime', () => {
     expect(result.current).toBe('1h 15m');
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(2);
 
-    // Advance time by 60 seconds
     act(() => {
       vi.advanceTimersByTime(60_000);
     });
@@ -148,7 +143,6 @@ describe('useElapsedTime', () => {
     expect(result.current).toBe('0h 45m');
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(2);
 
-    // Advance time by 60 seconds
     act(() => {
       vi.advanceTimersByTime(60_000);
     });
@@ -171,10 +165,8 @@ describe('useElapsedTime', () => {
     // Initial render sets up interval (calls formatElapsedTime twice: useState + useEffect)
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(2);
 
-    // Unmount should clear the interval
     unmount();
 
-    // Advance time - should not trigger any more calls
     act(() => {
       vi.advanceTimersByTime(60_000);
     });
@@ -206,16 +198,13 @@ describe('useElapsedTime', () => {
       { initialProps: { workflow: workflow1 } }
     );
 
-    // Initial render with workflow1
     expect(result.current).toBe('1h 00m');
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledWith(workflow1);
 
-    // Re-render with workflow2
     act(() => {
       rerender({ workflow: workflow2 });
     });
 
-    // Should immediately update to workflow2's elapsed time
     expect(result.current).toBe('2h 30m');
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledWith(workflow2);
   });
@@ -241,13 +230,10 @@ describe('useElapsedTime', () => {
       { initialProps: { workflow: inProgressWorkflow } }
     );
 
-    // Initial render - interval should be set up
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(2);
 
-    // Change to completed
     rerender({ workflow: completedWorkflow });
 
-    // After rerender, useEffect should have run
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(3);
 
     // Advance time - should not trigger any more calls (interval cleared)
@@ -275,13 +261,10 @@ describe('useElapsedTime', () => {
 
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(2);
 
-    // Change to null
     rerender({ workflow: null });
 
-    // After rerender, useEffect should have run
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(3);
 
-    // Advance time - should not trigger any more calls
     vi.clearAllMocks();
     act(() => {
       vi.advanceTimersByTime(60_000);

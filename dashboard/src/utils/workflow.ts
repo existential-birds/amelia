@@ -3,10 +3,6 @@
  */
 import type { WorkflowSummary, WorkflowDetail } from '@/types';
 
-// ============================================================================
-// Token & Cost Formatting
-// ============================================================================
-
 /**
  * Formats a token count in a compact format with K suffix for thousands.
  * Examples: 500 -> "500", 1500 -> "1.5K", 15200 -> "15.2K"
@@ -19,7 +15,6 @@ export function formatTokens(tokens: number): string {
     return tokens.toString();
   }
   const value = tokens / 1000;
-  // Use at most 1 decimal place, remove trailing zeros
   return `${parseFloat(value.toFixed(1))}K`;
 }
 
@@ -81,13 +76,11 @@ function sortByStartTimeDesc(a: WorkflowSummary, b: WorkflowSummary): number {
  * @returns The active workflow or null if none exist
  */
 export function getActiveWorkflow(workflows: WorkflowSummary[]): WorkflowSummary | null {
-  // Priority 1: Most recently started running workflow
   const running = workflows
     .filter(w => w.status === 'in_progress')
     .sort(sortByStartTimeDesc);
   if (running[0]) return running[0];
 
-  // Priority 2: Most recently started blocked workflow
   const blocked = workflows
     .filter(w => w.status === 'blocked')
     .sort(sortByStartTimeDesc);

@@ -179,13 +179,11 @@ function applyEventBatch(
     const existing = newEventsByWorkflow[workflowId] ?? [];
     const updated = [...existing, event];
 
-    // Trim oldest events if exceeding limit (keep most recent)
     const needsTrim = updated.length > MAX_EVENTS_PER_WORKFLOW;
     const trimmed = needsTrim
       ? updated.slice(-MAX_EVENTS_PER_WORKFLOW)
       : updated;
 
-    // Rebuild Set if trimmed (to remove old IDs), otherwise clone and add
     const newIds = needsTrim
       ? new Set(trimmed.map((e) => e.id))
       : new Set(existingIds).add(event.id);
@@ -196,17 +194,14 @@ function applyEventBatch(
     lastEventId = event.id;
   }
 
-  // Evict oldest workflows if exceeding MAX_WORKFLOWS
   const workflowIds = Object.keys(newEventsByWorkflow);
   if (workflowIds.length > MAX_WORKFLOWS) {
-    // Sort by last event timestamp (oldest first)
     const sortedByAge = workflowIds.sort((a, b) => {
       const tsA = newLastEventTimestamp[a] ?? '';
       const tsB = newLastEventTimestamp[b] ?? '';
       return tsA.localeCompare(tsB);
     });
 
-    // Evict oldest workflows until we're at the limit
     const toEvict = sortedByAge.slice(0, workflowIds.length - MAX_WORKFLOWS);
     for (const id of toEvict) {
       delete newEventsByWorkflow[id];
@@ -319,7 +314,6 @@ export const useWorkflowStore = create<WorkflowState>()(
       addEvent: (event) => {
         pendingEvents.push(event);
 
-        // Flush immediately if batch is full
         if (pendingEvents.length >= BATCH_SIZE_LIMIT) {
           flushPendingEvents();
         } else {
@@ -337,7 +331,6 @@ export const useWorkflowStore = create<WorkflowState>()(
 
       addPendingAction: (actionId) =>
         set((state) => {
-          // Don't add duplicates
           if (state.pendingActions.includes(actionId)) {
             return state;
           }

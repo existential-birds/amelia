@@ -6,7 +6,6 @@ import WorkflowsPage from './WorkflowsPage';
 import { createMockWorkflowSummary, createMockWorkflowDetail } from '@/__tests__/fixtures';
 import type { WorkflowSummary, WorkflowDetail } from '@/types';
 
-// Mock modules
 vi.mock('@/utils/workflow', () => ({
   getActiveWorkflow: vi.fn(),
   formatElapsedTime: vi.fn(),
@@ -14,7 +13,6 @@ vi.mock('@/utils/workflow', () => ({
 
 import { getActiveWorkflow, formatElapsedTime } from '@/utils/workflow';
 
-// Mock data using fixture factories
 const mockWorkflowSummary = createMockWorkflowSummary({
   id: 'wf-001',
   issue_id: 'PROJ-123',
@@ -34,7 +32,6 @@ const mockWorkflowDetail = createMockWorkflowDetail({
   goal: null,
 });
 
-// Second workflow for testing selection behavior
 const mockSecondWorkflowSummary = createMockWorkflowSummary({
   id: 'wf-002',
   issue_id: 'PROJ-456',
@@ -77,12 +74,10 @@ function renderPage(
             path: ':id',
             element: <WorkflowsPage />,
             loader: ({ params }) => {
-              // Return the appropriate detail based on the workflow ID
               // When workflows is empty (past workflow case), use loaderData.detail directly
               if (loaderData.workflows.length === 0 && loaderData.detail) {
                 return { workflows: loaderData.workflows, detail: loaderData.detail };
               }
-              // Otherwise, look up by ID for switching between workflows
               if (params.id === 'wf-002') {
                 return { workflows: loaderData.workflows, detail: mockSecondWorkflowDetail };
               }
@@ -119,14 +114,12 @@ describe('WorkflowsPage', () => {
   it('should display workflow detail when no active workflows but detail exists (past workflow)', async () => {
     vi.mocked(getActiveWorkflow).mockReturnValue(null);
 
-    // Simulate viewing a past workflow when no active workflows exist
     renderPage({ workflows: [], detail: mockWorkflowDetail }, '/workflows/wf-001');
 
     await waitFor(() => {
       // Should NOT show the WorkflowEmptyState component (uses data-slot="empty-state")
       const emptyState = document.querySelector('[data-slot="empty-state"]');
       expect(emptyState).not.toBeInTheDocument();
-      // Should show the workflow detail in the header
       const pageHeader = screen.getByRole('banner');
       expect(within(pageHeader).getByText('PROJ-123')).toBeInTheDocument();
     });
@@ -136,7 +129,6 @@ describe('WorkflowsPage', () => {
     renderPage({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
 
     await waitFor(() => {
-      // PageHeader uses banner role
       const pageHeader = screen.getByRole('banner');
       expect(pageHeader).toBeInTheDocument();
 
@@ -170,7 +162,6 @@ describe('WorkflowsPage', () => {
     renderPage({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
 
     await waitFor(() => {
-      // Query the job queue button directly by its accessible name
       const workflowButton = screen.getByRole('button', { name: /PROJ-123/ });
       expect(workflowButton).toBeInTheDocument();
       expect(workflowButton).toHaveAttribute('data-selected', 'true');
@@ -180,7 +171,6 @@ describe('WorkflowsPage', () => {
   it('should show active workflow detail when clicking back after selecting another workflow', async () => {
     const user = userEvent.setup();
 
-    // Render with two workflows, active workflow is wf-001
     renderPage(
       {
         workflows: [mockWorkflowSummary, mockSecondWorkflowSummary],
@@ -189,27 +179,22 @@ describe('WorkflowsPage', () => {
       '/workflows'
     );
 
-    // Wait for initial render showing active workflow (PROJ-123)
     await waitFor(() => {
       const pageHeader = screen.getByRole('banner');
       expect(within(pageHeader).getByText('PROJ-123')).toBeInTheDocument();
     });
 
-    // Click the second workflow (PROJ-456) - should navigate to /workflows/wf-002
     const secondWorkflowButton = screen.getByRole('button', { name: /PROJ-456/ });
     await user.click(secondWorkflowButton);
 
-    // Wait for the workflow detail to display (loaded via URL param)
     await waitFor(() => {
       const pageHeader = screen.getByRole('banner');
       expect(within(pageHeader).getByText('PROJ-456')).toBeInTheDocument();
     });
 
-    // Click back to the active workflow (PROJ-123) - should navigate to /workflows/wf-001
     const firstWorkflowButton = screen.getByRole('button', { name: /PROJ-123/ });
     await user.click(firstWorkflowButton);
 
-    // Should show PROJ-123 detail from loader
     await waitFor(() => {
       const pageHeader = screen.getByRole('banner');
       expect(within(pageHeader).getByText('PROJ-123')).toBeInTheDocument();

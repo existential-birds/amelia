@@ -82,9 +82,7 @@ function escapeCsvField(value: string | number): string {
   if (/^[=+\-@\t\0]/.test(text)) {
     text = `'${text}`;
   }
-  // Check if quoting is needed
   const needsQuote = /[",\n\r]/.test(text);
-  // Escape existing double quotes
   text = text.replace(/"/g, '""');
   return needsQuote ? `"${text}"` : text;
 }
@@ -139,7 +137,6 @@ export default function CostsPage() {
     navigate(`/history?model=${encodeURIComponent(model.model)}`);
   };
 
-  // Calculate cost delta
   const costDelta = calculateDelta(
     usage.summary.total_cost_usd,
     usage.summary.previous_period_cost_usd
@@ -151,7 +148,6 @@ export default function CostsPage() {
     [usage.by_model]
   );
 
-  // Create color lookup based on cost rank
   const modelColorMap = useMemo(() => {
     const map: Record<string, string> = {};
     sortedModels.forEach((model, index) => {
@@ -160,7 +156,6 @@ export default function CostsPage() {
     return map;
   }, [sortedModels]);
 
-  // Table columns
   const columns: ColumnDef<UsageByModel>[] = useMemo(
     () => [
       {
@@ -260,7 +255,6 @@ export default function CostsPage() {
     [modelColorMap, usage.summary.total_cost_usd]
   );
 
-  // Empty state
   if (usage.summary.total_workflows === 0) {
     return (
       <div className="flex flex-col w-full">
