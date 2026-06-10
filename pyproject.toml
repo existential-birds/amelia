@@ -95,6 +95,8 @@ module = [
     "psutil",
     "claude_agent_sdk",
     "pgvector.asyncpg",
+    "harbor",
+    "harbor.*",
 ]
 ignore_missing_imports = true
 
