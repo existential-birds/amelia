@@ -16,11 +16,6 @@ from amelia.server.events.bus import EventBus
 from amelia.server.models.events import EventDomain, EventType, WorkflowEvent
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture
 def mock_event_bus() -> MagicMock:
     """Provide a mocked EventBus."""
@@ -106,11 +101,6 @@ def service(
     )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _find_events(
     bus: MagicMock, event_type: EventType,
 ) -> list[WorkflowEvent]:
@@ -121,11 +111,6 @@ def _find_events(
         if isinstance(call_args.args[0], WorkflowEvent)
         and call_args.args[0].event_type == event_type
     ]
-
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

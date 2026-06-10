@@ -32,7 +32,7 @@ async def test_recorder_assembles_valid_trajectory(tmp_path):
     assert data["steps"][0]["observation"]["results"][0]  # parent step references the subagent
     assert data["extra"]["outcome"]["status"] == "completed"
     assert data["final_metrics"]["total_cost_usd"] == 0.01
-    assert validate_trajectory(data)  # harbor validator entry point from Task 0
+    assert validate_trajectory(data)
 
 
 async def test_finalize_is_atomic_and_drains_open_invocation(tmp_path):

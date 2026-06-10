@@ -250,9 +250,6 @@ class TestFilterComments:
         assert len(result) == 1
 
 
-# --- Task 2: LLM classification, filtering, grouping ---
-
-
 def _make_classification(
     comment_id: int,
     category: CommentCategory = CommentCategory.BUG,

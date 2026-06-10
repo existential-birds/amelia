@@ -42,10 +42,6 @@ from amelia.server.events.bus import EventBus
 from tests.conftest import create_mock_execute_agentic
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 _NOW = datetime(2026, 3, 15, 12, 0, 0, tzinfo=UTC)
 
 
@@ -140,11 +136,6 @@ def orchestrator(event_bus: EventBus) -> PRAutoFixOrchestrator:
     )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _mock_unified_driver(comment_ids: list[int]) -> MagicMock:
     """Create a mock driver for both classify (generate) and develop (execute_agentic)."""
     driver = MagicMock()
@@ -161,11 +152,6 @@ def _mock_unified_driver(comment_ids: list[int]) -> MagicMock:
     driver.get_usage = MagicMock(return_value=None)
     driver.get_tool_definitions = MagicMock(return_value=None)
     return driver
-
-
-# ---------------------------------------------------------------------------
-# Test: Full pipeline graph with real nodes
-# ---------------------------------------------------------------------------
 
 
 class TestPipelineEndToEnd:
@@ -370,11 +356,6 @@ class TestPipelineEndToEnd:
         mock_git_ops.stage_and_commit.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# Test: Orchestrator threads comments into pipeline
-# ---------------------------------------------------------------------------
-
-
 class TestOrchestratorThreadsComments:
     """Verify the orchestrator passes comments and config to the real pipeline."""
 
@@ -402,7 +383,6 @@ class TestOrchestratorThreadsComments:
         mock_github_service.reply_to_comment = AsyncMock()
         mock_github_service.resolve_thread = AsyncMock()
 
-        # Mock LocalWorktree as async context manager returning a fake path
         mock_worktree_instance = AsyncMock()
         mock_worktree_instance.__aenter__ = AsyncMock(return_value="/tmp/fake-worktree")
         mock_worktree_instance.__aexit__ = AsyncMock(return_value=None)
@@ -448,11 +428,6 @@ class TestOrchestratorThreadsComments:
         mock_git_ops.stage_and_commit.assert_called_once()
         # Replies were posted (reply_resolve ran)
         assert mock_github_service.reply_to_comment.call_count >= 1
-
-
-# ---------------------------------------------------------------------------
-# Test: Poller passes comments to orchestrator
-# ---------------------------------------------------------------------------
 
 
 class TestPollerPassesComments:
@@ -517,11 +492,6 @@ class TestPollerPassesComments:
         assert len(call_kwargs["comments"]) == 2
 
 
-# ---------------------------------------------------------------------------
-# Test: Concurrent trigger queueing + cooldown
-# ---------------------------------------------------------------------------
-
-
 class TestConcurrentTriggerQueueing:
     """Verify that concurrent trigger_fix_cycle calls queue properly."""
 
@@ -544,11 +514,9 @@ class TestConcurrentTriggerQueueing:
             github_pr_service=github_pr,
         )
 
-        # Collect emitted events
         emitted_events: list[Any] = []
         event_bus.subscribe(lambda e: emitted_events.append(e))
 
-        # Track _execute_pipeline calls
         execute_call_count = 0
         execute_started = asyncio.Event()
         execute_proceed = asyncio.Event()
@@ -561,7 +529,6 @@ class TestConcurrentTriggerQueueing:
                 await execute_proceed.wait()
             # Second call completes immediately
 
-        # Mock LocalWorktree as async context manager
         mock_worktree_instance = AsyncMock()
         mock_worktree_instance.__aenter__ = AsyncMock(return_value="/tmp/fake-worktree")
         mock_worktree_instance.__aexit__ = AsyncMock(return_value=None)
@@ -600,19 +567,12 @@ class TestConcurrentTriggerQueueing:
             execute_proceed.set()
             await task1
 
-        # PR_FIX_QUEUED should have been emitted
         queued_events = [e for e in emitted_events if e.event_type == EventType.PR_FIX_QUEUED]
         assert len(queued_events) >= 1, "PR_FIX_QUEUED event must be emitted for queued trigger"
 
-        # _execute_pipeline should have been called twice (initial + pending)
         assert execute_call_count == 2, (
             f"Expected 2 _execute_pipeline calls (initial + pending), got {execute_call_count}"
         )
-
-
-# ---------------------------------------------------------------------------
-# Test: Event emission sequence
-# ---------------------------------------------------------------------------
 
 
 class TestEventEmissionSequence:
@@ -691,7 +651,6 @@ class TestEventEmissionSequence:
                 comments=comments,
             )
 
-        # Filter lifecycle events
         started_events = [
             e for e in emitted_events if e.event_type == EventType.PR_AUTO_FIX_STARTED
         ]
@@ -702,12 +661,10 @@ class TestEventEmissionSequence:
         assert len(started_events) >= 1, "PR_AUTO_FIX_STARTED must be emitted"
         assert len(completed_events) >= 1, "PR_AUTO_FIX_COMPLETED must be emitted"
 
-        # Verify order: STARTED before COMPLETED
         started_idx = emitted_events.index(started_events[0])
         completed_idx = emitted_events.index(completed_events[0])
         assert started_idx < completed_idx, "STARTED must precede COMPLETED"
 
-        # Both must contain workflow_id in data
         assert "workflow_id" in (started_events[0].data or {}), (
             "PR_AUTO_FIX_STARTED must contain workflow_id in data"
         )
@@ -715,14 +672,8 @@ class TestEventEmissionSequence:
             "PR_AUTO_FIX_COMPLETED must contain workflow_id in data"
         )
 
-        # Both must have pr_number
         assert started_events[0].data["pr_number"] == 42
         assert completed_events[0].data["pr_number"] == 42
-
-
-# ---------------------------------------------------------------------------
-# Test: Divergence recovery -> retry -> success
-# ---------------------------------------------------------------------------
 
 
 class TestDivergenceRecovery:
@@ -786,13 +737,7 @@ class TestDivergenceRecovery:
         assert len(diverged_events) >= 1, "PR_FIX_DIVERGED must be emitted on divergence"
         assert diverged_events[0].data["attempt"] == 1
 
-        # _execute_pipeline should have been called 2 times (initial + retry)
         assert call_count == 2, f"Expected 2 calls (initial + retry), got {call_count}"
-
-
-# ---------------------------------------------------------------------------
-# Test: Multi-file-group partial failure
-# ---------------------------------------------------------------------------
 
 
 class TestMultiFileGroupPartialFailure:
@@ -837,7 +782,6 @@ class TestMultiFileGroupPartialFailure:
             ),
         ]
 
-        # Mock driver to classify both as actionable
         classification_output = ClassificationOutput(
             classifications=[
                 CommentClassification(
@@ -927,7 +871,6 @@ class TestMultiFileGroupPartialFailure:
         ):
             final_state = await graph.ainvoke(initial_state, config=config)
 
-        # Should have 2 group results
         group_results = final_state["group_results"]
         assert len(group_results) == 2, f"Expected 2 group results, got {len(group_results)}"
 
@@ -937,11 +880,6 @@ class TestMultiFileGroupPartialFailure:
 
         # Commit should still have happened for the fixed group
         mock_git_ops.stage_and_commit.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# Test: Confidence threshold filtering
-# ---------------------------------------------------------------------------
 
 
 class TestConfidenceThresholdFiltering:
@@ -1093,11 +1031,6 @@ class TestConfidenceThresholdFiltering:
         assert 301 not in all_comment_ids, "Low-confidence comment must NOT be in file_groups"
 
 
-# ---------------------------------------------------------------------------
-# Test: Aggressiveness filtering
-# ---------------------------------------------------------------------------
-
-
 class TestAggressivenessFiltering:
     """Verify aggressiveness=CRITICAL filters STYLE comments."""
 
@@ -1226,11 +1159,6 @@ class TestAggressivenessFiltering:
         mock_git_ops.stage_and_commit.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# Test: Commit message content
-# ---------------------------------------------------------------------------
-
-
 class TestCommitMessageContent:
     """Verify commit message contains prefix and addressed comments."""
 
@@ -1298,27 +1226,19 @@ class TestCommitMessageContent:
         ):
             await graph.ainvoke(initial_state, config=config)
 
-        # Capture the commit message
         mock_git_ops.stage_and_commit.assert_called_once()
         commit_msg = mock_git_ops.stage_and_commit.call_args[0][0]
 
-        # Must start with the configured prefix
         assert commit_msg.startswith("fix(review):"), (
             f"Commit message must start with 'fix(review):', got: {commit_msg[:50]}"
         )
 
-        # Must reference addressed comment content
         assert "Variable name" in commit_msg or "count" in commit_msg or "src/app.py" in commit_msg, (
             f"Commit message must reference addressed comments, got: {commit_msg}"
         )
         assert "null check" in commit_msg or "name" in commit_msg or "src/app.py" in commit_msg, (
             f"Commit message must reference addressed comments, got: {commit_msg}"
         )
-
-
-# ---------------------------------------------------------------------------
-# Test: Workflow status lifecycle
-# ---------------------------------------------------------------------------
 
 
 class TestWorkflowStatusLifecycle:
@@ -1394,24 +1314,16 @@ class TestWorkflowStatusLifecycle:
                 comments=comments,
             )
 
-        # workflow_repo.create() called once with IN_PROGRESS
         mock_workflow_repo.create.assert_called_once()
         created_state = mock_workflow_repo.create.call_args[0][0]
         assert created_state.workflow_status == WorkflowStatus.IN_PROGRESS
 
-        # workflow_repo.update() called once with COMPLETED
         mock_workflow_repo.update.assert_called_once()
         updated_state = mock_workflow_repo.update.call_args[0][0]
         assert updated_state.workflow_status == WorkflowStatus.COMPLETED
 
-        # issue_cache should contain pr_number and pr_comments
         assert updated_state.issue_cache["pr_number"] == 42
         assert "pr_comments" in updated_state.issue_cache
-
-
-# ---------------------------------------------------------------------------
-# Test: Metrics persistence
-# ---------------------------------------------------------------------------
 
 
 class TestMetricsPersistence:
@@ -1486,21 +1398,14 @@ class TestMetricsPersistence:
                 comments=comments,
             )
 
-        # save_classifications should be called with classification data
         mock_metrics_repo.save_classifications.assert_called_once()
 
-        # save_run_metrics should be called with fix counts
         mock_metrics_repo.save_run_metrics.assert_called_once()
         call_kwargs = mock_metrics_repo.save_run_metrics.call_args.kwargs
         assert call_kwargs["fixes_applied"] >= 1, (
             f"Expected fixes_applied >= 1, got {call_kwargs['fixes_applied']}"
         )
         assert call_kwargs["pr_number"] == 42
-
-
-# ---------------------------------------------------------------------------
-# Test: Poller deduplication
-# ---------------------------------------------------------------------------
 
 
 class TestPollerDeduplication:
@@ -1620,11 +1525,6 @@ class TestPollerDeduplication:
         assert mock_orchestrator.trigger_fix_cycle.call_count == 2, (
             f"Expected 2 triggers (first + third poll), got {mock_orchestrator.trigger_fix_cycle.call_count}"
         )
-
-
-# ---------------------------------------------------------------------------
-# Test: ATIF trajectory recording for fix cycles (requires PostgreSQL)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration

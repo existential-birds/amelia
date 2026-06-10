@@ -118,11 +118,6 @@ def _create_app_with_overrides(
     return app
 
 
-# =============================================================================
-# Shared brainstorm test helpers
-# =============================================================================
-
-
 def create_realistic_driver_messages(
     *,
     thinking_content: str = "Let me analyze this request...",

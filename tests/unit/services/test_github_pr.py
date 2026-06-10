@@ -12,11 +12,6 @@ from amelia.core.types import PRAutoFixConfig, PRReviewComment, PRSummary
 from amelia.services.github_pr import AMELIA_FOOTER, GitHubPRService
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _make_mock_process(
     stdout: str = "",
     stderr: str = "",
@@ -32,10 +27,6 @@ def _make_mock_process(
     proc.wait = AsyncMock()
     return proc
 
-
-# ---------------------------------------------------------------------------
-# Sample data
-# ---------------------------------------------------------------------------
 
 _NOW = datetime(2026, 3, 13, 12, 0, 0, tzinfo=UTC)
 
@@ -141,11 +132,6 @@ _GRAPHQL_THREADS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# GHAPI-01: Fetch unresolved review comments
-# ---------------------------------------------------------------------------
-
-
 async def test_fetch_review_comments_returns_unresolved(
     service: GitHubPRService,
 ) -> None:
@@ -175,9 +161,7 @@ async def test_fetch_review_comments_returns_unresolved(
         assert c.thread_id is not None
 
 
-# ---------------------------------------------------------------------------
 # GHAPI-01b: New context fields (original_line, start_line, side, subject_type)
-# ---------------------------------------------------------------------------
 
 
 async def test_fetch_review_comments_captures_context_fields(
@@ -299,11 +283,6 @@ async def test_fetch_review_comments_outdated_line_preserved(
     assert c.original_line == 15  # preserved despite line being null
 
 
-# ---------------------------------------------------------------------------
-# GHAPI-05: Skip self-authored and ignored comments
-# ---------------------------------------------------------------------------
-
-
 async def test_fetch_review_comments_skips_self_and_ignored(
     service: GitHubPRService,
 ) -> None:
@@ -329,11 +308,6 @@ async def test_fetch_review_comments_skips_self_and_ignored(
     # Comments 100, 103 should remain (unresolved, not skipped)
     assert 100 in comment_ids
     assert 103 in comment_ids
-
-
-# ---------------------------------------------------------------------------
-# GHAPI-02: List open PRs
-# ---------------------------------------------------------------------------
 
 
 async def test_list_open_prs(service: GitHubPRService) -> None:
@@ -366,11 +340,6 @@ async def test_list_open_prs(service: GitHubPRService) -> None:
     assert prs[1].number == 2
 
 
-# ---------------------------------------------------------------------------
-# GHAPI-03: Resolve thread
-# ---------------------------------------------------------------------------
-
-
 async def test_resolve_thread(service: GitHubPRService) -> None:
     """resolve_thread sends correct GraphQL mutation."""
     proc = _make_mock_process(
@@ -390,11 +359,6 @@ async def test_resolve_thread(service: GitHubPRService) -> None:
     # threadId should be passed
     arg_str = " ".join(str(a) for a in args)
     assert "PRRT_thread1" in arg_str
-
-
-# ---------------------------------------------------------------------------
-# GHAPI-04: Reply to comment
-# ---------------------------------------------------------------------------
 
 
 async def test_reply_to_comment(service: GitHubPRService) -> None:
@@ -436,11 +400,6 @@ async def test_reply_to_comment_uses_parent_id(service: GitHubPRService) -> None
     assert "/comments/100/replies" in arg_str
 
 
-# ---------------------------------------------------------------------------
-# GHAPI-05: _should_skip_comment
-# ---------------------------------------------------------------------------
-
-
 def test_should_skip_comment_footer_match(service: GitHubPRService) -> None:
     """Comment with Amelia footer should be skipped."""
     assert service._should_skip_comment(
@@ -465,11 +424,6 @@ def test_should_skip_comment_ignore_list(service: GitHubPRService) -> None:
     ) is False
 
 
-# ---------------------------------------------------------------------------
-# Error handling
-# ---------------------------------------------------------------------------
-
-
 async def test_gh_command_failure_raises_valueerror(
     service: GitHubPRService,
 ) -> None:
@@ -485,11 +439,6 @@ async def test_gh_command_failure_raises_valueerror(
         pytest.raises(ValueError, match="HTTP 404"),
     ):
         await service.list_open_prs()
-
-
-# ---------------------------------------------------------------------------
-# PRAutoFixConfig ignore_authors tests
-# ---------------------------------------------------------------------------
 
 
 def test_prautofix_config_ignore_authors_default() -> None:

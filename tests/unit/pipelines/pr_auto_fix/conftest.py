@@ -28,11 +28,6 @@ from amelia.server.models.events import WorkflowEvent
 from amelia.services.github_pr import GitHubPRService
 
 
-# ---------------------------------------------------------------------------
-# Factory helpers
-# ---------------------------------------------------------------------------
-
-
 def make_comment(
     *,
     id: int = 1,
@@ -180,11 +175,6 @@ def make_orchestrator(
     )
 
 
-# ---------------------------------------------------------------------------
-# Mock pipeline context manager (reduces ~15 lines per usage)
-# ---------------------------------------------------------------------------
-
-
 @asynccontextmanager
 async def mock_pipeline_context(
     *,
@@ -213,11 +203,6 @@ async def mock_pipeline_context(
         return_value=mock_pipeline,
     ):
         yield mock_pipeline, mock_graph
-
-
-# ---------------------------------------------------------------------------
-# Shared orchestrator fixtures (used by test_orchestrator.py)
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()

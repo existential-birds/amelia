@@ -23,11 +23,6 @@ from amelia.trajectory import WorkflowTrajectoryRecorder
 from .conftest import patch_lifespan
 
 
-# =============================================================================
-# Module-level fixtures and helpers
-# =============================================================================
-
-
 @pytest.fixture
 def mock_repository() -> MagicMock:
     """Create a mock WorkflowRepository with common methods stubbed."""
@@ -112,11 +107,6 @@ def make_recorder_with_invocation(
     ])
     inv.close(usage=DriverUsage(input_tokens=10, output_tokens=5), cost_usd=0.01)
     return recorder
-
-
-# =============================================================================
-# Test Classes
-# =============================================================================
 
 
 class TestGetWorkflowDetail:

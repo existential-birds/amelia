@@ -30,11 +30,6 @@ from tests.conftest import create_mock_execute_agentic
 from .conftest import AsyncClientFactory, _create_app_with_overrides
 
 
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-
 def create_simple_driver_response(
     response_content: str,
     session_id: str = "driver-session",
@@ -85,11 +80,6 @@ async def test_client(
 
     async with async_client_factory(app) as client:
         yield client
-
-
-# =============================================================================
-# Test Classes
-# =============================================================================
 
 
 @pytest.mark.integration

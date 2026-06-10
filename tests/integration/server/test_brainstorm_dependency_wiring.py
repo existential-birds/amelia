@@ -43,11 +43,6 @@ DATABASE_URL = os.environ.get(
 )
 
 
-# =============================================================================
-# Static Wiring Tests
-# =============================================================================
-
-
 @pytest.mark.integration
 class TestBrainstormDependencyWiring:
     """Verify that create_app() wires all brainstorm dependencies."""
@@ -104,11 +99,6 @@ class TestBrainstormDependencyWiring:
             f"Missing brainstorm dependencies in create_app(): {missing}. "
             "Ensure all dependencies are wired in main.py."
         )
-
-
-# =============================================================================
-# Dynamic Wiring Tests
-# =============================================================================
 
 
 @pytest.mark.integration
@@ -403,11 +393,6 @@ class TestBrainstormDependencyResolution:
                 f"Expected 202 but got {msg_resp.status_code}. "
                 f"Response: {msg_resp.json()}"
             )
-
-
-# =============================================================================
-# Driver Cleanup Wiring Tests
-# =============================================================================
 
 
 @pytest.mark.integration

@@ -11,11 +11,6 @@ from amelia.core.exceptions import ModelProviderError
 from amelia.drivers.api.deepagents import _extract_provider_info, _is_model_provider_error
 
 
-# ---------------------------------------------------------------------------
-# Pure helper function tests
-# ---------------------------------------------------------------------------
-
-
 class TestModelProviderErrorRepr:
     """Tests for ModelProviderError __repr__ method."""
 
@@ -103,11 +98,6 @@ class TestExtractProviderInfo:
         assert message == str(exc)
 
 
-# ---------------------------------------------------------------------------
-# ApiDriver integration tests (mocked at external boundary)
-# ---------------------------------------------------------------------------
-
-
 class TestExecuteAgenticProviderErrorWrapping:
     """Tests that execute_agentic wraps model provider ValueErrors."""
 
@@ -183,11 +173,6 @@ class TestGenerateProviderErrorWrapping:
             await driver.generate(prompt="test")
 
         assert "minimax" in str(exc_info.value)
-
-
-# ---------------------------------------------------------------------------
-# CLI driver ProcessError wrapping tests
-# ---------------------------------------------------------------------------
 
 
 class TestCliDriverProcessErrorWrapping:
