@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **dashboard:** Migrate to Vite 8 / Rolldown — replace `rollupOptions.output.manualChunks` (function form) with `rolldownOptions.output.codeSplitting.groups` for vendor chunk splitting ([f7c794a](https://github.com/existential-birds/amelia/commit/f7c794a1))
+
 ## [0.22.0] - 2026-06-07
 
 ### Added
@@ -57,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **knowledge:** Switch PDF chunker to `HybridChunker` (cl100k_base, max 512 tokens) with a 64-token minimum filter, contextualize chunks with heading breadcrumbs, and unify the search similarity threshold at 0.3 — eliminates noisy single-token chunks and improves semantic relevance of top results ([#587](https://github.com/existential-birds/amelia/pull/587))
 - **knowledge:** Drop document-text previews from the "tiny chunks" warning log to avoid leaking user-uploaded content into operator logs ([#587](https://github.com/existential-birds/amelia/pull/587))
 - **validation:** Reject plans without task structure (missing `### Task N:` headers) before processing, so architect raw output written to the wrong stage no longer slips through to execution ([#580](https://github.com/existential-birds/amelia/pull/580))
-- **dashboard:** Use function-form `manualChunks` in `vite.config.ts` for compatibility with current Rollup/Vite types — restores broken dashboard build ([#582](https://github.com/existential-birds/amelia/pull/582))
+- **dashboard:** Restore broken dashboard build by fixing `vite.config.ts` chunk-splitting configuration for Rollup/Vite type compatibility ([#582](https://github.com/existential-birds/amelia/pull/582))
 
 ### Security
 
