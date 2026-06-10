@@ -16,7 +16,7 @@
     "test:run": "vitest run",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc -b --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
