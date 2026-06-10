@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator, Callable
 from datetime import date
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from langchain_core.runnables.config import RunnableConfig
 
@@ -67,7 +67,6 @@ async def test_call_architect_node_creates_plan_directory_if_missing(
     # Mock the Architect (driver is now created internally by the agent)
     with (
         patch("amelia.pipelines.implementation.nodes.Architect") as mock_architect_class,
-        patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
     ):
         mock_architect = MagicMock()
         mock_architect.driver = MagicMock()  # Agent creates its own driver internally

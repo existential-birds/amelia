@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -53,12 +53,10 @@ async def test_call_architect_node_uses_agent_config(
         mock_architect.plan = MagicMock(return_value=AsyncIteratorMock([
             (mock_state, MagicMock())
         ]))
-        # Mock driver for _save_token_usage
         mock_architect.driver = MagicMock()
         MockArchitect.return_value = mock_architect
 
         with (
-            patch("amelia.pipelines.implementation.nodes._save_token_usage", new_callable=AsyncMock),
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.read_text", return_value="# Plan"),
         ):

@@ -2,7 +2,6 @@
 
 This module defines the foundational abstractions for the pipeline system:
 - PipelineMetadata: Immutable dataclass describing a pipeline
-- HistoryEntry: Structured entry for agent action history
 - BasePipelineState: Common fields shared across all pipelines
 - Pipeline: Protocol that all workflow types implement
 """
@@ -38,22 +37,6 @@ class PipelineMetadata(BaseModel):
     description: str
 
 
-class HistoryEntry(BaseModel):
-    """Structured history entry for agent actions.
-
-    Attributes:
-        timestamp: When the action occurred.
-        agent: Which agent performed the action (e.g., "architect", "developer").
-        message: Description of the action.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    timestamp: datetime
-    agent: str
-    message: str
-
-
 class BasePipelineState(BaseModel):
     """Common state for all pipelines.
 
@@ -66,7 +49,6 @@ class BasePipelineState(BaseModel):
         profile_id: ID of the active profile.
         created_at: When the workflow was created.
         status: Current workflow status.
-        history: Append-only list of agent actions.
         pending_user_input: Whether waiting for user input.
         user_message: Message from user (e.g., approval feedback).
         driver_session_id: Session ID for driver continuity.
@@ -84,9 +66,6 @@ class BasePipelineState(BaseModel):
 
     # Lifecycle
     status: Literal["pending", "running", "paused", "completed", "failed"]
-
-    # Observability (append-only via reducer)
-    history: Annotated[list[HistoryEntry], operator.add] = Field(default_factory=list)
 
     # Human interaction
     pending_user_input: bool = False

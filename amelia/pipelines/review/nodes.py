@@ -13,7 +13,7 @@ from amelia.agents.developer import Developer
 from amelia.agents.evaluator import Evaluator
 from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.pipelines.nodes import _resolve_commit, _save_token_usage
+from amelia.pipelines.nodes import _resolve_commit
 from amelia.pipelines.review.developer_prompt import build_review_fix_prompt
 from amelia.pipelines.utils import extract_node_config
 
@@ -42,8 +42,6 @@ async def call_evaluation_node(
     evaluation_result, new_session_id = await evaluator.evaluate(
         state, nc.profile, workflow_id=nc.workflow_id
     )
-
-    await _save_token_usage(evaluator.driver, nc.workflow_id, "evaluator", nc.repository)
 
     logger.info(
         "Agent action completed",
@@ -136,8 +134,6 @@ async def call_review_developer_node(
             workflow_id=str(nc.workflow_id),
         )
         raise
-
-    await _save_token_usage(developer.driver, nc.workflow_id, "developer", nc.repository)
 
     logger.info(
         "Agent action completed",

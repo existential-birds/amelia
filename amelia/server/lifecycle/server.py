@@ -92,8 +92,7 @@ class ServerLifecycle:
         cleanup_result = await self._log_retention.cleanup_on_shutdown()
         logger.info(
             "Cleanup complete",
-            events_deleted=cleanup_result.events_deleted,
-            workflows_deleted=cleanup_result.workflows_deleted,
+            trajectories_deleted=cleanup_result.trajectories_deleted,
             checkpoints_deleted=cleanup_result.checkpoints_deleted,
         )
 

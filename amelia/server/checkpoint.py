@@ -17,5 +17,4 @@ CHECKPOINT_ALLOWED_MODULES: list[tuple[str, str]] = [
     ("amelia.core.types", "PlanValidationResult"),
     ("amelia.core.types", "ReviewResult"),
     ("amelia.core.types", "Severity"),
-    ("amelia.pipelines.base", "HistoryEntry"),
 ]

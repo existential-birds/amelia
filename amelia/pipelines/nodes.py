@@ -7,8 +7,6 @@ operations like developer execution and code review.
 
 import asyncio
 import shutil
-import uuid
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -20,7 +18,6 @@ from amelia.agents.reviewer import Reviewer
 from amelia.core.types import ReviewResult
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.utils import extract_node_config
-from amelia.server.models.tokens import TokenUsage, resolve_driver_cost
 from amelia.skills.review import REVIEW_TYPE_SKILLS, detect_stack, load_skills
 from amelia.tools.git_utils import get_current_commit
 from amelia.trajectory import RecordingDriver
@@ -28,7 +25,6 @@ from amelia.trajectory import RecordingDriver
 
 if TYPE_CHECKING:
     from amelia.sandbox.provider import SandboxProvider
-    from amelia.server.database.repository import WorkflowRepository
 
 
 async def _resolve_commit(
@@ -91,67 +87,6 @@ async def _run_git_command(
             stderr=stderr.decode().strip()[:500],
         )
     return stdout.decode()
-
-
-async def _save_token_usage(
-    driver: Any,
-    workflow_id: uuid.UUID,
-    agent: str,
-    repository: "WorkflowRepository | None",
-) -> None:
-    """Extract token usage from driver and save to repository.
-
-    This is a best-effort operation - failures are logged but don't fail the workflow.
-    Uses the driver-agnostic get_usage() method when available.
-
-    Args:
-        driver: The driver that was used for execution.
-        workflow_id: Current workflow ID.
-        agent: Agent name (architect, developer, reviewer).
-        repository: Repository to save usage to (may be None in CLI mode).
-    """
-    if repository is None:
-        return
-
-    try:
-        # Get usage via the driver-agnostic get_usage() method
-        driver_usage = driver.get_usage() if hasattr(driver, "get_usage") else None
-        if driver_usage is None:
-            return
-
-        cost = await resolve_driver_cost(
-            driver_usage, getattr(driver, "model", "unknown")
-        )
-
-        usage = TokenUsage(
-            workflow_id=workflow_id,
-            agent=agent,
-            model=driver_usage.model or getattr(driver, "model", "unknown"),
-            input_tokens=driver_usage.input_tokens or 0,
-            output_tokens=driver_usage.output_tokens or 0,
-            cache_read_tokens=driver_usage.cache_read_tokens or 0,
-            cache_creation_tokens=driver_usage.cache_creation_tokens or 0,
-            cost_usd=cost,
-            duration_ms=driver_usage.duration_ms or 0,
-            num_turns=driver_usage.num_turns or 1,
-            timestamp=datetime.now(UTC),
-        )
-        await repository.save_token_usage(usage)
-        logger.debug(
-            "Token usage saved",
-            agent=agent,
-            workflow_id=workflow_id,
-            input_tokens=usage.input_tokens,
-            output_tokens=usage.output_tokens,
-            cost_usd=usage.cost_usd,
-        )
-    except Exception:
-        # Best-effort - don't fail workflow on token tracking errors
-        logger.exception(
-            "Failed to save token usage",
-            agent=agent,
-            workflow_id=workflow_id,
-        )
 
 
 async def call_developer_node(
@@ -225,8 +160,6 @@ async def call_developer_node(
             workflow_id=str(nc.workflow_id),
         )
         raise
-
-    await _save_token_usage(developer.driver, nc.workflow_id, "developer", nc.repository)
 
     logger.info(
         "Agent action completed",
@@ -398,8 +331,6 @@ async def call_reviewer_node(
                 workflow_id=nc.workflow_id,
                 diff_path=str(diff_path),
             )
-
-            await _save_token_usage(reviewer.driver, nc.workflow_id, agent_name, nc.repository)
 
             # Tag result with the review type as reviewer_persona
             review_result = review_result.model_copy(update={"reviewer_persona": review_type})

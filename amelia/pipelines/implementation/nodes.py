@@ -28,7 +28,6 @@ from amelia.pipelines.implementation.utils import (
     extract_task_count,
     validate_plan_structure,
 )
-from amelia.pipelines.nodes import _save_token_usage
 from amelia.pipelines.utils import extract_node_config
 from amelia.tools.write_plan import execute_write_plan
 from amelia.tools.write_plan_schema import WritePlanInput
@@ -358,8 +357,6 @@ async def call_architect_node(
         final_state = new_state
         if nc.event_bus:
             nc.event_bus.emit(event)
-
-    await _save_token_usage(architect.driver, nc.workflow_id, "architect", nc.repository)
 
     # Fallback: If plan file doesn't exist, write it from Write tool call content
     # This handles cases where Claude Code's Write tool didn't persist the file

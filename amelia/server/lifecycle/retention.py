@@ -1,7 +1,14 @@
-"""Log retention service for cleaning up old workflow data."""
+"""Retention service for cleaning up old workflow run data.
+
+Trajectory files are the only persistent run history. Retention removes the
+trajectory file (and its per-workflow directory) for finished workflows past
+the cutoff and NULLs the thin index columns on ``workflows``.
+"""
 
 import asyncio
+import shutil
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any, Protocol
 
 import asyncpg
@@ -41,13 +48,12 @@ class ConfigProtocol(Protocol):
 class CleanupResult(BaseModel):
     """Result of cleanup operation."""
 
-    events_deleted: int
-    workflows_deleted: int
+    trajectories_deleted: int
     checkpoints_deleted: int = 0
 
 
 class LogRetentionService:
-    """Manages event log and checkpoint cleanup on server shutdown.
+    """Manages trajectory file and checkpoint cleanup on server shutdown.
 
     Cleanup runs only during graceful shutdown to:
     - Avoid runtime performance impact
@@ -75,7 +81,7 @@ class LogRetentionService:
     async def cleanup_on_shutdown(self) -> CleanupResult:
         """Execute retention policy cleanup during server shutdown."""
         logger.info(
-            "Running log retention cleanup",
+            "Running trajectory retention cleanup",
             retention_days=self._config.log_retention_days,
         )
 
@@ -83,35 +89,65 @@ class LogRetentionService:
             days=self._config.log_retention_days
         )
 
-        events_deleted = await self._db.execute(
-            """
-            DELETE FROM workflow_log
-            WHERE workflow_id IN (
-                SELECT id FROM workflows
-                WHERE status IN ('completed', 'failed', 'cancelled')
-                AND completed_at < $1
-            )
-            """,
-            cutoff_date,
-        )
-
-        workflows_deleted = await self._db.execute(
-            """
-            DELETE FROM workflows
-            WHERE id NOT IN (SELECT DISTINCT workflow_id FROM workflow_log)
-            AND status IN ('completed', 'failed', 'cancelled')
-            AND completed_at < $1
-            """,
-            cutoff_date,
-        )
-
+        trajectories_deleted = await self._cleanup_trajectories(cutoff_date)
         checkpoints_deleted = await self._cleanup_checkpoints()
 
         return CleanupResult(
-            events_deleted=events_deleted,
-            workflows_deleted=workflows_deleted,
+            trajectories_deleted=trajectories_deleted,
             checkpoints_deleted=checkpoints_deleted,
         )
+
+    async def _cleanup_trajectories(self, cutoff_date: datetime) -> int:
+        """Remove trajectory files for finished workflows past the cutoff.
+
+        Paths come from the thin index (``workflows.trajectory_path``). A
+        missing file is not an error — the index columns are NULLed either
+        way so the workflow no longer appears to have a trajectory.
+
+        Args:
+            cutoff_date: Workflows completed before this moment are swept.
+
+        Returns:
+            Number of workflows whose trajectory index was cleared.
+        """
+        rows = await self._db.fetch_all(
+            """
+            SELECT id, trajectory_path FROM workflows
+            WHERE status IN ('completed', 'failed', 'cancelled')
+            AND completed_at < $1
+            AND trajectory_path IS NOT NULL
+            """,
+            cutoff_date,
+        )
+        if not rows:
+            return 0
+
+        for row in rows:
+            path = Path(row["trajectory_path"])
+            # One directory per workflow — remove the whole directory so
+            # nothing (temp files included) outlives the trajectory.
+            if path.parent.is_dir():
+                shutil.rmtree(path.parent, ignore_errors=True)
+
+        cleared = await self._db.execute(
+            """
+            UPDATE workflows SET
+                trajectory_path = NULL,
+                total_cost_usd = NULL,
+                total_tokens = NULL,
+                total_duration_ms = NULL
+            WHERE status IN ('completed', 'failed', 'cancelled')
+            AND completed_at < $1
+            AND trajectory_path IS NOT NULL
+            """,
+            cutoff_date,
+        )
+        logger.debug(
+            "Swept trajectory files for finished workflows",
+            count=cleared,
+            cutoff=cutoff_date,
+        )
+        return cleared
 
     async def _cleanup_checkpoints(self) -> int:
         """Delete LangGraph checkpoints for finished workflows based on retention.

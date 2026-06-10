@@ -78,7 +78,6 @@ async def _run_node(
     cls, dev = _setup_mocks(state, workflow_id)
     with ExitStack() as stack:
         stack.enter_context(patch("amelia.pipelines.review.nodes.Developer", cls))
-        stack.enter_context(patch("amelia.pipelines.review.nodes._save_token_usage", new_callable=AsyncMock))
         stack.enter_context(patch(
             "amelia.pipelines.review.nodes._resolve_commit",
             new_callable=AsyncMock,

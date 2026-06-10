@@ -21,7 +21,6 @@ from amelia.core.agentic_state import AgenticStatus
 from amelia.core.types import PRReviewComment
 from amelia.drivers.factory import get_driver
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.pipelines.nodes import _save_token_usage
 from amelia.pipelines.pr_auto_fix.state import (
     GroupFixResult,
     GroupFixStatus,
@@ -58,7 +57,6 @@ async def classify_node(
 
     _event_bus, workflow_id, profile = extract_config_params(config)
     configurable = config.get("configurable", {})
-    repository = configurable.get("repository")
     recorder = configurable.get("trajectory_recorder")
 
     # Create driver for classification using full developer agent config
@@ -87,18 +85,9 @@ async def classify_node(
         return {"classified_comments": [], "file_groups": {}}
 
     # LLM classification
-    try:
-        classifications = await classify_comments(
-            filtered, driver, state.autofix_config, recorder=recorder,
-        )
-    finally:
-        try:
-            await _save_token_usage(driver, workflow_id, "classifier", repository)
-        except Exception:
-            logger.exception(
-                "Failed to persist classifier token usage",
-                workflow_id=workflow_id,
-            )
+    classifications = await classify_comments(
+        filtered, driver, state.autofix_config, recorder=recorder,
+    )
 
     # Build classification audit data for deferred persistence.
     # Stored in state and persisted by the orchestrator after the
@@ -234,7 +223,6 @@ async def develop_node(
 
     _event_bus, workflow_id, profile = extract_config_params(config)
     configurable = config.get("configurable", {})
-    repository = configurable.get("repository")
     recorder = configurable.get("trajectory_recorder")
 
     # Build classification lookup from state
@@ -310,19 +298,10 @@ async def develop_node(
 
             # Run Developer and iterate to completion
             final_state = impl_state
-            try:
-                async for updated_state, _event in dev.run(
-                    final_state, profile=profile, workflow_id=workflow_id,
-                ):
-                    final_state = updated_state
-            finally:
-                try:
-                    await _save_token_usage(dev.driver, workflow_id, "developer", repository)
-                except Exception:
-                    logger.exception(
-                        "Failed to persist developer token usage",
-                        workflow_id=workflow_id,
-                    )
+            async for updated_state, _event in dev.run(
+                final_state, profile=profile, workflow_id=workflow_id,
+            ):
+                final_state = updated_state
 
             # Check if THIS group introduced new file changes by comparing
             # the current porcelain status against the pre-group baseline.

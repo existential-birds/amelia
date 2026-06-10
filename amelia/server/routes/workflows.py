@@ -53,7 +53,7 @@ from amelia.trajectory import (
 
 
 # Cap on projected history entries in the detail response; mirrors the
-# previous get_recent_events(limit=50) wire behavior.
+# pre-trajectory wire behavior (last 50 events).
 RECENT_EVENT_LIMIT = 50
 
 

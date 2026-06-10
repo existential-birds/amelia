@@ -49,8 +49,6 @@ def mock_repository() -> MagicMock:
     repo.get = AsyncMock(side_effect=mock_get)
     repo.update = AsyncMock(side_effect=mock_update)
     repo.update_plan_cache = AsyncMock(side_effect=mock_update_plan_cache)
-    repo.save_event = AsyncMock()
-    repo.get_max_event_sequence = AsyncMock(return_value=0)
     return repo
 
 

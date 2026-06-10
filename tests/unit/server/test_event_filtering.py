@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 import pytest
 
 from amelia.server.models.events import (
-    PERSISTED_TYPES,
     EventLevel,
     EventType,
     get_event_level,
@@ -63,30 +62,6 @@ class TestPRAutoFixEventClassification:
 
     def test_pr_poll_error_is_error(self) -> None:
         assert get_event_level(EventType.PR_POLL_ERROR) == EventLevel.ERROR
-
-
-# ---------------------------------------------------------------------------
-# Persistence classification
-# ---------------------------------------------------------------------------
-
-
-class TestPRAutoFixPersistence:
-    """Tests for PERSISTED_TYPES membership of new event types."""
-
-    @pytest.mark.parametrize(
-        "event_type",
-        [
-            EventType.PR_AUTO_FIX_STARTED,
-            EventType.PR_AUTO_FIX_COMPLETED,
-            EventType.PR_AUTO_FIX_FAILED,
-            EventType.PR_COMMENTS_DETECTED,
-            EventType.PR_COMMENTS_RESOLVED,
-            EventType.PR_POLL_ERROR,
-            EventType.PR_POLL_RATE_LIMITED,
-        ],
-    )
-    def test_persisted_events(self, event_type: EventType) -> None:
-        assert event_type in PERSISTED_TYPES
 
 
 # ---------------------------------------------------------------------------

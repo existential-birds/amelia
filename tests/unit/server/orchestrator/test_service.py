@@ -53,8 +53,6 @@ def mock_repository() -> AsyncMock:
     repo.update = AsyncMock()
     repo.update_plan_cache = AsyncMock()
     repo.set_status = AsyncMock()
-    repo.save_event = AsyncMock()
-    repo.get_max_event_sequence = AsyncMock(return_value=0)
     repo.get = AsyncMock(return_value=None)
     return repo
 

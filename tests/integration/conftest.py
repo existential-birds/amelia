@@ -29,7 +29,6 @@ from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.events.connection_manager import ConnectionManager
-from amelia.server.models.events import WorkflowEvent
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.runner import GraphRunner
 from amelia.server.orchestrator.service import OrchestratorService
@@ -427,8 +426,6 @@ def mock_repository() -> AsyncMock:
     """Create in-memory repository mock with full CRUD support."""
     repo = AsyncMock(spec=WorkflowRepository)
     repo.workflows = {}
-    repo.events = []
-    repo.event_sequence = {}
 
     async def create(state: ServerExecutionState) -> None:
         repo.workflows[state.id] = state
@@ -444,18 +441,9 @@ def mock_repository() -> AsyncMock:
                 update={"workflow_status": status, "failure_reason": failure_reason}
             )
 
-    async def save_event(event: WorkflowEvent) -> None:
-        repo.events.append(event)
-
-    async def get_max_event_sequence(workflow_id: str) -> int:
-        return cast(int, repo.event_sequence.get(workflow_id, 0))
-
     repo.create = create
     repo.get = get
     repo.set_status = set_status
-    repo.save_event = save_event
-    repo.get_max_event_sequence = get_max_event_sequence
-
     return repo
 
 
@@ -664,7 +652,7 @@ async def test_db() -> AsyncGenerator[Database, None]:
                 document_chunks, documents,
                 workflow_prompt_versions, prompt_versions, prompts,
                 brainstorm_artifacts, brainstorm_messages, brainstorm_sessions,
-                token_usage, workflow_log, workflows,
+                workflows,
                 profiles, server_settings
             CASCADE
         """)

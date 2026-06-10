@@ -33,8 +33,6 @@ def mock_repository() -> MagicMock:
     repo.create = AsyncMock()
     repo.update = AsyncMock()
     repo.list_active = AsyncMock(return_value=[])
-    repo.save_event = AsyncMock()
-    repo.get_max_event_sequence = AsyncMock(return_value=0)
     repo.get_by_worktree = AsyncMock(return_value=None)
     return repo
 

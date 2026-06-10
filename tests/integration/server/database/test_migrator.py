@@ -49,8 +49,6 @@ async def test_migrator_applies_initial_schema(db: Database) -> None:
     # Check that all core tables exist
     for table in [
         "workflows",
-        "workflow_log",
-        "token_usage",
         "profiles",
         "server_settings",
         "prompts",

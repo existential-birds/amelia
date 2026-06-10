@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import WebSocket, WebSocketDisconnect
 from loguru import logger
 
-from amelia.server.models.events import PERSISTED_TYPES, EventDomain, WorkflowEvent
+from amelia.server.models.events import TRACE_TYPES, EventDomain, WorkflowEvent
 
 
 if TYPE_CHECKING:
@@ -97,7 +97,7 @@ class ConnectionManager:
         Args:
             event: The workflow event to broadcast.
         """
-        is_trace = event.event_type not in PERSISTED_TYPES
+        is_trace = event.event_type in TRACE_TYPES
 
         targets: list[WebSocket] = []
         async with self._lock:

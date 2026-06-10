@@ -59,8 +59,7 @@ async def test_call_reviewer_node_uses_agent_config(profile_with_agents, mock_st
         mock_reviewer.driver = MagicMock()
         MockReviewer.return_value = mock_reviewer
 
-        with patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock):
-            await call_reviewer_node(mock_state, config)
+        await call_reviewer_node(mock_state, config)
 
         # Verify Reviewer was instantiated with AgentConfig
         call_args = MockReviewer.call_args
@@ -112,8 +111,7 @@ async def test_call_reviewer_node_writes_diff_file(profile_with_agents, mock_sta
                 "2 files changed, 1 insertion(+), 1 deletion(-)",  # --stat
             ]
 
-            with patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock):
-                await call_reviewer_node(mock_state, config)
+            await call_reviewer_node(mock_state, config)
 
     # agentic_review must have been called with diff_path kwarg
     assert "diff_path" in captured_kwargs, "agentic_review must be called with diff_path kwarg"
@@ -169,10 +167,7 @@ async def test_call_reviewer_node_diff_file_content(profile_with_agents, mock_st
                 "1 file changed, 1 insertion(+)",  # --stat
             ]
 
-            with (
-                patch.object(Path, "write_text", capturing_write_text),
-                patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
-            ):
+            with patch.object(Path, "write_text", capturing_write_text):
                 await call_reviewer_node(mock_state, config)
 
     assert len(written_content) == 1, "Expected exactly one diff.patch write"
@@ -213,10 +208,7 @@ async def test_call_reviewer_node_cleans_up_diff_on_error(profile_with_agents, m
                 "1 file changed",  # --stat
             ]
 
-            with (
-                patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
-                pytest.raises(RuntimeError, match="Review failed"),
-            ):
+            with pytest.raises(RuntimeError, match="Review failed"):
                 await call_reviewer_node(mock_state, config)
 
     # The diff directory must be cleaned up even after an exception

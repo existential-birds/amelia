@@ -8,7 +8,6 @@ from pydantic import ValidationError
 
 from amelia.pipelines.base import (
     BasePipelineState,
-    HistoryEntry,
     PipelineMetadata,
 )
 
@@ -38,28 +37,6 @@ class TestPipelineMetadata:
         assert meta.description == "Build features"
 
 
-class TestHistoryEntry:
-    """Tests for HistoryEntry Pydantic model."""
-
-    def test_history_entry_is_frozen(self) -> None:
-        """HistoryEntry should be immutable."""
-        entry = HistoryEntry(
-            timestamp=datetime.now(UTC),
-            agent="architect",
-            message="Started planning",
-        )
-        with pytest.raises(ValidationError):
-            entry.agent = "developer"
-
-    def test_history_entry_fields(self) -> None:
-        """HistoryEntry should store timestamp, agent, and message."""
-        ts = datetime.now(UTC)
-        entry = HistoryEntry(timestamp=ts, agent="reviewer", message="Review complete")
-        assert entry.timestamp == ts
-        assert entry.agent == "reviewer"
-        assert entry.message == "Review complete"
-
-
 class TestBasePipelineState:
     """Tests for BasePipelineState."""
 
@@ -80,7 +57,6 @@ class TestBasePipelineState:
         assert state.workflow_id is not None  # UUID propagated
         assert state.pipeline_type == "implementation"
         assert state.status == "pending"
-        assert state.history == []
 
     def test_status_values(self) -> None:
         """Status should only accept valid literals."""

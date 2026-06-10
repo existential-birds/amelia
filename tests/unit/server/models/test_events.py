@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from amelia.server.models.events import (
-    PERSISTED_TYPES,
+    TRACE_TYPES,
     BrainstormEventType,
     EventLevel,
     EventType,
@@ -183,15 +183,15 @@ class TestWorkflowEvent:
         assert event.level == expected_level
 
 
-class TestPersistedTypes:
-    """Tests for PERSISTED_TYPES classification."""
+class TestTraceTypes:
+    """Tests for TRACE_TYPES broadcast classification."""
 
-    def test_persisted_types_is_frozenset(self) -> None:
-        """PERSISTED_TYPES must be immutable."""
-        assert isinstance(PERSISTED_TYPES, frozenset)
+    def test_trace_types_is_frozenset(self) -> None:
+        """TRACE_TYPES must be immutable."""
+        assert isinstance(TRACE_TYPES, frozenset)
 
-    def test_lifecycle_events_are_persisted(self) -> None:
-        """All lifecycle events must be persisted."""
+    def test_lifecycle_events_are_not_trace(self) -> None:
+        """Lifecycle events are workflow-scoped, not trace broadcast."""
         lifecycle = {
             EventType.WORKFLOW_CREATED,
             EventType.WORKFLOW_STARTED,
@@ -199,70 +199,27 @@ class TestPersistedTypes:
             EventType.WORKFLOW_FAILED,
             EventType.WORKFLOW_CANCELLED,
         }
-        assert lifecycle <= PERSISTED_TYPES
+        assert lifecycle.isdisjoint(TRACE_TYPES)
 
-    def test_trace_events_are_not_persisted(self) -> None:
-        """Trace events must NOT be persisted."""
+    def test_agent_stream_events_are_trace(self) -> None:
+        """High-volume agent stream events broadcast to all clients."""
         trace_types = {
-            EventType.CLAUDE_THINKING,
-            EventType.CLAUDE_TOOL_CALL,
-            EventType.CLAUDE_TOOL_RESULT,
-            EventType.AGENT_OUTPUT,
-            EventType.ORACLE_CONSULTATION_THINKING,
-            EventType.ORACLE_TOOL_CALL,
-            EventType.ORACLE_TOOL_RESULT,
-        }
-        assert trace_types.isdisjoint(PERSISTED_TYPES)
-
-    def test_stream_events_are_not_persisted(self) -> None:
-        """Stream and agent_message events must NOT be persisted."""
-        stream_types = {EventType.STREAM, EventType.AGENT_MESSAGE}
-        assert stream_types.isdisjoint(PERSISTED_TYPES)
-
-    def test_brainstorm_trace_events_are_not_persisted(self) -> None:
-        """Brainstorm trace events must NOT be persisted."""
-        brainstorm_trace = {
-            BrainstormEventType.REASONING,
-            BrainstormEventType.TOOL_CALL,
-            BrainstormEventType.TOOL_RESULT,
-            BrainstormEventType.TEXT,
-            BrainstormEventType.MESSAGE_COMPLETE,
-        }
-        assert brainstorm_trace.isdisjoint(PERSISTED_TYPES)
-
-    def test_every_event_type_is_classified(self) -> None:
-        """Every EventType must be either persisted or explicitly stream-only.
-
-        Guards against new event types being added without classification.
-        """
-        all_types = set(EventType)
-        stream_only = {
-            EventType.CLAUDE_THINKING,
-            EventType.CLAUDE_TOOL_CALL,
-            EventType.CLAUDE_TOOL_RESULT,
-            EventType.AGENT_OUTPUT,
-            EventType.ORACLE_CONSULTATION_THINKING,
-            EventType.ORACLE_TOOL_CALL,
-            EventType.ORACLE_TOOL_RESULT,
             EventType.STREAM,
             EventType.AGENT_MESSAGE,
+            EventType.CLAUDE_THINKING,
+            EventType.CLAUDE_TOOL_CALL,
+            EventType.CLAUDE_TOOL_RESULT,
+            EventType.AGENT_OUTPUT,
+            EventType.ORACLE_CONSULTATION_THINKING,
+            EventType.ORACLE_TOOL_CALL,
+            EventType.ORACLE_TOOL_RESULT,
             EventType.DOCUMENT_INGESTION_PROGRESS,
-            EventType.PR_POLL_RATE_LIMITED,
-            EventType.PR_COMMENTS_DETECTED,
-            EventType.PR_COMMENTS_RESOLVED,
         }
-        classified = PERSISTED_TYPES | stream_only
-        unclassified = all_types - classified
-        assert not unclassified, f"Unclassified event types: {unclassified}"
+        assert trace_types <= TRACE_TYPES
 
-    def test_every_brainstorm_event_type_is_classified(self) -> None:
-        """Every BrainstormEventType must be either persisted or ephemeral.
-
-        Guards against new brainstorm event types being added without
-        classification.
-        """
-        all_types = set(BrainstormEventType)
-        ephemeral = {
+    def test_brainstorm_stream_events_are_trace(self) -> None:
+        """Brainstorm streaming events broadcast to all clients."""
+        brainstorm_trace = {
             BrainstormEventType.REASONING,
             BrainstormEventType.TOOL_CALL,
             BrainstormEventType.TOOL_RESULT,
@@ -270,6 +227,14 @@ class TestPersistedTypes:
             BrainstormEventType.ASK_USER,
             BrainstormEventType.MESSAGE_COMPLETE,
         }
-        classified = PERSISTED_TYPES | ephemeral
-        unclassified = all_types - classified
-        assert not unclassified, f"Unclassified brainstorm event types: {unclassified}"
+        assert brainstorm_trace <= TRACE_TYPES
+
+    def test_brainstorm_lifecycle_events_are_not_trace(self) -> None:
+        """Brainstorm lifecycle events are session-scoped, not trace."""
+        brainstorm_lifecycle = {
+            BrainstormEventType.SESSION_CREATED,
+            BrainstormEventType.SESSION_COMPLETED,
+            BrainstormEventType.ARTIFACT_CREATED,
+            BrainstormEventType.MESSAGE_FAILED,
+        }
+        assert brainstorm_lifecycle.isdisjoint(TRACE_TYPES)

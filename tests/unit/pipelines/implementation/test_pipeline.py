@@ -148,16 +148,6 @@ class TestImplementationPipelineInitialState:
         )
         assert state.status == "pending"
 
-    def test_initial_state_has_empty_history(self) -> None:
-        """Initial state should have empty history."""
-        pipeline = ImplementationPipeline()
-        state = pipeline.get_initial_state(
-            workflow_id=uuid4(),
-            profile_id="default",
-        )
-        assert state.history == []
-
-
 class TestPlanValidatorStructuredData:
     """Tests for structured plan data (JSON sidecar) in plan_validator_node."""
 
