@@ -1,12 +1,13 @@
 """Unit tests for pipeline utilities."""
 
+from collections.abc import Callable
 from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
 
 from amelia.core.types import Profile
-from amelia.pipelines.utils import extract_config_params
+from amelia.pipelines.utils import extract_config_params, extract_node_config
 
 
 class TestExtractConfigParams:
@@ -62,3 +63,30 @@ class TestExtractConfigParams:
 
         with pytest.raises(ValueError, match="profile"):
             extract_config_params(config)
+
+
+class TestExtractNodeConfig:
+    """Tests for extract_node_config utility."""
+
+    def test_carries_recorder(self, mock_profile_factory: Callable[..., Profile]) -> None:
+        """Should expose trajectory_recorder from configurable as recorder."""
+        rec = object()
+        nc = extract_node_config(
+            {
+                "configurable": {
+                    "thread_id": uuid4(),
+                    "profile": mock_profile_factory(),
+                    "trajectory_recorder": rec,
+                }
+            }
+        )
+        assert nc.recorder is rec
+
+    def test_recorder_defaults_to_none(
+        self, mock_profile_factory: Callable[..., Profile]
+    ) -> None:
+        """Recorder should be None when trajectory_recorder is absent (CLI mode)."""
+        nc = extract_node_config(
+            {"configurable": {"thread_id": uuid4(), "profile": mock_profile_factory()}}
+        )
+        assert nc.recorder is None

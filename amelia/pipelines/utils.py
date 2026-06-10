@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from amelia.sandbox.provider import SandboxProvider
     from amelia.server.database.repository import WorkflowRepository
     from amelia.server.events.bus import EventBus
+    from amelia.trajectory.recorder import WorkflowTrajectoryRecorder
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class NodeConfigParams:
     repository: "WorkflowRepository | None"
     prompts: dict[str, Any]
     sandbox_provider: "SandboxProvider | None"
+    recorder: "WorkflowTrajectoryRecorder | None"
 
 
 def extract_config_params(
@@ -70,8 +72,10 @@ def extract_node_config(
     """Extract all common node parameters from LangGraph config.
 
     Combines the event_bus/workflow_id/profile extraction with the
-    repository/prompts/sandbox_provider extraction that every node
-    function repeats.
+    repository/prompts/sandbox_provider/recorder extraction that every
+    node function repeats. The recorder is read from the
+    ``trajectory_recorder`` configurable key and is None outside server
+    mode (e.g. CLI runs).
 
     Args:
         config: LangGraph RunnableConfig (may be None).
@@ -93,4 +97,5 @@ def extract_node_config(
         repository=configurable.get("repository"),
         prompts=configurable.get("prompts") or {},
         sandbox_provider=configurable.get("sandbox_provider"),
+        recorder=configurable.get("trajectory_recorder"),
     )
