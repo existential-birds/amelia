@@ -189,9 +189,7 @@ class TestHandoffDesignFlow:
         orchestrator._repository = MagicMock()
         orchestrator._repository.create = AsyncMock()
         orchestrator._profile_repo = mock_profile_repo
-        orchestrator._events = StreamEventEmitter(
-            repository=orchestrator._repository, event_bus=orchestrator._event_bus
-        )
+        orchestrator._events = StreamEventEmitter(orchestrator._event_bus)
 
         # Use worktree-relative path (not absolute) for security
         request = CreateWorkflowRequest(

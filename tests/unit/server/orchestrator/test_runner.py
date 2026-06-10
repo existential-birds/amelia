@@ -85,7 +85,7 @@ def runner(
     Only the external graph/sandbox boundary is mocked per-test; the runner
     itself is wired exactly as production wires it.
     """
-    events = StreamEventEmitter(repository=mock_repository, event_bus=mock_event_bus)
+    events = StreamEventEmitter(mock_event_bus)
     return GraphRunner(
         repository=mock_repository,
         events=events,

@@ -89,7 +89,7 @@ class OrchestratorService:
         # Strong refs to in-flight recorder drain tasks (cleanup callback).
         self._drain_tasks: set[asyncio.Task[None]] = set()
         # Owns event emission + per-workflow sequencing.
-        self._events = StreamEventEmitter(repository=repository, event_bus=event_bus)
+        self._events = StreamEventEmitter(event_bus)
         # Owns LangGraph execution drivers + their setup helpers.
         self._runner = GraphRunner(
             repository=repository,

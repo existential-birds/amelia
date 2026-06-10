@@ -2,11 +2,11 @@
 
 The module-level functions are pure mappings over stream chunks and node
 output. ``StreamEventEmitter`` owns the stateful emission seam: per-workflow
-sequencing plus persistence and broadcast. Keeping all of this here lets the
-emission seam be tested in isolation from the service.
+in-memory sequencing plus broadcast over the event bus. The event stream is
+transient — nothing is persisted. Keeping all of this here lets the emission
+seam be tested in isolation from the service.
 """
 
-import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -15,7 +15,6 @@ from uuid import uuid4
 from loguru import logger
 
 from amelia.pipelines.implementation.utils import extract_task_title
-from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.models.events import EventType, WorkflowEvent
 
@@ -32,7 +31,7 @@ STAGE_NODES: frozenset[str] = frozenset({
 
 
 # Truncate strings in workflow summaries to ~500 chars: long enough to be useful
-# for debugging, short enough to avoid bloating PostgreSQL JSONB storage.
+# for debugging, short enough to avoid bloating event payloads on the bus.
 _MAX_SUMMARY_STRING_LENGTH = 500
 
 
@@ -60,8 +59,8 @@ def summarize_stage_output(output: dict[str, Any] | None) -> dict[str, Any] | No
     """Summarize node output for STAGE_COMPLETED events.
 
     Replaces large lists (tool_calls, tool_results) with counts and truncates
-    long strings (including in nested structures) to avoid exceeding PostgreSQL's
-    JSONB size limit.
+    long strings (including in nested structures) to keep event payloads on
+    the bus small.
 
     Args:
         output: Raw node output dictionary.
@@ -104,28 +103,21 @@ def is_interrupt_chunk(chunk: tuple[str, Any] | dict[str, Any]) -> bool:
 class StreamEventEmitter:
     """Owns workflow event emission and per-workflow sequencing.
 
-    Persists each event via the repository (assigning a monotonically
-    increasing sequence number per workflow) and broadcasts it over the event
-    bus. Also maps LangGraph stream chunks to the events they imply.
+    Assigns a monotonically increasing in-memory sequence number per workflow
+    (starting at 1) and broadcasts each event over the event bus. The stream
+    is transient — events are never persisted. Also maps LangGraph stream
+    chunks to the events they imply.
     """
 
-    def __init__(
-        self,
-        repository: WorkflowRepository,
-        event_bus: EventBus,
-    ) -> None:
+    def __init__(self, event_bus: EventBus) -> None:
         """Initialize the emitter.
 
         Args:
-            repository: Repository for workflow event persistence.
             event_bus: Event bus for broadcasting workflow events.
         """
-        self._repository = repository
         self._event_bus = event_bus
         # workflow_id -> next sequence
         self._sequence_counters: dict[uuid.UUID, int] = {}
-        # workflow_id -> lock
-        self._sequence_locks: dict[uuid.UUID, asyncio.Lock] = {}
 
     def forget(self, workflow_id: uuid.UUID) -> None:
         """Drop per-workflow sequence state after a workflow task completes.
@@ -134,7 +126,6 @@ class StreamEventEmitter:
             workflow_id: The workflow whose sequence state should be purged.
         """
         self._sequence_counters.pop(workflow_id, None)
-        self._sequence_locks.pop(workflow_id, None)
 
     async def emit(
         self,
@@ -147,8 +138,8 @@ class StreamEventEmitter:
     ) -> WorkflowEvent:
         """Emit a workflow event.
 
-        Creates an event with monotonically increasing sequence number,
-        persists to repository, and broadcasts via event bus.
+        Creates an event with a monotonically increasing in-memory sequence
+        number (starting at 1 per workflow) and broadcasts it via event bus.
 
         Args:
             workflow_id: The workflow this event belongs to.
@@ -161,18 +152,9 @@ class StreamEventEmitter:
         Returns:
             The emitted WorkflowEvent.
         """
-        # Get or create lock atomically (setdefault is atomic for dict operations)
-        lock = self._sequence_locks.setdefault(workflow_id, asyncio.Lock())
-
-        async with lock:
-            # Initialize or get sequence counter
-            if workflow_id not in self._sequence_counters:
-                max_seq = await self._repository.get_max_event_sequence(workflow_id)
-                # Repository returns 0 if no events exist, so max_seq + 1 starts at 1
-                self._sequence_counters[workflow_id] = max_seq + 1
-
-            sequence = self._sequence_counters[workflow_id]
-            self._sequence_counters[workflow_id] += 1
+        # Synchronous read-modify-write: atomic under asyncio's single thread.
+        sequence = self._sequence_counters.get(workflow_id, 1)
+        self._sequence_counters[workflow_id] = sequence + 1
 
         event = WorkflowEvent(
             id=uuid4(),
@@ -186,8 +168,6 @@ class StreamEventEmitter:
             correlation_id=correlation_id,
         )
 
-        # Persist and broadcast
-        await self._repository.save_event(event)
         self._event_bus.emit(event)
 
         logger.debug(
