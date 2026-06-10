@@ -27,6 +27,7 @@ dependencies = [
     "docling-core[chunking-openai]>=2.74.0",
     "pgvector>=0.3.7",
     "daytona-sdk>=0.148.0",
+    "harbor>=0.13.1",
 ]
 
 [project.scripts]
