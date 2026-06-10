@@ -31,6 +31,17 @@ class RecordingDriver(DriverInterface):
         self._inner = inner
         self._invocation = invocation
 
+    def __getattr__(self, name: str) -> Any:
+        """Delegate unknown public attributes to the inner driver.
+
+        Keeps the proxy transparent for driver-specific attributes that node
+        and agent code reads (e.g. ``model``). Dunder/private lookups raise so
+        proxy internals never recurse into delegation.
+        """
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return getattr(self._inner, name)
+
     async def generate(
         self,
         prompt: str,

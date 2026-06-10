@@ -205,6 +205,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         profile_repo=profile_repo,
         max_concurrent=server_settings.max_concurrent,
         checkpointer=checkpointer,
+        trajectory_dir=config.trajectory_dir,
     )
     set_orchestrator(orchestrator)
 

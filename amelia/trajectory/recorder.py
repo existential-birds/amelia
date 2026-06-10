@@ -21,11 +21,12 @@ from harbor.models.trajectories import (
     SubagentTrajectoryRef,
     Trajectory,
 )
+from loguru import logger
 
 import amelia
 from amelia.drivers.base import AgenticMessage, DriverUsage
 from amelia.trajectory.mapping import map_messages, usage_to_metrics
-from amelia.trajectory.store import trajectory_path, write_atomic
+from amelia.trajectory.store import load, trajectory_path, write_atomic
 
 
 def _sum_present[Num: (int, float)](values: Iterable[Num | None]) -> Num | None:
@@ -142,6 +143,37 @@ class WorkflowTrajectoryRecorder:
         self._profile_snapshot = profile_snapshot
         self._parent_steps: list[Step] = []
         self._invocations: list[AgentInvocationRecorder] = []
+        self._prior_subagents: list[Trajectory] = []
+        self._final_metrics: FinalMetrics | None = None
+        self._load_existing()
+
+    def _load_existing(self) -> None:
+        """Continue an existing trajectory file (resume after a finalized run).
+
+        When ``trajectory.json`` already exists for this workflow, its parent
+        steps and subagent trajectories are loaded so new invocations append
+        rather than overwrite. A corrupt file is logged and recording starts
+        fresh — resuming a workflow must not fail on a bad history file.
+        """
+        path = trajectory_path(self._trajectory_dir, self._workflow_id)
+        if not path.exists():
+            return
+        try:
+            existing = load(path)
+        except (ValueError, OSError):
+            logger.warning(
+                "Existing trajectory file is invalid; starting fresh",
+                workflow_id=str(self._workflow_id),
+                path=str(path),
+            )
+            return
+        self._parent_steps = list(existing.steps)
+        self._prior_subagents = list(existing.subagent_trajectories or [])
+
+    @property
+    def final_metrics(self) -> FinalMetrics | None:
+        """Parent final metrics computed by the most recent ``finalize`` call."""
+        return self._final_metrics
 
     def begin_invocation(
         self, agent_name: str, *, model: str | None = None
@@ -158,7 +190,8 @@ class WorkflowTrajectoryRecorder:
         Returns:
             The invocation recorder for the agent's driver stream.
         """
-        trajectory_id = f"{agent_name}-inv-{len(self._invocations) + 1}"
+        invocation_number = len(self._prior_subagents) + len(self._invocations) + 1
+        trajectory_id = f"{agent_name}-inv-{invocation_number}"
         inv = AgentInvocationRecorder(agent_name, model, trajectory_id)
         self._invocations.append(inv)
         self._parent_steps.append(
@@ -180,12 +213,19 @@ class WorkflowTrajectoryRecorder:
         )
         return inv
 
-    async def finalize(self, status: str, failure_reason: str | None = None) -> Path:
+    async def finalize(
+        self,
+        status: str,
+        failure_reason: str | None = None,
+        outcome_extra: dict[str, Any] | None = None,
+    ) -> Path:
         """Close open invocations, assemble the parent trajectory, and write it.
 
         Args:
             status: Terminal workflow status (e.g. ``"completed"``, ``"failed"``).
             failure_reason: Reason recorded in the outcome when the workflow failed.
+            outcome_extra: Additional outcome fields (e.g. ``pipeline``, final
+                review verdicts) merged into ``extra["outcome"]``.
 
         Returns:
             Path of the written ``trajectory.json``.
@@ -197,40 +237,43 @@ class WorkflowTrajectoryRecorder:
         for inv in self._invocations:
             if not inv.closed:
                 inv.close()
-        subagents = [inv.build() for inv in self._invocations]
+        subagents = self._prior_subagents + [inv.build() for inv in self._invocations]
 
         outcome: dict[str, Any] = {"status": status}
         if failure_reason is not None:
             outcome["failure_reason"] = failure_reason
+        if outcome_extra:
+            outcome.update(outcome_extra)
 
         parent_steps = self._parent_steps or [
             Step(step_id=1, source="system", message="No agent invocations recorded")
         ]
+        self._final_metrics = FinalMetrics(
+            total_prompt_tokens=_sum_present(
+                s.final_metrics.total_prompt_tokens if s.final_metrics else None
+                for s in subagents
+            ),
+            total_completion_tokens=_sum_present(
+                s.final_metrics.total_completion_tokens if s.final_metrics else None
+                for s in subagents
+            ),
+            total_cached_tokens=_sum_present(
+                s.final_metrics.total_cached_tokens if s.final_metrics else None
+                for s in subagents
+            ),
+            total_cost_usd=_sum_present(
+                s.final_metrics.total_cost_usd if s.final_metrics else None
+                for s in subagents
+            ),
+            total_steps=len(parent_steps),
+        )
         trajectory = Trajectory(
             session_id=str(self._workflow_id),
             agent=Agent(
                 name="amelia", version=amelia.__version__, model_name="orchestrator"
             ),
             steps=parent_steps,
-            final_metrics=FinalMetrics(
-                total_prompt_tokens=_sum_present(
-                    s.final_metrics.total_prompt_tokens if s.final_metrics else None
-                    for s in subagents
-                ),
-                total_completion_tokens=_sum_present(
-                    s.final_metrics.total_completion_tokens if s.final_metrics else None
-                    for s in subagents
-                ),
-                total_cached_tokens=_sum_present(
-                    s.final_metrics.total_cached_tokens if s.final_metrics else None
-                    for s in subagents
-                ),
-                total_cost_usd=_sum_present(
-                    s.final_metrics.total_cost_usd if s.final_metrics else None
-                    for s in subagents
-                ),
-                total_steps=len(parent_steps),
-            ),
+            final_metrics=self._final_metrics,
             extra={"outcome": outcome, **self._profile_snapshot},
             subagent_trajectories=subagents or None,
         )

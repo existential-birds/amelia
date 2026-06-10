@@ -2,7 +2,8 @@
 
 import uuid
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import asyncpg
 from loguru import logger
@@ -18,6 +19,10 @@ from amelia.server.models.state import (
     validate_transition,
 )
 from amelia.server.models.tokens import TokenSummary, TokenUsage
+
+
+if TYPE_CHECKING:
+    from harbor.models.trajectories import FinalMetrics
 
 
 # Workflow SELECT column list. Order is cosmetic; _row_to_state reads all fields by name.
@@ -352,6 +357,57 @@ class WorkflowRepository:
         rows_affected = await self._db.execute(
             "UPDATE workflows SET plan_cache = $1 WHERE id = $2",
             plan_cache.model_dump(), workflow_id,
+        )
+        if rows_affected == 0:
+            raise WorkflowNotFoundError(workflow_id)
+
+    async def set_trajectory_index(
+        self,
+        workflow_id: uuid.UUID,
+        path: Path,
+        final_metrics: "FinalMetrics | None",
+    ) -> None:
+        """Persist the thin trajectory index columns for a finalized workflow.
+
+        Single UPDATE writing ``trajectory_path``, ``total_cost_usd``, and
+        ``total_tokens`` from the trajectory's final metrics.
+        ``total_duration_ms`` is derived from the workflow's own
+        ``started_at``/``completed_at`` timestamps.
+
+        Args:
+            workflow_id: Workflow whose index columns to set.
+            path: Canonical trajectory file path.
+            final_metrics: Parent trajectory final metrics, if available.
+
+        Raises:
+            WorkflowNotFoundError: If workflow doesn't exist.
+        """
+        total_cost: float | None = None
+        total_tokens: int | None = None
+        if final_metrics is not None:
+            total_cost = final_metrics.total_cost_usd
+            prompt = final_metrics.total_prompt_tokens
+            completion = final_metrics.total_completion_tokens
+            if prompt is not None or completion is not None:
+                total_tokens = (prompt or 0) + (completion or 0)
+
+        rows_affected = await self._db.execute(
+            """
+            UPDATE workflows SET
+                trajectory_path = $1,
+                total_cost_usd = $2,
+                total_tokens = $3,
+                total_duration_ms = CASE
+                    WHEN completed_at IS NOT NULL AND started_at IS NOT NULL
+                    THEN (EXTRACT(EPOCH FROM (completed_at - started_at)) * 1000)::BIGINT
+                    ELSE NULL
+                END
+            WHERE id = $4
+            """,
+            str(path),
+            total_cost,
+            total_tokens,
+            workflow_id,
         )
         if rows_affected == 0:
             raise WorkflowNotFoundError(workflow_id)

@@ -32,6 +32,7 @@ from amelia.pipelines.nodes import _save_token_usage
 from amelia.pipelines.utils import extract_node_config
 from amelia.tools.write_plan import execute_write_plan
 from amelia.tools.write_plan_schema import WritePlanInput
+from amelia.trajectory import RecordingDriver
 
 
 async def _resolve_plan_from_tool_calls(
@@ -333,6 +334,13 @@ async def call_architect_node(
 
     agent_config = nc.profile.get_agent_config("architect")
     architect = Architect(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
+
+    # P1: record this invocation into the workflow trajectory (server mode only).
+    # Note: plan_validator_node performs regex-only validation (no driver call),
+    # so the architect is the only P1 seam in this module today.
+    if nc.recorder is not None:
+        inv = nc.recorder.begin_invocation("architect", model=agent_config.model)
+        architect.driver = RecordingDriver(architect.driver, inv)
 
     # Ensure the plan directory exists before the architect runs
     plan_rel_path = resolve_plan_path(nc.profile.plan_path_pattern, state.issue.id)

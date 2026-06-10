@@ -54,6 +54,33 @@ def test_unmatched_tool_result_raises_naming_orphan_id():
         ], start_id=1)
 
 
+def test_tool_result_without_id_pairs_with_last_open_tool_call():
+    """Drivers that omit tool_call_id pair calls and results by stream order."""
+    steps = map_messages([
+        AgenticMessage(type=AgenticMessageType.TOOL_CALL, tool_name="write_file",
+                       tool_input={"path": "a.py"}),
+        AgenticMessage(type=AgenticMessageType.TOOL_RESULT, tool_name="write_file",
+                       tool_output="ok"),
+        AgenticMessage(type=AgenticMessageType.RESULT, content="done"),
+    ], start_id=1)
+    assert len(steps) == 2
+    tool_step = steps[0]
+    assert tool_step.tool_calls is not None
+    assert tool_step.observation is not None
+    result = tool_step.observation.results[0]
+    assert result.content == "ok"
+    # source_call_id matches the synthesized tool_call_id (ATIF validation rule)
+    assert result.source_call_id == tool_step.tool_calls[0].tool_call_id
+
+
+def test_tool_result_without_id_and_no_open_call_raises():
+    with pytest.raises(ValueError, match="None"):
+        map_messages([
+            AgenticMessage(type=AgenticMessageType.TOOL_RESULT, tool_name="ls",
+                           tool_output="files"),
+        ], start_id=1)
+
+
 def test_usage_messages_are_skipped():
     steps = map_messages([
         AgenticMessage(type=AgenticMessageType.USAGE,

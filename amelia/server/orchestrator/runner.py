@@ -48,6 +48,7 @@ from amelia.trackers.factory import create_tracker
 
 if TYPE_CHECKING:
     from amelia.sandbox.provider import SandboxProvider
+    from amelia.trajectory.recorder import WorkflowTrajectoryRecorder
 
 
 class _SandboxBootstrapHandled(Exception):
@@ -74,6 +75,7 @@ class GraphRunner:
         event_bus: EventBus,
         checkpointer: BaseCheckpointSaver[Any] | None,
         profile_repo: ProfileRepository | None,
+        recorders: "dict[uuid.UUID, WorkflowTrajectoryRecorder] | None" = None,
     ) -> None:
         """Initialize the graph runner.
 
@@ -83,12 +85,18 @@ class GraphRunner:
             event_bus: Event bus passed into the LangGraph runnable config.
             checkpointer: LangGraph checkpoint saver for state persistence.
             profile_repo: Repository for profile lookup.
+            recorders: Shared per-workflow trajectory recorder registry
+                (owned by the service; the runner threads recorders into
+                graph config and finalizes them at terminal seams).
         """
         self._repository = repository
         self._events = events
         self._event_bus = event_bus
         self._checkpointer = checkpointer
         self._profile_repo = profile_repo
+        self._recorders: dict[uuid.UUID, WorkflowTrajectoryRecorder] = (
+            recorders if recorders is not None else {}
+        )
 
     # ------------------------------------------------------------------
     # Setup helpers
@@ -250,6 +258,7 @@ class GraphRunner:
             "repository": self._repository,
             "prompts": prompts,
             "sandbox_provider": sandbox_provider,
+            "trajectory_recorder": self._recorders.get(workflow_id),
             **extra,
         }
         return {
@@ -452,6 +461,104 @@ class GraphRunner:
         }
 
     # ------------------------------------------------------------------
+    # Trajectory finalization
+    # ------------------------------------------------------------------
+
+    async def _get_review_verdicts(self, workflow_id: uuid.UUID) -> list[dict[str, Any]]:
+        """Read the final review verdicts from the LangGraph checkpoint, if any.
+
+        Best-effort: any checkpoint read failure returns an empty list.
+
+        Args:
+            workflow_id: Workflow whose checkpoint to inspect.
+
+        Returns:
+            ``[{persona, approved, severity}]`` projected from ``last_reviews``.
+        """
+        if self._checkpointer is None:
+            return []
+        try:
+            graph = self.create_server_graph(self._checkpointer)
+            snapshot = await graph.aget_state(
+                {"configurable": {"thread_id": str(workflow_id)}}
+            )
+        except Exception:
+            logger.warning(
+                "Could not read review verdicts from checkpoint",
+                workflow_id=workflow_id,
+                exc_info=True,
+            )
+            return []
+        values = snapshot.values if snapshot is not None else None
+        raw_reviews = (values or {}).get("last_reviews") or []
+        verdicts: list[dict[str, Any]] = []
+        for review in raw_reviews:
+            if isinstance(review, dict):
+                persona = review.get("reviewer_persona")
+                approved = review.get("approved")
+                severity = review.get("severity")
+            else:
+                persona = getattr(review, "reviewer_persona", None)
+                approved = getattr(review, "approved", None)
+                severity = getattr(review, "severity", None)
+            verdicts.append(
+                {
+                    "persona": persona,
+                    "approved": approved,
+                    "severity": getattr(severity, "value", severity),
+                }
+            )
+        return verdicts
+
+    async def finalize_trajectory(
+        self,
+        workflow_id: uuid.UUID,
+        status: str,
+        failure_reason: str | None = None,
+    ) -> None:
+        """Finalize and index the workflow's trajectory, if one is recording.
+
+        Pops the recorder from the shared registry (idempotent across seams:
+        whichever terminal seam runs first wins), writes the trajectory file
+        with the outcome, and persists the thin index columns. Errors are
+        logged and never propagate — finalization must not mask the workflow's
+        own success or failure.
+
+        Args:
+            workflow_id: Workflow whose recorder to finalize.
+            status: Terminal outcome status (``completed``/``failed``/``cancelled``).
+            failure_reason: Outcome failure reason for failed workflows.
+        """
+        recorder = self._recorders.pop(workflow_id, None)
+        if recorder is None:
+            return
+        try:
+            outcome_extra: dict[str, Any] = {"pipeline": "implementation"}
+            verdicts = await self._get_review_verdicts(workflow_id)
+            if verdicts:
+                outcome_extra["reviews"] = verdicts
+            path = await recorder.finalize(
+                status=status,
+                failure_reason=failure_reason,
+                outcome_extra=outcome_extra,
+            )
+            await self._repository.set_trajectory_index(
+                workflow_id, path, recorder.final_metrics
+            )
+            logger.info(
+                "Trajectory finalized",
+                workflow_id=workflow_id,
+                status=status,
+                path=str(path),
+            )
+        except Exception:
+            logger.exception(
+                "Failed to finalize trajectory",
+                workflow_id=workflow_id,
+                status=status,
+            )
+
+    # ------------------------------------------------------------------
     # Execution drivers
     # ------------------------------------------------------------------
 
@@ -575,6 +682,7 @@ class GraphRunner:
                 "Workflow completed successfully",
             )
             await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
+            await self.finalize_trajectory(workflow_id, status="completed")
 
     async def run_workflow_with_retry(
         self,
@@ -653,8 +761,13 @@ class GraphRunner:
                     config=retry_config,
                     retryable_exceptions=TRANSIENT_EXCEPTIONS,
                 )
-            except _SandboxBootstrapHandled:
+            except _SandboxBootstrapHandled as e:
                 # Bootstrap failure already emitted WORKFLOW_FAILED + set FAILED.
+                await self.finalize_trajectory(
+                    workflow_id,
+                    status="failed",
+                    failure_reason=f"Sandbox bootstrap failed: {e.__cause__}",
+                )
                 return
             except TRANSIENT_EXCEPTIONS as e:
                 # Retries exhausted. The total attempt count is 1 + max_retries.
@@ -671,6 +784,11 @@ class GraphRunner:
                     WorkflowStatus.FAILED,
                     failure_reason=f"Failed after {attempts} attempts: {e}",
                 )
+                await self.finalize_trajectory(
+                    workflow_id,
+                    status="failed",
+                    failure_reason=f"Failed after {attempts} attempts: {e}",
+                )
                 raise
             except Exception as e:
                 # Non-transient error - fail immediately.
@@ -683,6 +801,9 @@ class GraphRunner:
                 )
                 await self._repository.set_status(
                     workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
+                )
+                await self.finalize_trajectory(
+                    workflow_id, status="failed", failure_reason=str(e)
                 )
                 raise
         finally:
@@ -785,6 +906,7 @@ class GraphRunner:
                     "Workflow completed successfully",
                 )
                 await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
+                await self.finalize_trajectory(workflow_id, status="completed")
             except BaseException:
                 # Tear down the sandbox so the next retry recreates it cleanly.
                 if sandbox_provider is not None:
@@ -802,8 +924,13 @@ class GraphRunner:
                     config=retry_config,
                     retryable_exceptions=TRANSIENT_EXCEPTIONS,
                 )
-            except _SandboxBootstrapHandled:
+            except _SandboxBootstrapHandled as e:
                 # Bootstrap failure already emitted WORKFLOW_FAILED + set FAILED.
+                await self.finalize_trajectory(
+                    workflow_id,
+                    status="failed",
+                    failure_reason=f"Sandbox bootstrap failed: {e.__cause__}",
+                )
                 return
             except TRANSIENT_EXCEPTIONS as e:
                 attempts = retry_config.max_retries + 1
@@ -822,6 +949,11 @@ class GraphRunner:
                     WorkflowStatus.FAILED,
                     failure_reason=f"Failed after {attempts} attempts: {e}",
                 )
+                await self.finalize_trajectory(
+                    workflow_id,
+                    status="failed",
+                    failure_reason=f"Failed after {attempts} attempts: {e}",
+                )
                 raise
             except Exception as e:
                 logger.exception("Workflow failed after approval", workflow_id=workflow_id)
@@ -833,6 +965,9 @@ class GraphRunner:
                 )
                 await self._repository.set_status(
                     workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
+                )
+                await self.finalize_trajectory(
+                    workflow_id, status="failed", failure_reason=str(e)
                 )
                 raise
         finally:
@@ -1163,6 +1298,9 @@ class GraphRunner:
                 EventType.WORKFLOW_FAILED,
                 f"Planning failed: {e}",
                 data={"error": str(e)},
+            )
+            await self.finalize_trajectory(
+                workflow_id, status="failed", failure_reason=f"Planning failed: {e}"
             )
 
             logger.error(

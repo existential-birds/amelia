@@ -26,15 +26,19 @@ def map_messages(messages: list[AgenticMessage], start_id: int) -> list[Step]:
     Returns:
         ATIF steps, all with ``source="agent"``. A TOOL_CALL opens a step;
         a TOOL_RESULT with matching ``tool_call_id`` attaches to that step's
-        observation. THINKING maps to ``reasoning_content``; RESULT maps to
-        ``message`` (``extra["is_error"]`` set when the result is an error).
-        USAGE messages are skipped — metrics are handled by the recorder.
+        observation. A TOOL_RESULT without a ``tool_call_id`` attaches to the
+        most recently opened tool step (drivers that omit ids pair calls and
+        results by stream order). THINKING maps to ``reasoning_content``;
+        RESULT maps to ``message`` (``extra["is_error"]`` set when the result
+        is an error). USAGE messages are skipped — metrics are handled by the
+        recorder.
 
     Raises:
         ValueError: If a TOOL_RESULT has no matching open TOOL_CALL step.
     """
     steps: list[Step] = []
     open_tool_steps: dict[str, Step] = {}
+    last_tool_step: Step | None = None
 
     for msg in messages:
         if msg.type == AgenticMessageType.USAGE:
@@ -57,16 +61,21 @@ def map_messages(messages: list[AgenticMessage], start_id: int) -> list[Step]:
             )
             steps.append(step)
             open_tool_steps[call_id] = step
+            last_tool_step = step
 
         elif msg.type == AgenticMessageType.TOOL_RESULT:
-            step = open_tool_steps.get(msg.tool_call_id or "")
+            if msg.tool_call_id is not None:
+                step = open_tool_steps.get(msg.tool_call_id)
+            else:
+                step = last_tool_step
             if step is None:
                 raise ValueError(
                     f"TOOL_RESULT with tool_call_id={msg.tool_call_id!r} has no "
                     "matching TOOL_CALL in this message stream"
                 )
+            assert step.tool_calls is not None  # opened by a TOOL_CALL above
             result = ObservationResult(
-                source_call_id=msg.tool_call_id,
+                source_call_id=msg.tool_call_id or step.tool_calls[0].tool_call_id,
                 content=msg.tool_output,
                 extra={"is_error": True} if msg.is_error else None,
             )

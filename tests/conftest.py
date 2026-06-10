@@ -49,6 +49,23 @@ def _isolate_git_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(var, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_trajectory_dir(
+    tmp_path_factory: TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Point AMELIA_TRAJECTORY_DIR at a temp dir for every test.
+
+    ``OrchestratorService`` defaults its trajectory root to
+    ``ServerConfig().trajectory_dir`` (``~/.amelia/trajectories``). Tests that
+    construct the service without an explicit ``trajectory_dir`` must never
+    write trajectory files into the real home directory.
+    """
+    monkeypatch.setenv(
+        "AMELIA_TRAJECTORY_DIR",
+        str(tmp_path_factory.mktemp("trajectories")),
+    )
+
+
 @pytest.fixture
 def event_bus() -> EventBus:
     """Create EventBus instance for testing."""

@@ -21,6 +21,7 @@ from amelia.core.types import (
 )
 from amelia.pipelines.implementation.external_plan import import_external_plan
 from amelia.pipelines.implementation.state import ImplementationState
+from amelia.server.config import ServerConfig
 from amelia.server.database import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
@@ -43,6 +44,7 @@ from amelia.server.orchestrator._common import (
 from amelia.server.orchestrator.event_emitter import StreamEventEmitter
 from amelia.server.orchestrator.runner import GraphRunner
 from amelia.trackers.factory import create_tracker
+from amelia.trajectory import WorkflowTrajectoryRecorder
 
 
 class OrchestratorService:
@@ -60,6 +62,7 @@ class OrchestratorService:
         profile_repo: ProfileRepository | None = None,
         max_concurrent: int = 5,
         checkpointer: BaseCheckpointSaver[Any] | None = None,
+        trajectory_dir: Path | None = None,
     ) -> None:
         """Initialize orchestrator service.
 
@@ -69,12 +72,22 @@ class OrchestratorService:
             profile_repo: Repository for profile lookup. Required for workflow execution.
             max_concurrent: Maximum number of concurrent workflows (default: 5).
             checkpointer: LangGraph checkpoint saver for workflow state persistence.
+            trajectory_dir: Root directory for ATIF trajectory files. Defaults
+                to ``ServerConfig().trajectory_dir``.
         """
         self._event_bus = event_bus
         self._repository = repository
         self._profile_repo = profile_repo
         self._max_concurrent = max_concurrent
         self._checkpointer = checkpointer
+        self._trajectory_dir = (
+            trajectory_dir if trajectory_dir is not None else ServerConfig().trajectory_dir
+        )
+        # workflow_id -> trajectory recorder; shared with the runner, which
+        # threads recorders into graph config and finalizes at terminal seams.
+        self._recorders: dict[uuid.UUID, WorkflowTrajectoryRecorder] = {}
+        # Strong refs to in-flight recorder drain tasks (cleanup callback).
+        self._drain_tasks: set[asyncio.Task[None]] = set()
         # Owns event emission + per-workflow sequencing.
         self._events = StreamEventEmitter(repository=repository, event_bus=event_bus)
         # Owns LangGraph execution drivers + their setup helpers.
@@ -84,6 +97,7 @@ class OrchestratorService:
             event_bus=event_bus,
             checkpointer=checkpointer,
             profile_repo=profile_repo,
+            recorders=self._recorders,
         )
         # worktree_path -> (workflow_id, task)
         self._active_tasks: dict[str, tuple[uuid.UUID, asyncio.Task[None]]] = {}
@@ -91,6 +105,119 @@ class OrchestratorService:
         self._planning_tasks: dict[uuid.UUID, asyncio.Task[None]] = {}
         self._approval_lock = asyncio.Lock()  # Prevents race conditions on approvals
         self._start_lock = asyncio.Lock()  # Prevents race conditions on workflow start
+
+    def _ensure_recorder(
+        self,
+        workflow_id: uuid.UUID,
+        issue_id: str,
+        profile: Profile,
+    ) -> WorkflowTrajectoryRecorder:
+        """Create and register the workflow's trajectory recorder if absent.
+
+        The profile snapshot records ``profile_id``, ``issue_id``, and each
+        agent's ``{driver, model}`` so the trajectory file is self-describing.
+        If a trajectory file already exists for the workflow (resume after a
+        finalized run), the recorder loads it and appends.
+
+        Args:
+            workflow_id: Workflow the recorder belongs to.
+            issue_id: Issue the workflow is working on.
+            profile: Resolved profile for the snapshot.
+
+        Returns:
+            The registered recorder.
+        """
+        recorder = self._recorders.get(workflow_id)
+        if recorder is not None:
+            return recorder
+        snapshot: dict[str, Any] = {
+            "profile_id": profile.name,
+            "issue_id": issue_id,
+            "agents": {
+                name: {"driver": cfg.driver, "model": cfg.model}
+                for name, cfg in profile.agents.items()
+            },
+        }
+        recorder = WorkflowTrajectoryRecorder(
+            workflow_id=workflow_id,
+            trajectory_dir=self._trajectory_dir,
+            profile_snapshot=snapshot,
+        )
+        self._recorders[workflow_id] = recorder
+        return recorder
+
+    async def _ensure_recorder_for_state(self, workflow: ServerExecutionState) -> None:
+        """Best-effort recorder registration from a persisted workflow row.
+
+        Used at task-start seams where only ``profile_id`` is at hand
+        (start-pending/resume/approve). Failure to resolve the profile is
+        logged — recording is never allowed to block workflow execution.
+
+        Args:
+            workflow: Persisted workflow state with ``profile_id``/``issue_id``.
+        """
+        if workflow.id in self._recorders or workflow.profile_id is None:
+            return
+        try:
+            profile = await self._resolve_profile(
+                workflow.profile_id, workflow.worktree_path
+            )
+            self._ensure_recorder(workflow.id, workflow.issue_id, profile)
+        except Exception:
+            logger.warning(
+                "Could not create trajectory recorder for workflow",
+                workflow_id=workflow.id,
+                exc_info=True,
+            )
+
+    def _schedule_recorder_drain(self, workflow_id: uuid.UUID) -> None:
+        """Schedule a best-effort drain of an un-finalized recorder.
+
+        Called from the task done-callback. No-op when the recorder was
+        already finalized (and popped) at a terminal seam.
+
+        Args:
+            workflow_id: Workflow whose recorder may need draining.
+        """
+        if workflow_id not in self._recorders:
+            return
+        task = asyncio.create_task(self._drain_recorder(workflow_id))
+        self._drain_tasks.add(task)
+        task.add_done_callback(self._drain_tasks.discard)
+
+    async def _drain_recorder(self, workflow_id: uuid.UUID) -> None:
+        """Drain an un-finalized recorder after its workflow task exited.
+
+        Blocked/pending workflows keep their recorder registered — the
+        post-approval resume continues recording into it. Anything else is
+        finalized with the workflow's terminal status (defaulting to
+        ``failed`` for unexpected exits) so captured steps are never lost.
+
+        Args:
+            workflow_id: Workflow whose recorder to drain.
+        """
+        try:
+            workflow = await self._repository.get(workflow_id)
+            status = workflow.workflow_status if workflow is not None else None
+            if status in (WorkflowStatus.PENDING, WorkflowStatus.BLOCKED):
+                return  # Awaiting approval/start — recorder keeps accumulating
+            terminal_status = {
+                WorkflowStatus.COMPLETED: "completed",
+                WorkflowStatus.CANCELLED: "cancelled",
+            }.get(status, "failed") if status is not None else "failed"
+            failure_reason: str | None = None
+            if terminal_status == "failed":
+                failure_reason = (
+                    workflow.failure_reason if workflow is not None else None
+                ) or "workflow task exited without finalizing trajectory"
+            await self._runner.finalize_trajectory(
+                workflow_id, status=terminal_status, failure_reason=failure_reason
+            )
+        except Exception:
+            logger.exception(
+                "Failed to drain trajectory recorder",
+                workflow_id=workflow_id,
+            )
 
     def _make_cleanup_callback(
         self,
@@ -109,6 +236,8 @@ class OrchestratorService:
         def _cleanup(_: asyncio.Task[None]) -> None:
             self._active_tasks.pop(worktree_path, None)
             self._events.forget(workflow_id)
+            # Drain any un-finalized trajectory recorder (crash/unexpected exit).
+            self._schedule_recorder_drain(workflow_id)
             logger.debug(
                 "Workflow task completed",
                 workflow_id=workflow_id,
@@ -500,6 +629,9 @@ class OrchestratorService:
                     raise WorkflowConflictError(resolved_path, "existing") from e
                 raise
 
+            # Record the run's ATIF trajectory from the first agent invocation
+            self._ensure_recorder(workflow_id, issue_id, loaded_profile)
+
             # Start async task with retry wrapper for transient failures
             task = asyncio.create_task(self._runner.run_workflow_with_retry(workflow_id, state))
             self._active_tasks[resolved_path] = (workflow_id, task)
@@ -792,6 +924,10 @@ class OrchestratorService:
         # Persist the cancelled status to database
         await self._repository.set_status(workflow_id, WorkflowStatus.CANCELLED)
 
+        # Finalize the trajectory with the cancelled outcome (no-op if the
+        # workflow never recorded or was already finalized).
+        await self._runner.finalize_trajectory(workflow_id, status="cancelled")
+
     async def resume_workflow(self, workflow_id: uuid.UUID) -> ServerExecutionState:
         """Resume a failed workflow from its last checkpoint.
 
@@ -847,6 +983,9 @@ class OrchestratorService:
                 "Workflow resumed from checkpoint",
                 data={"resumed": True},
             )
+
+            # Continue the trajectory: an existing file is loaded and appended to
+            await self._ensure_recorder_for_state(workflow)
 
             # Launch workflow task (same as start_workflow)
             task = asyncio.create_task(
@@ -951,6 +1090,10 @@ class OrchestratorService:
             )
 
             await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
+
+        # Recorder normally survives the approval pause in-memory; recreate it
+        # after a server restart so the post-approval run is still recorded.
+        await self._ensure_recorder_for_state(workflow)
 
         # Delegate post-approval execution to the runner, which owns the
         # execution-driver pattern (retry/failure-ladder, sandbox lifecycle).
@@ -1117,6 +1260,9 @@ class OrchestratorService:
             data={"issue_id": request.issue_id, "queued": True, "planning": True},
         )
 
+        # Planning runs the architect — record it into the workflow trajectory
+        self._ensure_recorder(workflow_id, request.issue_id, profile)
+
         # Spawn planning task in background (non-blocking)
         task = asyncio.create_task(
             self._runner.run_planning_task(workflow_id, state, execution_state, profile)
@@ -1191,6 +1337,9 @@ class OrchestratorService:
             # the pending -> in_progress transition, consistent with start_workflow
             workflow.started_at = datetime.now(UTC)
             await self._repository.update(workflow)
+
+            # Record the run's ATIF trajectory (best-effort profile resolution)
+            await self._ensure_recorder_for_state(workflow)
 
             # Spawn execution task
             task = asyncio.create_task(
@@ -1488,6 +1637,9 @@ class OrchestratorService:
                 agent="architect",
                 data={"stage": "architect", "replan": True},
             )
+
+            # Replanning re-runs the architect — keep recording into the trajectory
+            self._ensure_recorder(workflow_id, workflow.issue_id, profile)
 
             # Spawn planning task in background (reuses existing runner.run_planning_task).
             # Note: workflow/execution_state are only used as initial graph input

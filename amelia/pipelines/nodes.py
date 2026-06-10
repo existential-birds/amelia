@@ -23,6 +23,7 @@ from amelia.pipelines.utils import extract_node_config
 from amelia.server.models.tokens import TokenUsage, resolve_driver_cost
 from amelia.skills.review import REVIEW_TYPE_SKILLS, detect_stack, load_skills
 from amelia.tools.git_utils import get_current_commit
+from amelia.trajectory import RecordingDriver
 
 
 if TYPE_CHECKING:
@@ -205,6 +206,11 @@ async def call_developer_node(
     agent_config = nc.profile.get_agent_config("developer")
     developer = Developer(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
 
+    # P1: record this invocation into the workflow trajectory (server mode only)
+    if nc.recorder is not None:
+        inv = nc.recorder.begin_invocation("developer", model=agent_config.model)
+        developer.driver = RecordingDriver(developer.driver, inv)
+
     final_state = state
     try:
         async for new_state, event in developer.run(state, nc.profile, workflow_id=nc.workflow_id):
@@ -381,6 +387,11 @@ async def call_reviewer_node(
                 sandbox_provider=nc.sandbox_provider,
                 review_guidelines=guidelines,
             )
+
+            # P1: one trajectory invocation per review pass (server mode only)
+            if nc.recorder is not None:
+                inv = nc.recorder.begin_invocation(agent_name, model=agent_config.model)
+                reviewer.driver = RecordingDriver(reviewer.driver, inv)
 
             review_result, session_id = await reviewer.agentic_review(
                 state, base_commit, nc.profile,
