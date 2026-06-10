@@ -31,7 +31,6 @@ echo "Checking version consistency..."
 grep -q "^version = \"${VERSION}\"" pyproject.toml || { echo "ERROR: pyproject.toml version mismatch"; exit 1; }
 grep -q "__version__ = \"${VERSION}\"" amelia/__init__.py || { echo "ERROR: amelia/__init__.py version mismatch"; exit 1; }
 grep -q "\"version\": \"${VERSION}\"" dashboard/package.json || { echo "ERROR: dashboard/package.json version mismatch"; exit 1; }
-grep -q "\"version\": \"${VERSION}\"" docs/site/package.json || { echo "ERROR: docs/site/package.json version mismatch"; exit 1; }
 echo "All versions match: ${VERSION}"
 ```
 

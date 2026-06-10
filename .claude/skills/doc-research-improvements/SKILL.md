@@ -20,7 +20,7 @@ and propose improvements with external sources and implementation candidates.
 
 ## Repository Context (Align To)
 
-These are core assumptions from `docs/site/architecture/*` and `docs/site/ideas/*`:
+These are core assumptions for the project (see the documentation at https://existentialbirds.com/projects/amelia):
 
 - Amelia is a local-first, agentic coding orchestrator with LangGraph, FastAPI, and SQLite.
 - Primary workflow: Architect -> Developer -> Reviewer with human approval gates.
