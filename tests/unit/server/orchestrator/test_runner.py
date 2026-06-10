@@ -465,3 +465,81 @@ class TestSyncPlanFromCheckpoint:
         await runner._sync_plan_from_checkpoint(uuid4(), mock_graph, config)
 
         mock_repository.update_plan_cache.assert_not_called()
+
+
+class TestFinalizeTrajectoryRetention:
+    """finalize_trajectory must keep the recorder until finalize+index succeed.
+
+    Idempotency-vs-retry (Finding 4): the recorder is the only in-memory copy
+    of captured steps. Dropping it before a successful write means a transient
+    failure loses the trajectory permanently, because the cleanup drain has
+    nothing left to retry. These tests drive the real recorder + real registry
+    and assert on observable state (the registry contents and the written
+    trajectory file), not on bookkeeping calls.
+    """
+
+    @pytest.fixture
+    def real_recorder(self, tmp_path: Any) -> Any:
+        from amelia.trajectory import WorkflowTrajectoryRecorder
+
+        return WorkflowTrajectoryRecorder(
+            workflow_id=uuid4(),
+            trajectory_dir=tmp_path,
+            profile_snapshot={"profile_id": "default"},
+        )
+
+    async def test_recorder_dropped_after_successful_finalize(
+        self,
+        runner: GraphRunner,
+        mock_repository: AsyncMock,
+        real_recorder: Any,
+    ) -> None:
+        wf_id = real_recorder._workflow_id
+        runner._recorders[wf_id] = real_recorder
+
+        await runner.finalize_trajectory(wf_id, status="completed")
+
+        assert wf_id not in runner._recorders
+        mock_repository.set_trajectory_index.assert_awaited_once()
+
+    async def test_recorder_retained_when_index_write_fails(
+        self,
+        runner: GraphRunner,
+        mock_repository: AsyncMock,
+        real_recorder: Any,
+        tmp_path: Any,
+    ) -> None:
+        wf_id = real_recorder._workflow_id
+        runner._recorders[wf_id] = real_recorder
+        mock_repository.set_trajectory_index.side_effect = RuntimeError("db down")
+
+        # Must not raise — finalization is best-effort.
+        await runner.finalize_trajectory(wf_id, status="completed")
+
+        # Retained for the cleanup drain to retry.
+        assert wf_id in runner._recorders
+        assert wf_id not in runner._finalizing
+
+        # Drain retry: index write recovers, recorder is then dropped and the
+        # trajectory file lands on disk.
+        mock_repository.set_trajectory_index.side_effect = None
+        await runner.finalize_trajectory(wf_id, status="completed")
+        assert wf_id not in runner._recorders
+        from amelia.trajectory.store import trajectory_path
+
+        assert trajectory_path(tmp_path, wf_id).exists()
+
+    async def test_in_flight_marker_blocks_double_finalize(
+        self,
+        runner: GraphRunner,
+        mock_repository: AsyncMock,
+        real_recorder: Any,
+    ) -> None:
+        wf_id = real_recorder._workflow_id
+        runner._recorders[wf_id] = real_recorder
+        runner._finalizing.add(wf_id)
+
+        await runner.finalize_trajectory(wf_id, status="completed")
+
+        mock_repository.set_trajectory_index.assert_not_awaited()
+        assert wf_id in runner._recorders

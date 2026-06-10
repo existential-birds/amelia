@@ -567,7 +567,8 @@ class TestGetWorkflowDetailEndpoint:
         test_repository: WorkflowRepository,
         tmp_path: Path,
     ) -> None:
-        """A non-null trajectory_path pointing nowhere is a 500 naming the path."""
+        """A non-null trajectory_path pointing nowhere is a 500 with a generic
+        detail that does not disclose the internal path."""
         workflow = await create_test_workflow(
             test_repository, issue_id="TEST-TRAJ-2", workflow_status="completed"
         )
@@ -577,7 +578,9 @@ class TestGetWorkflowDetailEndpoint:
         response = await test_client.get(f"/api/workflows/{workflow.id}")
 
         assert response.status_code == 500
-        assert str(missing) in response.json()["detail"]
+        detail = response.json()["detail"]
+        assert "trajectory" in detail.lower()
+        assert str(missing) not in detail
 
     async def test_detail_with_null_trajectory_path_returns_empty_history(
         self,
@@ -633,11 +636,18 @@ class TestUsageEndpoint:
         inv.record_prompt(instructions="You are the developer.", prompt="Fix it.")
         inv.record_messages([AgenticMessage(type=AgenticMessageType.RESULT, content="done")])
         inv.close(
-            usage=DriverUsage(input_tokens=input_tokens, output_tokens=output_tokens),
+            usage=DriverUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                duration_ms=300_000,
+            ),
             cost_usd=cost,
         )
         path = await recorder.finalize(status="completed")
-        await repository.set_trajectory_index(workflow.id, path, recorder.final_metrics)
+        await repository.set_trajectory_index(
+            workflow.id, path, recorder.final_metrics,
+            execution_duration_ms=recorder.total_duration_ms,
+        )
 
     async def test_usage_totals_from_trajectory_files_with_date_filter(
         self,
@@ -677,7 +687,7 @@ class TestUsageEndpoint:
         assert summary["total_cost_usd"] == pytest.approx(3.0)
         assert summary["total_workflows"] == 2
         assert summary["total_tokens"] == 45
-        assert summary["total_duration_ms"] == 600_000  # 2 × 5 minutes
+        assert summary["total_duration_ms"] == 600_000  # 2 × 300_000ms agent execution
         assert summary["previous_period_cost_usd"] == pytest.approx(4.0)
         assert summary["successful_workflows"] == 2
         assert summary["success_rate"] == 1.0

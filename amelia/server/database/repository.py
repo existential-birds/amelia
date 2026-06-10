@@ -381,10 +381,10 @@ class WorkflowRepository:
             path: Canonical trajectory file path.
             final_metrics: Parent trajectory final metrics, if available.
             execution_duration_ms: Sum of driver-reported agent execution times
-                in milliseconds. Stored directly as ``total_duration_ms``; when
-                ``None`` (drivers that do not track duration) the column falls
-                back to wall-clock ``completed_at - started_at``, so callers
-                must persist ``completed_at`` before indexing.
+                in milliseconds, stored directly as ``total_duration_ms``. Left
+                NULL when drivers do not track duration; never substituted with
+                wall-clock, which would conflate human approval-wait time into
+                the metric for BLOCKED workflows.
 
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist.
@@ -404,10 +404,7 @@ class WorkflowRepository:
                 trajectory_path = $1,
                 total_cost_usd = $2,
                 total_tokens = $3,
-                total_duration_ms = COALESCE(
-                    $4::bigint,
-                    (EXTRACT(EPOCH FROM (completed_at - started_at)) * 1000)::bigint
-                )
+                total_duration_ms = $4::bigint
             WHERE id = $5
             """,
             str(path),

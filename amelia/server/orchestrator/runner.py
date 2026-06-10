@@ -44,6 +44,7 @@ from amelia.server.orchestrator.event_emitter import (
     is_interrupt_chunk,
 )
 from amelia.trackers.factory import create_tracker
+from amelia.trajectory import finalize_and_index
 
 
 if TYPE_CHECKING:
@@ -97,6 +98,9 @@ class GraphRunner:
         self._recorders: dict[uuid.UUID, WorkflowTrajectoryRecorder] = (
             recorders if recorders is not None else {}
         )
+        # Workflows whose finalization is in flight, so a second terminal seam
+        # does not double-finalize while the first is still running.
+        self._finalizing: set[uuid.UUID] = set()
 
     def create_server_graph(
         self,
@@ -504,11 +508,16 @@ class GraphRunner:
     ) -> None:
         """Finalize and index the workflow's trajectory, if one is recording.
 
-        Pops the recorder from the shared registry (idempotent across seams:
-        whichever terminal seam runs first wins), writes the trajectory file
-        with the outcome, and persists the thin index columns. Errors are
+        Writes the trajectory file with the outcome and persists the thin index
+        columns via the shared :func:`finalize_and_index` core. Errors are
         logged and never propagate — finalization must not mask the workflow's
         own success or failure.
+
+        Idempotency vs. retry: the recorder is removed from the registry only
+        after finalize and index both succeed, so a transient failure leaves it
+        registered for the cleanup drain to retry. An in-flight marker prevents
+        a second terminal seam from double-finalizing while the first is still
+        running.
 
         Args:
             workflow_id: Workflow whose recorder to finalize.
@@ -517,35 +526,27 @@ class GraphRunner:
             pipeline: Pipeline label written into outcome metadata
                 (``"implementation"`` or ``"review"``).
         """
-        recorder = self._recorders.pop(workflow_id, None)
-        if recorder is None:
+        recorder = self._recorders.get(workflow_id)
+        if recorder is None or workflow_id in self._finalizing:
             return
+        outcome_extra: dict[str, Any] = {"pipeline": pipeline}
+        verdicts = await self._get_review_verdicts(workflow_id)
+        if verdicts:
+            outcome_extra["reviews"] = verdicts
+        self._finalizing.add(workflow_id)
         try:
-            outcome_extra: dict[str, Any] = {"pipeline": pipeline}
-            verdicts = await self._get_review_verdicts(workflow_id)
-            if verdicts:
-                outcome_extra["reviews"] = verdicts
-            path = await recorder.finalize(
+            succeeded = await finalize_and_index(
+                recorder,
+                workflow_id,
                 status=status,
                 failure_reason=failure_reason,
                 outcome_extra=outcome_extra,
+                write_index=self._repository.set_trajectory_index,
             )
-            await self._repository.set_trajectory_index(
-                workflow_id, path, recorder.final_metrics,
-                execution_duration_ms=recorder.total_duration_ms,
-            )
-            logger.info(
-                "Trajectory finalized",
-                workflow_id=workflow_id,
-                status=status,
-                path=str(path),
-            )
-        except Exception:
-            logger.exception(
-                "Failed to finalize trajectory",
-                workflow_id=workflow_id,
-                status=status,
-            )
+            if succeeded:
+                self._recorders.pop(workflow_id, None)
+        finally:
+            self._finalizing.discard(workflow_id)
 
     async def run_workflow(
         self,

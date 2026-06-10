@@ -2,7 +2,7 @@
 
 The trajectory file keeps full fidelity; these projections produce the
 ``WorkflowEvent`` history and ``TokenSummary`` the dashboard already consumes.
-Display strings are truncated via the emitter's ``_truncate_nested`` policy —
+Display strings are truncated via the shared ``truncate_nested`` policy —
 truncation here is presentation only and never touches the file.
 """
 import uuid
@@ -22,7 +22,7 @@ from amelia.server.models.usage import (
     UsageSummary,
     UsageTrendPoint,
 )
-from amelia.server.orchestrator.event_emitter import _truncate_nested
+from amelia.trajectory.truncation import truncate_nested
 
 
 def _text(value: str | list[ContentPart] | None) -> str:
@@ -77,7 +77,7 @@ def _make_event(
         agent=agent,
         event_type=event_type,
         level=EventLevel.DEBUG,
-        message=_truncate_nested(message),
+        message=truncate_nested(message),
         tool_name=tool_name,
         tool_input=tool_input,
         is_error=is_error,
@@ -116,7 +116,7 @@ def _step_to_events(
                     message=f"Calling {call.function_name}",
                     timestamp=timestamp,
                     tool_name=call.function_name,
-                    tool_input=_truncate_nested(call.arguments),
+                    tool_input=truncate_nested(call.arguments),
                     model=step.model_name,
                 )
             )

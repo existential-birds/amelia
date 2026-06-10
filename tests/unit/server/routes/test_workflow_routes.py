@@ -185,7 +185,7 @@ class TestGetWorkflowDetail:
         assert data["recent_events"] == []
         assert data["token_usage"] is None
 
-    async def test_unreadable_trajectory_file_returns_500_naming_path(
+    async def test_unreadable_trajectory_file_returns_500_generic_detail(
         self,
         test_client: TestClient,
         mock_repository: MagicMock,
@@ -199,9 +199,11 @@ class TestGetWorkflowDetail:
         response = test_client.get(f"/api/workflows/{workflow.id}")
 
         assert response.status_code == 500
-        assert str(missing) in response.json()["detail"]
+        detail = response.json()["detail"]
+        assert "trajectory" in detail.lower()
+        assert str(missing) not in detail
 
-    async def test_corrupt_trajectory_file_returns_500_naming_path(
+    async def test_corrupt_trajectory_file_returns_500_generic_detail(
         self,
         test_client: TestClient,
         mock_repository: MagicMock,
@@ -216,7 +218,9 @@ class TestGetWorkflowDetail:
         response = test_client.get(f"/api/workflows/{workflow.id}")
 
         assert response.status_code == 500
-        assert str(corrupt) in response.json()["detail"]
+        detail = response.json()["detail"]
+        assert "trajectory" in detail.lower()
+        assert str(corrupt) not in detail
 
     async def test_get_workflow_not_found(
         self,

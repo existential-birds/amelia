@@ -328,12 +328,14 @@ async def get_workflow(
         try:
             trajectory = load_trajectory(Path(workflow.trajectory_path))
         except (OSError, ValueError) as e:
+            logger.exception(
+                "Failed to load trajectory file",
+                workflow_id=workflow_id,
+                trajectory_path=workflow.trajectory_path,
+            )
             raise HTTPException(
                 status_code=500,
-                detail=(
-                    f"Failed to load trajectory file {workflow.trajectory_path} "
-                    f"for workflow {workflow_id}: {e}"
-                ),
+                detail="Failed to load recorded trajectory for this workflow.",
             ) from e
 
     token_usage: TokenSummary | None = None

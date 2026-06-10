@@ -20,7 +20,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from amelia.core.types import Profile
 from amelia.drivers.api import ApiDriver
-from amelia.drivers.base import AgenticMessage, AgenticMessageType
+from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage
 from amelia.server.database.connection import Database
 from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
@@ -118,6 +118,11 @@ def _scripted_execute_agentic(
         script = scripts[idx]
         if isinstance(script, Exception):
             raise script
+        # Mirror the real ApiDriver, which records per-invocation usage
+        # (including duration_ms) that the recording seam reads via get_usage().
+        self._usage = DriverUsage(
+            input_tokens=100, output_tokens=50, duration_ms=1500, model="claude-x"
+        )
         for msg in script:
             yield msg
 

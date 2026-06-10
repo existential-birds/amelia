@@ -1150,3 +1150,52 @@ class TestWorkflowIdThreading:
         assert len(diverged_events) == 2
         for event in diverged_events:
             assert event.workflow_id == wf_id
+
+
+class TestFinalizeTrajectoryOutcome:
+    """The trajectory outcome must reflect the real pipeline result.
+
+    Finding 3: a secondary repo write must not be able to skip finalization or
+    flip the recorded outcome. These tests drive _finalize_trajectory with a
+    real recorder and assert on the written trajectory file's outcome, not on
+    bookkeeping calls.
+    """
+
+    @pytest.fixture
+    def real_recorder(self, tmp_path: object) -> object:
+        from uuid import uuid4
+
+        from amelia.trajectory import WorkflowTrajectoryRecorder
+
+        return WorkflowTrajectoryRecorder(
+            workflow_id=uuid4(),
+            trajectory_dir=tmp_path,  # type: ignore[arg-type]
+            profile_snapshot={"profile_id": "default"},
+        )
+
+    async def test_index_write_failure_still_writes_true_outcome(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        workflow_repo: MagicMock,
+        real_recorder: object,
+        tmp_path: object,
+    ) -> None:
+        from amelia.trajectory.store import load, trajectory_path
+
+        wf_id = real_recorder._workflow_id  # type: ignore[attr-defined]
+        workflow_repo.set_trajectory_index = AsyncMock(
+            side_effect=RuntimeError("db down")
+        )
+
+        # Best-effort: a failing index write must not raise.
+        await orchestrator._finalize_trajectory(
+            real_recorder,  # type: ignore[arg-type]
+            wf_id,
+            status="completed",
+        )
+
+        # The canonical record reflects the real (completed) outcome, not the
+        # repo write failure.
+        traj = load(trajectory_path(tmp_path, wf_id))  # type: ignore[arg-type]
+        assert traj.extra["outcome"]["status"] == "completed"
+        assert traj.extra["outcome"]["pipeline"] == "pr_auto_fix"

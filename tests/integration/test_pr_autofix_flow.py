@@ -1568,6 +1568,7 @@ class TestTrajectoryRecording:
             output_tokens=100,
             cache_read_tokens=20,
             cost_usd=0.003,
+            duration_ms=1500,
             model="test-model",
         ))
 

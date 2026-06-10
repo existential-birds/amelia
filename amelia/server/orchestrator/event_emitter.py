@@ -17,6 +17,7 @@ from loguru import logger
 from amelia.pipelines.implementation.utils import extract_task_title
 from amelia.server.events.bus import EventBus
 from amelia.server.models.events import EventType, WorkflowEvent
+from amelia.trajectory.truncation import truncate_nested
 
 
 STAGE_NODES: frozenset[str] = frozenset({
@@ -27,31 +28,6 @@ STAGE_NODES: frozenset[str] = frozenset({
     "reviewer_node",
     "evaluation_node",
 })
-
-
-# Truncate strings in workflow summaries to ~500 chars: long enough to be useful
-# for debugging, short enough to avoid bloating event payloads on the bus.
-_MAX_SUMMARY_STRING_LENGTH = 500
-
-
-def _truncate_nested(value: Any) -> Any:
-    """Recursively truncate long strings in nested structures.
-
-    Args:
-        value: Any value that may contain nested strings.
-
-    Returns:
-        A copy with all long strings truncated.
-    """
-    if isinstance(value, str):
-        if len(value) > _MAX_SUMMARY_STRING_LENGTH:
-            return value[:_MAX_SUMMARY_STRING_LENGTH] + "… [truncated]"
-        return value
-    if isinstance(value, dict):
-        return {k: _truncate_nested(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_truncate_nested(item) for item in value]
-    return value
 
 
 def summarize_stage_output(output: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -75,7 +51,7 @@ def summarize_stage_output(output: dict[str, Any] | None) -> dict[str, Any] | No
         if key in ("tool_calls", "tool_results") and isinstance(value, list):
             result[f"{key}_count"] = len(value)
         else:
-            result[key] = _truncate_nested(value)
+            result[key] = truncate_nested(value)
     return result
 
 
