@@ -4,12 +4,7 @@ import type { GitHubIssuesResponse } from '@/types';
 import { createMockWorkflowSummary, createMockWorkflowDetail } from '@/__tests__/fixtures';
 import { mockFetchSuccess, mockFetchError } from '@/test/mocks/fetch';
 
-// Mock fetch globally
 global.fetch = vi.fn();
-
-// ============================================================================
-// Tests
-// ============================================================================
 
 describe('API Client', () => {
   beforeEach(() => {
@@ -205,13 +200,11 @@ describe('API Client', () => {
 
   describe('request timeout', () => {
     it('should convert AbortError to ApiError with timeout code', async () => {
-      // Mock fetch that immediately throws AbortError (simulating timeout)
       const abortError = new Error('The operation was aborted');
       abortError.name = 'AbortError';
 
       (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(abortError);
 
-      // The ApiError should be thrown with timeout details
       await expect(api.getWorkflows()).rejects.toMatchObject({
         message: 'Request timeout',
         code: 'TIMEOUT',
@@ -286,7 +279,6 @@ describe('API Client', () => {
         '/api/workflows?status=cancelled',
         expect.objectContaining({ signal: expect.any(AbortSignal) })
       );
-      // Should be sorted by started_at descending
       expect(result).toHaveLength(3);
       expect(result[0]!.id).toBe('wf-2'); // Most recent (11:00)
       expect(result[1]!.id).toBe('wf-1'); // 10:00
@@ -294,8 +286,6 @@ describe('API Client', () => {
     });
 
     it('should handle HTTP errors', async () => {
-      // getWorkflowHistory makes 3 parallel requests, mock the first to fail
-      // (Promise.all will reject on first error)
       (global.fetch as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce({
           ok: false,
@@ -314,10 +304,6 @@ describe('API Client', () => {
       await expect(api.getWorkflowHistory()).rejects.toThrow('Internal server error');
     });
   });
-
-  // ==========================================================================
-  // Queue Workflow Methods
-  // ==========================================================================
 
   describe('startWorkflow', () => {
     it('should POST to /api/workflows/{id}/start', async () => {
@@ -474,10 +460,6 @@ describe('API Client', () => {
       await expect(api.getGitHubIssues('noop-profile')).rejects.toThrow();
     });
   });
-
-  // ==========================================================================
-  // Config and Files API Methods
-  // ==========================================================================
 
   describe('getConfig', () => {
     it('returns config with repo_root', async () => {

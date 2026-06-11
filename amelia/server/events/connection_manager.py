@@ -1,4 +1,3 @@
-# amelia/server/events/connection_manager.py
 """WebSocket connection manager with subscription filtering."""
 from __future__ import annotations
 
@@ -10,11 +9,11 @@ from typing import TYPE_CHECKING, Any
 from fastapi import WebSocket, WebSocketDisconnect
 from loguru import logger
 
-from amelia.server.models.events import PERSISTED_TYPES, EventDomain, WorkflowEvent
+from amelia.server.models.events import TRACE_TYPES, EventDomain, WorkflowEvent
 
 
 if TYPE_CHECKING:
-    from amelia.server.database.repository import WorkflowRepository
+    from amelia.server.events.bus import EventBus
 
 
 class ConnectionManager:
@@ -31,13 +30,13 @@ class ConnectionManager:
     def __init__(self) -> None:
         self._connections: dict[WebSocket, set[str]] = {}
         self._lock = asyncio.Lock()
-        self._repository: WorkflowRepository | None = None
+        self._event_bus: EventBus | None = None
 
-    def set_repository(self, repository: WorkflowRepository) -> None:
-        self._repository = repository
+    def set_event_bus(self, event_bus: EventBus) -> None:
+        self._event_bus = event_bus
 
-    def get_repository(self) -> WorkflowRepository | None:
-        return self._repository
+    def get_event_bus(self) -> EventBus | None:
+        return self._event_bus
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -62,6 +61,15 @@ class ConnectionManager:
         async with self._lock:
             if websocket in self._connections:
                 self._connections[websocket] = set()
+
+    async def get_subscriptions(self, websocket: WebSocket) -> set[str]:
+        """Return the subscription set for a connection (snapshot).
+
+        An empty set means "subscribed to all workflows".
+        Returns an empty set if the websocket is not found.
+        """
+        async with self._lock:
+            return set(self._connections.get(websocket, set()))
 
 
     async def _send_to_client(
@@ -97,15 +105,13 @@ class ConnectionManager:
         Args:
             event: The workflow event to broadcast.
         """
-        is_trace = event.event_type not in PERSISTED_TYPES
+        is_trace = event.event_type in TRACE_TYPES
 
         targets: list[WebSocket] = []
         async with self._lock:
             if is_trace:
-                # Trace events go to ALL clients
                 targets = list(self._connections.keys())
             else:
-                # Regular events filtered by workflow subscription
                 wid_str = str(event.workflow_id) if event.workflow_id else None
                 for ws, subscribed_ids in self._connections.items():
                     # Empty set = subscribed to all workflows
@@ -136,7 +142,6 @@ class ConnectionManager:
                 "timestamp": event.timestamp.isoformat(),
             }
         else:
-            # Workflow events use wrapped format
             payload = {
                 "type": "event",
                 "payload": event.model_dump(mode="json"),
@@ -146,7 +151,6 @@ class ConnectionManager:
             *(self._send_to_client(ws, payload) for ws in targets)
         )
 
-        # Remove failed connections
         failed = [ws for ws, success in results if not success]
         succeeded = len(targets) - len(failed)
         logger.debug(

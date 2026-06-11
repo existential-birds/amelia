@@ -53,11 +53,10 @@ export function ApiModelSelect({ agentKey, value, onChange, error, className }: 
     setManualModelId(value);
   }, [value]);
 
-  // Get recent models that exist in the store
   const recentModels = recentModelIds
     .map((id) => models.find((m) => m.id === id))
     .filter((m): m is ModelInfo => m !== undefined)
-    .slice(0, 5); // Show max 5 in dropdown
+    .slice(0, 5);
 
   // Ensure current value is always represented in dropdown items
   const currentInRecent = recentModels.some((m) => m.id === value);

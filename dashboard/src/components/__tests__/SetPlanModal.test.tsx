@@ -10,7 +10,6 @@ import { api, ApiError } from '@/api/client';
 import type { SetPlanResponse } from '@/types';
 import { toast } from 'sonner';
 
-// Mock the API client
 vi.mock('@/api/client', () => ({
   api: {
     setPlan: vi.fn(),
@@ -27,7 +26,6 @@ vi.mock('@/api/client', () => ({
   },
 }));
 
-// Mock sonner toast
 vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
@@ -55,7 +53,6 @@ describe('SetPlanModal', () => {
   });
 
   afterEach(() => {
-    // Ensure cleanup happens before moving to next test
     cleanup();
   });
 
@@ -66,10 +63,8 @@ describe('SetPlanModal', () => {
   async function renderAndWaitForInit(props = defaultProps) {
     const result = render(<SetPlanModal {...props} />);
     // Wait for PlanImportSection's useEffect to run (the one that updates on mount)
-    // If open, the component renders and effects run
     if (props.open !== false) {
       await waitFor(() => {
-        // Just waiting a tick for effects to settle
         expect(result.container).toBeInTheDocument();
       });
     }
@@ -83,14 +78,12 @@ describe('SetPlanModal', () => {
     });
 
     it('does not render when closed', () => {
-      // When modal is closed, no async operations occur
       render(<SetPlanModal {...defaultProps} open={false} />);
       expect(screen.queryByText(/set plan/i)).not.toBeInTheDocument();
     });
 
     it('renders PlanImportSection expanded', async () => {
       await renderAndWaitForInit();
-      // PlanImportSection content should be visible
       expect(screen.getByPlaceholderText(/relative path/i)).toBeInTheDocument();
     });
 
@@ -157,7 +150,6 @@ describe('SetPlanModal', () => {
       const user = userEvent.setup();
       await renderAndWaitForInit();
 
-      // Switch to paste mode
       await user.click(screen.getByRole('radio', { name: /paste/i }));
 
       const textarea = screen.getByPlaceholderText(/paste.*plan.*markdown/i);
@@ -266,12 +258,10 @@ describe('SetPlanModal', () => {
       await user.type(input, 'docs/plan.md');
       await user.click(screen.getByRole('button', { name: /apply/i }));
 
-      // Check for loading indicator
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /applying/i })).toBeInTheDocument();
       });
 
-      // Resolve the promise and wait for the submission to complete
       await act(async () => {
         resolvePromise!({ status: 'ready', goal: 'Test', key_files: [], total_tasks: 1 });
       });

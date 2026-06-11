@@ -60,7 +60,6 @@ describe('useIsTablet', () => {
     const { result } = renderHook(() => useIsTablet());
     expect(result.current).toBe(false);
 
-    // Simulate resize to tablet
     act(() => {
       vi.stubGlobal('innerWidth', 800);
       listeners.forEach((cb) => cb());

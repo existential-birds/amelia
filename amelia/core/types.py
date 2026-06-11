@@ -21,7 +21,6 @@ from pydantic import (
 )
 
 
-# Default allowed hosts for sandbox network allowlist
 DEFAULT_NETWORK_ALLOWED_HOSTS: tuple[str, ...] = (
     "api.anthropic.com",
     "openrouter.ai",

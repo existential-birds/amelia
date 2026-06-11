@@ -20,12 +20,10 @@ def _validate_worktree_path(cls: type, v: str) -> str:
     Raises:
         ValueError: If path is not absolute or contains null bytes.
     """
-    # Reject null bytes
     if "\0" in v:
         msg = "worktree_path contains null byte"
         raise ValueError(msg)
 
-    # Must be absolute
     if not os.path.isabs(v):
         msg = "worktree_path must be absolute"
         raise ValueError(msg)
@@ -52,7 +50,6 @@ def _validate_profile(cls: type, v: str | None) -> str | None:
     if v is None:
         return v
 
-    # Must be lowercase alphanumeric with dashes/underscores
     if not v:
         msg = "profile cannot be empty"
         raise ValueError(msg)
@@ -223,7 +220,6 @@ class CreateWorkflowRequest(BaseModel):
                 msg = f"issue_id contains dangerous character: {repr(char)}"
                 raise ValueError(msg)
 
-        # Only allow alphanumeric, dashes, and underscores
         if not all(c.isalnum() or c in {"-", "_"} for c in v):
             msg = "issue_id must contain only alphanumeric characters, dashes, and underscores"
             raise ValueError(msg)
@@ -260,7 +256,6 @@ class CreateWorkflowRequest(BaseModel):
             msg = "driver cannot be empty"
             raise ValueError(msg)
 
-        # Accept simple driver types
         if v in ("api", "claude", "codex"):
             return v
 

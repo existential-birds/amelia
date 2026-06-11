@@ -217,6 +217,10 @@ class ContainerDriver:
         """
         return self._last_usage
 
+    def get_tool_definitions(self) -> list[dict[str, Any]] | None:
+        """Return None — the container worker's tool list is not materialized here."""
+        return None
+
     async def cleanup_session(self, session_id: str) -> bool:
         """Clean up a session. Not applicable for container driver.
 

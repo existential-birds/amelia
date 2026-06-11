@@ -58,19 +58,16 @@ export function useAutoRevalidation(workflowId?: string) {
   const lastProcessedTimestampRef = useRef<number>(0);
 
   useEffect(() => {
-    // Get events for specific workflow or all workflows
     const events = workflowId
       ? eventsByWorkflow[workflowId] ?? []
       : Object.values(eventsByWorkflow).flat();
 
-    // Find the latest status-changing event within the 5-second window
     const latestStatusEvent = events
       .filter((e) => STATUS_EVENTS.includes(e.event_type as (typeof STATUS_EVENTS)[number]))
       .map((e) => new Date(e.timestamp).getTime())
       .filter((timestamp) => Date.now() - timestamp < 5000)
       .sort((a, b) => b - a)[0];
 
-    // Only revalidate if we have a new event we haven't processed yet
     if (
       latestStatusEvent &&
       latestStatusEvent > lastProcessedTimestampRef.current &&

@@ -1,4 +1,3 @@
-# amelia/server/routes/prompts.py
 """API routes for prompt configuration.
 
 Provides endpoints for listing, viewing, and editing agent prompts.
@@ -19,7 +18,6 @@ if TYPE_CHECKING:
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 
 
-# Dependency placeholder - will be overridden by app
 def get_prompt_repository() -> "PromptRepository":
     """Get prompt repository dependency.
 
@@ -36,9 +34,6 @@ def get_prompt_repository() -> "PromptRepository":
         "Prompt repository dependency not configured. "
         "Ensure the app has overridden this dependency."
     )
-
-
-# Request/Response models
 
 
 class PromptSummary(BaseModel):
@@ -193,9 +188,6 @@ class ResetResponse(BaseModel):
     message: str
 
 
-# Routes
-
-
 @router.get("", response_model=PromptListResponse)
 async def list_prompts(
     repository: "PromptRepository" = Depends(get_prompt_repository),
@@ -210,7 +202,6 @@ async def list_prompts(
     """
     prompts = await repository.list_prompts()
 
-    # Get version numbers for active versions
     summaries = []
     for prompt in prompts:
         version_number = None

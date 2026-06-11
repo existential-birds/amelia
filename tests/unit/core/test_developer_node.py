@@ -71,18 +71,14 @@ class TestDeveloperNodeProfileFromConfig:
         # Mock Developer to avoid actual execution
         with patch("amelia.pipelines.nodes.Developer") as mock_dev:
             mock_dev_instance = MagicMock()
-            # Developer.run is now an async generator
             async def mock_run(*args: Any, **kwargs: Any) -> Any:
                 yield state, MagicMock(type="thinking", content="test")
             mock_dev_instance.run = mock_run
             mock_dev.return_value = mock_dev_instance
 
-            # Should not raise, should use profile from config
             await call_developer_node(state, config)
 
-            # Verify Developer was created with AgentConfig from profile
             mock_dev.assert_called_once()
-            # The AgentConfig should come from profile.get_agent_config("developer")
             call_args = mock_dev.call_args
             assert call_args is not None
             agent_config = call_args[0][0]
@@ -121,7 +117,6 @@ class TestDeveloperUnifiedExecution:
             plan_markdown="# Test Plan\n\nImplement the feature.",
         )
 
-        # Create a mock driver that yields AgenticMessage
         mock_driver = MagicMock(spec=DriverInterface)
         mock_driver.execute_agentic = create_mock_execute_agentic([
             AgenticMessage(
@@ -149,12 +144,10 @@ class TestDeveloperUnifiedExecution:
 
         developer = create_developer_with_mock_driver(mock_driver)
 
-        # Collect all yielded results
         results = []
         async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
-        # Should have yielded events for each AgenticMessage
         assert len(results) >= 3  # At least thinking, tool_call, result
 
         # Verify it didn't try to import driver types
@@ -198,12 +191,11 @@ class TestDeveloperUnifiedExecution:
         async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
-        # Find the thinking event
         thinking_events = [r for r in results if r[1].event_type == EventType.CLAUDE_THINKING]
         assert len(thinking_events) >= 1
         assert thinking_events[0][1].message == "Thinking about the problem..."
         assert thinking_events[0][1].agent == "developer"
-        assert thinking_events[0][1].workflow_id is not None  # UUID propagated
+        assert thinking_events[0][1].workflow_id is not None
 
     async def test_developer_processes_tool_call_message(
         self,
@@ -245,7 +237,6 @@ class TestDeveloperUnifiedExecution:
         async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
-        # Find the tool call event
         tool_call_events = [r for r in results if r[1].event_type == EventType.CLAUDE_TOOL_CALL]
         assert len(tool_call_events) >= 1
         assert tool_call_events[0][1].tool_name == ToolName.WRITE_FILE
@@ -292,7 +283,6 @@ class TestDeveloperUnifiedExecution:
         async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
-        # Find the tool result event
         tool_result_events = [r for r in results if r[1].event_type == EventType.CLAUDE_TOOL_RESULT]
         assert len(tool_result_events) >= 1
         assert tool_result_events[0][1].message == f"Tool {ToolName.READ_FILE} completed"
@@ -332,12 +322,10 @@ class TestDeveloperUnifiedExecution:
         async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
-        # Find the agent output event
         output_events = [r for r in results if r[1].event_type == EventType.AGENT_OUTPUT]
         assert len(output_events) >= 1
         assert output_events[0][1].message == "Task completed successfully"
 
-        # Check final state
         final_state = results[-1][0]
         assert final_state.agentic_status == "completed"
         assert final_state.final_response == "Task completed successfully"
@@ -378,7 +366,6 @@ class TestDeveloperUnifiedExecution:
         async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
-        # Check final state reflects error
         final_state = results[-1][0]
         assert final_state.agentic_status == "failed"
         assert final_state.error == "Error: Something went wrong"
@@ -429,7 +416,6 @@ class TestDeveloperUnifiedExecution:
         async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
-        # Check final state has tool calls
         final_state = results[-1][0]
         assert len(final_state.tool_calls) >= 2
         tool_names = [tc.tool_name for tc in final_state.tool_calls]
@@ -484,7 +470,6 @@ class TestDeveloperUnifiedExecution:
         async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
-        # Check final state has tool results
         final_state = results[-1][0]
         assert len(final_state.tool_results) >= 2
 
@@ -535,7 +520,7 @@ class TestDeveloperUnifiedExecution:
         # All events should have agent and workflow_id set (from to_stream_event)
         for _state_update, event in results:
             assert event.agent == "developer"
-            assert event.workflow_id is not None  # UUID propagated
+            assert event.workflow_id is not None
             assert event.timestamp is not None
 
     async def test_developer_raises_without_goal(
@@ -624,7 +609,6 @@ Step 1: Build the thing
             }
         }
 
-        # Track what session_id is passed to the driver
         captured_session_id: str | None = "NOT_SET"
 
         async def mock_run(
@@ -632,7 +616,6 @@ Step 1: Build the thing
         ) -> Any:
             nonlocal captured_session_id
             captured_session_id = state.driver_session_id
-            # Return minimal valid state updates
             yield (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
 
         with patch("amelia.pipelines.nodes.Developer") as mock_developer_class:
@@ -678,11 +661,9 @@ Step 1: Build the thing
 
             await call_developer_node(multi_task_state, config)
 
-        # Should preserve full plan with ALL tasks
         assert captured_plan is not None
         assert "### Task 1:" in captured_plan
-        assert "### Task 2:" in captured_plan  # Full plan preserved
-        # Should preserve header context
+        assert "### Task 2:" in captured_plan
         assert "**Goal:**" in captured_plan
         assert "## Phase 1:" in captured_plan
 
@@ -724,5 +705,4 @@ Step 1: Build the thing
 
             await call_developer_node(state, config)
 
-        # Session should be cleared for task execution
         assert captured_session_id is None

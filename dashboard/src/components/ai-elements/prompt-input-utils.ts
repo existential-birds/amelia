@@ -12,10 +12,6 @@ import {
 } from "react";
 import { nanoid } from "nanoid";
 
-// ============================================================================
-// Provider Context & Types
-// ============================================================================
-
 export type AttachmentsContext = {
   files: (FileUIPart & { id: string })[];
   add: (files: File[] | FileList) => void;
@@ -98,11 +94,9 @@ export type PromptInputProviderProps = PropsWithChildren<{
  * Separated for use with React.createElement in the main component file.
  */
 export function usePromptInputProviderState(initialTextInput: string = "") {
-  // ----- textInput state
   const [textInput, setTextInput] = useState(initialTextInput);
   const clearInput = useCallback(() => setTextInput(""), []);
 
-  // ----- attachments state (global when wrapped)
   const [attachmentFiles, setAttachmentFiles] = useState<
     (FileUIPart & { id: string })[]
   >([]);

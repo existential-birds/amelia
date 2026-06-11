@@ -43,10 +43,6 @@ class TestSkillInjection:
             ) as mock_load,
             patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_cls,
             patch(
-                "amelia.pipelines.nodes._save_token_usage",
-                new_callable=AsyncMock,
-            ),
-            patch(
                 "amelia.pipelines.nodes._run_git_command",
                 new_callable=AsyncMock,
                 side_effect=lambda cmd, *a, **kw: (
@@ -125,10 +121,6 @@ class TestSkillInjection:
             ) as mock_load,
             patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_cls,
             patch(
-                "amelia.pipelines.nodes._save_token_usage",
-                new_callable=AsyncMock,
-            ),
-            patch(
                 "amelia.pipelines.nodes._run_git_command",
                 side_effect=lambda cmd, *a, **kw: (
                     "app.py\n" if "--name-only" in cmd else ""
@@ -180,10 +172,6 @@ class TestSkillInjection:
                 return_value="",
             ),
             patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_cls,
-            patch(
-                "amelia.pipelines.nodes._save_token_usage",
-                new_callable=AsyncMock,
-            ),
             patch(
                 "amelia.pipelines.nodes._run_git_command",
                 new_callable=AsyncMock,

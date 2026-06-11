@@ -18,7 +18,6 @@ export function Sparkline({ data, color, className }: SparklineProps) {
   const height = 24;
   const padding = 2;
 
-  // Handle edge cases
   if (data.length === 0) {
     return (
       <svg
@@ -30,7 +29,6 @@ export function Sparkline({ data, color, className }: SparklineProps) {
     );
   }
 
-  // Normalize data to fit in viewBox
   const max = Math.max(...data);
   const min = Math.min(...data);
   const range = max - min || 1; // Avoid division by zero
@@ -39,7 +37,6 @@ export function Sparkline({ data, color, className }: SparklineProps) {
     return height - padding - ((value - min) / range) * (height - padding * 2);
   };
 
-  // Generate points for polyline
   const xStep = data.length > 1 ? (width - padding * 2) / (data.length - 1) : 0;
   const points = data
     .map((value, index) => {

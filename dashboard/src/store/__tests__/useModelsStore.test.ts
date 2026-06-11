@@ -2,14 +2,12 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useModelsStore } from '../useModelsStore';
 import type { ModelInfo } from '@/components/model-picker/types';
 
-// Mock fetch
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 describe('useModelsStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset store state
     useModelsStore.setState({
       models: [],
       providers: [],

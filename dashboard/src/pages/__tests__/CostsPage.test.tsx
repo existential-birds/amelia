@@ -6,7 +6,6 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import CostsPage from '../CostsPage';
 
-// Mock React Router
 vi.mock('react-router-dom', async (importOriginal) => {
   const mod = await importOriginal<typeof import('react-router-dom')>();
   return {
@@ -19,7 +18,6 @@ vi.mock('react-router-dom', async (importOriginal) => {
 
 import { useLoaderData } from 'react-router-dom';
 
-// Mock loader data matching CostsLoaderData interface
 const mockLoaderData = {
   usage: {
     summary: {
@@ -92,7 +90,6 @@ describe('CostsPage', () => {
     );
 
     // Date range presets appear both in desktop buttons and mobile dropdown
-    // Check that at least one set is present
     const sevenDaysButtons = screen.getAllByRole('button', { name: '7 days' });
     expect(sevenDaysButtons.length).toBeGreaterThan(0);
     const thirtyDaysButtons = screen.getAllByRole('button', { name: '30 days' });
@@ -128,12 +125,10 @@ describe('CostsPage table enhancements', () => {
       </MemoryRouter>
     );
 
-    // Column headers should exist as buttons (sortable) in the DataTable
     // The table is rendered but hidden on mobile via CSS class
     const modelButton = container.querySelector('button[type="button"]');
     expect(modelButton).toBeInTheDocument();
 
-    // Verify we have sortable headers by checking for the DataTableColumnHeader buttons
     const sortButtons = container.querySelectorAll('th button');
     expect(sortButtons.length).toBeGreaterThan(0);
   });
@@ -196,7 +191,6 @@ describe('CostsPage table enhancements', () => {
     );
 
     // Success rate badge should show 95% (in mobile card view which is visible)
-    // Also shows 83% from summary
     const badges = screen.getAllByText(/\d+%/);
     expect(badges.some(b => b.textContent === '95%')).toBe(true);
   });
@@ -208,7 +202,6 @@ describe('CostsPage table enhancements', () => {
       </MemoryRouter>
     );
 
-    // Export CSV button appears in the BY MODEL section
     const exportButton = screen.getByRole('button', { name: /export csv/i });
     expect(exportButton).toBeInTheDocument();
   });

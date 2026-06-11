@@ -2,7 +2,6 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import { renderSidebar } from '@/test/helpers';
 
-// Mock the workflow store (inline due to vi.mock hoisting)
 vi.mock('@/store/workflowStore', () => ({
   useWorkflowStore: vi.fn((selector) => {
     const state = { isConnected: true };
@@ -10,7 +9,6 @@ vi.mock('@/store/workflowStore', () => ({
   }),
 }));
 
-// Mock the demo mode hook (inline due to vi.mock hoisting)
 vi.mock('@/hooks/useDemoMode', () => ({
   useDemoMode: vi.fn(() => ({ isDemo: false, demoType: null })),
 }));
@@ -24,7 +22,6 @@ describe('DashboardSidebar Accessibility', () => {
     renderSidebar({ open: true });
     // getByRole throws if element not found, no need for toBeInTheDocument()
     const status = screen.getByRole('status');
-    // In expanded mode, it should contain text "Connected"
     expect(status).toHaveTextContent('Connected');
   });
 

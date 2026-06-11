@@ -31,11 +31,6 @@ from .conftest import (
 )
 
 
-# ---------------------------------------------------------------------------
-# classify_node tests
-# ---------------------------------------------------------------------------
-
-
 class TestClassifyNode:
     """Tests for classify_node."""
 
@@ -76,11 +71,6 @@ class TestClassifyNode:
         assert result["file_groups"] == {}
 
 
-# ---------------------------------------------------------------------------
-# develop_node helpers
-# ---------------------------------------------------------------------------
-
-
 def _fake_dev_run_success(impl_state: Any, profile: Any, workflow_id: Any) -> Any:
     """Async generator that yields a completed state."""
     async def gen() -> Any:
@@ -95,11 +85,6 @@ def _fake_dev_run_failure(impl_state: Any, profile: Any, workflow_id: Any) -> An
         raise RuntimeError("Developer failed")
         yield  # noqa: RET503
     return gen()
-
-
-# ---------------------------------------------------------------------------
-# _build_developer_goal tests
-# ---------------------------------------------------------------------------
 
 
 class TestBuildDeveloperGoal:
@@ -166,11 +151,6 @@ class TestBuildDeveloperGoal:
         c = make_comment(id=1, path="src/app.py")
         goal = _build_developer_goal("src/app.py", [c], {}, pr_number=1, head_branch="main")
         assert "Working Directory" not in goal
-
-
-# ---------------------------------------------------------------------------
-# develop_node tests
-# ---------------------------------------------------------------------------
 
 
 class TestDevelopNode:
@@ -365,11 +345,6 @@ class TestDevelopNode:
         assert result["group_results"][0].status == expected_status
 
 
-# ---------------------------------------------------------------------------
-# commit_push_node tests
-# ---------------------------------------------------------------------------
-
-
 class TestCommitPushNode:
     """Tests for commit_push_node."""
 
@@ -464,11 +439,6 @@ class TestCommitPushNode:
         commit_msg = mock_git.stage_and_commit.call_args[0][0]
         for expected in ["chore(review):", "address PR review comments", "src/app.py:10", "Fix null check", "src/utils.py:20", "Add validation"]:
             assert expected in commit_msg
-
-
-# ---------------------------------------------------------------------------
-# reply_resolve_node tests
-# ---------------------------------------------------------------------------
 
 
 def _make_reply_resolve_state(

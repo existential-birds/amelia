@@ -47,7 +47,6 @@ class TestOrchestratorProfileLoading:
         """Verify get_profile_or_fail returns Profile from database."""
         mock_event_bus = MagicMock()
         mock_repository = AsyncMock()
-        mock_repository.get_max_event_sequence.return_value = 0
         mock_profile_repo = AsyncMock()
         mock_profile_repo.get_profile.return_value = _make_test_profile(
             repo_root="/repo",
@@ -75,7 +74,6 @@ class TestOrchestratorProfileLoading:
         """Verify get_profile_or_fail returns None and sets failed status when profile not found."""
         mock_event_bus = MagicMock()
         mock_repository = AsyncMock()
-        mock_repository.get_max_event_sequence.return_value = 0
         mock_profile_repo = AsyncMock()
         mock_profile_repo.get_profile.return_value = None
 

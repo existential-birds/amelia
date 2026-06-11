@@ -126,7 +126,6 @@ class Oracle:
             working_dir=working_dir,
         )
 
-        # Emit started event
         self._emit(self._make_event(
             EventType.ORACLE_CONSULTATION_STARTED,
             session_id=session_id,
@@ -134,7 +133,6 @@ class Oracle:
             workflow_id=workflow_id,
         ))
 
-        # Gather codebase context only when file patterns are specified
         files_consulted: list[str] = []
         bundle_tokens = 0
         bundle = None
@@ -176,7 +174,6 @@ class Oracle:
                 session_id=session_id,
             )
 
-        # Build prompt with context
         context_parts: list[str] = [f"## Problem\n\n{problem}"]
         if bundle and bundle.files:
             context_parts.append("\n## Codebase Context\n")

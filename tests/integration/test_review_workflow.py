@@ -46,10 +46,6 @@ from amelia.server.models.state import (
 from amelia.server.orchestrator.service import OrchestratorService
 
 
-# =============================================================================
-# Helpers
-# =============================================================================
-
 def _make_blocking_astream(event: asyncio.Event) -> Any:
     async def blocking_astream(*args: Any, **kwargs: Any) -> Any:
         await event.wait()
@@ -114,20 +110,10 @@ async def _create_completed_workflow(
     return state
 
 
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-
 @pytest.fixture
 def test_client(orchestrator_test_client: httpx.AsyncClient) -> httpx.AsyncClient:
     """Alias shared orchestrator_test_client fixture for local use."""
     return orchestrator_test_client
-
-
-# =============================================================================
-# Test Classes
-# =============================================================================
 
 
 @pytest.mark.integration

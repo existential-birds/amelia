@@ -24,11 +24,6 @@ from amelia.drivers.cli.claude import (
 from amelia.drivers.cli.utils import strip_markdown_fences
 
 
-# =============================================================================
-# Test Models
-# =============================================================================
-
-
 class _TestModel(BaseModel):
     reasoning: str
     answer: str
@@ -38,14 +33,10 @@ class _TestListModel(BaseModel):
     tasks: list[str]
 
 
-# =============================================================================
-# Mock SDK Types
-#
 # These classes mock claude-agent-sdk types for testing without requiring
 # the actual SDK. They mirror the structure of:
 # - TextBlock, ToolUseBlock, ToolResultBlock (content blocks)
 # - AssistantMessage, ResultMessage (message types)
-# =============================================================================
 
 
 class MockTextBlock:
@@ -133,11 +124,6 @@ def _patch_sdk_types() -> contextlib.AbstractContextManager[None]:
     )
 
 
-# =============================================================================
-# Test Fixtures and Helpers
-# =============================================================================
-
-
 @pytest.fixture
 def driver() -> ClaudeCliDriver:
     return ClaudeCliDriver()
@@ -188,11 +174,6 @@ def create_mock_sdk_client(messages: list[Any]) -> MagicMock:
     mock_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
     return mock_class
-
-
-# =============================================================================
-# Test Classes
-# =============================================================================
 
 
 class TestClaudeCliDriverGenerate:

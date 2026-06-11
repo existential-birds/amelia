@@ -100,7 +100,6 @@ export function ProviderLogo({ provider, className }: ProviderLogoProps) {
   const LogoComponent = BUNDLED_LOGOS[provider];
   const [imageError, setImageError] = useState(false);
 
-  // Reset error state when provider changes
   useEffect(() => {
     setImageError(false);
   }, [provider]);

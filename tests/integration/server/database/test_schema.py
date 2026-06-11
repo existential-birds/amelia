@@ -18,57 +18,19 @@ async def _get_columns(db: Database, table: str) -> list[str]:
     return [row["column_name"] for row in rows]
 
 
-async def _get_indexes(db: Database, table: str) -> list[str]:
-    """Get index names for a table."""
-    rows = await db.fetch_all(
-        "SELECT indexname FROM pg_indexes WHERE tablename = $1",
-        table,
-    )
-    return [row["indexname"] for row in rows]
+class TestDroppedTables:
+    """Guards that the dead stores stay dropped — trajectories are the only run history."""
 
-
-class TestEventsSchema:
-    """Tests for workflow_log table schema."""
-
-    async def test_workflow_log_table_has_level_column(self, test_db: Database) -> None:
-        """workflow_log table has level column."""
-        columns = await _get_columns(test_db, "workflow_log")
-        assert "level" in columns
-
-    async def test_workflow_log_table_has_expected_columns(self, test_db: Database) -> None:
-        """workflow_log table has the expected columns."""
-        columns = await _get_columns(test_db, "workflow_log")
-        assert "id" in columns
-        assert "workflow_id" in columns
-        assert "sequence" in columns
-        assert "timestamp" in columns
-        assert "event_type" in columns
-        assert "level" in columns
-        assert "agent" in columns
-        assert "message" in columns
-        assert "data" in columns
-        assert "is_error" in columns
-
-    async def test_workflow_log_errors_index_exists(self, test_db: Database) -> None:
-        """workflow_log table has index on errors."""
-        indexes = await _get_indexes(test_db, "workflow_log")
-        assert "idx_workflow_log_errors" in indexes
-
-    async def test_workflow_log_does_not_have_trace_columns(
-        self, test_db: Database
+    @pytest.mark.parametrize("table", ["workflow_log", "token_usage"])
+    async def test_dead_store_table_does_not_exist(
+        self, test_db: Database, table: str
     ) -> None:
-        """workflow_log table does NOT have old trace-specific columns."""
-        columns = await _get_columns(test_db, "workflow_log")
-        assert "tool_name" not in columns
-        assert "tool_input_json" not in columns
-        assert "trace_id" not in columns
-        assert "parent_id" not in columns
-        assert "correlation_id" not in columns
-
-    async def test_workflow_log_workflow_sequence_unique(self, test_db: Database) -> None:
-        """workflow_log table has unique constraint on (workflow_id, sequence)."""
-        indexes = await _get_indexes(test_db, "workflow_log")
-        assert "idx_workflow_log_workflow" in indexes
+        row = await test_db.fetch_one(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)",
+            table,
+        )
+        assert row is not None
+        assert row[0] is False, f"Table {table} should have been dropped"
 
 
 class TestWorkflowsSchema:

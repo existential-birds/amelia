@@ -86,7 +86,6 @@ def review(
         if local:
             typer.echo("Reviewing local uncommitted changes...")
 
-            # Gather git diff
             diff_content = await run_shell_command("git diff")
             if not diff_content or not diff_content.strip():
                 typer.echo("No local uncommitted changes found.")
@@ -94,7 +93,6 @@ def review(
 
             typer.echo(f"Found {len(diff_content)} bytes of changes")
 
-            # Create workflow via API
             client = AmeliaClient()
             try:
                 response = await client.create_review_workflow(
@@ -104,7 +102,6 @@ def review(
                 )
                 typer.echo(f"Created review workflow: {response.id}")
 
-                # Stream events via WebSocket
                 await stream_workflow_events(response.id)
 
             except ServerUnreachableError:
@@ -144,7 +141,6 @@ def fix_pr(
     async def _run() -> None:
         client = AmeliaClient()
 
-        # Validate pr_autofix is enabled
         status = await client.get_pr_autofix_status(profile_name)
         if not status.enabled:
             typer.echo(
@@ -153,7 +149,6 @@ def fix_pr(
             )
             raise typer.Exit(code=1)
 
-        # Trigger the fix cycle
         response = await client.trigger_pr_autofix(
             pr_number, profile_name, aggressiveness
         )
@@ -161,12 +156,10 @@ def fix_pr(
             f"Triggered auto-fix for PR #{pr_number} (workflow: {response.workflow_id})"
         )
 
-        # Stream events and collect summary
         summary = await stream_workflow_events(
             response.workflow_id, display=not quiet
         )
 
-        # Print summary line
         summary_line = (
             f"{summary.fixed} comments fixed, "
             f"{summary.skipped} skipped, "
@@ -216,7 +209,6 @@ def watch_pr(
     async def _run() -> None:
         client = AmeliaClient()
 
-        # Validate pr_autofix is enabled
         status = await client.get_pr_autofix_status(profile_name)
         if not status.enabled:
             typer.echo(
@@ -228,7 +220,6 @@ def watch_pr(
         previous_comment_ids: set[int] = set()
 
         while True:
-            # Trigger a fix cycle
             response = await client.trigger_pr_autofix(
                 pr_number, profile_name, aggressiveness
             )
@@ -236,12 +227,10 @@ def watch_pr(
                 f"Triggered auto-fix for PR #{pr_number} (workflow: {response.workflow_id})"
             )
 
-            # Stream events and collect summary
             summary = await stream_workflow_events(
                 response.workflow_id, display=not quiet
             )
 
-            # Print summary line
             summary_line = (
                 f"{summary.fixed} comments fixed, "
                 f"{summary.skipped} skipped, "
@@ -251,7 +240,6 @@ def watch_pr(
                 summary_line += f" (commit: {summary.commit_sha[:8]})"
             typer.echo(summary_line)
 
-            # Check if any unresolved comments remain
             comments_response = await client.get_pr_comments(
                 pr_number, profile_name
             )

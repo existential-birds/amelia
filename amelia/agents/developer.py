@@ -155,7 +155,6 @@ class Developer:
                 event = message.to_workflow_event(workflow_id=workflow_id, agent="developer")
 
             elif message.type == AgenticMessageType.RESULT:
-                # Update session_id from result message
                 if message.session_id:
                     session_id = message.session_id
 
@@ -233,10 +232,8 @@ IMPLEMENTATION PLAN:
                 parts.append(f"Executing Task 1 of {total}:\n\n")
             parts.append(task_section)
 
-        # Main task
         parts.append(f"\n\nPlease complete the following task:\n\n{state.goal}")
 
-        # Review feedback (if this is a review-fix iteration)
         rejected_comments = collect_rejected_comments(state.last_reviews)
         if rejected_comments:
             feedback = "\n".join(f"- {c}" for c in rejected_comments)

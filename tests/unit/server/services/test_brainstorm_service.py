@@ -241,7 +241,6 @@ class TestSendMessage(TestBrainstormService):
         mock_repository.get_session.return_value = mock_session
         mock_repository.get_max_sequence.return_value = 0
 
-        # Consume the async generator
         messages = []
         async for msg in service.send_message(
             session_id=sess_id,
@@ -251,7 +250,6 @@ class TestSendMessage(TestBrainstormService):
         ):
             messages.append(msg)
 
-        # Verify user message was saved
         save_calls = mock_repository.save_message.call_args_list
         user_msg_call = save_calls[0][0][0]
         assert user_msg_call.role == MessageRole.USER
@@ -318,10 +316,8 @@ class TestSendMessage(TestBrainstormService):
         ):
             messages.append(msg)
 
-        # Verify session was updated with driver session ID
         update_calls = mock_repository.update_session.call_args_list
         assert len(update_calls) > 0
-        # Find the call that updated driver_session_id
         updated_session = update_calls[-1][0][0]
         assert updated_session.driver_session_id == "claude-sess-789"
 
@@ -392,7 +388,6 @@ class TestArtifactDetection(TestBrainstormService):
         mock_repository.get_session.return_value = self._make_session(sess_id)
         mock_repository.get_max_sequence.return_value = 0
 
-        # Patch Path.is_file to return True for the plan path
         original_is_file = Path.is_file
 
         def fake_is_file(self: Path) -> bool:
@@ -652,7 +647,6 @@ class TestHandoff(TestBrainstormService):
         ]
 
         mock_orchestrator = MagicMock()
-        # Simulate ValueError from orchestrator when tracker is not none
         mock_orchestrator.queue_workflow = AsyncMock(
             side_effect=ValueError("task_title can only be used with none tracker")
         )
@@ -672,7 +666,6 @@ class TestHandoff(TestBrainstormService):
         mock_repository: MagicMock,
     ) -> None:
         """Should pass artifact_path when creating workflow request."""
-        # Setup session and artifact
         sess_id = uuid4()
         session = BrainstormingSession(
             id=sess_id,
@@ -694,11 +687,9 @@ class TestHandoff(TestBrainstormService):
         mock_repository.get_session.return_value = session
         mock_repository.get_artifacts.return_value = [artifact]
 
-        # Create mock orchestrator that captures the request
         mock_orchestrator = AsyncMock()
         mock_orchestrator.queue_workflow = AsyncMock(return_value="workflow-456")
 
-        # Execute handoff
         result = await service.handoff_to_implementation(
             session_id=sess_id,
             artifact_path="/path/to/design.md",
@@ -707,7 +698,6 @@ class TestHandoff(TestBrainstormService):
             worktree_path="/path/to/repo",
         )
 
-        # Verify workflow was created with artifact_path
         mock_orchestrator.queue_workflow.assert_called_once()
         request = mock_orchestrator.queue_workflow.call_args[0][0]
         assert request.artifact_path == "/path/to/design.md"
@@ -915,10 +905,8 @@ class TestDeleteSessionCleanup(TestBrainstormService):
         mock_cleanup: MagicMock,
     ) -> None:
         """Should still delete session even if cleanup callback fails."""
-        # Setup: make cleanup raise an exception
         mock_cleanup.side_effect = Exception("cleanup failed")
 
-        # Create a session with driver_type and driver_session_id
         now = datetime.now(UTC)
         sess_id = uuid4()
         mock_session = BrainstormingSession(
@@ -935,7 +923,6 @@ class TestDeleteSessionCleanup(TestBrainstormService):
         # Should not raise, should still delete the session
         await service_with_cleanup.delete_session(sess_id)
 
-        # Verify cleanup was attempted
         mock_cleanup.assert_called_once_with("claude", "driver-sess-123")
         # Verify session was still deleted despite cleanup failure
         mock_repository.delete_session.assert_called_once_with(sess_id)
@@ -1037,10 +1024,8 @@ class TestGetSessionWithHistory(TestBrainstormService):
 
         result = await service.get_session_with_history(sess_id)
 
-        # Verify get_messages was called
         mock_repository.get_messages.assert_called_once()
 
-        # Verify result contains messages
         assert result is not None
         assert len(result["messages"]) == 2
 
@@ -1109,7 +1094,6 @@ class TestSendMessageNewArchitecture:
         mock_repository.get_session.return_value = mock_session
         mock_repository.get_max_sequence.return_value = 0  # First message
 
-        # Create a mock driver that captures the prompt
         captured_prompts: list[str] = []
 
         async def mock_execute_agentic(
@@ -1136,7 +1120,6 @@ class TestSendMessageNewArchitecture:
         ):
             pass
 
-        # Verify prompt was formatted with template
         expected = BRAINSTORMER_USER_PROMPT_TEMPLATE.format(idea="a caching layer")
         assert len(captured_prompts) == 1
         assert captured_prompts[0] == expected
@@ -1160,7 +1143,6 @@ class TestSendMessageNewArchitecture:
         mock_repository.get_session.return_value = mock_session
         mock_repository.get_max_sequence.return_value = 2  # Not first message
 
-        # Create a mock driver that captures the prompt
         captured_prompts: list[str] = []
 
         async def mock_execute_agentic(
@@ -1210,7 +1192,6 @@ class TestSendMessageNewArchitecture:
         mock_repository.get_session.return_value = mock_session
         mock_repository.get_max_sequence.return_value = 0
 
-        # Create a mock driver that captures the instructions
         captured_instructions: list[str | None] = []
 
         async def mock_execute_agentic(
@@ -1237,7 +1218,6 @@ class TestSendMessageNewArchitecture:
         ):
             pass
 
-        # Verify instructions contain system prompt content (with resolved path)
         assert len(captured_instructions) == 1
         assert captured_instructions[0] is not None
         assert "design collaborator" in captured_instructions[0]
@@ -1285,7 +1265,6 @@ class TestSendMessageNewArchitecture:
         ):
             pass
 
-        # Verify user message stored original content
         save_calls = mock_repository.save_message.call_args_list
         user_msg = save_calls[0][0][0]
         assert user_msg.content == "a caching layer"
@@ -1333,7 +1312,6 @@ class TestSendMessageNewArchitecture:
         ):
             pass
 
-        # Verify user message does not have is_system=True
         save_calls = mock_repository.save_message.call_args_list
         user_msg = save_calls[0][0][0]
         # Either is_system field is absent or defaults to False
@@ -1457,7 +1435,6 @@ class TestSendMessagePlanPath:
         assert "caching-layer" in instructions
         assert "-design.md" in instructions
 
-        # Verify output_artifact_path was persisted on session
         update_calls = mock_repository.update_session.call_args_list
         # First update_session call stores the artifact path
         updated_session = update_calls[0][0][0]
@@ -1495,7 +1472,6 @@ class TestSendMessagePlanPath:
         assert instructions is not None
         assert "brainstorm-abcd1234" in instructions
 
-        # Verify output_artifact_path was persisted on session
         update_calls = mock_repository.update_session.call_args_list
         updated_session = update_calls[0][0][0]
         assert updated_session.output_artifact_path is not None
@@ -1529,7 +1505,6 @@ class TestSendMessagePlanPath:
         assert "docs/plans/" in instructions
         assert "auth-system" in instructions
 
-        # Verify output_artifact_path was persisted on session
         update_calls = mock_repository.update_session.call_args_list
         updated_session = update_calls[0][0][0]
         assert updated_session.output_artifact_path is not None

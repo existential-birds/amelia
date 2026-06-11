@@ -40,10 +40,8 @@ class ProviderConfig(BaseModel):
     api_key: str
 
 
-# Type alias for the provider resolver function
 type ProviderResolver = Callable[[str], Coroutine[Any, Any, ProviderConfig | None]]
 
-# Type alias for the token validator function (sync or async)
 type TokenValidator = Callable[[str], bool] | Callable[[str], Coroutine[Any, Any, bool]]
 
 
@@ -185,7 +183,6 @@ def create_proxy_router(
 
         upstream_url = f"{provider.base_url.rstrip('/')}{path}"
 
-        # Forward original headers, replacing auth and removing internal headers
         headers = dict(request.headers)
         headers["authorization"] = f"Bearer {provider.api_key}"
         # Remove hop-by-hop and internal headers
@@ -243,7 +240,6 @@ def create_proxy_router(
                 detail="Upstream provider request failed",
             ) from e
 
-        # Pass through the upstream response
         return StreamingResponse(
             content=upstream_response.aiter_raw(),
             status_code=upstream_response.status_code,

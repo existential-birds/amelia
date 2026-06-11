@@ -25,11 +25,8 @@ def mock_repository() -> MagicMock:
     """Create a mock WorkflowRepository."""
     repo = MagicMock()
     repo.get = AsyncMock()
-    repo.get_token_summary = AsyncMock()
-    repo.get_recent_events = AsyncMock(return_value=[])
     repo.list_workflows = AsyncMock()
     repo.count_workflows = AsyncMock()
-    repo.get_token_summaries_batch = AsyncMock()
     repo.list_active = AsyncMock()
     return repo
 

@@ -30,7 +30,6 @@ export function HandoffDialog({
 }: HandoffDialogProps) {
   const [issueTitle, setIssueTitle] = useState("");
 
-  // Pre-fill title from artifact
   useEffect(() => {
     if (artifact?.title) {
       setIssueTitle(`Implement ${artifact.title}`);

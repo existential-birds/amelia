@@ -64,7 +64,6 @@ interface SidebarNavLinkProps {
  * @returns A SidebarMenuItem element containing either a NavLink or disabled placeholder.
  */
 function SidebarNavLink({ to, icon: Icon, label, onClick, comingSoon, badge }: SidebarNavLinkProps) {
-  // Coming soon items render as non-clickable placeholders
   if (comingSoon) {
     return (
       <SidebarMenuItem>
@@ -139,7 +138,6 @@ function SidebarNavLink({ to, icon: Icon, label, onClick, comingSoon, badge }: S
  * @returns React element for the dashboard sidebar navigation
  */
 export function DashboardSidebar() {
-  // Get connection status from store
   const isConnected = useWorkflowStore((state) => state.isConnected);
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';

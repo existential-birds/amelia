@@ -2,11 +2,11 @@
 
 The module-level functions are pure mappings over stream chunks and node
 output. ``StreamEventEmitter`` owns the stateful emission seam: per-workflow
-sequencing plus persistence and broadcast. Keeping all of this here lets the
-emission seam be tested in isolation from the service.
+in-memory sequencing plus broadcast over the event bus. The event stream is
+transient — nothing is persisted. Keeping all of this here lets the emission
+seam be tested in isolation from the service.
 """
 
-import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -15,12 +15,11 @@ from uuid import uuid4
 from loguru import logger
 
 from amelia.pipelines.implementation.utils import extract_task_title
-from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.models.events import EventType, WorkflowEvent
+from amelia.trajectory.truncation import truncate_nested
 
 
-# Nodes that emit stage events
 STAGE_NODES: frozenset[str] = frozenset({
     "architect_node",
     "plan_validator_node",
@@ -31,37 +30,12 @@ STAGE_NODES: frozenset[str] = frozenset({
 })
 
 
-# Truncate strings in workflow summaries to ~500 chars: long enough to be useful
-# for debugging, short enough to avoid bloating PostgreSQL JSONB storage.
-_MAX_SUMMARY_STRING_LENGTH = 500
-
-
-def _truncate_nested(value: Any) -> Any:
-    """Recursively truncate long strings in nested structures.
-
-    Args:
-        value: Any value that may contain nested strings.
-
-    Returns:
-        A copy with all long strings truncated.
-    """
-    if isinstance(value, str):
-        if len(value) > _MAX_SUMMARY_STRING_LENGTH:
-            return value[:_MAX_SUMMARY_STRING_LENGTH] + "… [truncated]"
-        return value
-    if isinstance(value, dict):
-        return {k: _truncate_nested(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_truncate_nested(item) for item in value]
-    return value
-
-
 def summarize_stage_output(output: dict[str, Any] | None) -> dict[str, Any] | None:
     """Summarize node output for STAGE_COMPLETED events.
 
     Replaces large lists (tool_calls, tool_results) with counts and truncates
-    long strings (including in nested structures) to avoid exceeding PostgreSQL's
-    JSONB size limit.
+    long strings (including in nested structures) to keep event payloads on
+    the bus small.
 
     Args:
         output: Raw node output dictionary.
@@ -77,7 +51,7 @@ def summarize_stage_output(output: dict[str, Any] | None) -> dict[str, Any] | No
         if key in ("tool_calls", "tool_results") and isinstance(value, list):
             result[f"{key}_count"] = len(value)
         else:
-            result[key] = _truncate_nested(value)
+            result[key] = truncate_nested(value)
     return result
 
 
@@ -97,35 +71,27 @@ def is_interrupt_chunk(chunk: tuple[str, Any] | dict[str, Any]) -> bool:
         if mode == "updates" and isinstance(data, dict):
             return "__interrupt__" in data
         return False
-    # Single mode (dict)
     return "__interrupt__" in chunk
 
 
 class StreamEventEmitter:
     """Owns workflow event emission and per-workflow sequencing.
 
-    Persists each event via the repository (assigning a monotonically
-    increasing sequence number per workflow) and broadcasts it over the event
-    bus. Also maps LangGraph stream chunks to the events they imply.
+    Assigns a monotonically increasing in-memory sequence number per workflow
+    (starting at 1) and broadcasts each event over the event bus. The stream
+    is transient — events are never persisted. Also maps LangGraph stream
+    chunks to the events they imply.
     """
 
-    def __init__(
-        self,
-        repository: WorkflowRepository,
-        event_bus: EventBus,
-    ) -> None:
+    def __init__(self, event_bus: EventBus) -> None:
         """Initialize the emitter.
 
         Args:
-            repository: Repository for workflow event persistence.
             event_bus: Event bus for broadcasting workflow events.
         """
-        self._repository = repository
         self._event_bus = event_bus
         # workflow_id -> next sequence
         self._sequence_counters: dict[uuid.UUID, int] = {}
-        # workflow_id -> lock
-        self._sequence_locks: dict[uuid.UUID, asyncio.Lock] = {}
 
     def forget(self, workflow_id: uuid.UUID) -> None:
         """Drop per-workflow sequence state after a workflow task completes.
@@ -134,7 +100,6 @@ class StreamEventEmitter:
             workflow_id: The workflow whose sequence state should be purged.
         """
         self._sequence_counters.pop(workflow_id, None)
-        self._sequence_locks.pop(workflow_id, None)
 
     async def emit(
         self,
@@ -147,8 +112,8 @@ class StreamEventEmitter:
     ) -> WorkflowEvent:
         """Emit a workflow event.
 
-        Creates an event with monotonically increasing sequence number,
-        persists to repository, and broadcasts via event bus.
+        Creates an event with a monotonically increasing in-memory sequence
+        number (starting at 1 per workflow) and broadcasts it via event bus.
 
         Args:
             workflow_id: The workflow this event belongs to.
@@ -161,18 +126,9 @@ class StreamEventEmitter:
         Returns:
             The emitted WorkflowEvent.
         """
-        # Get or create lock atomically (setdefault is atomic for dict operations)
-        lock = self._sequence_locks.setdefault(workflow_id, asyncio.Lock())
-
-        async with lock:
-            # Initialize or get sequence counter
-            if workflow_id not in self._sequence_counters:
-                max_seq = await self._repository.get_max_event_sequence(workflow_id)
-                # Repository returns 0 if no events exist, so max_seq + 1 starts at 1
-                self._sequence_counters[workflow_id] = max_seq + 1
-
-            sequence = self._sequence_counters[workflow_id]
-            self._sequence_counters[workflow_id] += 1
+        # Synchronous read-modify-write: atomic under asyncio's single thread.
+        sequence = self._sequence_counters.get(workflow_id, 1)
+        self._sequence_counters[workflow_id] = sequence + 1
 
         event = WorkflowEvent(
             id=uuid4(),
@@ -186,8 +142,6 @@ class StreamEventEmitter:
             correlation_id=correlation_id,
         )
 
-        # Persist and broadcast
-        await self._repository.save_event(event)
         self._event_bus.emit(event)
 
         logger.debug(
@@ -234,10 +188,8 @@ class StreamEventEmitter:
                 summarized = summarize_stage_output(output)
                 assert summarized is not None
 
-                # Emit agent-specific messages based on node
                 await self._emit_agent_messages(workflow_id, node_name, summarized)
 
-                # Emit STAGE_COMPLETED for the current node
                 await self.emit(
                     workflow_id,
                     EventType.STAGE_COMPLETED,
@@ -246,9 +198,7 @@ class StreamEventEmitter:
                     data={"stage": node_name, "output": summarized},
                 )
 
-            # Emit TASK_COMPLETED when next_task_node completes
             if node_name == "next_task_node":
-                # Get total_tasks from output (passed through by next_task_node)
                 total_tasks = output.get("total_tasks")
                 if total_tasks is not None:
                     # The output contains the NEW index, so completed task is index - 1
@@ -284,7 +234,6 @@ class StreamEventEmitter:
             workflow_id: The workflow this task belongs to.
             task_data: Task event data from LangGraph.
         """
-        # Ignore task result events - only process task start events
         if "input" not in task_data:
             return
 
@@ -298,7 +247,6 @@ class StreamEventEmitter:
                 data={"stage": node_name},
             )
 
-        # Emit TASK_STARTED for developer_node in task-based mode
         if node_name == "developer_node":
             input_state = task_data.get("input")
             # input_state is an ImplementationState Pydantic model from LangGraph.
@@ -379,7 +327,6 @@ class StreamEventEmitter:
             workflow_id: The workflow ID.
             output: State updates from the architect node.
         """
-        # In agentic mode, architect sets goal and generates markdown plan
         goal = output.get("goal")
         plan_markdown = output.get("plan_markdown")
 
@@ -426,8 +373,6 @@ class StreamEventEmitter:
             workflow_id: The workflow ID.
             output: State updates from the developer node.
         """
-        # In agentic mode, developer works autonomously with tool calls
-        # Emit status updates based on agentic state
         status = output.get("agentic_status")
         final_response = output.get("final_response")
 
@@ -464,7 +409,6 @@ class StreamEventEmitter:
         if not last_reviews:
             return
 
-        # Emit a message for each review in the list
         for review in last_reviews:
             approved = review.approved
             severity = review.severity

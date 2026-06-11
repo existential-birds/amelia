@@ -424,13 +424,10 @@ describe("useBrainstormStore", () => {
 
       const messages = useBrainstormStore.getState().messages;
       expect(messages).toHaveLength(3);
-      // User message unchanged
       expect(messages[0]!.content).toBe("Hello");
       expect(messages[0]!.status).toBeUndefined();
-      // Streaming message got error
       expect(messages[1]!.status).toBe("error");
       expect(messages[1]!.errorMessage).toBe("Connection lost. Please retry.");
-      // Completed message unchanged
       expect(messages[2]!.content).toBe("Done earlier");
       expect(messages[2]!.status).toBeUndefined();
     });

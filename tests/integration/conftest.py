@@ -29,7 +29,6 @@ from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.events.connection_manager import ConnectionManager
-from amelia.server.models.events import WorkflowEvent
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.runner import GraphRunner
 from amelia.server.orchestrator.service import OrchestratorService
@@ -40,18 +39,9 @@ from tests.conftest import AsyncIteratorMock
 rebuild_implementation_state()
 
 
-# =============================================================================
-# Constants
-# =============================================================================
-
 # Free model for OpenRouter integration tests (incurs no costs)
 # Must support tool use - see https://openrouter.ai/models?q=:free
 OPENROUTER_FREE_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
-
-
-# =============================================================================
-# Git Repository Helpers
-# =============================================================================
 
 
 def _run_git(
@@ -105,7 +95,6 @@ def init_git_repo(
     _run_git(["git", "config", "user.name", "Test"], cwd=path, env=clean_env)
     _run_git(["git", "config", "commit.gpgsign", "false"], cwd=path, env=clean_env)
 
-    # Create initial files
     files_to_create = initial_files if initial_files is not None else {"README.md": "# Test"}
     for file_path, content in files_to_create.items():
         full_path = path / file_path
@@ -116,11 +105,6 @@ def init_git_repo(
     _run_git(["git", "commit", "-m", "Initial"], cwd=path, env=clean_env)
 
     return clean_env
-
-
-# =============================================================================
-# Factory Functions (module-level, not fixtures)
-# =============================================================================
 
 
 def make_issue(
@@ -210,7 +194,6 @@ def make_execution_state(
     if profile is None:
         profile = make_profile()
 
-    # Provide defaults for required BasePipelineState fields
     workflow_id = kwargs.pop("workflow_id", uuid4())
     created_at = kwargs.pop("created_at", datetime.now(UTC))
     status = kwargs.pop("status", "pending")
@@ -338,7 +321,6 @@ def make_reviewer_agentic_messages(
     if comments is None:
         comments = ["LGTM! Good work."] if approved else ["Issue found in code."]
 
-    # Map severity to beagle format section
     severity_map = {
         "low": "Minor",
         "medium": "Minor",
@@ -349,7 +331,6 @@ def make_reviewer_agentic_messages(
     }
     section = severity_map.get(severity, "Minor")
 
-    # Build issues section if not approved
     issues_section = ""
     if not approved:
         issues_section = f"\n### {section} (Should Fix)\n\n"
@@ -359,7 +340,6 @@ def make_reviewer_agentic_messages(
             issues_section += "   - Why: Quality concern\n"
             issues_section += "   - Fix: Address the issue\n\n"
 
-    # Build verdict
     verdict = "Yes" if approved else "No"
     rationale = "All changes look good." if approved else "Issues need to be addressed."
 
@@ -393,11 +373,6 @@ Review of the code changes.
     ]
 
 
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-
 @pytest.fixture
 def find_free_port() -> Callable[[], int]:
     """Fixture that returns a function to find an available port for testing.
@@ -427,8 +402,6 @@ def mock_repository() -> AsyncMock:
     """Create in-memory repository mock with full CRUD support."""
     repo = AsyncMock(spec=WorkflowRepository)
     repo.workflows = {}
-    repo.events = []
-    repo.event_sequence = {}
 
     async def create(state: ServerExecutionState) -> None:
         repo.workflows[state.id] = state
@@ -444,18 +417,9 @@ def mock_repository() -> AsyncMock:
                 update={"workflow_status": status, "failure_reason": failure_reason}
             )
 
-    async def save_event(event: WorkflowEvent) -> None:
-        repo.events.append(event)
-
-    async def get_max_event_sequence(workflow_id: str) -> int:
-        return cast(int, repo.event_sequence.get(workflow_id, 0))
-
     repo.create = create
     repo.get = get
     repo.set_status = set_status
-    repo.save_event = save_event
-    repo.get_max_event_sequence = get_max_event_sequence
-
     return repo
 
 
@@ -537,11 +501,6 @@ def orchestrator_graph() -> CompiledStateGraph[Any]:
     )
 
 
-# ---------------------------------------------------------------------------
-# Shared LangGraph planning mocks
-# ---------------------------------------------------------------------------
-
-
 def create_planning_graph_mock(
     goal: str = "Test goal from architect",
     plan_markdown: str = "## Plan\n\n### Task 1: First task\n- Do something",
@@ -560,7 +519,6 @@ def create_planning_graph_mock(
     """
     mock_graph = MagicMock()
 
-    # Mock aget_state to return checkpoint with plan data
     checkpoint_values = {
         "goal": goal,
         "plan_markdown": plan_markdown,
@@ -571,7 +529,6 @@ def create_planning_graph_mock(
     mock_checkpoint.next = []
     mock_graph.aget_state = AsyncMock(return_value=mock_checkpoint)
 
-    # Mock astream to yield chunks including interrupt
     astream_items: list[tuple[str, dict[str, Any]]] = [
         ("updates", {"architect_node": {"goal": goal, "architect_raw_output": plan_markdown}}),
     ]
@@ -581,7 +538,6 @@ def create_planning_graph_mock(
 
     mock_graph.astream = lambda *args, **kwargs: AsyncIteratorMock(astream_items)
 
-    # Mock aupdate_state for approve_workflow
     mock_graph.aupdate_state = AsyncMock()
 
     return mock_graph
@@ -626,10 +582,6 @@ async def mock_langgraph_for_planning(
         yield mock_graph
 
 
-# ---------------------------------------------------------------------------
-# Shared database & service fixtures for orchestrator integration tests
-# ---------------------------------------------------------------------------
-
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql://amelia:amelia@localhost:5434/amelia_test",
@@ -664,7 +616,7 @@ async def test_db() -> AsyncGenerator[Database, None]:
                 document_chunks, documents,
                 workflow_prompt_versions, prompt_versions, prompts,
                 brainstorm_artifacts, brainstorm_messages, brainstorm_sessions,
-                token_usage, workflow_log, workflows,
+                workflows,
                 profiles, server_settings
             CASCADE
         """)
@@ -766,11 +718,6 @@ async def active_test_profile(
     return profile
 
 
-# ---------------------------------------------------------------------------
-# Shared orchestrator test client fixture
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture
 async def orchestrator_test_client(
     test_orchestrator: OrchestratorService,
@@ -798,11 +745,6 @@ async def orchestrator_test_client(
         base_url="http://testserver",
     ) as client:
         yield client
-
-
-# ---------------------------------------------------------------------------
-# Shared create_test_workflow helper
-# ---------------------------------------------------------------------------
 
 
 async def create_test_workflow(
@@ -839,11 +781,6 @@ async def create_test_workflow(
     )
     await repository.create(workflow)
     return workflow
-
-
-# ---------------------------------------------------------------------------
-# Shared mock_api_key fixture
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture

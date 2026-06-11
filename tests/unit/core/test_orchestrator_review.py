@@ -75,7 +75,6 @@ def run_reviewer_node(
                 return_value=get_commit_return,
             ) as mock_get_commit,
             patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class,
-            patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
         ):
             mock_reviewer = MagicMock()
             mock_reviewer.driver = MagicMock()
@@ -208,7 +207,6 @@ class TestCallReviewNodeMultipleReviewTypes:
             patch("amelia.pipelines.nodes.detect_stack", return_value={"python"}),
             patch("amelia.pipelines.nodes.load_skills", return_value="# Guidelines") as mock_load,
             patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_cls,
-            patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
         ):
             mock_reviewer = MagicMock()
             mock_reviewer.driver = MagicMock()
@@ -277,7 +275,6 @@ class TestCallReviewNodeMultipleReviewTypes:
             patch("amelia.pipelines.nodes.detect_stack", return_value=set()),
             patch("amelia.pipelines.nodes.load_skills", return_value="") as mock_load,
             patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_cls,
-            patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
         ):
             mock_reviewer = MagicMock()
             mock_reviewer.driver = MagicMock()

@@ -44,10 +44,8 @@ export default function WorkflowsPage() {
   const isTablet = useIsTablet();
   const [activeTab, setActiveTab] = useState('all');
 
-  // Auto-revalidate when any workflow's status changes (approval events, completion, etc.)
   useAutoRevalidation();
 
-  // Filter workflows by pipeline type tab
   const filteredWorkflows = useMemo(() => {
     if (activeTab === 'all') return workflows;
     return workflows.filter((w: WorkflowSummary) => {
@@ -56,12 +54,10 @@ export default function WorkflowsPage() {
     });
   }, [workflows, activeTab]);
 
-  // Determine which workflow is displayed
   const activeWorkflow = getActiveWorkflow(workflows);
   const displayedId = params.id ?? activeWorkflow?.id ?? null;
   const elapsedTime = useElapsedTime(detail);
 
-  // Handle workflow selection by navigating to URL
   const handleSelect = useCallback((id: string | null) => {
     if (id) {
       navigate(`/workflows/${id}`);

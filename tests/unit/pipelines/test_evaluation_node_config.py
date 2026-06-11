@@ -63,8 +63,7 @@ async def test_call_evaluation_node_uses_agent_config(profile_with_agents, mock_
         mock_evaluator.driver = MagicMock()
         MockEvaluator.return_value = mock_evaluator
 
-        with patch("amelia.pipelines.review.nodes._save_token_usage", new_callable=AsyncMock):
-            await call_evaluation_node(mock_state, config)
+        await call_evaluation_node(mock_state, config)
 
         # Verify Evaluator was instantiated with AgentConfig via 'config' kwarg
         MockEvaluator.assert_called_once()

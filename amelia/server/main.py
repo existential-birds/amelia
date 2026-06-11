@@ -133,18 +133,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Initializes configuration, database, orchestrator, and lifecycle components.
     """
     # Rebuild ImplementationState forward references before any instantiation.
-    # ServerExecutionState no longer has forward refs (execution_state field removed).
     rebuild_implementation_state()
 
     # Configure logging (needed when uvicorn loads app directly, e.g. with --reload)
     log_level = os.environ.get("AMELIA_LOG_LEVEL", "INFO").upper()
     configure_logging(level=log_level)
 
-    # Initialize configuration
     config = ServerConfig()
     set_config(config)
 
-    # Connect to database and run migrations
     database = Database(config.database_url, min_size=config.db_pool_min_size, max_size=config.db_pool_max_size)
     try:
         await database.connect()
@@ -155,32 +152,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await migrator.run()
     await migrator.initialize_prompts()
 
-    # Initialize settings with defaults
     settings_repo = SettingsRepository(database)
     await settings_repo.ensure_defaults()
 
-    # Get server settings for orchestrator configuration
     server_settings = await settings_repo.get_server_settings()
 
-    # Set the database in dependencies module for DI
     set_database(database)
 
-    # Create repositories
     repository = WorkflowRepository(database)
     profile_repo = ProfileRepository(database)
 
-    # Create event bus
-    event_bus = EventBus()
-    # Wire WebSocket broadcasting and repository
+    event_bus = EventBus(buffer_size=config.event_bus_buffer_size)
+    # Wire WebSocket broadcasting and reconnect backfill
     event_bus.set_connection_manager(connection_manager)
-    connection_manager.set_repository(repository)
+    connection_manager.set_event_bus(event_bus)
 
-    # Bridge events to server console via loguru
     from amelia.server.events.log_subscriber import log_event_to_console  # noqa: PLC0415
 
     event_bus.subscribe(log_event_to_console)
 
-    # Create and register orchestrator
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
     from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
@@ -205,10 +195,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         profile_repo=profile_repo,
         max_concurrent=server_settings.max_concurrent,
         checkpointer=checkpointer,
+        trajectory_dir=config.trajectory_dir,
     )
     set_orchestrator(orchestrator)
 
-    # Create brainstorm repository and service
     brainstorm_repo = BrainstormRepository(database)
     brainstorm_service = BrainstormService(
         repository=brainstorm_repo,
@@ -219,14 +209,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.brainstorm_service = brainstorm_service
     app.state.event_bus = event_bus
 
-    # Create knowledge service
     openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
     embedding_client: EmbeddingClient | None = None
     if openrouter_api_key:
         embedding_client = EmbeddingClient(api_key=openrouter_api_key)
         knowledge_repo = KnowledgeRepository(database)
 
-        # Tag derivation configuration
         tag_model = os.environ.get(
             "AMELIA_KNOWLEDGE_TAG_MODEL",
             "minimax/minimax-m2.5",  # Reliable tool calling support
@@ -234,9 +222,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         tag_driver_raw = os.environ.get(
             "AMELIA_KNOWLEDGE_TAG_DRIVER",
             "api",  # Default to API driver
-        ).lower()  # Normalize to lowercase
+        ).lower()
 
-        # Validate driver type
         try:
             tag_driver = DriverType(tag_driver_raw)
         except ValueError:
@@ -262,7 +249,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         knowledge_service = None
         logger.warning("OPENROUTER_API_KEY not set, knowledge service disabled")
 
-    # Create lifecycle components
     log_retention = LogRetentionService(
         db=database, config=server_settings, checkpointer=checkpointer
     )
@@ -272,7 +258,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     health_checker = WorktreeHealthChecker(orchestrator=orchestrator)
 
-    # Create PR auto-fix orchestrator for polling service
     # GitHubPRService needs a repo_root; the orchestrator uses it only for
     # create_issue_comment on divergence failure. The poller creates per-profile
     # services for actual PR listing and comment fetching.
@@ -283,6 +268,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         github_pr_service=GitHubPRService("."),
         workflow_repo=repository,
         metrics_repo=metrics_repo,
+        trajectory_dir=config.trajectory_dir,
     )
     pr_poller = PRCommentPoller(
         profile_repo=profile_repo,
@@ -294,12 +280,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.pr_autofix_orchestrator = pr_fix_orchestrator
     app.state.lifecycle = lifecycle
 
-    # Start lifecycle components
     await lifecycle.startup()
     await health_checker.start()
     await pr_poller.start()
 
-    # Log server startup with styled banner
     log_server_startup(
         host=config.host,
         port=config.port,
@@ -400,7 +384,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Mount routes
     application.include_router(config_router, prefix="/api")
     application.include_router(descriptions_router, prefix="/api")
     application.include_router(files_router, prefix="/api")
@@ -417,21 +400,18 @@ def create_app() -> FastAPI:
     application.include_router(prompts_router)  # Already has /api/prompts prefix
     application.include_router(settings_router)  # Already has /api prefix
 
-    # Set up prompt repository dependency
     def get_prompt_repo() -> PromptRepository:
         from amelia.server.dependencies import get_database
         return PromptRepository(get_database())
 
     application.dependency_overrides[get_prompt_repository] = get_prompt_repo
 
-    # Set up brainstorm service dependency
     def get_brainstorm_svc() -> BrainstormService:
         service: BrainstormService = application.state.brainstorm_service
         return service
 
     application.dependency_overrides[get_brainstorm_service] = get_brainstorm_svc
 
-    # Set up driver dependency for brainstorm routes
     async def get_brainstorm_driver() -> DriverInterface:
         """Get driver for brainstorming using active profile from database.
 
@@ -453,7 +433,6 @@ def create_app() -> FastAPI:
 
     application.dependency_overrides[get_driver] = get_brainstorm_driver
 
-    # Set up cwd dependency for brainstorm routes
     async def get_brainstorm_cwd() -> str:
         """Get working directory from active profile in database.
 
@@ -468,7 +447,6 @@ def create_app() -> FastAPI:
 
     application.dependency_overrides[get_cwd] = get_brainstorm_cwd
 
-    # Set up Oracle dependencies
     def get_oracle_event_bus() -> EventBus:
         """Get EventBus for Oracle consultations."""
         bus: EventBus = application.state.event_bus
@@ -476,7 +454,6 @@ def create_app() -> FastAPI:
 
     application.dependency_overrides[oracle_get_event_bus] = get_oracle_event_bus
 
-    # Mount sandbox proxy routes
     async def _resolve_provider(profile_name: str) -> ProviderConfig | None:
         return await resolve_proxy_provider(profile_name, get_profile_repository())
 
@@ -518,7 +495,6 @@ def create_app() -> FastAPI:
     bundled_static_dir = Path(__file__).parent / "static"
     dev_dashboard_dir = Path(__file__).parent.parent.parent / "dashboard" / "dist"
 
-    # Determine dashboard directory (None if not built)
     if (bundled_static_dir / "index.html").exists():
         dashboard_dir = bundled_static_dir
     elif dev_dashboard_dir.exists():
@@ -526,7 +502,6 @@ def create_app() -> FastAPI:
     else:
         dashboard_dir = None
 
-    # Mount assets if dashboard exists
     if dashboard_dir is not None:
         assets_dir = dashboard_dir / "assets"
         if assets_dir.exists():
@@ -549,13 +524,11 @@ def create_app() -> FastAPI:
         if full_path.startswith("api/") or full_path.startswith("ws/"):
             raise HTTPException(status_code=404, detail="Not found")
 
-        # Serve dashboard if built
         if dashboard_dir is not None:
             index_file = dashboard_dir / "index.html"
             if index_file.exists():
                 return FileResponse(index_file)
 
-        # Dashboard not built - return instructions
         return JSONResponse({
             "message": "Dashboard not built",
             "instructions": "Run 'cd dashboard && pnpm run build' to build the dashboard",
@@ -564,5 +537,4 @@ def create_app() -> FastAPI:
     return application
 
 
-# Create app instance
 app = create_app()

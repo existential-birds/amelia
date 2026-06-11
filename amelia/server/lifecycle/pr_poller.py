@@ -87,7 +87,6 @@ class PRCommentPoller:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
 
-        # Cancel all fire-and-forget tasks
         for task in self._active_tasks:
             task.cancel()
         for task in self._active_tasks:
@@ -122,14 +121,12 @@ class PRCommentPoller:
         without pr_autofix or whose next-poll time hasn't passed.
         Sets next_poll BEFORE calling _poll_profile to prevent overlap.
         """
-        # Find first enabled profile's repo_root for rate limit check
         profiles = await self._profile_repo.list_profiles()
         enabled_profiles = [p for p in profiles if p.pr_autofix is not None]
 
         if not enabled_profiles:
             return
 
-        # Check rate limit using first enabled profile's repo
         backoff_seconds = await self._should_back_off(enabled_profiles[0].repo_root)
         if backoff_seconds is not None:
             self._emit_rate_limited_event(backoff_seconds)
@@ -138,7 +135,6 @@ class PRCommentPoller:
 
         now = time.monotonic()
         for profile in enabled_profiles:
-            # Skip if next-poll time hasn't passed
             if now < self._next_poll.get(profile.name, 0):
                 continue
 
@@ -206,7 +202,6 @@ class PRCommentPoller:
 
             repo_slug = await self._get_repo_slug(profile.repo_root)
 
-            # Emit PR_COMMENTS_DETECTED event
             detected_event = WorkflowEvent(
                 id=uuid4(),
                 workflow_id=uuid4(),
@@ -223,7 +218,6 @@ class PRCommentPoller:
             )
             self._event_bus.emit(detected_event)
 
-            # Fire-and-forget dispatch
             task = asyncio.create_task(
                 self._orchestrator.trigger_fix_cycle(
                     pr_number=pr.number,

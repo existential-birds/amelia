@@ -67,7 +67,6 @@ def _is_model_provider_error(exc: ValueError) -> bool:
     # langchain_openai pattern: ValueError({"error": {...}, "provider": "..."})
     if exc.args and isinstance(exc.args[0], dict):
         return True
-    # String-based detection for known provider error patterns
     msg = str(exc).lower()
     return any(pattern in msg for pattern in _get_provider_error_patterns())
 

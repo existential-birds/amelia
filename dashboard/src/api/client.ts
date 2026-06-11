@@ -224,7 +224,6 @@ export const api = {
         return data.workflows;
       })
     );
-    // Flatten and sort by started_at descending (most recent first)
     return results
       .flat()
       .sort((a, b) => {
@@ -399,10 +398,6 @@ export const api = {
     });
   },
 
-  // ==========================================================================
-  // Prompts API
-  // ==========================================================================
-
   /**
    * Get all prompts with current version info.
    *
@@ -540,10 +535,6 @@ export const api = {
     return request<DefaultContent>(`/prompts/${promptId}/default`);
   },
 
-  // ==========================================================================
-  // Config API
-  // ==========================================================================
-
   /**
    * Retrieves server configuration for dashboard.
    *
@@ -559,10 +550,6 @@ export const api = {
   async getConfig(): Promise<ConfigResponse> {
     return request<ConfigResponse>('/config');
   },
-
-  // ==========================================================================
-  // Files API
-  // ==========================================================================
 
   /**
    * Reads file content for design document import.
@@ -585,10 +572,6 @@ export const api = {
       body: { path },
     });
   },
-
-  // ==========================================================================
-  // Path Validation API
-  // ==========================================================================
 
   /**
    * Validates a filesystem path and returns git repository info.
@@ -613,10 +596,6 @@ export const api = {
       signal,
     });
   },
-
-  // ==========================================================================
-  // Usage API
-  // ==========================================================================
 
   /**
    * Retrieves usage metrics for a date range.
@@ -647,10 +626,6 @@ export const api = {
     return request<UsageResponse>('/usage', { params: queryParams });
   },
 
-  // ==========================================================================
-  // Knowledge API
-  // ==========================================================================
-
   /**
    * List all knowledge documents.
    *
@@ -676,7 +651,6 @@ export const api = {
     name: string,
     tags: string[]
   ): Promise<KnowledgeDocument> {
-    // Validate tags don't contain commas
     const invalidTag = tags.find(tag => tag.includes(','));
     if (invalidTag) {
       throw new ApiError(`Tag "${invalidTag}" cannot contain commas`, 'VALIDATION_ERROR', 400);
@@ -725,10 +699,6 @@ export const api = {
     });
   },
 
-  // ==========================================================================
-  // Review API
-  // ==========================================================================
-
   /**
    * Requests an on-demand code review for a workflow.
    *
@@ -743,10 +713,6 @@ export const api = {
   ): Promise<void> {
     await request(`/workflows/${workflowId}/review`, { method: 'POST', body: payload });
   },
-
-  // ==========================================================================
-  // PR Auto-Fix Metrics API
-  // ==========================================================================
 
   /**
    * Retrieves PR auto-fix metrics for a date range.

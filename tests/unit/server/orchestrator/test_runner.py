@@ -7,6 +7,7 @@ directly and assert observable behavior (astream inputs, status transitions,
 backoff delays) — not bookkeeping between components.
 """
 
+import asyncio
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -48,8 +49,6 @@ def mock_repository() -> AsyncMock:
     repo.update = AsyncMock()
     repo.update_plan_cache = AsyncMock()
     repo.set_status = AsyncMock()
-    repo.save_event = AsyncMock()
-    repo.get_max_event_sequence = AsyncMock(return_value=0)
     repo.get = AsyncMock(return_value=None)
     return repo
 
@@ -85,7 +84,7 @@ def runner(
     Only the external graph/sandbox boundary is mocked per-test; the runner
     itself is wired exactly as production wires it.
     """
-    events = StreamEventEmitter(repository=mock_repository, event_bus=mock_event_bus)
+    events = StreamEventEmitter(mock_event_bus)
     return GraphRunner(
         repository=mock_repository,
         events=events,
@@ -93,11 +92,6 @@ def runner(
         checkpointer=None,
         profile_repo=mock_profile_repo,
     )
-
-
-# =============================================================================
-# Checkpoint Resume Tests (Bug #199: Infinite Loop) — relocated from test_service
-# =============================================================================
 
 
 class TestRunWorkflowCheckpointResume:
@@ -205,11 +199,6 @@ class TestRunWorkflowCheckpointResume:
         assert first_arg is not None, "Expected astream called with initial_state"
         assert isinstance(first_arg, dict), "Expected initial_state to be a dict"
         assert first_arg.get("profile_id") == "test"
-
-
-# =============================================================================
-# Exponential Backoff / Retry Tests — relocated from test_service
-# =============================================================================
 
 
 class TestRunWorkflowWithRetry:
@@ -441,11 +430,6 @@ class TestRunWorkflowWithRetry:
         assert len(failed_calls) == 1
 
 
-# =============================================================================
-# Plan Sync Tests — relocated from test_service (driver-owned helper)
-# =============================================================================
-
-
 class TestSyncPlanFromCheckpoint:
     """_sync_plan_from_checkpoint writes the checkpoint plan to the plan_cache column."""
 
@@ -482,3 +466,121 @@ class TestSyncPlanFromCheckpoint:
         await runner._sync_plan_from_checkpoint(uuid4(), mock_graph, config)
 
         mock_repository.update_plan_cache.assert_not_called()
+
+
+class TestFinalizeTrajectoryRetention:
+    """finalize_trajectory must keep the recorder until finalize+index succeed.
+
+    Idempotency-vs-retry (Finding 4): the recorder is the only in-memory copy
+    of captured steps. Dropping it before a successful write means a transient
+    failure loses the trajectory permanently, because the cleanup drain has
+    nothing left to retry. These tests drive the real recorder + real registry
+    and assert on observable state (the registry contents and the written
+    trajectory file), not on bookkeeping calls.
+    """
+
+    @pytest.fixture
+    def real_recorder(self, tmp_path: Any) -> Any:
+        from amelia.trajectory import WorkflowTrajectoryRecorder
+
+        return WorkflowTrajectoryRecorder(
+            workflow_id=uuid4(),
+            trajectory_dir=tmp_path,
+            profile_snapshot={"profile_id": "default"},
+        )
+
+    async def test_recorder_dropped_after_successful_finalize(
+        self,
+        runner: GraphRunner,
+        mock_repository: AsyncMock,
+        real_recorder: Any,
+    ) -> None:
+        wf_id = real_recorder._workflow_id
+        runner._recorders[wf_id] = real_recorder
+
+        await runner.finalize_trajectory(wf_id, status="completed")
+
+        assert wf_id not in runner._recorders
+        mock_repository.set_trajectory_index.assert_awaited_once()
+
+    async def test_recorder_retained_when_index_write_fails(
+        self,
+        runner: GraphRunner,
+        mock_repository: AsyncMock,
+        real_recorder: Any,
+        tmp_path: Any,
+    ) -> None:
+        wf_id = real_recorder._workflow_id
+        runner._recorders[wf_id] = real_recorder
+        mock_repository.set_trajectory_index.side_effect = RuntimeError("db down")
+
+        # Must not raise — finalization is best-effort.
+        await runner.finalize_trajectory(wf_id, status="completed")
+
+        # Retained for the cleanup drain to retry.
+        assert wf_id in runner._recorders
+        assert wf_id not in runner._finalizing
+
+        # Drain retry: index write recovers, recorder is then dropped and the
+        # trajectory file lands on disk.
+        mock_repository.set_trajectory_index.side_effect = None
+        await runner.finalize_trajectory(wf_id, status="completed")
+        assert wf_id not in runner._recorders
+        from amelia.trajectory.store import trajectory_path
+
+        assert trajectory_path(tmp_path, wf_id).exists()
+
+    async def test_in_flight_marker_blocks_double_finalize(
+        self,
+        runner: GraphRunner,
+        mock_repository: AsyncMock,
+        real_recorder: Any,
+    ) -> None:
+        wf_id = real_recorder._workflow_id
+        runner._recorders[wf_id] = real_recorder
+        runner._finalizing.add(wf_id)
+
+        await runner.finalize_trajectory(wf_id, status="completed")
+
+        mock_repository.set_trajectory_index.assert_not_awaited()
+        assert wf_id in runner._recorders
+
+    async def test_concurrent_finalize_writes_index_once(
+        self,
+        runner: GraphRunner,
+        mock_repository: AsyncMock,
+        real_recorder: Any,
+    ) -> None:
+        """Two terminal seams racing into finalize must write the index once.
+
+        The in-flight marker has to be acquired before the first ``await`` (the
+        verdict fetch); if it is set only afterwards, both callers pass the
+        guard while the first is suspended and the trajectory is finalized
+        twice. Forces the interleaving with a gated verdict fetch.
+        """
+        wf_id = real_recorder._workflow_id
+        runner._recorders[wf_id] = real_recorder
+
+        gate = asyncio.Event()
+        verdict_calls = 0
+
+        async def gated_verdicts(_wid: Any) -> list[Any]:
+            nonlocal verdict_calls
+            verdict_calls += 1
+            await gate.wait()
+            return []
+
+        runner._get_review_verdicts = gated_verdicts  # type: ignore[method-assign]
+
+        first = asyncio.create_task(runner.finalize_trajectory(wf_id, status="completed"))
+        second = asyncio.create_task(runner.finalize_trajectory(wf_id, status="completed"))
+        for _ in range(4):
+            await asyncio.sleep(0)  # let both reach the guard / first reach the await
+        gate.set()
+        await asyncio.gather(first, second)
+
+        # Second caller short-circuited at the marker, so verdicts (the first
+        # await past the guard) ran once and the index was written once.
+        assert verdict_calls == 1
+        mock_repository.set_trajectory_index.assert_awaited_once()
+        assert wf_id not in runner._recorders

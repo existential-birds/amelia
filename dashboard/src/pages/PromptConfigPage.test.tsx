@@ -10,7 +10,6 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import PromptConfigPage from './PromptConfigPage';
 import type { PromptSummary } from '@/types';
 
-// Mock the API client
 vi.mock('@/api/client', () => ({
   api: {
     resetPromptToDefault: vi.fn(),
@@ -94,7 +93,6 @@ describe('PromptConfigPage', () => {
     it('should display all four agent sections', async () => {
       renderWithRouter(mockPromptsWithoutDeveloper);
 
-      // All four agent sections should be visible
       expect(await screen.findByText('Architect')).toBeInTheDocument();
       expect(screen.getByText('Developer')).toBeInTheDocument();
       expect(screen.getByText('Reviewer')).toBeInTheDocument();
@@ -106,7 +104,6 @@ describe('PromptConfigPage', () => {
 
       await screen.findByText('Architect');
 
-      // Get all section elements and extract their heading text
       const sections = document.querySelectorAll('section');
       const sectionHeadings = Array.from(sections).map(
         (s) => s.querySelector('h2')?.textContent
@@ -126,7 +123,6 @@ describe('PromptConfigPage', () => {
 
       await screen.findByText('Architect');
 
-      // Each section header should have the agent color class
       expect(screen.getByText('Architect')).toHaveClass('text-agent-architect');
       expect(screen.getByText('Developer')).toHaveClass('text-agent-developer');
       expect(screen.getByText('Reviewer')).toHaveClass('text-agent-reviewer');
@@ -136,17 +132,13 @@ describe('PromptConfigPage', () => {
     it('should display prompt cards for agents with prompts', async () => {
       renderWithRouter(mockPromptsWithoutDeveloper);
 
-      // Wait for page to load
       await screen.findByText('Architect');
 
-      // Architect should have 2 prompt cards
       expect(screen.getByText('System Prompt')).toBeInTheDocument();
       expect(screen.getByText('Plan Format')).toBeInTheDocument();
 
-      // Reviewer should have 1 prompt card
       expect(screen.getByText('Structured Review')).toBeInTheDocument();
 
-      // Evaluator should have 1 prompt card
       expect(screen.getByText('Evaluator System')).toBeInTheDocument();
     });
   });
@@ -155,14 +147,11 @@ describe('PromptConfigPage', () => {
     it('should show placeholder card when developer has no prompts', async () => {
       renderWithRouter(mockPromptsWithoutDeveloper);
 
-      // Wait for page to load
       await screen.findByText('Architect');
 
-      // Developer section should exist
       const developerSection = screen.getByText('Developer').closest('section');
       expect(developerSection).toBeInTheDocument();
 
-      // Should show the placeholder card with explanatory text
       expect(
         within(developerSection!).getByText('No Configurable Prompt')
       ).toBeInTheDocument();
@@ -173,11 +162,9 @@ describe('PromptConfigPage', () => {
 
       await screen.findByText('Architect');
 
-      // Find the developer section
       const developerSection = screen.getByText('Developer').closest('section');
       expect(developerSection).toBeInTheDocument();
 
-      // Should contain generic placeholder explanation
       expect(
         within(developerSection!).getByText(/no prompt template available/i)
       ).toBeInTheDocument();
@@ -188,16 +175,13 @@ describe('PromptConfigPage', () => {
 
       await screen.findByText('Architect');
 
-      // Developer section should show the actual prompt, not placeholder
       const developerSection = screen.getByText('Developer').closest('section');
       expect(developerSection).toBeInTheDocument();
 
-      // Should show the actual prompt card
       expect(
         within(developerSection!).getByText('Developer System')
       ).toBeInTheDocument();
 
-      // Should NOT show the placeholder
       expect(
         within(developerSection!).queryByText('No Configurable Prompt')
       ).not.toBeInTheDocument();
@@ -210,7 +194,6 @@ describe('PromptConfigPage', () => {
 
       await screen.findByText('Architect');
 
-      // Should show total count of 4 prompts
       expect(screen.getByText('4')).toBeInTheDocument();
     });
 
@@ -219,7 +202,6 @@ describe('PromptConfigPage', () => {
 
       await screen.findByText('Architect');
 
-      // One prompt has a custom version (architect.plan)
       expect(screen.getByText('1')).toBeInTheDocument();
       expect(screen.getByText('customized')).toBeInTheDocument();
     });

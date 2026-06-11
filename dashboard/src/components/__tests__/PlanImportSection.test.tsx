@@ -7,7 +7,6 @@ import userEvent from '@testing-library/user-event';
 import { PlanImportSection } from '../PlanImportSection';
 import { api, ApiError } from '@/api/client';
 
-// Mock the API client
 vi.mock('@/api/client', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/api/client')>();
   return {
@@ -28,7 +27,6 @@ describe('PlanImportSection', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset listFiles default
     vi.mocked(api.listFiles).mockResolvedValue({ files: [], directory: '' });
   });
 
@@ -40,7 +38,6 @@ describe('PlanImportSection', () => {
 
     it('renders collapsed by default', () => {
       render(<PlanImportSection {...defaultProps} />);
-      // Content should not be visible when collapsed
       expect(screen.queryByPlaceholderText(/relative path/i)).not.toBeInTheDocument();
     });
 
@@ -50,7 +47,6 @@ describe('PlanImportSection', () => {
 
       await user.click(screen.getByText(/external plan/i));
 
-      // Content should now be visible
       await waitFor(() => {
         expect(screen.getByPlaceholderText(/relative path/i)).toBeInTheDocument();
       });
@@ -66,9 +62,7 @@ describe('PlanImportSection', () => {
     it('shows "File Path" mode by default', () => {
       render(<PlanImportSection {...defaultProps} defaultExpanded />);
 
-      // File path input should be visible
       expect(screen.getByPlaceholderText(/relative path/i)).toBeInTheDocument();
-      // Textarea should not be visible
       expect(screen.queryByPlaceholderText(/paste.*plan.*markdown/i)).not.toBeInTheDocument();
     });
 
@@ -76,14 +70,11 @@ describe('PlanImportSection', () => {
       const user = userEvent.setup();
       render(<PlanImportSection {...defaultProps} defaultExpanded />);
 
-      // Click the "Paste" toggle
       await user.click(screen.getByRole('radio', { name: /paste/i }));
 
-      // Textarea should be visible
       await waitFor(() => {
         expect(screen.getByPlaceholderText(/paste.*plan.*markdown/i)).toBeInTheDocument();
       });
-      // File path input should not be visible
       expect(screen.queryByPlaceholderText(/relative path/i)).not.toBeInTheDocument();
     });
 
@@ -91,12 +82,9 @@ describe('PlanImportSection', () => {
       const user = userEvent.setup();
       render(<PlanImportSection {...defaultProps} defaultExpanded />);
 
-      // Switch to Paste
       await user.click(screen.getByRole('radio', { name: /paste/i }));
-      // Switch back to File
       await user.click(screen.getByRole('radio', { name: /file/i }));
 
-      // File path input should be visible again
       await waitFor(() => {
         expect(screen.getByPlaceholderText(/relative path/i)).toBeInTheDocument();
       });
@@ -146,7 +134,6 @@ describe('PlanImportSection', () => {
       const onPlanChange = vi.fn();
       render(<PlanImportSection onPlanChange={onPlanChange} defaultExpanded planOutputDir={undefined} />);
 
-      // Switch to paste mode
       await user.click(screen.getByRole('radio', { name: /paste/i }));
 
       const textarea = screen.getByPlaceholderText(/paste.*plan.*markdown/i);
@@ -165,7 +152,6 @@ describe('PlanImportSection', () => {
       const user = userEvent.setup();
       render(<PlanImportSection {...defaultProps} defaultExpanded />);
 
-      // Switch to paste mode
       await user.click(screen.getByRole('radio', { name: /paste/i }));
 
       const markdown = `# Plan
@@ -182,7 +168,6 @@ Implement user authentication.
       const textarea = screen.getByPlaceholderText(/paste.*plan.*markdown/i);
       await user.type(textarea, markdown);
 
-      // Preview should show extracted info (in the preview card, not textarea)
       await waitFor(() => {
         const preview = screen.getByTestId('plan-preview');
         expect(preview).toHaveTextContent(/implement user authentication/i);
@@ -209,7 +194,6 @@ Implement user authentication.
       const onPlanChange = vi.fn();
       render(<PlanImportSection onPlanChange={onPlanChange} defaultExpanded planOutputDir={undefined} />);
 
-      // Switch to paste mode to enable drop target
       const user = userEvent.setup();
       await user.click(screen.getByRole('radio', { name: /paste/i }));
 
@@ -309,7 +293,6 @@ Add new feature.
     it('does not show preview card when content is empty', () => {
       render(<PlanImportSection {...defaultProps} defaultExpanded />);
 
-      // No preview should be visible
       expect(screen.queryByTestId('plan-preview')).not.toBeInTheDocument();
     });
   });
@@ -468,14 +451,12 @@ Add new feature.
         />
       );
 
-      // First, get a preview
       await user.type(screen.getByPlaceholderText(/relative path/i), 'docs/plan.md');
       await user.click(screen.getByRole('button', { name: /preview/i }));
       await waitFor(() => {
         expect(screen.getByTestId('plan-preview')).toBeInTheDocument();
       });
 
-      // Change path — preview should clear
       await user.type(screen.getByPlaceholderText(/relative path/i), '-v2');
       expect(screen.queryByTestId('plan-preview')).not.toBeInTheDocument();
     });
@@ -522,7 +503,6 @@ Add new feature.
         />
       );
 
-      // Should show combobox, not text input
       expect(screen.queryByPlaceholderText(/relative path/i)).not.toBeInTheDocument();
       expect(screen.getByRole('combobox')).toBeInTheDocument();
     });
@@ -543,7 +523,6 @@ Add new feature.
         />
       );
 
-      // Open combobox
       await user.click(screen.getByRole('combobox'));
 
       await waitFor(() => {
@@ -567,12 +546,10 @@ Add new feature.
         />
       );
 
-      // Wait for files to load
       await waitFor(() => {
         expect(api.listFiles).toHaveBeenCalled();
       });
 
-      // Open combobox
       await user.click(screen.getByRole('combobox'));
 
       await waitFor(() => {
@@ -602,12 +579,10 @@ Add new feature.
         />
       );
 
-      // Wait for files to load
       await waitFor(() => {
         expect(api.listFiles).toHaveBeenCalled();
       });
 
-      // Open combobox and select a file
       await user.click(screen.getByRole('combobox'));
       await waitFor(() => {
         expect(screen.getByText('plan-1.md')).toBeInTheDocument();
@@ -644,12 +619,10 @@ Add new feature.
         />
       );
 
-      // Wait for files to load
       await waitFor(() => {
         expect(api.listFiles).toHaveBeenCalled();
       });
 
-      // Open combobox and select a file
       await user.click(screen.getByRole('combobox'));
       await waitFor(() => {
         expect(screen.getByText('plan-1.md')).toBeInTheDocument();

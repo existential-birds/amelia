@@ -26,10 +26,6 @@ from amelia.server.database.repository import WorkflowRepository
 from tests.integration.conftest import init_git_repo
 
 
-# =============================================================================
-# Fixtures
-# =============================================================================
-
 # test_db, test_repository, test_profile_repository, and test_event_bus
 # fixtures are inherited from tests/integration/conftest.py
 
@@ -75,11 +71,6 @@ async def setup_test_profile(test_profile_repository: ProfileRepository) -> Prof
 def test_client(orchestrator_test_client: httpx.AsyncClient) -> httpx.AsyncClient:
     """Alias shared orchestrator_test_client fixture for local use."""
     return orchestrator_test_client
-
-
-# =============================================================================
-# Test Classes
-# =============================================================================
 
 
 @pytest.mark.integration

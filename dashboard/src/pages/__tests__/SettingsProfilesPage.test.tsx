@@ -11,7 +11,6 @@ import * as toast from '../../components/Toast';
 
 const navigateSpy = vi.fn();
 
-// Mock React Router
 vi.mock('react-router-dom', async (importOriginal) => {
   const mod = await importOriginal<typeof import('react-router-dom')>();
   return {
@@ -22,13 +21,11 @@ vi.mock('react-router-dom', async (importOriginal) => {
   };
 });
 
-// Mock the API
 vi.mock('../../api/settings', () => ({
   deleteProfile: vi.fn(),
   activateProfile: vi.fn(),
 }));
 
-// Mock toast
 vi.mock('../../components/Toast', () => ({
   success: vi.fn(),
   error: vi.fn(),
@@ -130,14 +127,11 @@ describe('SettingsProfilesPage', () => {
       </MemoryRouter>
     );
 
-    // Click the Claude filter
     const user = userEvent.setup();
     const claudeButton = screen.getByRole('radio', { name: 'Claude' });
     await user.click(claudeButton);
 
-    // dev uses claude, should be visible
     expect(screen.getByText('dev')).toBeInTheDocument();
-    // prod uses api, should be hidden after animation
     await waitFor(() => {
       expect(screen.queryByText('prod')).not.toBeInTheDocument();
     });
@@ -212,7 +206,6 @@ describe('SettingsProfilesPage', () => {
       </MemoryRouter>
     );
 
-    // Check that driver badges are rendered
     expect(await screen.findByText('claude')).toBeInTheDocument();
     expect(screen.getByText('api')).toBeInTheDocument();
   });
@@ -225,7 +218,6 @@ describe('SettingsProfilesPage', () => {
     );
 
     const cards = await screen.findAllByText(/dev|prod/);
-    // Active profile (dev) should come first
     expect(cards[0]?.textContent).toBe('dev');
   });
 });
@@ -248,7 +240,6 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Click the always-visible star on the prod card (inactive) to activate it
     const star = screen.getByRole('button', { name: /set prod active/i });
     await user.click(star);
 
@@ -268,11 +259,9 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Find the delete button using accessible query
     const trashButton = screen.getByRole('button', { name: /delete profile dev/i });
     await user.click(trashButton);
 
-    // Wait for the AlertDialog to appear and click the Delete button
     const deleteButton = await screen.findByRole('button', { name: 'Delete' });
     await user.click(deleteButton);
 
@@ -291,11 +280,9 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Find the delete button using accessible query
     const trashButton = screen.getByRole('button', { name: /delete profile dev/i });
     await user.click(trashButton);
 
-    // Wait for the AlertDialog to appear and click the Cancel button
     const cancelButton = await screen.findByRole('button', { name: 'Cancel' });
     await user.click(cancelButton);
 
@@ -312,7 +299,6 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Click the star on the prod card (inactive) to try activating it
     const star = screen.getByRole('button', { name: /set prod active/i });
     await user.click(star);
 
@@ -331,11 +317,9 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Find the delete button using accessible query
     const trashButton = screen.getByRole('button', { name: /delete profile dev/i });
     await user.click(trashButton);
 
-    // Wait for the AlertDialog to appear and click the Delete button
     const deleteButton = await screen.findByRole('button', { name: 'Delete' });
     await user.click(deleteButton);
 

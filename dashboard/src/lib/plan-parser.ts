@@ -46,7 +46,6 @@ function extractSection(markdown: string, headingName: string): string {
   const startIndex = match.index + match[0].length;
   const remainingContent = markdown.slice(startIndex);
 
-  // Find next ## heading or end of string
   const nextHeadingMatch = remainingContent.match(/^##\s+\w/m);
   const endIndex = nextHeadingMatch?.index ?? remainingContent.length;
 
@@ -63,7 +62,6 @@ function parseGoal(markdown: string): string {
     return '';
   }
 
-  // Collapse multiple lines into one, preserving sentence structure
   return section
     .split('\n')
     .map((line) => line.trim())
@@ -77,19 +75,16 @@ function parseGoal(markdown: string): string {
  * Priority: ### Task headings > checklist items > numbered lists
  */
 function countTasks(markdown: string): number {
-  // First, try ### Task headings (most explicit)
   const taskHeadings = markdown.match(/^###\s+Task\s+\d+/gim);
   if (taskHeadings && taskHeadings.length > 0) {
     return taskHeadings.length;
   }
 
-  // Fall back to checklist items (- [ ] or - [x])
   const checklistItems = markdown.match(/^-\s+\[[ x]\]/gim);
   if (checklistItems && checklistItems.length > 0) {
     return checklistItems.length;
   }
 
-  // Fall back to numbered list items in Tasks section
   const tasksSection = extractSection(markdown, 'Tasks');
   if (tasksSection) {
     const numberedItems = tasksSection.match(/^\d+\.\s+/gm);
@@ -116,7 +111,6 @@ function parseKeyFiles(markdown: string): string[] {
 
   const files: string[] = [];
 
-  // Extract from code blocks first
   const codeBlockMatch = section.match(/```[\s\S]*?```/);
   if (codeBlockMatch) {
     const codeContent = codeBlockMatch[0].replace(/```/g, '').trim();
@@ -128,7 +122,6 @@ function parseKeyFiles(markdown: string): string[] {
     }
   }
 
-  // Extract from list items (- path or - `path`)
   const listItemPattern = /^-\s+`?([^`\n]+)`?\s*$/gm;
   let match;
   while ((match = listItemPattern.exec(section)) !== null) {
@@ -138,7 +131,6 @@ function parseKeyFiles(markdown: string): string[] {
     }
   }
 
-  // Deduplicate and limit to 5
   const uniqueFiles = [...new Set(files)];
   return uniqueFiles.slice(0, 5);
 }

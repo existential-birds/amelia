@@ -9,13 +9,15 @@ Mocks at external boundaries: LLM driver, git operations, GitHub API.
 from __future__ import annotations
 
 import asyncio
-import os
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from harbor.utils.trajectory_validator import validate_trajectory
 
 from amelia.agents.schemas.classifier import (
     ClassificationOutput,
@@ -34,14 +36,11 @@ from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage
 from amelia.pipelines.pr_auto_fix.graph import create_pr_auto_fix_graph
 from amelia.pipelines.pr_auto_fix.orchestrator import PRAutoFixOrchestrator
 from amelia.pipelines.pr_auto_fix.state import GroupFixStatus, PRAutoFixState
+from amelia.server.database.connection import Database
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from tests.conftest import create_mock_execute_agentic
 
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 _NOW = datetime(2026, 3, 15, 12, 0, 0, tzinfo=UTC)
 
@@ -137,11 +136,6 @@ def orchestrator(event_bus: EventBus) -> PRAutoFixOrchestrator:
     )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _mock_unified_driver(comment_ids: list[int]) -> MagicMock:
     """Create a mock driver for both classify (generate) and develop (execute_agentic)."""
     driver = MagicMock()
@@ -152,12 +146,12 @@ def _mock_unified_driver(comment_ids: list[int]) -> MagicMock:
     driver.execute_agentic = create_mock_execute_agentic([
         AgenticMessage(type=AgenticMessageType.RESULT, content="Applied fix."),
     ])
+    # High-fidelity defaults: return production types, not MagicMock auto-attrs
+    # (the trajectory RecordingDriver reads these when wrapping the driver).
+    driver.model = "test-model"
+    driver.get_usage = MagicMock(return_value=None)
+    driver.get_tool_definitions = MagicMock(return_value=None)
     return driver
-
-
-# ---------------------------------------------------------------------------
-# Test: Full pipeline graph with real nodes
-# ---------------------------------------------------------------------------
 
 
 class TestPipelineEndToEnd:
@@ -362,11 +356,6 @@ class TestPipelineEndToEnd:
         mock_git_ops.stage_and_commit.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# Test: Orchestrator threads comments into pipeline
-# ---------------------------------------------------------------------------
-
-
 class TestOrchestratorThreadsComments:
     """Verify the orchestrator passes comments and config to the real pipeline."""
 
@@ -394,7 +383,6 @@ class TestOrchestratorThreadsComments:
         mock_github_service.reply_to_comment = AsyncMock()
         mock_github_service.resolve_thread = AsyncMock()
 
-        # Mock LocalWorktree as async context manager returning a fake path
         mock_worktree_instance = AsyncMock()
         mock_worktree_instance.__aenter__ = AsyncMock(return_value="/tmp/fake-worktree")
         mock_worktree_instance.__aexit__ = AsyncMock(return_value=None)
@@ -440,11 +428,6 @@ class TestOrchestratorThreadsComments:
         mock_git_ops.stage_and_commit.assert_called_once()
         # Replies were posted (reply_resolve ran)
         assert mock_github_service.reply_to_comment.call_count >= 1
-
-
-# ---------------------------------------------------------------------------
-# Test: Poller passes comments to orchestrator
-# ---------------------------------------------------------------------------
 
 
 class TestPollerPassesComments:
@@ -509,11 +492,6 @@ class TestPollerPassesComments:
         assert len(call_kwargs["comments"]) == 2
 
 
-# ---------------------------------------------------------------------------
-# Test: Concurrent trigger queueing + cooldown
-# ---------------------------------------------------------------------------
-
-
 class TestConcurrentTriggerQueueing:
     """Verify that concurrent trigger_fix_cycle calls queue properly."""
 
@@ -536,11 +514,9 @@ class TestConcurrentTriggerQueueing:
             github_pr_service=github_pr,
         )
 
-        # Collect emitted events
         emitted_events: list[Any] = []
         event_bus.subscribe(lambda e: emitted_events.append(e))
 
-        # Track _execute_pipeline calls
         execute_call_count = 0
         execute_started = asyncio.Event()
         execute_proceed = asyncio.Event()
@@ -553,7 +529,6 @@ class TestConcurrentTriggerQueueing:
                 await execute_proceed.wait()
             # Second call completes immediately
 
-        # Mock LocalWorktree as async context manager
         mock_worktree_instance = AsyncMock()
         mock_worktree_instance.__aenter__ = AsyncMock(return_value="/tmp/fake-worktree")
         mock_worktree_instance.__aexit__ = AsyncMock(return_value=None)
@@ -592,19 +567,12 @@ class TestConcurrentTriggerQueueing:
             execute_proceed.set()
             await task1
 
-        # PR_FIX_QUEUED should have been emitted
         queued_events = [e for e in emitted_events if e.event_type == EventType.PR_FIX_QUEUED]
         assert len(queued_events) >= 1, "PR_FIX_QUEUED event must be emitted for queued trigger"
 
-        # _execute_pipeline should have been called twice (initial + pending)
         assert execute_call_count == 2, (
             f"Expected 2 _execute_pipeline calls (initial + pending), got {execute_call_count}"
         )
-
-
-# ---------------------------------------------------------------------------
-# Test: Event emission sequence
-# ---------------------------------------------------------------------------
 
 
 class TestEventEmissionSequence:
@@ -683,7 +651,6 @@ class TestEventEmissionSequence:
                 comments=comments,
             )
 
-        # Filter lifecycle events
         started_events = [
             e for e in emitted_events if e.event_type == EventType.PR_AUTO_FIX_STARTED
         ]
@@ -694,12 +661,10 @@ class TestEventEmissionSequence:
         assert len(started_events) >= 1, "PR_AUTO_FIX_STARTED must be emitted"
         assert len(completed_events) >= 1, "PR_AUTO_FIX_COMPLETED must be emitted"
 
-        # Verify order: STARTED before COMPLETED
         started_idx = emitted_events.index(started_events[0])
         completed_idx = emitted_events.index(completed_events[0])
         assert started_idx < completed_idx, "STARTED must precede COMPLETED"
 
-        # Both must contain workflow_id in data
         assert "workflow_id" in (started_events[0].data or {}), (
             "PR_AUTO_FIX_STARTED must contain workflow_id in data"
         )
@@ -707,14 +672,8 @@ class TestEventEmissionSequence:
             "PR_AUTO_FIX_COMPLETED must contain workflow_id in data"
         )
 
-        # Both must have pr_number
         assert started_events[0].data["pr_number"] == 42
         assert completed_events[0].data["pr_number"] == 42
-
-
-# ---------------------------------------------------------------------------
-# Test: Divergence recovery -> retry -> success
-# ---------------------------------------------------------------------------
 
 
 class TestDivergenceRecovery:
@@ -778,13 +737,7 @@ class TestDivergenceRecovery:
         assert len(diverged_events) >= 1, "PR_FIX_DIVERGED must be emitted on divergence"
         assert diverged_events[0].data["attempt"] == 1
 
-        # _execute_pipeline should have been called 2 times (initial + retry)
         assert call_count == 2, f"Expected 2 calls (initial + retry), got {call_count}"
-
-
-# ---------------------------------------------------------------------------
-# Test: Multi-file-group partial failure
-# ---------------------------------------------------------------------------
 
 
 class TestMultiFileGroupPartialFailure:
@@ -829,7 +782,6 @@ class TestMultiFileGroupPartialFailure:
             ),
         ]
 
-        # Mock driver to classify both as actionable
         classification_output = ClassificationOutput(
             classifications=[
                 CommentClassification(
@@ -919,7 +871,6 @@ class TestMultiFileGroupPartialFailure:
         ):
             final_state = await graph.ainvoke(initial_state, config=config)
 
-        # Should have 2 group results
         group_results = final_state["group_results"]
         assert len(group_results) == 2, f"Expected 2 group results, got {len(group_results)}"
 
@@ -929,11 +880,6 @@ class TestMultiFileGroupPartialFailure:
 
         # Commit should still have happened for the fixed group
         mock_git_ops.stage_and_commit.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# Test: Confidence threshold filtering
-# ---------------------------------------------------------------------------
 
 
 class TestConfidenceThresholdFiltering:
@@ -1085,11 +1031,6 @@ class TestConfidenceThresholdFiltering:
         assert 301 not in all_comment_ids, "Low-confidence comment must NOT be in file_groups"
 
 
-# ---------------------------------------------------------------------------
-# Test: Aggressiveness filtering
-# ---------------------------------------------------------------------------
-
-
 class TestAggressivenessFiltering:
     """Verify aggressiveness=CRITICAL filters STYLE comments."""
 
@@ -1218,11 +1159,6 @@ class TestAggressivenessFiltering:
         mock_git_ops.stage_and_commit.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# Test: Commit message content
-# ---------------------------------------------------------------------------
-
-
 class TestCommitMessageContent:
     """Verify commit message contains prefix and addressed comments."""
 
@@ -1290,27 +1226,19 @@ class TestCommitMessageContent:
         ):
             await graph.ainvoke(initial_state, config=config)
 
-        # Capture the commit message
         mock_git_ops.stage_and_commit.assert_called_once()
         commit_msg = mock_git_ops.stage_and_commit.call_args[0][0]
 
-        # Must start with the configured prefix
         assert commit_msg.startswith("fix(review):"), (
             f"Commit message must start with 'fix(review):', got: {commit_msg[:50]}"
         )
 
-        # Must reference addressed comment content
         assert "Variable name" in commit_msg or "count" in commit_msg or "src/app.py" in commit_msg, (
             f"Commit message must reference addressed comments, got: {commit_msg}"
         )
         assert "null check" in commit_msg or "name" in commit_msg or "src/app.py" in commit_msg, (
             f"Commit message must reference addressed comments, got: {commit_msg}"
         )
-
-
-# ---------------------------------------------------------------------------
-# Test: Workflow status lifecycle
-# ---------------------------------------------------------------------------
 
 
 class TestWorkflowStatusLifecycle:
@@ -1386,24 +1314,16 @@ class TestWorkflowStatusLifecycle:
                 comments=comments,
             )
 
-        # workflow_repo.create() called once with IN_PROGRESS
         mock_workflow_repo.create.assert_called_once()
         created_state = mock_workflow_repo.create.call_args[0][0]
         assert created_state.workflow_status == WorkflowStatus.IN_PROGRESS
 
-        # workflow_repo.update() called once with COMPLETED
         mock_workflow_repo.update.assert_called_once()
         updated_state = mock_workflow_repo.update.call_args[0][0]
         assert updated_state.workflow_status == WorkflowStatus.COMPLETED
 
-        # issue_cache should contain pr_number and pr_comments
         assert updated_state.issue_cache["pr_number"] == 42
         assert "pr_comments" in updated_state.issue_cache
-
-
-# ---------------------------------------------------------------------------
-# Test: Metrics persistence
-# ---------------------------------------------------------------------------
 
 
 class TestMetricsPersistence:
@@ -1478,21 +1398,14 @@ class TestMetricsPersistence:
                 comments=comments,
             )
 
-        # save_classifications should be called with classification data
         mock_metrics_repo.save_classifications.assert_called_once()
 
-        # save_run_metrics should be called with fix counts
         mock_metrics_repo.save_run_metrics.assert_called_once()
         call_kwargs = mock_metrics_repo.save_run_metrics.call_args.kwargs
         assert call_kwargs["fixes_applied"] >= 1, (
             f"Expected fixes_applied >= 1, got {call_kwargs['fixes_applied']}"
         )
         assert call_kwargs["pr_number"] == 42
-
-
-# ---------------------------------------------------------------------------
-# Test: Poller deduplication
-# ---------------------------------------------------------------------------
 
 
 class TestPollerDeduplication:
@@ -1614,272 +1527,60 @@ class TestPollerDeduplication:
         )
 
 
-# ---------------------------------------------------------------------------
-# Test: Token usage is persisted for PR auto-fix runs
-# ---------------------------------------------------------------------------
+@pytest.mark.integration
+class TestTrajectoryRecording:
+    """Each fix cycle produces one canonical ATIF trajectory file + index columns."""
 
-
-class TestTokenUsagePersistence:
-    """Verify that LLM token usage is saved to the repository during PR auto-fix.
-
-    This is a regression test: the PR auto-fix pipeline previously ran LLM
-    calls (classify + develop) without persisting token usage, so cost/usage
-    data was missing from past runs.
-    """
-
-    async def test_pipeline_saves_token_usage_for_classifier_and_developer(
-        self,
-        profile: Profile,
-        comments: list[PRReviewComment],
+    @staticmethod
+    def _make_orchestrator(
         event_bus: EventBus,
-    ) -> None:
-        """Running the full graph must call save_token_usage for both
-        the classifier (classify_node) and the developer (develop_node)."""
-        from amelia.drivers.base import DriverUsage
-        from amelia.server.models.tokens import TokenUsage
-
-        graph = create_pr_auto_fix_graph()
-        workflow_id = uuid4()
-
-        initial_state = PRAutoFixState(
-            workflow_id=workflow_id,
-            profile_id=profile.name,
-            pr_number=42,
-            head_branch="feat/test",
-            repo="owner/repo",
-            comments=comments,
-            autofix_config=profile.pr_autofix,
-            created_at=datetime.now(tz=UTC),
-        )
-
-        # Mock repository that records save_token_usage calls
-        mock_repo = AsyncMock()
-        saved_usages: list[TokenUsage] = []
-
-        async def capture_token_usage(usage: TokenUsage) -> None:
-            saved_usages.append(usage)
-
-        mock_repo.save_token_usage = AsyncMock(side_effect=capture_token_usage)
-
-        config = {
-            "configurable": {
-                "thread_id": str(workflow_id),
-                "profile": profile,
-                "event_bus": event_bus,
-                "repository": mock_repo,
-                "metrics_repo": None,
-                "metrics_run_id": None,
-            },
-        }
-
-        # Driver that returns usage data from get_usage()
-        mock_driver = _mock_unified_driver([100, 101])
-        mock_driver.get_usage = MagicMock(return_value=DriverUsage(
-            input_tokens=1000,
-            output_tokens=200,
-            cache_read_tokens=50,
-            cache_creation_tokens=10,
-            cost_usd=0.005,
-            duration_ms=3000,
-            num_turns=3,
-            model="test-model",
-        ))
-
-        mock_git_ops = MagicMock()
-        mock_git_ops.has_changes = AsyncMock(return_value=True)
-        mock_git_ops._run_git = AsyncMock(
-            side_effect=["", "sha1", "M src/foo.py", "sha2"],
-        )
-        mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
-        mock_git_ops.safe_push = AsyncMock()
-
-        mock_github_service = MagicMock()
-        mock_github_service.reply_to_comment = AsyncMock()
-        mock_github_service.resolve_thread = AsyncMock()
-
-        with (
-            patch(
-                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
-                return_value=mock_driver,
-            ),
-            patch(
-                "amelia.agents._driver_init.get_driver",
-                return_value=mock_driver,
-            ),
-            patch(
-                "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
-                return_value=mock_git_ops,
-            ),
-            patch(
-                "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService",
-                return_value=mock_github_service,
-            ),
-        ):
-            await graph.ainvoke(initial_state, config=config)
-
-        # Token usage must have been saved
-        assert mock_repo.save_token_usage.call_count >= 2, (
-            f"Expected save_token_usage called for classifier + developer, "
-            f"got {mock_repo.save_token_usage.call_count} calls"
-        )
-
-        agents_saved = {u.agent for u in saved_usages}
-        assert "classifier" in agents_saved, (
-            f"Missing 'classifier' token usage; agents saved: {agents_saved}"
-        )
-        assert "developer" in agents_saved, (
-            f"Missing 'developer' token usage; agents saved: {agents_saved}"
-        )
-
-        # All records should reference the correct workflow
-        for usage in saved_usages:
-            assert usage.workflow_id == workflow_id
-            assert usage.input_tokens == 1000
-            assert usage.output_tokens == 200
-            assert usage.cost_usd == 0.005
-            assert usage.model == "test-model"
-
-    async def test_token_usage_not_saved_when_no_repository(
-        self,
-        profile: Profile,
-        comments: list[PRReviewComment],
-        event_bus: EventBus,
-    ) -> None:
-        """When repository is None (CLI mode), pipeline must not crash."""
-        graph = create_pr_auto_fix_graph()
-
-        initial_state = PRAutoFixState(
-            workflow_id=uuid4(),
-            profile_id=profile.name,
-            pr_number=42,
-            head_branch="feat/test",
-            repo="owner/repo",
-            comments=comments,
-            autofix_config=profile.pr_autofix,
-            created_at=datetime.now(tz=UTC),
-        )
-
-        config = {
-            "configurable": {
-                "thread_id": str(uuid4()),
-                "profile": profile,
-                "event_bus": event_bus,
-                "repository": None,
-                "metrics_repo": None,
-                "metrics_run_id": None,
-            },
-        }
-
-        mock_driver = _mock_unified_driver([100, 101])
-        mock_driver.get_usage = MagicMock(return_value=None)
-
-        mock_git_ops = MagicMock()
-        mock_git_ops.has_changes = AsyncMock(return_value=True)
-        mock_git_ops._run_git = AsyncMock(
-            side_effect=["", "sha1", "M src/foo.py", "sha2"],
-        )
-        mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
-        mock_git_ops.safe_push = AsyncMock()
-
-        mock_github_service = MagicMock()
-        mock_github_service.reply_to_comment = AsyncMock()
-        mock_github_service.resolve_thread = AsyncMock()
-
-        with (
-            patch(
-                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
-                return_value=mock_driver,
-            ),
-            patch(
-                "amelia.agents._driver_init.get_driver",
-                return_value=mock_driver,
-            ),
-            patch(
-                "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
-                return_value=mock_git_ops,
-            ),
-            patch(
-                "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService",
-                return_value=mock_github_service,
-            ),
-        ):
-            # Should not raise even with repository=None
-            final_state = await graph.ainvoke(initial_state, config=config)
-
-        # Pipeline still completes successfully
-        assert len(final_state["classified_comments"]) == 2
-        assert any(r.status == GroupFixStatus.FIXED for r in final_state["group_results"])
-
-
-# ---------------------------------------------------------------------------
-# Test: End-to-end token usage through DB and API (requires PostgreSQL)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.skipif(
-    not os.environ.get("DATABASE_URL"),
-    reason="Requires DATABASE_URL for PostgreSQL integration test",
-)
-class TestTokenUsageEndToEnd:
-    """Full stack test: orchestrator → pipeline → DB → API response.
-
-    Runs the real orchestrator with a real PostgreSQL-backed WorkflowRepository,
-    then queries the workflow detail endpoint and verifies token_usage appears
-    in the JSON response. This catches breaks anywhere in the chain.
-    """
-
-    async def test_orchestrator_persists_token_usage_to_db_and_api(
-        self,
         test_repository: WorkflowRepository,
-        comments: list[PRReviewComment],
-    ) -> None:
-        """Token usage from classify + develop nodes must be readable
-        via get_token_summary after the orchestrator completes."""
-
-        event_bus = EventBus()
+        trajectory_dir: Path,
+    ) -> PRAutoFixOrchestrator:
         github_pr = MagicMock()
         github_pr.create_issue_comment = AsyncMock()
-
-        profile = _make_profile("/tmp/fake-worktree")
-
-        orchestrator = PRAutoFixOrchestrator(
+        return PRAutoFixOrchestrator(
             event_bus=event_bus,
             github_pr_service=github_pr,
             workflow_repo=test_repository,
-            metrics_repo=None,
+            trajectory_dir=trajectory_dir,
         )
 
-        # Driver with realistic usage data
+    async def test_completed_fix_cycle_writes_trajectory_and_index(
+        self,
+        test_repository: WorkflowRepository,
+        test_db: Database,
+        profile: Profile,
+        comments: list[PRReviewComment],
+        event_bus: EventBus,
+        tmp_path: Path,
+    ) -> None:
+        """A successful cycle finalizes a valid ATIF file (status=completed,
+        pipeline=pr_auto_fix) with classifier + developer subagent
+        trajectories, and persists the thin index columns."""
+        orchestrator = self._make_orchestrator(
+            event_bus, test_repository, tmp_path / "trajectories"
+        )
+
         mock_driver = _mock_unified_driver([100, 101])
         mock_driver.get_usage = MagicMock(return_value=DriverUsage(
             input_tokens=500,
             output_tokens=100,
             cache_read_tokens=20,
-            cache_creation_tokens=5,
             cost_usd=0.003,
             duration_ms=1500,
-            num_turns=2,
             model="test-model",
         ))
 
         mock_git_ops = MagicMock()
         mock_git_ops.has_changes = AsyncMock(return_value=True)
-        mock_git_ops._run_git = AsyncMock(
-            side_effect=["", "sha1", "M src/changed.py", "sha2"],
-        )
+        mock_git_ops._run_git = AsyncMock(side_effect=["", "sha1", "M src/app.py", "sha2"])
         mock_git_ops.stage_and_commit = AsyncMock(return_value="abc1234")
         mock_git_ops.safe_push = AsyncMock()
-        mock_git_ops.fetch_origin = AsyncMock()
-        mock_git_ops.checkout_and_reset = AsyncMock()
 
         mock_github_service = MagicMock()
         mock_github_service.reply_to_comment = AsyncMock()
         mock_github_service.resolve_thread = AsyncMock()
-
-        mock_worktree_instance = AsyncMock()
-        mock_worktree_instance.__aenter__ = AsyncMock(return_value="/tmp/fake-worktree")
-        mock_worktree_instance.__aexit__ = AsyncMock(return_value=None)
-        mock_worktree_cls = MagicMock(return_value=mock_worktree_instance)
 
         workflow_id = uuid4()
 
@@ -1895,14 +1596,6 @@ class TestTokenUsageEndToEnd:
             patch(
                 "amelia.pipelines.pr_auto_fix.nodes.GitOperations",
                 return_value=mock_git_ops,
-            ),
-            patch(
-                "amelia.pipelines.pr_auto_fix.orchestrator.GitOperations",
-                return_value=mock_git_ops,
-            ),
-            patch(
-                "amelia.pipelines.pr_auto_fix.orchestrator.LocalWorktree",
-                mock_worktree_cls,
             ),
             patch(
                 "amelia.pipelines.pr_auto_fix.nodes.GitHubPRService",
@@ -1913,29 +1606,121 @@ class TestTokenUsageEndToEnd:
                 pr_number=42,
                 repo="owner/repo",
                 profile=profile,
-                head_branch="feat/test",
+                head_branch="",  # no worktree: run the pipeline in-place
                 comments=comments,
                 workflow_id=workflow_id,
             )
 
-        # Query the DB through the repository — same path the API uses
-        token_summary = await test_repository.get_token_summary(workflow_id)
+        row = await test_db.fetch_one(
+            """
+            SELECT status, trajectory_path, total_cost_usd, total_tokens, total_duration_ms
+            FROM workflows WHERE id = $1
+            """,
+            workflow_id,
+        )
+        assert row is not None
+        assert row["status"] == "completed"
+        assert row["trajectory_path"], "trajectory_path index column was not set"
 
-        assert token_summary is not None, (
-            "No token_usage rows found in DB for the PR auto-fix workflow"
+        data = json.loads(Path(row["trajectory_path"]).read_text())
+        assert validate_trajectory(data)
+        assert data["session_id"] == str(workflow_id)
+
+        outcome = data["extra"]["outcome"]
+        assert outcome["status"] == "completed"
+        assert outcome["pipeline"] == "pr_auto_fix"
+
+        # Profile snapshot recorded on the parent trajectory
+        assert data["extra"]["profile_id"] == profile.name
+        assert data["extra"]["issue_id"] == "PR-42"
+
+        agents = [s["agent"]["name"] for s in data["subagent_trajectories"]]
+        assert "classifier" in agents
+        assert "developer" in agents
+
+        # Classifier recorded as a generate()-style invocation:
+        # system prompt step, user prompt step, then the structured result.
+        classifier = next(
+            s for s in data["subagent_trajectories"] if s["agent"]["name"] == "classifier"
+        )
+        assert [step["source"] for step in classifier["steps"]] == [
+            "system", "user", "agent",
+        ]
+
+        # Developer invocation captured its resolved prompts and result
+        developer = next(
+            s for s in data["subagent_trajectories"] if s["agent"]["name"] == "developer"
+        )
+        assert [step["source"] for step in developer["steps"][:2]] == ["system", "user"]
+
+        # Index columns mirror the file's final metrics
+        assert row["total_cost_usd"] == data["final_metrics"]["total_cost_usd"]
+        assert row["total_tokens"] == (
+            data["final_metrics"]["total_prompt_tokens"]
+            + data["final_metrics"]["total_completion_tokens"]
+        )
+        assert row["total_duration_ms"] is not None
+
+    async def test_failed_fix_cycle_finalizes_trajectory(
+        self,
+        test_repository: WorkflowRepository,
+        test_db: Database,
+        profile: Profile,
+        comments: list[PRReviewComment],
+        event_bus: EventBus,
+        tmp_path: Path,
+    ) -> None:
+        """A failing cycle still finalizes the trajectory (status=failed) with
+        the steps captured before the failure."""
+        orchestrator = self._make_orchestrator(
+            event_bus, test_repository, tmp_path / "trajectories"
         )
 
-        # Must have records for both classifier and developer
-        agents_in_db = {u.agent for u in token_summary.breakdown}
-        assert "classifier" in agents_in_db, (
-            f"Missing 'classifier' in DB token_usage; found: {agents_in_db}"
-        )
-        assert "developer" in agents_in_db, (
-            f"Missing 'developer' in DB token_usage; found: {agents_in_db}"
-        )
+        mock_driver = MagicMock()
+        mock_driver.model = "test-model"
+        mock_driver.generate = AsyncMock(side_effect=RuntimeError("classifier exploded"))
+        mock_driver.get_usage = MagicMock(return_value=None)
+        mock_driver.get_tool_definitions = MagicMock(return_value=None)
 
-        # Aggregated totals should reflect the mock data
-        # classifier (500 input) + developer (500 input) = 1000
-        assert token_summary.total_input_tokens >= 1000
-        assert token_summary.total_output_tokens >= 200
-        assert token_summary.total_cost_usd > 0
+        workflow_id = uuid4()
+
+        with (
+            patch(
+                "amelia.pipelines.pr_auto_fix.nodes.get_driver",
+                return_value=mock_driver,
+            ),
+            patch(
+                "amelia.agents._driver_init.get_driver",
+                return_value=mock_driver,
+            ),
+        ):
+            await orchestrator.trigger_fix_cycle(
+                pr_number=42,
+                repo="owner/repo",
+                profile=profile,
+                head_branch="",
+                comments=comments,
+                workflow_id=workflow_id,
+            )
+
+        row = await test_db.fetch_one(
+            "SELECT status, trajectory_path FROM workflows WHERE id = $1",
+            workflow_id,
+        )
+        assert row is not None
+        assert row["status"] == "failed"
+        assert row["trajectory_path"], "failed cycle must still index its trajectory"
+
+        data = json.loads(Path(row["trajectory_path"]).read_text())
+        assert validate_trajectory(data)
+
+        outcome = data["extra"]["outcome"]
+        assert outcome["status"] == "failed"
+        assert outcome["pipeline"] == "pr_auto_fix"
+        assert "classifier exploded" in outcome["failure_reason"]
+
+        # The classifier invocation captured its prompts before the failure
+        classifier = next(
+            s for s in data["subagent_trajectories"] if s["agent"]["name"] == "classifier"
+        )
+        assert [step["source"] for step in classifier["steps"][:2]] == ["system", "user"]

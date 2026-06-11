@@ -11,12 +11,14 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.runnables.config import RunnableConfig
 
 from amelia.core.types import Profile
+from amelia.trajectory import RecordingDriver
 
 
 if TYPE_CHECKING:
     from amelia.sandbox.provider import SandboxProvider
     from amelia.server.database.repository import WorkflowRepository
     from amelia.server.events.bus import EventBus
+    from amelia.trajectory.recorder import WorkflowTrajectoryRecorder
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,24 @@ class NodeConfigParams:
     repository: "WorkflowRepository | None"
     prompts: dict[str, Any]
     sandbox_provider: "SandboxProvider | None"
+    recorder: "WorkflowTrajectoryRecorder | None"
+
+
+def wrap_with_recording(agent: Any, recorder: "WorkflowTrajectoryRecorder | None", agent_name: str, model: str) -> None:
+    """Wrap an agent's driver with RecordingDriver if a recorder is active.
+
+    This is the single canonical recording-seam guard used at every node site.
+    When ``recorder`` is None (CLI / non-server mode) the call is a no-op.
+
+    Args:
+        agent: An agent instance that exposes a ``driver`` attribute.
+        recorder: The active WorkflowTrajectoryRecorder, or None.
+        agent_name: Logical name for the invocation (e.g. ``"developer"``).
+        model: Model identifier string from the agent's config.
+    """
+    if recorder is not None:
+        inv = recorder.begin_invocation(agent_name, model=model)
+        agent.driver = RecordingDriver(agent.driver, inv)
 
 
 def extract_config_params(
@@ -70,8 +90,10 @@ def extract_node_config(
     """Extract all common node parameters from LangGraph config.
 
     Combines the event_bus/workflow_id/profile extraction with the
-    repository/prompts/sandbox_provider extraction that every node
-    function repeats.
+    repository/prompts/sandbox_provider/recorder extraction that every
+    node function repeats. The recorder is read from the
+    ``trajectory_recorder`` configurable key and is None outside server
+    mode (e.g. CLI runs).
 
     Args:
         config: LangGraph RunnableConfig (may be None).
@@ -93,4 +115,5 @@ def extract_node_config(
         repository=configurable.get("repository"),
         prompts=configurable.get("prompts") or {},
         sandbox_provider=configurable.get("sandbox_provider"),
+        recorder=configurable.get("trajectory_recorder"),
     )

@@ -110,7 +110,6 @@ export default function DevelopPage() {
   const descriptionValue = watch('task_description');
   const descriptionLength = descriptionValue?.length ?? 0;
 
-  // Fetch server config on mount
   useEffect(() => {
     let mounted = true;
 
@@ -134,7 +133,6 @@ export default function DevelopPage() {
     return () => { mounted = false; };
   }, [setValue]);
 
-  // Fetch profiles to determine tracker type
   useEffect(() => {
     let mounted = true;
     const controller = new AbortController();
@@ -152,7 +150,6 @@ export default function DevelopPage() {
     return () => { mounted = false; controller.abort(); };
   }, []);
 
-  // Update tracker type when profile changes
   useEffect(() => {
     if (profileValue) {
       const profile = profiles.find((p) => p.id === profileValue);
@@ -253,7 +250,6 @@ export default function DevelopPage() {
     setOriginalDescription(null);
   }, [originalDescription, setValue]);
 
-  // Design document import handlers
   const populateFromContent = useCallback(
     (content: string, filename: string) => {
       let title = extractTitle(content);

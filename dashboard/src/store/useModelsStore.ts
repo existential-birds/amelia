@@ -67,7 +67,6 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   timeoutId: undefined,
 
   fetchModels: async () => {
-    // Skip if already fetched this session
     if (get().models.length > 0 && get().lastFetched) {
       return;
     }
@@ -76,7 +75,6 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   },
 
   refreshModels: async () => {
-    // Cancel any pending request
     const currentController = get().abortController;
     const currentTimeoutId = get().timeoutId;
     if (currentController) {
@@ -86,10 +84,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       clearTimeout(currentTimeoutId);
     }
 
-    // Create new AbortController for this request
     const abortController = new AbortController();
 
-    // Set timeout to abort request after 30 seconds
     const timeoutId = setTimeout(() => {
       abortController.abort(new TimeoutError());
     }, 30000);

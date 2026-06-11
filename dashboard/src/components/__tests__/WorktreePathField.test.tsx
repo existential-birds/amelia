@@ -7,7 +7,6 @@ import userEvent from '@testing-library/user-event';
 import { WorktreePathField } from '../WorktreePathField';
 import { api } from '@/api/client';
 
-// Mock the API client
 vi.mock('@/api/client', () => ({
   api: {
     validatePath: vi.fn(),
@@ -110,7 +109,6 @@ describe('WorktreePathField', () => {
 
       render(<WorktreePathField {...defaultProps} value="/valid/git/repo" />);
 
-      // Wait for validation to complete
       await waitFor(
         () => {
           expect(api.validatePath).toHaveBeenCalledWith('/valid/git/repo', expect.any(AbortSignal));
@@ -196,7 +194,6 @@ describe('WorktreePathField', () => {
 
       render(<WorktreePathField {...defaultProps} value="/some/path" />);
 
-      // Wait for validation to be called
       await waitFor(() => {
         expect(api.validatePath).toHaveBeenCalled();
       });
@@ -249,7 +246,6 @@ describe('WorktreePathField', () => {
         />
       );
 
-      // Open dropdown
       const recentButton = screen.getByRole('button', { name: /recent/i });
       await user.click(recentButton);
 
@@ -276,11 +272,9 @@ describe('WorktreePathField', () => {
         />
       );
 
-      // Open dropdown
       const recentButton = screen.getByRole('button', { name: /recent/i });
       await user.click(recentButton);
 
-      // Click on the recent path
       const pathOption = await screen.findByText('/recent/path');
       await user.click(pathOption);
 
@@ -304,7 +298,6 @@ describe('WorktreePathField', () => {
     it('highlights last segment', () => {
       render(<WorktreePathField {...defaultProps} value="/a/b/repo" />);
 
-      // The last segment should be highlighted with primary color
       const repoSegment = screen.getByText('repo');
       expect(repoSegment).toHaveClass('text-primary');
     });

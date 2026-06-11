@@ -6,10 +6,8 @@ import { useModelsStore } from '@/store/useModelsStore';
 import { makeMockModelsStore } from '@/test/mocks/modelsStore';
 import type { AgentFormData } from '../types';
 
-// Mock the models store (used by ApiModelSelect for the api driver)
 vi.mock('@/store/useModelsStore');
 
-// Mock useRecentModels (used by ApiModelSelect)
 vi.mock('@/hooks/useRecentModels', () => ({
   useRecentModels: () => ({
     recentModelIds: ['claude-sonnet-4'],
@@ -42,7 +40,6 @@ describe('AgentsSection', () => {
         onBulkApply={vi.fn()}
       />
     );
-    // architect/developer/reviewer visible
     expect(screen.getByText(/architect/i)).toBeInTheDocument();
     expect(screen.getByText(/developer/i)).toBeInTheDocument();
     expect(screen.getByText(/reviewer/i)).toBeInTheDocument();
@@ -61,7 +58,6 @@ describe('AgentsSection', () => {
         onBulkApply={vi.fn()}
       />
     );
-    // The architect driver select is the first combobox.
     const driverSelect = screen.getAllByRole('combobox')[0]!; // Safe: AgentsSection always renders driver selects
     await user.click(driverSelect);
     await user.click(screen.getByRole('option', { name: /codex/i }));

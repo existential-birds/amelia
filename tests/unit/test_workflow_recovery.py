@@ -48,8 +48,6 @@ def repository() -> AsyncMock:
     repo = AsyncMock()
     repo.find_by_status = AsyncMock(return_value=[])
     repo.set_status = AsyncMock()
-    repo.save_event = AsyncMock()
-    repo.get_max_event_sequence = AsyncMock(return_value=0)
     return repo
 
 
@@ -103,11 +101,11 @@ class TestRecoverInterruptedWorkflows:
             WorkflowStatus.FAILED,
             failure_reason="Server restarted while workflow was running",
         )
-        # Check WORKFLOW_FAILED event was emitted with recoverable=True
-        repository.save_event.assert_called()
-        saved_event = repository.save_event.call_args[0][0]
-        assert saved_event.event_type == EventType.WORKFLOW_FAILED
-        assert saved_event.data["recoverable"] is True
+        # Check WORKFLOW_FAILED event was broadcast with recoverable=True
+        event_bus.emit.assert_called()
+        emitted_event = event_bus.emit.call_args[0][0]
+        assert emitted_event.event_type == EventType.WORKFLOW_FAILED
+        assert emitted_event.data["recoverable"] is True
 
     async def test_recover_blocked_restores_approval(
         self,
@@ -125,10 +123,10 @@ class TestRecoverInterruptedWorkflows:
 
         # Status should NOT change — no set_status call for BLOCKED
         repository.set_status.assert_not_called()
-        # APPROVAL_REQUIRED event should be emitted
-        repository.save_event.assert_called()
-        saved_event = repository.save_event.call_args[0][0]
-        assert saved_event.event_type == EventType.APPROVAL_REQUIRED
+        # APPROVAL_REQUIRED event should be broadcast
+        event_bus.emit.assert_called()
+        emitted_event = event_bus.emit.call_args[0][0]
+        assert emitted_event.event_type == EventType.APPROVAL_REQUIRED
 
     async def test_recover_pending_unchanged(
         self,
@@ -146,6 +144,7 @@ class TestRecoverInterruptedWorkflows:
         self,
         service: OrchestratorService,
         repository: AsyncMock,
+        event_bus: MagicMock,
     ) -> None:
         """With no interrupted workflows, just log summary."""
         repository.find_by_status = AsyncMock(return_value=[])
@@ -153,7 +152,7 @@ class TestRecoverInterruptedWorkflows:
         await service.recover_interrupted_workflows()
 
         repository.set_status.assert_not_called()
-        repository.save_event.assert_not_called()
+        event_bus.emit.assert_not_called()
 
 
 class TestResumeWorkflow:
@@ -268,8 +267,8 @@ class TestResumeWorkflow:
         await service.resume_workflow(wf.id)
 
         # Check WORKFLOW_STARTED event with resumed=True
-        saved_events = [c[0][0] for c in repository.save_event.call_args_list]
-        started_events = [e for e in saved_events if e.event_type == EventType.WORKFLOW_STARTED]
+        emitted_events = [c[0][0] for c in event_bus.emit.call_args_list]
+        started_events = [e for e in emitted_events if e.event_type == EventType.WORKFLOW_STARTED]
         assert len(started_events) == 1
         assert started_events[0].data["resumed"] is True
 

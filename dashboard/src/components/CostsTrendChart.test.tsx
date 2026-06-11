@@ -28,7 +28,6 @@ describe('CostsTrendChart', () => {
   it('should render chart container', () => {
     render(<CostsTrendChart data={mockTrend} />);
 
-    // Chart container should exist
     expect(screen.getByRole('figure')).toBeInTheDocument();
   });
 

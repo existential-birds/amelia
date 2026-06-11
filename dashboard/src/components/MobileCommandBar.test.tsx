@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
-// Mock the sidebar hook
 const mockToggleSidebar = vi.fn();
 vi.mock('@/components/ui/sidebar', () => ({
   useSidebar: () => ({ toggleSidebar: mockToggleSidebar }),
@@ -10,7 +9,6 @@ vi.mock('@/components/ui/sidebar', () => ({
 // Mutable state for tests - must be declared before vi.mock
 let mockIsConnected = true;
 
-// Mock the workflow store with selector support
 vi.mock('@/store/workflowStore', () => ({
   useWorkflowStore: vi.fn((selector) => {
     const state = { isConnected: mockIsConnected };
@@ -23,7 +21,7 @@ import { MobileCommandBar } from './MobileCommandBar';
 describe('MobileCommandBar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockIsConnected = true; // Reset to connected state
+    mockIsConnected = true;
   });
 
   it('renders on mobile viewport with AMELIA branding', () => {
@@ -63,11 +61,9 @@ describe('MobileCommandBar', () => {
     mockIsConnected = true;
     render(<MobileCommandBar />);
 
-    // Verify sidebar button has correct aria-label
     const sidebarButton = screen.getByRole('button', { name: 'Toggle sidebar' });
     expect(sidebarButton).toHaveAttribute('aria-label', 'Toggle sidebar');
 
-    // Verify status indicator has role="status" and appropriate aria-label
     const statusIndicator = screen.getByRole('status');
     expect(statusIndicator).toHaveAttribute('aria-label', 'Connected');
   });

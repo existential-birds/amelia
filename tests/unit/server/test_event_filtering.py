@@ -6,18 +6,12 @@ from datetime import UTC, datetime
 import pytest
 
 from amelia.server.models.events import (
-    PERSISTED_TYPES,
     EventLevel,
     EventType,
     get_event_level,
 )
 from amelia.server.models.responses import WorkflowDetailResponse, WorkflowSummary
 from amelia.server.models.state import WorkflowStatus, WorkflowType
-
-
-# ---------------------------------------------------------------------------
-# PR auto-fix event types: existence and values
-# ---------------------------------------------------------------------------
 
 
 class TestPRAutoFixEventTypes:
@@ -41,11 +35,6 @@ class TestPRAutoFixEventTypes:
         assert isinstance(event, EventType)
 
 
-# ---------------------------------------------------------------------------
-# Event level classification
-# ---------------------------------------------------------------------------
-
-
 class TestPRAutoFixEventClassification:
     """Tests for correct INFO/ERROR classification of new event types."""
 
@@ -65,35 +54,6 @@ class TestPRAutoFixEventClassification:
         assert get_event_level(EventType.PR_POLL_ERROR) == EventLevel.ERROR
 
 
-# ---------------------------------------------------------------------------
-# Persistence classification
-# ---------------------------------------------------------------------------
-
-
-class TestPRAutoFixPersistence:
-    """Tests for PERSISTED_TYPES membership of new event types."""
-
-    @pytest.mark.parametrize(
-        "event_type",
-        [
-            EventType.PR_AUTO_FIX_STARTED,
-            EventType.PR_AUTO_FIX_COMPLETED,
-            EventType.PR_AUTO_FIX_FAILED,
-            EventType.PR_COMMENTS_DETECTED,
-            EventType.PR_COMMENTS_RESOLVED,
-            EventType.PR_POLL_ERROR,
-            EventType.PR_POLL_RATE_LIMITED,
-        ],
-    )
-    def test_persisted_events(self, event_type: EventType) -> None:
-        assert event_type in PERSISTED_TYPES
-
-
-# ---------------------------------------------------------------------------
-# WorkflowType.PR_AUTO_FIX
-# ---------------------------------------------------------------------------
-
-
 class TestWorkflowTypePRAutoFix:
     """Tests for the PR_AUTO_FIX workflow type."""
 
@@ -102,11 +62,6 @@ class TestWorkflowTypePRAutoFix:
 
     def test_pr_auto_fix_is_workflow_type(self) -> None:
         assert isinstance(WorkflowType.PR_AUTO_FIX, WorkflowType)
-
-
-# ---------------------------------------------------------------------------
-# WorkflowSummary new fields
-# ---------------------------------------------------------------------------
 
 
 def _make_summary(**kwargs: object) -> WorkflowSummary:
@@ -148,11 +103,6 @@ class TestWorkflowSummaryFields:
         assert summary.pr_number == 42
         assert summary.pr_title == "Fix: broken tests"
         assert summary.pr_comment_count == 5
-
-
-# ---------------------------------------------------------------------------
-# WorkflowDetailResponse new fields
-# ---------------------------------------------------------------------------
 
 
 class TestWorkflowDetailResponseFields:

@@ -8,7 +8,6 @@ import httpx
 from loguru import logger
 
 
-# Constants
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/embeddings"
 EMBEDDING_BATCH_SIZE = 100
 EMBEDDING_MAX_PARALLEL = 3
@@ -86,7 +85,6 @@ class EmbeddingClient:
         if not texts:
             return []
 
-        # Split into batches
         batches = [
             texts[i : i + EMBEDDING_BATCH_SIZE]
             for i in range(0, len(texts), EMBEDDING_BATCH_SIZE)
@@ -99,7 +97,6 @@ class EmbeddingClient:
             batch_size=EMBEDDING_BATCH_SIZE,
         )
 
-        # Process batches in parallel with concurrency limit
         semaphore = asyncio.Semaphore(EMBEDDING_MAX_PARALLEL)
         processed_count = 0
         lock = asyncio.Lock()
@@ -147,7 +144,6 @@ class EmbeddingClient:
                 try:
                     embeddings = await self._call_api(texts)
 
-                    # Report progress
                     if on_complete:
                         await on_complete(len(texts))
 

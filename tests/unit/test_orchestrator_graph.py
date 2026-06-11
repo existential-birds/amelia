@@ -446,8 +446,7 @@ class TestReviewerNodeTaskIteration:
             mock_reviewer.agentic_review = AsyncMock(return_value=(mock_review, "session-123"))
             mock_reviewer_class.return_value = mock_reviewer
 
-            with patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock):
-                result = await call_reviewer_node(state, config)
+            result = await call_reviewer_node(state, config)
 
         assert result["task_review_iteration"] == 2
 

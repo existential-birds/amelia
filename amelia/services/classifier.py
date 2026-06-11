@@ -21,10 +21,12 @@ from amelia.agents.schemas.classifier import (
 )
 from amelia.core.types import PRAutoFixConfig, PRReviewComment
 from amelia.services.github_pr import AMELIA_FOOTER
+from amelia.trajectory import RecordingDriver
 
 
 if TYPE_CHECKING:
     from amelia.drivers.base import DriverInterface
+    from amelia.trajectory.recorder import WorkflowTrajectoryRecorder
 
 
 def filter_top_level(comments: list[PRReviewComment]) -> list[PRReviewComment]:
@@ -193,6 +195,7 @@ async def classify_comments(
     comments: list[PRReviewComment],
     driver: DriverInterface,
     config: PRAutoFixConfig,
+    recorder: WorkflowTrajectoryRecorder | None = None,
 ) -> dict[int, CommentClassification]:
     """Classify PR review comments using LLM with post-filtering.
 
@@ -206,6 +209,9 @@ async def classify_comments(
         comments: Pre-filtered list of comments to classify.
         driver: LLM driver implementing DriverInterface.
         config: PR auto-fix configuration with aggressiveness and thresholds.
+        recorder: Optional workflow trajectory recorder. When set, the LLM
+            call is recorded as a ``generate()``-style classifier invocation;
+            None leaves behavior unchanged.
 
     Returns:
         Mapping of comment_id to final CommentClassification.
@@ -216,28 +222,30 @@ async def classify_comments(
             count=len(comments),
         )
 
-    # Build prompts
     system_prompt_template = PROMPT_DEFAULTS["classifier.system"].content
     system_prompt = system_prompt_template.format(
         aggressiveness_level=config.aggressiveness.name,
     )
     user_prompt = _build_user_prompt(comments)
 
-    # Call LLM
+    if recorder is not None:
+        invocation = recorder.begin_invocation(
+            "classifier", model=getattr(driver, "model", None)
+        )
+        driver = RecordingDriver(driver, invocation)
+
     output, _session_id = await driver.generate(
         prompt=user_prompt,
         system_prompt=system_prompt,
         schema=ClassificationOutput,
     )
 
-    # Process classifications
     result: dict[int, CommentClassification] = {}
     classification_output: ClassificationOutput = output
 
     for classification in classification_output.classifications:
         final = classification
 
-        # Apply confidence threshold
         if classification.confidence < config.confidence_threshold:
             logger.debug(
                 "Classification below confidence threshold",
@@ -248,7 +256,6 @@ async def classify_comments(
             if final.actionable:
                 final = final.model_copy(update={"actionable": False})
 
-        # Apply aggressiveness filter
         if final.actionable and not is_actionable(
             final.category, config.aggressiveness
         ):

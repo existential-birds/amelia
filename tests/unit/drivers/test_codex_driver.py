@@ -544,11 +544,6 @@ async def test_execute_agentic_extracts_reasoning_from_item_completed() -> None:
     assert msgs[0].content == "Let me think about this"
 
 
-# ---------------------------------------------------------------------------
-# CodexApprovalMode tests
-# ---------------------------------------------------------------------------
-
-
 def test_init_default_approval_mode_is_full_auto() -> None:
     driver = CodexCliDriver()
     assert driver.approval_mode == CodexApprovalMode.FULL_AUTO
@@ -710,11 +705,6 @@ async def test_validate_schema_raises_schema_error() -> None:
         driver._validate_schema({"wrong": "data"}, _Schema, "source")
 
 
-# ---------------------------------------------------------------------------
-# Usage tracking tests
-# ---------------------------------------------------------------------------
-
-
 def _make_turn_completed_event(
     input_tokens: int, output_tokens: int, cached_input_tokens: int = 0
 ) -> CodexStreamEvent:
@@ -860,11 +850,6 @@ class TestCodexDriverUsageAccumulation:
             _ = [m async for m in driver.execute_agentic("task", cwd="/tmp")]
 
         assert driver.get_usage() is None
-
-
-# ---------------------------------------------------------------------------
-# Exception / early-exit usage tracking tests (Issue 4)
-# ---------------------------------------------------------------------------
 
 
 class TestCodexDriverUsageOnException:

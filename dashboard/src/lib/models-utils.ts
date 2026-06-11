@@ -36,11 +36,9 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
   const models: ModelInfo[] = [];
 
   for (const model of data) {
-    // Extract provider from model ID (e.g., "anthropic/claude-sonnet-4" -> "anthropic")
     const slashIndex = model.id.indexOf('/');
     const provider = slashIndex !== -1 ? model.id.substring(0, slashIndex) : 'unknown';
 
-    // Parse and validate cost values
     const inputParsed = parseFloat(model.pricing.prompt);
     const inputCost = isNaN(inputParsed) ? null : inputParsed * 1_000_000; // Convert per-token to per-1M tokens
     const outputParsed = parseFloat(model.pricing.completion);
@@ -106,17 +104,14 @@ function matchesPriceTier(model: ModelInfo, requiredTier: AgentRequirements['pri
 
   const modelTier = getPriceTier(model.cost.output);
 
-  // Budget tier only matches budget models (strict cost constraint)
   if (requiredTier === 'budget') {
     return modelTier === 'budget';
   }
 
-  // Standard tier matches budget and standard (moderate cost constraint)
   if (requiredTier === 'standard') {
     return modelTier === 'budget' || modelTier === 'standard';
   }
 
-  // Premium tier matches all models (no cost constraint)
   return true;
 }
 
@@ -128,19 +123,16 @@ export function filterModelsByRequirements(
   requirements: AgentRequirements
 ): ModelInfo[] {
   return models.filter((model) => {
-    // Check all required capabilities
     for (const cap of requirements.capabilities) {
       if (!model.capabilities[cap]) {
         return false;
       }
     }
 
-    // Check minimum context size
     if (model.limit.context === null || model.limit.context < requirements.minContext) {
       return false;
     }
 
-    // Check price tier
     if (!matchesPriceTier(model, requirements.priceTier)) {
       return false;
     }

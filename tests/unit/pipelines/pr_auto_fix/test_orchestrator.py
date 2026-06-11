@@ -16,11 +16,6 @@ from amelia.server.models.state import WorkflowStatus, WorkflowType
 from .conftest import mock_pipeline_context
 
 
-# ---------------------------------------------------------------------------
-# Phase 06-01 tests (config + event types)
-# ---------------------------------------------------------------------------
-
-
 class TestPRAutoFixConfigCooldown:
     """Tests for cooldown configuration fields on PRAutoFixConfig."""
 
@@ -76,11 +71,6 @@ class TestPRFixEventTypes:
         assert isinstance(event, EventType)
 
 
-# ---------------------------------------------------------------------------
-# Autouse: patch LocalWorktree + GitOperations for all tests in this module
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture(autouse=True)
 def _patch_worktree_and_git(
     mock_local_worktree: MagicMock,
@@ -98,11 +88,6 @@ def _patch_worktree_and_git(
         ),
     ):
         yield
-
-
-# ---------------------------------------------------------------------------
-# ORCH-01: Per-PR Concurrency Control
-# ---------------------------------------------------------------------------
 
 
 class TestConcurrencyControl:
@@ -222,11 +207,6 @@ class TestConcurrencyControl:
         pipeline_continue.set()
         await task1
         assert call_count == 2
-
-
-# ---------------------------------------------------------------------------
-# ORCH-02: Cooldown with Reset
-# ---------------------------------------------------------------------------
 
 
 def _make_cooldown_orchestrator(
@@ -391,11 +371,6 @@ class TestCooldown:
 
         await asyncio.wait_for(task, timeout=timeout)
         assert call_count == 2
-
-
-# ---------------------------------------------------------------------------
-# ORCH-03: Worktree-based Branch Safety & Divergence Recovery
-# ---------------------------------------------------------------------------
 
 
 class TestWorktreeIntegration:
@@ -583,11 +558,6 @@ class TestDivergenceRecovery:
         assert orchestrator._execute_pipeline.await_count == 1
 
 
-# ---------------------------------------------------------------------------
-# Event Emission
-# ---------------------------------------------------------------------------
-
-
 class TestEventEmission:
     async def test_queued_event_has_pr_number(
         self,
@@ -618,11 +588,6 @@ class TestEventEmission:
         assert queued[0].data["pr_number"] == 42
 
 
-# ---------------------------------------------------------------------------
-# Pipeline Wiring
-# ---------------------------------------------------------------------------
-
-
 class TestExecutePipelineWiring:
     async def test_execute_pipeline_creates_and_invokes_graph(
         self,
@@ -651,11 +616,6 @@ class TestExecutePipelineWiring:
         assert "thread_id" in configurable
         assert configurable["profile"].name == "test"
         assert configurable["event_bus"] is not None
-
-
-# ---------------------------------------------------------------------------
-# Workflow Record Creation (Phase 09-01 Task 2)
-# ---------------------------------------------------------------------------
 
 
 class TestWorkflowRecordCreation:
@@ -1081,11 +1041,6 @@ class TestBuildPrCommentsStatusReason:
         assert by_id[4]["status_reason"] == "Not actionable or filtered"
 
 
-# ---------------------------------------------------------------------------
-# Phase 13-01: Workflow ID threading
-# ---------------------------------------------------------------------------
-
-
 class TestWorkflowIdThreading:
     """Tests for workflow_id parameter threading through the orchestrator."""
 
@@ -1195,3 +1150,52 @@ class TestWorkflowIdThreading:
         assert len(diverged_events) == 2
         for event in diverged_events:
             assert event.workflow_id == wf_id
+
+
+class TestFinalizeTrajectoryOutcome:
+    """The trajectory outcome must reflect the real pipeline result.
+
+    Finding 3: a secondary repo write must not be able to skip finalization or
+    flip the recorded outcome. These tests drive _finalize_trajectory with a
+    real recorder and assert on the written trajectory file's outcome, not on
+    bookkeeping calls.
+    """
+
+    @pytest.fixture
+    def real_recorder(self, tmp_path: object) -> object:
+        from uuid import uuid4
+
+        from amelia.trajectory import WorkflowTrajectoryRecorder
+
+        return WorkflowTrajectoryRecorder(
+            workflow_id=uuid4(),
+            trajectory_dir=tmp_path,  # type: ignore[arg-type]
+            profile_snapshot={"profile_id": "default"},
+        )
+
+    async def test_index_write_failure_still_writes_true_outcome(
+        self,
+        orchestrator: PRAutoFixOrchestrator,
+        workflow_repo: MagicMock,
+        real_recorder: object,
+        tmp_path: object,
+    ) -> None:
+        from amelia.trajectory.store import load, trajectory_path
+
+        wf_id = real_recorder._workflow_id  # type: ignore[attr-defined]
+        workflow_repo.set_trajectory_index = AsyncMock(
+            side_effect=RuntimeError("db down")
+        )
+
+        # Best-effort: a failing index write must not raise.
+        await orchestrator._finalize_trajectory(
+            real_recorder,  # type: ignore[arg-type]
+            wf_id,
+            status="completed",
+        )
+
+        # The canonical record reflects the real (completed) outcome, not the
+        # repo write failure.
+        traj = load(trajectory_path(tmp_path, wf_id))  # type: ignore[arg-type]
+        assert traj.extra["outcome"]["status"] == "completed"
+        assert traj.extra["outcome"]["pipeline"] == "pr_auto_fix"

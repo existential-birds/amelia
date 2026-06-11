@@ -94,9 +94,7 @@ function getPathLabel(path: string): string {
  */
 function getPathSegments(path: string): string[] {
   if (!path) return [];
-  // For absolute paths, keep the leading slash context
   const segments = path.split('/').filter(Boolean);
-  // Show last 3 segments max for readability
   if (segments.length > 3) {
     return ['...', ...segments.slice(-3)];
   }
@@ -128,10 +126,8 @@ export function WorktreePathField({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Build the list of path suggestions
   const suggestions: RecentPath[] = [];
 
-  // Add server repo_root as primary suggestion (if not empty)
   if (serverWorkingDir) {
     suggestions.push({
       path: serverWorkingDir,
@@ -140,7 +136,6 @@ export function WorktreePathField({
     });
   }
 
-  // Add unique recent paths (excluding server default)
   const seen = new Set(suggestions.map((s) => s.path));
   for (const path of recentPaths) {
     if (!seen.has(path)) {
@@ -227,7 +222,6 @@ export function WorktreePathField({
     // Validation handled by useEffect with proper AbortSignal
   };
 
-  // Get the status icon from the pre-defined lookup
   const statusIcon = statusIcons[status];
 
   /**

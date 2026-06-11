@@ -6,7 +6,6 @@ from rich.style import Style
 from rich.text import Text
 
 
-# --- Color Palette ---
 NAVY = "#0a2463"
 TWILIGHT = "#1245ba"
 RUST = "#a0311c"
@@ -16,12 +15,10 @@ GRAY = "#6d726a"
 MOSS = "#88976b"
 DARK_GREEN = "#1f332e"
 
-# Additional colors for specialized log types
 CYAN = "#17a2b8"      # Available for future use
 PURPLE = "#6f42c1"    # Knowledge library operations
 PINK = "#e83e8c"      # Other specialized operations (future)
 
-# --- ASCII Art ---
 # Combined plane and text for unified gradient handling
 # The plane is a stylized twin-engine (nod to the Electra)
 BANNER_ART = """\
@@ -49,7 +46,6 @@ def _interpolate_color(color1: str, color2: str, factor: float) -> str:
     Returns:
         Interpolated hex color string.
     """
-    # Parse hex colors
     r1 = int(color1[1:3], 16)
     g1 = int(color1[3:5], 16)
     b1 = int(color1[5:7], 16)
@@ -58,7 +54,6 @@ def _interpolate_color(color1: str, color2: str, factor: float) -> str:
     g2 = int(color2[3:5], 16)
     b2 = int(color2[5:7], 16)
 
-    # Interpolate
     r = int(r1 + (r2 - r1) * factor)
     g = int(g1 + (g2 - g1) * factor)
     b = int(b1 + (b2 - b1) * factor)
@@ -86,7 +81,6 @@ def get_gradient_banner(start_color: str, end_color: str) -> Text:
     for i, line in enumerate(lines):
         for j, char in enumerate(line):
             if char.strip():  # Only color non-whitespace
-                # Calculate gradient position (0.0 to 1.0) based on horizontal position
                 factor = j / max_len if max_len > 0 else 0
                 color = _interpolate_color(start_color, end_color, factor)
                 text.append(char, style=Style(color=color))
@@ -161,7 +155,6 @@ def get_service_urls_display(
 
     text = Text()
 
-    # Dashboard line with arrow
     text.append("    ➜ ", style=MOSS)
     text.append("Dashboard: ", style=CREAM)
     text.append(dashboard_url, style=f"bold {GOLD}")

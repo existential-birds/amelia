@@ -5,7 +5,6 @@ import HistoryPage from './HistoryPage';
 import { createMockWorkflowSummary } from '@/__tests__/fixtures';
 import type { WorkflowSummary } from '@/types';
 
-// Mock loader data
 vi.mock('react-router-dom', async (importOriginal) => {
   const mod = await importOriginal<typeof import('react-router-dom')>();
   return {
@@ -80,7 +79,6 @@ describe('HistoryPage', () => {
   it('should display duration, tokens, and cost when available', () => {
     renderHistory();
 
-    // First workflow has all values
     expect(screen.getByText('2m 34s')).toBeInTheDocument();
     expect(screen.getByText('15.2K')).toBeInTheDocument();
     expect(screen.getByText('$0.42')).toBeInTheDocument();
@@ -89,7 +87,6 @@ describe('HistoryPage', () => {
   it('should display "-" when duration, tokens, or cost are null', () => {
     renderHistory();
 
-    // Second workflow has null values - should show "-" for each
     const dashElements = screen.getAllByText('-');
     expect(dashElements.length).toBeGreaterThanOrEqual(3);
   });

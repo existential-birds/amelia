@@ -1,4 +1,3 @@
-# amelia/tools/shell_executor.py
 """Shell command execution utilities."""
 
 import asyncio

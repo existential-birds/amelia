@@ -1,29 +1,26 @@
-"""Tests for workflow REST endpoints with token usage data.
+"""Tests for workflow REST endpoints serving history/tokens from trajectories.
 
-These are unit tests that mock the repository to test the route handlers
-in isolation. Integration tests with real database are in tests/integration/.
+These are unit tests that mock the repository/orchestrator to test the route
+handlers in isolation. Integration tests with real database are in
+tests/integration/.
 """
 
 from datetime import UTC, datetime
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 
-from amelia.pipelines.implementation.state import ImplementationState
+from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.dependencies import get_orchestrator, get_repository
 from amelia.server.main import create_app
 from amelia.server.models.state import ServerExecutionState
-from amelia.server.models.tokens import TokenSummary, TokenUsage
+from amelia.trajectory import WorkflowTrajectoryRecorder
 
 from .conftest import patch_lifespan
-
-
-# =============================================================================
-# Module-level fixtures and helpers
-# =============================================================================
 
 
 @pytest.fixture
@@ -31,19 +28,18 @@ def mock_repository() -> MagicMock:
     """Create a mock WorkflowRepository with common methods stubbed."""
     repo = MagicMock(spec=WorkflowRepository)
     repo.get = AsyncMock()
-    repo.get_token_summary = AsyncMock()
-    repo.get_recent_events = AsyncMock(return_value=[])
     repo.list_workflows = AsyncMock()
     repo.count_workflows = AsyncMock()
-    repo.get_token_summaries_batch = AsyncMock()
     repo.list_active = AsyncMock()
     return repo
 
 
 @pytest.fixture
 def mock_orchestrator() -> MagicMock:
-    """Create a mock OrchestratorService."""
-    return MagicMock()
+    """Create a mock OrchestratorService with no live recorder registered."""
+    orch = MagicMock()
+    orch.get_recorder.return_value = None
+    return orch
 
 
 @pytest.fixture
@@ -60,10 +56,13 @@ def test_client(
 
 
 def make_workflow(
-    workflow_id: str | None = None,
     issue_id: str = "TEST-001",
     status: str = "in_progress",
     worktree_path: str | None = None,
+    trajectory_path: str | None = None,
+    total_cost_usd: float | None = None,
+    total_tokens: int | None = None,
+    total_duration_ms: int | None = None,
 ) -> ServerExecutionState:
     """Create a test workflow with sensible defaults."""
     wf_uuid = uuid4()
@@ -73,112 +72,155 @@ def make_workflow(
         worktree_path=worktree_path or f"/tmp/{wf_uuid}",
         workflow_status=status,
         started_at=datetime.now(UTC),
-        execution_state=ImplementationState(workflow_id=wf_uuid, created_at=datetime.now(UTC), status="running", profile_id="test"),
+        trajectory_path=trajectory_path,
+        total_cost_usd=total_cost_usd,
+        total_tokens=total_tokens,
+        total_duration_ms=total_duration_ms,
     )
 
 
-def make_token_usage(
-    workflow_id: str,
-    agent: str = "architect",
-    input_tokens: int = 1000,
-    output_tokens: int = 500,
-    cost_usd: float = 0.01,
-    duration_ms: int = 5000,
-) -> TokenUsage:
-    """Create a test TokenUsage record."""
-    return TokenUsage(
-        workflow_id=workflow_id,
-        agent=agent,
-        model="claude-sonnet-4-20250514",
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        cache_read_tokens=200,
-        cache_creation_tokens=0,
-        cost_usd=cost_usd,
-        duration_ms=duration_ms,
-        num_turns=3,
-        timestamp=datetime.now(UTC),
+def make_recorder_with_invocation(
+    workflow: ServerExecutionState, trajectory_dir: Path
+) -> WorkflowTrajectoryRecorder:
+    """Create a recorder holding one closed developer invocation."""
+    recorder = WorkflowTrajectoryRecorder(
+        workflow_id=workflow.id,
+        trajectory_dir=trajectory_dir,
+        profile_snapshot={"profile_id": "test"},
     )
+    inv = recorder.begin_invocation("developer", model="claude-x")
+    inv.record_prompt(instructions="You are the developer.", prompt="Fix the bug.")
+    inv.record_messages([
+        AgenticMessage(
+            type=AgenticMessageType.TOOL_CALL,
+            tool_name="write_file",
+            tool_input={"path": "a.py"},
+            tool_call_id="c1",
+        ),
+        AgenticMessage(
+            type=AgenticMessageType.TOOL_RESULT,
+            tool_name="write_file",
+            tool_output="ok",
+            tool_call_id="c1",
+        ),
+        AgenticMessage(type=AgenticMessageType.RESULT, content="fixed"),
+    ])
+    inv.close(usage=DriverUsage(input_tokens=10, output_tokens=5), cost_usd=0.01)
+    return recorder
 
 
-# =============================================================================
-# Test Classes
-# =============================================================================
+class TestGetWorkflowDetail:
+    """Tests for GET /workflows/{workflow_id} history and token projection."""
 
-
-class TestGetWorkflowTokenUsage:
-    """Tests for GET /workflows/{workflow_id} token usage data."""
-
-    async def test_get_workflow_includes_token_summary(
+    async def test_active_workflow_projects_from_live_recorder(
         self,
         test_client: TestClient,
         mock_repository: MagicMock,
+        mock_orchestrator: MagicMock,
+        tmp_path: Path,
     ) -> None:
-        """GET /workflows/{id} should include token_usage when data exists."""
+        """An active workflow's history comes from the in-memory recorder."""
         workflow = make_workflow()
-        wf_id = str(workflow.id)
         mock_repository.get.return_value = workflow
+        recorder = make_recorder_with_invocation(workflow, tmp_path)
+        mock_orchestrator.get_recorder.return_value = recorder
 
-        # Create token summary
-        token_usages = [
-            make_token_usage(wf_id, "architect", 500, 200, 0.005, 3000),
-            make_token_usage(wf_id, "developer", 2000, 1000, 0.025, 10000),
-        ]
-        token_summary = TokenSummary(
-            total_input_tokens=2500,
-            total_output_tokens=1200,
-            total_cache_read_tokens=400,
-            total_cost_usd=0.03,
-            total_duration_ms=13000,
-            total_turns=6,
-            breakdown=token_usages,
+        response = test_client.get(f"/api/workflows/{workflow.id}")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        event_types = [e["event_type"] for e in data["recent_events"]]
+        assert "claude_tool_call" in event_types
+        assert "claude_tool_result" in event_types
+        assert "agent_output" in event_types
+        tool_event = next(
+            e for e in data["recent_events"] if e["event_type"] == "claude_tool_call"
         )
-        mock_repository.get_token_summary.return_value = token_summary
+        assert tool_event["agent"] == "developer"
+        assert tool_event["tool_name"] == "write_file"
 
-        response = test_client.get(f"/api/workflows/{wf_id}")
+        token_usage = data["token_usage"]
+        assert token_usage["total_input_tokens"] == 10
+        assert token_usage["total_output_tokens"] == 5
+        assert token_usage["total_cost_usd"] == pytest.approx(0.01, rel=1e-6)
+        assert [u["agent"] for u in token_usage["breakdown"]] == ["developer"]
+
+        mock_orchestrator.get_recorder.assert_called_once_with(workflow.id)
+
+    async def test_finished_workflow_projects_from_trajectory_file(
+        self,
+        test_client: TestClient,
+        mock_repository: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Without a live recorder, history is loaded from trajectory_path."""
+        workflow = make_workflow(status="completed")
+        recorder = make_recorder_with_invocation(workflow, tmp_path)
+        path = await recorder.finalize(status="completed")
+        workflow.trajectory_path = str(path)
+        mock_repository.get.return_value = workflow
+
+        response = test_client.get(f"/api/workflows/{workflow.id}")
 
         assert response.status_code == 200
         data = response.json()
+        assert data["recent_events"], "events must be projected from the file"
+        assert data["token_usage"]["total_cost_usd"] == pytest.approx(0.01, rel=1e-6)
+        assert data["token_usage"]["breakdown"][0]["agent"] == "developer"
 
-        # Verify token_usage is present
-        assert "token_usage" in data
-        assert data["token_usage"] is not None
-
-        # Verify summary fields
-        token_usage = data["token_usage"]
-        assert token_usage["total_input_tokens"] == 2500
-        assert token_usage["total_output_tokens"] == 1200
-        assert token_usage["total_cache_read_tokens"] == 400
-        assert token_usage["total_cost_usd"] == pytest.approx(0.03, rel=1e-6)
-        assert token_usage["total_duration_ms"] == 13000
-        assert token_usage["total_turns"] == 6
-
-        # Verify breakdown is present
-        assert "breakdown" in token_usage
-        assert len(token_usage["breakdown"]) == 2
-
-        # Verify repository was called correctly (route passes uuid.UUID from path param)
-        mock_repository.get_token_summary.assert_awaited_once_with(workflow.id)
-
-    async def test_get_workflow_token_usage_is_none_when_no_data(
+    async def test_null_trajectory_path_returns_empty_history(
         self,
         test_client: TestClient,
         mock_repository: MagicMock,
     ) -> None:
-        """GET /workflows/{id} should return null token_usage when no data exists."""
-        workflow = make_workflow()
-        wf_id = str(workflow.id)
+        """Legacy/in-flight rows without a trajectory yield empty history."""
+        workflow = make_workflow(status="completed", trajectory_path=None)
         mock_repository.get.return_value = workflow
-        mock_repository.get_token_summary.return_value = None
 
-        response = test_client.get(f"/api/workflows/{wf_id}")
+        response = test_client.get(f"/api/workflows/{workflow.id}")
 
         assert response.status_code == 200
         data = response.json()
-
-        # token_usage should be null when no data
-        assert "token_usage" in data
+        assert data["recent_events"] == []
         assert data["token_usage"] is None
+
+    async def test_unreadable_trajectory_file_returns_500_generic_detail(
+        self,
+        test_client: TestClient,
+        mock_repository: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """A non-null path that cannot be read is a 500, never empty history."""
+        missing = tmp_path / "gone" / "trajectory.json"
+        workflow = make_workflow(status="completed", trajectory_path=str(missing))
+        mock_repository.get.return_value = workflow
+
+        response = test_client.get(f"/api/workflows/{workflow.id}")
+
+        assert response.status_code == 500
+        detail = response.json()["detail"]
+        assert "trajectory" in detail.lower()
+        assert str(missing) not in detail
+
+    async def test_corrupt_trajectory_file_returns_500_generic_detail(
+        self,
+        test_client: TestClient,
+        mock_repository: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """An invalid trajectory file is a 500, never fabricated history."""
+        corrupt = tmp_path / "trajectory.json"
+        corrupt.write_text("{not json")
+        workflow = make_workflow(status="completed", trajectory_path=str(corrupt))
+        mock_repository.get.return_value = workflow
+
+        response = test_client.get(f"/api/workflows/{workflow.id}")
+
+        assert response.status_code == 500
+        detail = response.json()["detail"]
+        assert "trajectory" in detail.lower()
+        assert str(corrupt) not in detail
 
     async def test_get_workflow_not_found(
         self,
@@ -196,111 +238,78 @@ class TestGetWorkflowTokenUsage:
 
 
 class TestListWorkflowsTokenData:
-    """Tests for GET /workflows endpoint token data in summaries."""
+    """Tests for GET /workflows token data sourced from index columns."""
 
     async def test_list_workflows_includes_token_data(
         self,
         test_client: TestClient,
         mock_repository: MagicMock,
     ) -> None:
-        """GET /workflows should include token data in workflow summaries."""
-        # Setup workflows
-        wf1 = make_workflow(issue_id="TEST-001", status="completed")
-        wf2 = make_workflow(issue_id="TEST-002", status="completed")
-        workflows = [wf1, wf2]
-        mock_repository.list_workflows.return_value = workflows
+        """GET /workflows serves totals from the workflows index columns."""
+        wf1 = make_workflow(
+            issue_id="TEST-001",
+            status="completed",
+            total_cost_usd=0.015,
+            total_tokens=1500,
+            total_duration_ms=5000,
+        )
+        wf2 = make_workflow(
+            issue_id="TEST-002",
+            status="completed",
+            total_cost_usd=0.028,
+            total_tokens=2800,
+            total_duration_ms=8000,
+        )
+        mock_repository.list_workflows.return_value = [wf1, wf2]
         mock_repository.count_workflows.return_value = 2
-
-        wf1_id = wf1.id
-        wf2_id = wf2.id
-
-        # Setup batch token summaries
-        mock_repository.get_token_summaries_batch.return_value = {
-            wf1_id: TokenSummary(
-                total_input_tokens=1000,
-                total_output_tokens=500,
-                total_cache_read_tokens=200,
-                total_cost_usd=0.015,
-                total_duration_ms=5000,
-                total_turns=3,
-                breakdown=[],
-            ),
-            wf2_id: TokenSummary(
-                total_input_tokens=2000,
-                total_output_tokens=800,
-                total_cache_read_tokens=300,
-                total_cost_usd=0.028,
-                total_duration_ms=8000,
-                total_turns=5,
-                breakdown=[],
-            ),
-        }
 
         response = test_client.get("/api/workflows")
 
         assert response.status_code == 200
         data = response.json()
-
-        # Verify workflows have token data
         assert len(data["workflows"]) == 2
 
         wf1_data = data["workflows"][0]
         assert wf1_data["total_cost_usd"] == pytest.approx(0.015, rel=1e-6)
-        assert wf1_data["total_tokens"] == 1500  # input + output
+        assert wf1_data["total_tokens"] == 1500
         assert wf1_data["total_duration_ms"] == 5000
 
         wf2_data = data["workflows"][1]
         assert wf2_data["total_cost_usd"] == pytest.approx(0.028, rel=1e-6)
-        assert wf2_data["total_tokens"] == 2800  # input + output
+        assert wf2_data["total_tokens"] == 2800
         assert wf2_data["total_duration_ms"] == 8000
-
-        # Verify batch method was called with correct workflow IDs
-        mock_repository.get_token_summaries_batch.assert_awaited_once_with(
-            [wf1_id, wf2_id]
-        )
 
     async def test_list_workflows_handles_missing_token_data(
         self,
         test_client: TestClient,
         mock_repository: MagicMock,
     ) -> None:
-        """GET /workflows should handle workflows without token data."""
-        wf_with = make_workflow(status="completed")
+        """Workflows without index data return null totals."""
+        wf_with = make_workflow(
+            status="completed",
+            total_cost_usd=0.015,
+            total_tokens=1500,
+            total_duration_ms=5000,
+        )
         wf_without = make_workflow(status="completed")
-        workflows = [wf_with, wf_without]
-        mock_repository.list_workflows.return_value = workflows
+        mock_repository.list_workflows.return_value = [wf_with, wf_without]
         mock_repository.count_workflows.return_value = 2
-
-        wf_with_id = wf_with.id
-        wf_without_id = wf_without.id
-
-        # Setup batch token summaries - one with data, one without
-        mock_repository.get_token_summaries_batch.return_value = {
-            wf_with_id: TokenSummary(
-                total_input_tokens=1000,
-                total_output_tokens=500,
-                total_cache_read_tokens=200,
-                total_cost_usd=0.015,
-                total_duration_ms=5000,
-                total_turns=3,
-                breakdown=[],
-            ),
-            wf_without_id: None,  # No token data for this workflow
-        }
 
         response = test_client.get("/api/workflows")
 
         assert response.status_code == 200
         data = response.json()
 
-        # Workflow with data should have values
-        wf_with_data = next(wf for wf in data["workflows"] if wf["id"] == str(wf_with_id))
+        wf_with_data = next(
+            wf for wf in data["workflows"] if wf["id"] == str(wf_with.id)
+        )
         assert wf_with_data["total_cost_usd"] == pytest.approx(0.015, rel=1e-6)
         assert wf_with_data["total_tokens"] == 1500
         assert wf_with_data["total_duration_ms"] == 5000
 
-        # Workflow without data should have null values
-        wf_no_data = next(wf for wf in data["workflows"] if wf["id"] == str(wf_without_id))
+        wf_no_data = next(
+            wf for wf in data["workflows"] if wf["id"] == str(wf_without.id)
+        )
         assert wf_no_data["total_cost_usd"] is None
         assert wf_no_data["total_tokens"] is None
         assert wf_no_data["total_duration_ms"] is None
@@ -313,7 +322,6 @@ class TestListWorkflowsTokenData:
         """GET /workflows with no workflows should return empty list."""
         mock_repository.list_workflows.return_value = []
         mock_repository.count_workflows.return_value = 0
-        mock_repository.get_token_summaries_batch.return_value = {}
 
         response = test_client.get("/api/workflows")
 
@@ -324,31 +332,21 @@ class TestListWorkflowsTokenData:
 
 
 class TestListActiveWorkflowsTokenData:
-    """Tests for GET /workflows/active endpoint token data."""
+    """Tests for GET /workflows/active token data from index columns."""
 
     async def test_list_active_includes_token_data(
         self,
         test_client: TestClient,
         mock_repository: MagicMock,
     ) -> None:
-        """GET /workflows/active should include token data in summaries."""
-        active_wf = make_workflow(status="in_progress")
-        active_wf_id = active_wf.id
-        workflows = [active_wf]
-        mock_repository.list_active.return_value = workflows
-
-        # Setup batch token summaries
-        mock_repository.get_token_summaries_batch.return_value = {
-            active_wf_id: TokenSummary(
-                total_input_tokens=1500,
-                total_output_tokens=700,
-                total_cache_read_tokens=300,
-                total_cost_usd=0.022,
-                total_duration_ms=7000,
-                total_turns=4,
-                breakdown=[],
-            ),
-        }
+        """GET /workflows/active serves totals from the index columns."""
+        active_wf = make_workflow(
+            status="in_progress",
+            total_cost_usd=0.022,
+            total_tokens=2200,
+            total_duration_ms=7000,
+        )
+        mock_repository.list_active.return_value = [active_wf]
 
         response = test_client.get("/api/workflows/active")
 
@@ -358,10 +356,5 @@ class TestListActiveWorkflowsTokenData:
         assert len(data["workflows"]) == 1
         wf = data["workflows"][0]
         assert wf["total_cost_usd"] == pytest.approx(0.022, rel=1e-6)
-        assert wf["total_tokens"] == 2200  # 1500 + 700
+        assert wf["total_tokens"] == 2200
         assert wf["total_duration_ms"] == 7000
-
-        # Verify batch method was called with correct workflow IDs
-        mock_repository.get_token_summaries_batch.assert_awaited_once_with(
-            [active_wf_id]
-        )

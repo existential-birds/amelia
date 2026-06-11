@@ -19,7 +19,6 @@ function createLoaderArgs(params: Record<string, string>): LoaderFunctionArgs {
   } as unknown as LoaderFunctionArgs;
 }
 
-
 describe('Workflow Loaders', () => {
   beforeEach(() => {
     vi.clearAllMocks();

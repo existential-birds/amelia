@@ -120,9 +120,6 @@ def create_implementation_graph(
         }
     )
 
-    # Conditional edge from human_approval_node:
-    # - approve: continue to developer_node
-    # - reject: go to END
     workflow.add_conditional_edges(
         "human_approval_node",
         route_approval,
@@ -132,7 +129,6 @@ def create_implementation_graph(
         }
     )
 
-    # Developer -> Reviewer
     workflow.add_edge("developer_node", "reviewer_node")
 
     # Reviewer routing: developer (retry), next_task_node (task approved), or __end__ (all done)
@@ -149,7 +145,6 @@ def create_implementation_graph(
     # next_task_node loops back to developer for the next task
     workflow.add_edge("next_task_node", "developer_node")
 
-    # Set default interrupt_before only if checkpointer is provided and interrupt_before is None
     if interrupt_before is None and checkpointer is not None:
         interrupt_before = ["human_approval_node"]
 

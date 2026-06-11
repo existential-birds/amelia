@@ -144,66 +144,30 @@ class BrainstormEventType(StrEnum):
 AnyEventType = EventType | BrainstormEventType
 
 
-# Persisted event types (written to workflow log)
-PERSISTED_TYPES: frozenset[AnyEventType] = frozenset({
-    # Lifecycle
-    EventType.WORKFLOW_CREATED,
-    EventType.WORKFLOW_STARTED,
-    EventType.WORKFLOW_COMPLETED,
-    EventType.WORKFLOW_FAILED,
-    EventType.WORKFLOW_CANCELLED,
-    # Stages
-    EventType.STAGE_STARTED,
-    EventType.STAGE_COMPLETED,
-    # Approval
-    EventType.APPROVAL_REQUIRED,
-    EventType.APPROVAL_GRANTED,
-    EventType.APPROVAL_REJECTED,
-    # Artifacts
-    EventType.FILE_CREATED,
-    EventType.FILE_MODIFIED,
-    EventType.FILE_DELETED,
-    # Review
-    EventType.REVIEW_REQUESTED,
-    EventType.REVIEW_COMPLETED,
-    EventType.REVISION_REQUESTED,
-    # Tasks
-    EventType.TASK_STARTED,
-    EventType.TASK_COMPLETED,
-    EventType.TASK_FAILED,
-    # System
-    EventType.SYSTEM_ERROR,
-    EventType.SYSTEM_WARNING,
-    # Oracle
-    EventType.ORACLE_CONSULTATION_STARTED,
-    EventType.ORACLE_CONSULTATION_COMPLETED,
-    EventType.ORACLE_CONSULTATION_FAILED,
-    # Brainstorm
-    BrainstormEventType.SESSION_CREATED,
-    BrainstormEventType.SESSION_COMPLETED,
-    BrainstormEventType.ARTIFACT_CREATED,
-    BrainstormEventType.MESSAGE_FAILED,
-    # Knowledge ingestion
-    EventType.DOCUMENT_INGESTION_STARTED,
-    EventType.DOCUMENT_INGESTION_COMPLETED,
-    EventType.DOCUMENT_INGESTION_FAILED,
-    # Plan validation
-    EventType.PLAN_VALIDATED,
-    EventType.PLAN_VALIDATION_FAILED,
-    # PR Auto-Fix orchestration
-    EventType.PR_FIX_QUEUED,
-    EventType.PR_FIX_DIVERGED,
-    EventType.PR_FIX_COOLDOWN_STARTED,
-    EventType.PR_FIX_COOLDOWN_RESET,
-    EventType.PR_FIX_RETRIES_EXHAUSTED,
-    # PR Auto-Fix lifecycle
-    EventType.PR_COMMENTS_DETECTED,
-    EventType.PR_AUTO_FIX_STARTED,
-    EventType.PR_AUTO_FIX_COMPLETED,
-    EventType.PR_AUTO_FIX_FAILED,
-    EventType.PR_COMMENTS_RESOLVED,
-    EventType.PR_POLL_ERROR,
-    EventType.PR_POLL_RATE_LIMITED,
+# High-volume stream/trace event types. These are broadcast to every connected
+# WebSocket client (no workflow subscription filtering). Nothing is persisted —
+# trajectory files are the only run history.
+TRACE_TYPES: frozenset[AnyEventType] = frozenset({
+    # Agent streaming
+    EventType.STREAM,
+    EventType.AGENT_MESSAGE,
+    EventType.CLAUDE_THINKING,
+    EventType.CLAUDE_TOOL_CALL,
+    EventType.CLAUDE_TOOL_RESULT,
+    EventType.AGENT_OUTPUT,
+    # Oracle streaming
+    EventType.ORACLE_CONSULTATION_THINKING,
+    EventType.ORACLE_TOOL_CALL,
+    EventType.ORACLE_TOOL_RESULT,
+    # Knowledge ingestion progress
+    EventType.DOCUMENT_INGESTION_PROGRESS,
+    # Brainstorm streaming
+    BrainstormEventType.REASONING,
+    BrainstormEventType.TOOL_CALL,
+    BrainstormEventType.TOOL_RESULT,
+    BrainstormEventType.TEXT,
+    BrainstormEventType.ASK_USER,
+    BrainstormEventType.MESSAGE_COMPLETE,
 })
 
 _ERROR_TYPES: frozenset[AnyEventType] = frozenset({

@@ -22,11 +22,6 @@ from amelia.server.lifecycle.pr_poller import PRCommentPoller
 from amelia.server.models.events import _WARNING_TYPES, EventType
 
 
-# ---------------------------------------------------------------------------
-# Shared fixtures (reused by Task 2 tests)
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture()
 def mock_settings_repo() -> AsyncMock:
     """Mock SettingsRepository with get_server_settings."""
@@ -67,11 +62,6 @@ def sample_profile_no_autofix() -> Profile:
         name="no-autofix",
         repo_root="/tmp/test-repo",
     )
-
-
-# ---------------------------------------------------------------------------
-# Task 1: Config extensions
-# ---------------------------------------------------------------------------
 
 
 class TestPRAutoFixConfigPollLabel:
@@ -162,11 +152,6 @@ class TestListLabeledPRs:
             result = await service.list_labeled_prs("amelia")
 
         assert result == []
-
-
-# ---------------------------------------------------------------------------
-# Task 2: PRCommentPoller service
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -610,11 +595,6 @@ class TestNoOverlap:
 
             poll_continue.set()
             await task
-
-
-# ---------------------------------------------------------------------------
-# Processed comment tracking (skip-when-all-processed)
-# ---------------------------------------------------------------------------
 
 
 class TestProcessedCommentTracking:

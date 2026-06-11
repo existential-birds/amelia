@@ -9,16 +9,13 @@ import { api } from '../../api/client';
 import { createMockWorkflowSummary, createMockWorkflowDetail } from '@/__tests__/fixtures';
 import type { WorkflowSummary, WorkflowDetail } from '../../types';
 
-// Mock the API module
 vi.mock('../../api/client');
 
-// Mock the hooks module
 vi.mock('../../hooks', () => ({
   useElapsedTime: () => '0h 00m',
   useAutoRevalidation: () => {},
 }));
 
-// Mock React Router
 vi.mock('react-router-dom', async (importOriginal) => {
   const mod = await importOriginal<typeof import('react-router-dom')>();
   return {
@@ -105,10 +102,8 @@ describe('WorkflowsPage pending workflow actions', () => {
   it('should show "queued" for pending workflows', async () => {
     renderPage([pendingWorkflow], pendingWorkflowDetail);
 
-    // Look for the "queued" text in the pending workflow controls section
     const queuedElements = await screen.findAllByText(/queued/i);
     expect(queuedElements.length).toBeGreaterThan(0);
-    // At least one should be the status text in the PendingWorkflowControls
     expect(queuedElements.some(el => el.className.includes('text-muted-foreground'))).toBe(true);
   });
 
@@ -125,7 +120,6 @@ describe('WorkflowsPage pending workflow actions', () => {
 
     renderPage([plannedWorkflow], plannedWorkflowDetail);
 
-    // Look for plan indicator
     const planIndicator = await screen.findByText(/plan ready/i);
     expect(planIndicator).toBeInTheDocument();
   });
@@ -146,7 +140,6 @@ describe('WorkflowsPage pending workflow actions', () => {
 
     renderPage([runningWorkflow], runningWorkflowDetail);
 
-    // Wait for the workflow to render
     const issueElements = await screen.findAllByText('ISSUE-123');
     expect(issueElements.length).toBeGreaterThan(0);
 

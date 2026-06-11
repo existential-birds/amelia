@@ -37,7 +37,6 @@ export default function WorkflowDetailPage() {
     useCallback((state) => state.eventsByWorkflow[workflowId], [workflowId])
   );
 
-  // Auto-revalidate when this workflow's status changes (approval events, completion, etc.)
   useAutoRevalidation(workflow?.id);
 
   // Determine if this failed workflow can be resumed from checkpoint.

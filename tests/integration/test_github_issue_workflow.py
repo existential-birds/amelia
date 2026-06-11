@@ -32,11 +32,6 @@ from amelia.server.database.repository import WorkflowRepository
 from tests.integration.conftest import init_git_repo
 
 
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-
 @pytest.fixture
 def github_worktree(tmp_path: Path) -> str:
     """Create a valid git worktree with a GitHub tracker profile.
@@ -135,11 +130,6 @@ def mock_graph(langgraph_mock_factory: Any):
     ) as mock_create_graph:
         mock_create_graph.return_value = mocks.graph
         yield mocks
-
-
-# =============================================================================
-# Tests
-# =============================================================================
 
 
 @pytest.mark.integration

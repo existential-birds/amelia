@@ -172,11 +172,6 @@ def _build_default_agents(
     }
 
 
-# =============================================================================
-# Profile Commands
-# =============================================================================
-
-
 @profile_app.command("list")
 def profile_list() -> None:
     """List all profiles."""
@@ -200,7 +195,6 @@ def profile_list() -> None:
             table.add_column("Agents", style="yellow")
 
             for profile in profiles:
-                # Get driver/model from first agent for display
                 display_driver: str = "-"
                 display_model: str = "-"
                 if profile.agents:
@@ -247,7 +241,6 @@ def profile_show(
 
             console.print(table)
 
-            # Show agents table
             if profile.agents:
                 agents_table = Table(title="Agent Configurations")
                 agents_table.add_column("Agent", style="cyan")
@@ -312,7 +305,6 @@ def profile_create(
     If options are not provided, prompts interactively.
     Creates default agent configurations using the specified driver and model.
     """
-    # Interactive prompts if options not provided
     if driver is None:
         driver = typer.prompt(
             "Driver",
@@ -373,7 +365,6 @@ def profile_create(
     async def _run() -> None:
         db, repo = await _get_profile_repository()
         try:
-            # Check if profile already exists
             existing = await repo.get_profile(name)
             if existing:
                 console.print(f"[red]Profile '{name}' already exists.[/red]")
@@ -383,11 +374,9 @@ def profile_create(
             if driver is None or model is None or tracker is None or repo_root is None:
                 raise ValueError("All profile options must be provided")
 
-            # Validate and cast to proper types
             validated_driver = _validate_driver(driver)
             validated_tracker = _validate_tracker(tracker)
 
-            # Build default agents configuration
             agents = _build_default_agents(validated_driver, model, agent_options)
 
             profile = Profile(
@@ -458,11 +447,6 @@ def profile_activate(
     asyncio.run(_run())
 
 
-# =============================================================================
-# First-Run Setup
-# =============================================================================
-
-
 async def check_and_run_first_time_setup() -> bool:
     """Check if this is first run and prompt for profile creation.
 
@@ -488,11 +472,9 @@ async def check_and_run_first_time_setup() -> bool:
         tracker = typer.prompt("Tracker (noop, github, jira)", default="noop")
         repo_root = typer.prompt("Repository root", default=str(Path.cwd()))
 
-        # Validate driver and tracker
         validated_driver = _validate_driver(driver_input)
         validated_tracker = _validate_tracker(tracker)
 
-        # Build default agents configuration
         agents = _build_default_agents(validated_driver, model)
 
         profile = Profile(
@@ -518,11 +500,6 @@ def run_first_time_setup() -> bool:
         True if setup completed or not needed, False if user cancelled.
     """
     return asyncio.run(check_and_run_first_time_setup())
-
-
-# =============================================================================
-# Server Settings Commands
-# =============================================================================
 
 
 @server_app.command("show")
@@ -574,7 +551,6 @@ def server_set(
     - workflow_start_timeout_seconds (float)
     - max_concurrent (int)
     """
-    # Convert value to appropriate type
     int_fields = {
         "log_retention_days",
         "checkpoint_retention_days",

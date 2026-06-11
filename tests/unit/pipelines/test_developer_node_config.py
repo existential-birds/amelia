@@ -41,7 +41,7 @@ async def _run_developer_node(
     *,
     resolve_commit_return: Any = None,
 ) -> tuple[Any, MagicMock, MagicMock]:
-    """Run call_developer_node with mocked Developer and _save_token_usage.
+    """Run call_developer_node with a mocked Developer.
 
     Returns (result, MockDeveloperCls, mock_developer_instance).
     If resolve_commit_return is provided, _resolve_commit is also patched.
@@ -49,7 +49,6 @@ async def _run_developer_node(
     MockDeveloperCls, mock_developer = _setup_developer_mocks(state)
     with ExitStack() as stack:
         stack.enter_context(patch("amelia.pipelines.nodes.Developer", MockDeveloperCls))
-        stack.enter_context(patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock))
         if resolve_commit_return is not None:
             stack.enter_context(
                 patch(

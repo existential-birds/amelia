@@ -22,7 +22,6 @@ from amelia.server.events.bus import EventBus
 router = APIRouter(tags=["oracle"])
 
 
-# --- Request / Response models ---
 
 
 class OracleConsultRequest(BaseModel):
@@ -57,9 +56,6 @@ class OracleConsultResponse(BaseModel):
     consultation: OracleConsultation
 
 
-# --- Dependency stubs (overridden in main.py) ---
-
-
 def get_event_bus() -> EventBus:
     """Get EventBus -- overridden in main.py."""
     raise NotImplementedError("Must be overridden via dependency_overrides")
@@ -88,9 +84,6 @@ def _validate_repo_root(requested: str, profile_root: str) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"working_dir must be within profile root: {profile_root}",
         ) from exc
-
-
-# --- Route ---
 
 
 @router.post(
@@ -122,7 +115,6 @@ async def create_consultation(
         HTTPException: 400 if working_dir invalid or oracle not configured.
         HTTPException: 404 if profile not found.
     """
-    # Resolve profile
     if request.profile_id:
         profile = await profile_repo.get_profile(request.profile_id)
         if profile is None:
@@ -138,10 +130,8 @@ async def create_consultation(
                 detail="No active profile",
             )
 
-    # Validate working_dir
     _validate_repo_root(request.working_dir, profile.repo_root)
 
-    # Get oracle agent config
     try:
         agent_config = profile.get_agent_config("oracle")
     except ValueError as exc:
@@ -150,7 +140,6 @@ async def create_consultation(
             detail=str(exc),
         ) from exc
 
-    # Override model if provided
     if request.model:
         agent_config = AgentConfig(
             driver=agent_config.driver,
@@ -158,7 +147,6 @@ async def create_consultation(
             options=agent_config.options,
         )
 
-    # Run consultation
     oracle = Oracle(config=agent_config, event_bus=event_bus)
     result: OracleConsultResult = await oracle.consult(
         problem=request.problem,

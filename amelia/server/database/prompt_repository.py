@@ -1,4 +1,3 @@
-# amelia/server/database/prompt_repository.py
 """Repository for prompt configuration persistence.
 
 Provides CRUD operations for prompts, versions, and workflow linking.
@@ -28,8 +27,6 @@ class PromptRepository:
             db: Database connection wrapper.
         """
         self._db = db
-
-    # Prompt CRUD
 
     async def create_prompt(self, prompt: Prompt) -> None:
         """Create a new prompt definition.
@@ -82,8 +79,6 @@ class PromptRepository:
             description=row["description"],
             current_version_id=row["current_version_id"],
         )
-
-    # Version management
 
     async def get_versions(self, prompt_id: str) -> list[PromptVersion]:
         """Get all versions for a prompt, newest first.
@@ -151,14 +146,12 @@ class PromptRepository:
         Returns:
             The created version.
         """
-        # Get next version number
         row = await self._db.fetch_one(
             "SELECT MAX(version_number) as max_version FROM prompt_versions WHERE prompt_id = $1",
             prompt_id,
         )
         next_version = (row["max_version"] or 0) + 1 if row else 1
 
-        # Create version
         version_id = uuid.uuid4()
         now = datetime.now(UTC)
         await self._db.execute(
@@ -167,7 +160,6 @@ class PromptRepository:
             version_id, prompt_id, next_version, content, now, change_note,
         )
 
-        # Set as active
         await self._db.execute(
             "UPDATE prompts SET current_version_id = $1 WHERE id = $2",
             version_id, prompt_id,
@@ -204,8 +196,6 @@ class PromptRepository:
             "UPDATE prompts SET current_version_id = NULL WHERE id = $1",
             prompt_id,
         )
-
-    # Workflow linking
 
     async def record_workflow_prompt(
         self,

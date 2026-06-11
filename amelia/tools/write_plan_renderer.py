@@ -25,7 +25,6 @@ def render_plan_markdown(plan: WritePlanInput) -> str:
     """
     parts: list[str] = []
 
-    # Header
     parts.append(f"# {plan.goal} Implementation Plan")
     parts.append("")
     parts.append(f"**Goal:** {plan.goal}")
@@ -38,12 +37,10 @@ def render_plan_markdown(plan: WritePlanInput) -> str:
     parts.append("---")
     parts.append("")
 
-    # Tasks
     for task in plan.tasks:
         parts.append(_render_task(task))
         parts.append("")
 
-    # Summary
     parts.append("---")
     parts.append("")
     parts.append("## Summary")
@@ -71,7 +68,6 @@ def _render_task(task: PlanTask) -> str:
     lines.append(f"### Task {task.number}: {task.title}")
     lines.append("")
 
-    # Files section
     has_files = task.files_to_create or task.files_to_modify
     if has_files:
         lines.append("**Files:**")
@@ -81,7 +77,6 @@ def _render_task(task: PlanTask) -> str:
             lines.append(f"- Modify: `{f}`")
         lines.append("")
 
-    # Steps
     for step in task.steps:
         lines.append(step)
         lines.append("")

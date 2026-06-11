@@ -173,7 +173,6 @@ Provide clear evidence for each disposition decision."""
         """
         parts: list[str] = []
 
-        # Task context (if available)
         if state.goal:
             parts.append(f"## Current Task\n\n{state.goal}")
         elif state.issue:
@@ -185,7 +184,6 @@ Provide clear evidence for each disposition decision."""
             if issue_parts:
                 parts.append("## Issue Context\n\n" + "\n\n".join(issue_parts))
 
-        # Review feedback to evaluate — aggregate comments from all reviews
         if not state.last_reviews:
             raise ValueError("No review feedback found in state")
 
@@ -256,7 +254,6 @@ You MUST call `submit_evaluation` exactly once with all items.""")
         if not state.last_reviews:
             raise ValueError("ImplementationState must have last_reviews set for evaluation")
 
-        # Handle empty review comments — aggregate from all reviews
         all_comments = collect_all_comments(state.last_reviews)
         if not all_comments:
             logger.warning(
@@ -286,7 +283,6 @@ You MUST call `submit_evaluation` exactly once with all items.""")
             )
             return result, None
 
-        # Build prompt and call driver
         prompt = self._build_prompt(state)
 
         logger.debug(
@@ -318,7 +314,6 @@ You MUST call `submit_evaluation` exactly once with all items.""")
             on_call=_on_submit,
         )
 
-        # Execute agentic evaluation with submit_evaluation tool (per D-05, D-06)
         new_session_id: str | None = None
         stream_result_input: Any | None = None  # fallback for drivers/tests that don't invoke on_call
         driver_error: str | None = None
@@ -368,7 +363,6 @@ You MUST call `submit_evaluation` exactly once with all items.""")
                 "submit_evaluation must cover every review item exactly once"
             )
 
-        # Partition items by disposition
         items_to_implement: list[EvaluatedItem] = []
         items_rejected: list[EvaluatedItem] = []
         items_deferred: list[EvaluatedItem] = []
@@ -393,7 +387,6 @@ You MUST call `submit_evaluation` exactly once with all items.""")
             needs_clarification=len(items_needing_clarification),
         )
 
-        # Emit completion event
         if self._event_bus is not None:
             summary_parts = []
             if items_to_implement:

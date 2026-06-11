@@ -1,17 +1,18 @@
 """WebSocket endpoint for real-time event streaming."""
 import asyncio
 import contextlib
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from loguru import logger
 
 from amelia.server.events.connection_manager import ConnectionManager
+from amelia.server.models.events import TRACE_TYPES
 
 
 router = APIRouter(tags=["websocket"])
 
-# Global connection manager instance
 connection_manager = ConnectionManager()
 
 
@@ -43,41 +44,59 @@ async def websocket_endpoint(
     logger.info("websocket_connected", active_connections=connection_manager.active_connections)
 
     try:
-        # Handle backfill if reconnecting
         if since:
-            repository = connection_manager.get_repository()
-            if repository:
+            bus = connection_manager.get_event_bus()
+            if bus:
                 try:
-                    # Replay missed events from database (limit to prevent memory exhaustion)
-                    import uuid as _uuid  # noqa: PLC0415
-                    events = await repository.get_events_after(_uuid.UUID(since), limit=1000)
-
-                    for event in events:
-                        await websocket.send_json({
-                            "type": "event",
-                            "payload": event.model_dump(mode="json"),
-                        })
-
-                    await websocket.send_json({
-                        "type": "backfill_complete",
-                        "count": len(events),
-                    })
-                    logger.info("backfill_complete", count=len(events))
+                    since_id = uuid.UUID(since)
                 except ValueError:
-                    # Event was cleaned up by retention - client needs full refresh
                     await websocket.send_json({
                         "type": "backfill_expired",
-                        "message": "Requested event no longer exists. Full refresh required.",
+                        "message": "Invalid event id. Full refresh required.",
                     })
                     logger.warning("backfill_expired", since_event_id=since)
-            else:
-                logger.warning("backfill_unavailable", reason="repository_not_initialized")
+                else:
+                    # Replay missed events from the in-memory ring buffer.
+                    # None means the anchor id was evicted or never seen —
+                    # the client must refetch full state via GET.
+                    events = bus.events_after(since_id)
 
-        # Start heartbeat task
+                    if events is None:
+                        await websocket.send_json({
+                            "type": "backfill_expired",
+                            "message": "Event id not in buffer (evicted). Full refresh required.",
+                        })
+                        logger.warning("backfill_expired", since_event_id=str(since_id))
+                    else:
+                        # Apply the same subscription filtering used by broadcast():
+                        # trace events go to everyone; other events are filtered by
+                        # workflow subscription (empty set == subscribed to all).
+                        subscribed_ids = await connection_manager.get_subscriptions(websocket)
+                        sent = 0
+                        for event in events:
+                            is_trace = event.event_type in TRACE_TYPES
+                            wid_str = str(event.workflow_id) if event.workflow_id else None
+                            if not is_trace and subscribed_ids and (
+                                wid_str is None or wid_str not in subscribed_ids
+                            ):
+                                continue
+                            await websocket.send_json({
+                                "type": "event",
+                                "payload": event.model_dump(mode="json"),
+                            })
+                            sent += 1
+
+                        await websocket.send_json({
+                            "type": "backfill_complete",
+                            "count": sent,
+                        })
+                        logger.info("backfill_complete", count=sent)
+            else:
+                logger.warning("backfill_unavailable", reason="event_bus_not_initialized")
+
         heartbeat_task = asyncio.create_task(_heartbeat_loop(websocket))
 
         try:
-            # Message handling loop
             while True:
                 data = await websocket.receive_json()
                 message_type = data.get("type")
@@ -99,11 +118,9 @@ async def websocket_endpoint(
                     logger.debug("subscribed_to_all")
 
                 elif message_type == "pong":
-                    # Heartbeat response - just log
                     logger.debug("heartbeat_pong_received")
 
         finally:
-            # Cancel heartbeat when loop exits
             heartbeat_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await heartbeat_task

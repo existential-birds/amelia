@@ -6,10 +6,8 @@ import { useModelsStore } from '@/store/useModelsStore';
 import { makeMockModelsStore, mockModels } from '@/test/mocks/modelsStore';
 import type { ModelInfo } from '../types';
 
-// Mock the store with selector support
 vi.mock('@/store/useModelsStore');
 
-// Mock useRecentModels hook
 vi.mock('@/hooks/useRecentModels', () => ({
   useRecentModels: () => ({
     recentModelIds: [],
@@ -79,14 +77,12 @@ describe('ModelPickerSheet', () => {
       />
     );
 
-    // Open sheet
     fireEvent.click(screen.getByText('Browse'));
 
     await waitFor(() => {
       expect(screen.getByText('Claude Sonnet 4')).toBeInTheDocument();
     });
 
-    // Expand and select
     fireEvent.click(screen.getByRole('button', { name: /expand/i }));
     fireEvent.click(screen.getByRole('button', { name: /select/i }));
 
@@ -131,7 +127,6 @@ describe('ModelPickerSheet', () => {
       expect(screen.getByText('GPT-4o')).toBeInTheDocument();
     });
 
-    // Search for "claude"
     await user.type(screen.getByPlaceholderText(/search/i), 'claude');
 
     await waitFor(() => {

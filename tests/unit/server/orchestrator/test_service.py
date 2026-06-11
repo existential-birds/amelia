@@ -53,8 +53,6 @@ def mock_repository() -> AsyncMock:
     repo.update = AsyncMock()
     repo.update_plan_cache = AsyncMock()
     repo.set_status = AsyncMock()
-    repo.save_event = AsyncMock()
-    repo.get_max_event_sequence = AsyncMock(return_value=0)
     repo.get = AsyncMock(return_value=None)
     return repo
 
@@ -155,11 +153,6 @@ def capture_emit(
     return emitted_events, install
 
 
-# =============================================================================
-# Worktree Validation Tests
-# =============================================================================
-
-
 async def test_start_workflow_rejects_nonexistent_path(
     orchestrator: OrchestratorService,
 ) -> None:
@@ -220,18 +213,16 @@ async def test_start_workflow_success(
             worktree_path=valid_worktree,
         )
 
-        assert workflow_id  # Should return a UUID
+        assert workflow_id
         assert valid_worktree in orchestrator._active_tasks
         mock_repository.create.assert_called_once()
 
-        # Verify state creation
         call_args = mock_repository.create.call_args
         state = call_args[0][0]
         assert state.id == workflow_id
         assert state.issue_id == "ISSUE-123"
         assert state.worktree_path == valid_worktree
         assert state.workflow_status == WorkflowStatus.PENDING
-        # Verify profile_id is stored on ServerExecutionState
         assert state.profile_id == "test"
 
 
@@ -254,7 +245,6 @@ async def test_start_workflow_conflict(
 
     assert valid_worktree in str(exc_info.value)
 
-    # Cleanup
     _, task = orchestrator._active_tasks[valid_worktree]
     task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
@@ -274,7 +264,6 @@ async def test_start_workflow_concurrency_limit(
         orchestrator._active_tasks[f"/fake/worktree{i}"] = (uuid4(), task)
         tasks.append(task)
 
-    # Now try to start a workflow with a valid worktree path
     with pytest.raises(ConcurrencyLimitError) as exc_info:
         await orchestrator.start_workflow(
             issue_id="ISSUE-123",
@@ -283,7 +272,6 @@ async def test_start_workflow_concurrency_limit(
 
     assert exc_info.value.max_concurrent == 5
 
-    # Cleanup
     for task in tasks:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -321,7 +309,6 @@ async def test_cancel_workflow(
     mock_repository: AsyncMock,
 ) -> None:
     """Should cancel running workflow task and persist status."""
-    # Create mock workflow state
     cancel_wf_id = uuid4()
     mock_state = ServerExecutionState(
         id=cancel_wf_id,
@@ -332,20 +319,16 @@ async def test_cancel_workflow(
     )
     mock_repository.get.return_value = mock_state
 
-    # Create a fake running task
     task = asyncio.create_task(asyncio.sleep(100))
     orchestrator._active_tasks["/path/to/worktree"] = (cancel_wf_id, task)
 
     await orchestrator.cancel_workflow(cancel_wf_id)
 
-    # Wait for the cancellation to complete
     with contextlib.suppress(asyncio.CancelledError):
         await task
 
-    # Task should be cancelled
     assert task.cancelled()
 
-    # Status should be persisted to database
     mock_repository.set_status.assert_called_once_with(cancel_wf_id, WorkflowStatus.CANCELLED)
 
 
@@ -464,11 +447,6 @@ def test_get_active_workflows(orchestrator: OrchestratorService) -> None:
     assert set(active) == {"/path/1", "/path/2"}
 
 
-# =============================================================================
-# Approval Flow Tests
-# =============================================================================
-
-
 @patch("amelia.server.orchestrator.runner.create_implementation_graph")
 async def test_approve_workflow_success(
     mock_create_graph: MagicMock,
@@ -481,7 +459,6 @@ async def test_approve_workflow_success(
     received_events = []
     mock_event_bus.subscribe(lambda e: received_events.append(e))
 
-    # Create mock blocked workflow
     mock_state = ServerExecutionState(
         id=uuid4(),
         issue_id="ISSUE-123",
@@ -492,7 +469,6 @@ async def test_approve_workflow_success(
     )
     mock_repository.get.return_value = mock_state
 
-    # Setup LangGraph mocks using factory
     mocks = langgraph_mock_factory(
         aget_state_return=MagicMock(values={"human_approved": True}, next=[])
     )
@@ -502,14 +478,11 @@ async def test_approve_workflow_success(
     # New API returns None, raises on error
     await orchestrator.approve_workflow(mock_state.id)
 
-    # Should update status - now called twice: once for in_progress, once for completed
     assert mock_repository.set_status.call_count == 2
-    # First call is in_progress, second is completed
     calls = mock_repository.set_status.call_args_list
     assert calls[0][0] == (mock_state.id, WorkflowStatus.IN_PROGRESS)
     assert calls[1][0] == (mock_state.id, WorkflowStatus.COMPLETED)
 
-    # Should emit APPROVAL_GRANTED
     approval_granted = [e for e in received_events if e.event_type == EventType.APPROVAL_GRANTED]
     assert len(approval_granted) == 1
 
@@ -526,7 +499,6 @@ async def test_reject_workflow_success(
     received_events = []
     mock_event_bus.subscribe(lambda e: received_events.append(e))
 
-    # Create mock workflow and task
     mock_state = ServerExecutionState(
         id=uuid4(),
         issue_id="ISSUE-123",
@@ -537,32 +509,168 @@ async def test_reject_workflow_success(
     )
     mock_repository.get.return_value = mock_state
 
-    # Setup LangGraph mocks using factory
     mocks = langgraph_mock_factory()
     mock_create_graph.return_value = mocks.graph
 
     # Profile is already mocked via mock_profile_repo fixture
-    # Create fake task
     task = asyncio.create_task(asyncio.sleep(100))
     orchestrator._active_tasks["/path/to/worktree"] = (mock_state.id, task)
 
     # New API returns None, raises on error
     await orchestrator.reject_workflow(mock_state.id, feedback="Plan too complex")
 
-    # Should update status to failed
     mock_repository.set_status.assert_called_once_with(
         mock_state.id, WorkflowStatus.FAILED, failure_reason="Plan too complex"
     )
 
-    # Should cancel task - wait for cancellation to complete
     with contextlib.suppress(asyncio.CancelledError):
         await task
     assert task.cancelled()
 
-    # Should emit APPROVAL_REJECTED
     approval_rejected = [e for e in received_events if e.event_type == EventType.APPROVAL_REJECTED]
     assert len(approval_rejected) == 1
     assert "rejected" in approval_rejected[0].message.lower()
+
+
+async def test_reject_finalizes_recorder_and_forgets_sequence(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+    tmp_path: Path,
+) -> None:
+    """Rejecting a blocked workflow finalizes the kept-alive recorder.
+
+    A blocked workflow's task already exited at the interrupt, so no
+    done-callback fires on rejection. Without an explicit finalize the
+    recorder (deliberately retained across the pause) would never be written
+    and its captured steps would be lost.
+    """
+    from amelia.trajectory import WorkflowTrajectoryRecorder
+    from amelia.trajectory.store import trajectory_path
+
+    wf_id = uuid4()
+    recorder = WorkflowTrajectoryRecorder(
+        workflow_id=wf_id,
+        trajectory_dir=tmp_path,
+        profile_snapshot={"profile_id": "test"},
+    )
+    orchestrator._runner._recorders[wf_id] = recorder
+    orchestrator._events._sequence_counters[wf_id] = 7
+
+    mock_repository.get.return_value = ServerExecutionState(
+        id=wf_id,
+        issue_id="ISSUE-1",
+        worktree_path="/path/to/worktree",
+        workflow_status=WorkflowStatus.BLOCKED,
+        started_at=datetime.now(UTC),
+        profile_id="test",
+    )
+
+    with patch.object(orchestrator._runner, "record_rejection", new=AsyncMock()):
+        await orchestrator.reject_workflow(wf_id, feedback="Plan no good")
+
+    # Consequence: the trajectory is written and the recorder dropped.
+    assert wf_id not in orchestrator._runner._recorders
+    assert trajectory_path(tmp_path, wf_id).exists()
+    # The terminal rejection also drops the per-workflow sequence state.
+    assert wf_id not in orchestrator._events._sequence_counters
+
+
+async def test_start_review_workflow_registers_recorder(
+    orchestrator: OrchestratorService,
+    valid_worktree: str,
+    tmp_path: Path,
+) -> None:
+    """Launching a review workflow must register a trajectory recorder.
+
+    Without it ``finalize_trajectory`` early-returns (no recorder) and review
+    runs leave no trajectory file, no indexed totals, and empty history. The
+    observable consequence checked here is that finalize actually writes the
+    trajectory file once the workflow is launched.
+    """
+    import json
+
+    from amelia.trajectory.store import trajectory_path
+
+    orchestrator._trajectory_dir = tmp_path
+    block = asyncio.Event()
+
+    async def _hang(*_args: object, **_kwargs: object) -> None:
+        await block.wait()
+
+    with patch.object(orchestrator._runner, "run_review_workflow", new=_hang):
+        workflow_id = await orchestrator.start_review_workflow(
+            diff_content="diff --git a/x b/x",
+            worktree_path=valid_worktree,
+        )
+
+        assert orchestrator._recorders.get(workflow_id) is not None
+
+        await orchestrator._runner.finalize_trajectory(
+            workflow_id, status="completed", pipeline="review"
+        )
+
+        path = trajectory_path(tmp_path, workflow_id)
+        assert path.exists()
+        written = json.loads(path.read_text())
+        assert written["extra"]["outcome"]["pipeline"] == "review"
+        assert written["extra"]["issue_id"] == "LOCAL-REVIEW"
+        assert workflow_id not in orchestrator._recorders
+
+    _, task = orchestrator._active_tasks[valid_worktree]
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+
+async def test_post_task_cleanup_keeps_sequence_while_blocked(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+) -> None:
+    """An approval pause must not forget the event sequence or finalize.
+
+    The post-approval resume continues recording into the same recorder and
+    must keep numbering events monotonically; forgetting here would restart the
+    per-workflow sequence at 1 on resume.
+    """
+    wf_id = uuid4()
+    orchestrator._events._sequence_counters[wf_id] = 3
+    mock_repository.get.return_value = ServerExecutionState(
+        id=wf_id,
+        issue_id="ISSUE-1",
+        worktree_path="/wt",
+        workflow_status=WorkflowStatus.BLOCKED,
+        started_at=datetime.now(UTC),
+        profile_id="test",
+    )
+
+    with patch.object(orchestrator._runner, "finalize_trajectory", new=AsyncMock()) as fin:
+        await orchestrator._post_task_cleanup(wf_id)
+
+    assert orchestrator._events._sequence_counters[wf_id] == 3
+    fin.assert_not_awaited()
+
+
+async def test_post_task_cleanup_forgets_sequence_on_terminal(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+) -> None:
+    """A terminal exit drops the event sequence and finalizes the recorder."""
+    wf_id = uuid4()
+    orchestrator._events._sequence_counters[wf_id] = 3
+    mock_repository.get.return_value = ServerExecutionState(
+        id=wf_id,
+        issue_id="ISSUE-1",
+        worktree_path="/wt",
+        workflow_status=WorkflowStatus.FAILED,
+        started_at=datetime.now(UTC),
+        profile_id="test",
+    )
+
+    with patch.object(orchestrator._runner, "finalize_trajectory", new=AsyncMock()) as fin:
+        await orchestrator._post_task_cleanup(wf_id)
+
+    assert wf_id not in orchestrator._events._sequence_counters
+    fin.assert_awaited_once()
 
 
 class TestRejectWorkflowGraphState:
@@ -586,7 +694,6 @@ class TestRejectWorkflowGraphState:
         )
         mock_repository.get.return_value = workflow
 
-        # Setup LangGraph mocks using factory
         mocks = langgraph_mock_factory()
         mock_create_graph.return_value = mocks.graph
 
@@ -610,7 +717,6 @@ class TestApproveWorkflowResume:
         langgraph_mock_factory: Callable[..., MagicMock],
     ) -> None:
         """approve_workflow updates graph state and resumes execution."""
-        # Setup blocked workflow
         workflow = ServerExecutionState(
             id=uuid4(),
             issue_id="ISSUE-456",
@@ -621,7 +727,6 @@ class TestApproveWorkflowResume:
         mock_repository.get.return_value = workflow
         orchestrator._active_tasks["/tmp/test"] = (workflow.id, AsyncMock())
 
-        # Setup LangGraph mocks using factory
         mocks = langgraph_mock_factory(
             aget_state_return=MagicMock(values={"human_approved": True}, next=[])
         )
@@ -630,7 +735,6 @@ class TestApproveWorkflowResume:
         # Profile is already mocked via mock_profile_repo fixture
         await orchestrator.approve_workflow(workflow.id)
 
-        # Verify state was updated with approval
         mocks.graph.aupdate_state.assert_called_once()
         call_args = mocks.graph.aupdate_state.call_args
         assert call_args[0][1] == {"human_approved": True}
@@ -707,11 +811,9 @@ class TestApproveWorkflowResume:
         # the un-jittered 1.0 the old loop produced.
         slept_delay = mock_sleep.call_args_list[0][0][0]
         assert slept_delay == pytest.approx(1.2)
-        # Observable completion emitted after the retry.
         assert any(
             e[1] == EventType.WORKFLOW_COMPLETED for e in emitted_events
         )
-        # And the repository recorded COMPLETED.
         completed_calls = [
             c
             for c in mock_repository.set_status.call_args_list
@@ -737,7 +839,6 @@ class TestStartWorkflowWithRetry:
             # Wait briefly for task to start
             await asyncio.sleep(0.01)
 
-            # The task should call _run_workflow_with_retry
             assert workflow_id is not None
             mock_retry.assert_called_once()
 
@@ -747,7 +848,6 @@ async def test_get_workflow_by_worktree_uses_cache(
     mock_repository: AsyncMock,
 ) -> None:
     """get_workflow_by_worktree should use cached workflow_id, not DB."""
-    # Create workflow state
     cached_wf_id = uuid4()
     mock_state = ServerExecutionState(
         id=cached_wf_id,
@@ -762,31 +862,21 @@ async def test_get_workflow_by_worktree_uses_cache(
     task = asyncio.create_task(asyncio.sleep(100))
     orchestrator._active_tasks["/cached/worktree"] = (cached_wf_id, task)
 
-    # Reset mock to track calls
     mock_repository.list_active.reset_mock()
 
-    # Get workflow by worktree
     result = await orchestrator.get_workflow_by_worktree("/cached/worktree")
 
     # Should NOT call list_active (O(n) query)
     mock_repository.list_active.assert_not_called()
 
-    # Should call get() with cached workflow_id
     mock_repository.get.assert_called_once_with(cached_wf_id)
 
-    # Should return the workflow
     assert result is not None
     assert result.id == cached_wf_id
 
-    # Cleanup
     task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await task
-
-
-# =============================================================================
-# Task Title/Description Tests
-# =============================================================================
 
 
 class TestTaskProgressEvents:
@@ -820,7 +910,6 @@ class TestTaskProgressEvents:
         }
         await orchestrator._events.handle_tasks_event(uuid4(), task_data)
 
-        # Verify TASK_STARTED event emitted
         task_events = [e for e in emitted_events if e[1] == EventType.TASK_STARTED]
         assert len(task_events) == 1
         _, event_type, message, data = task_events[0]
@@ -868,7 +957,6 @@ class TestTaskProgressEvents:
 
         await orchestrator._events.handle_stream_chunk(uuid4(), chunk)
 
-        # Verify TASK_COMPLETED event emitted
         task_events = [e for e in emitted_events if e[1] == EventType.TASK_COMPLETED]
         assert len(task_events) == 1
         _, event_type, message, data = task_events[0]
@@ -906,7 +994,6 @@ class TestStartWorkflowWithTaskFields:
 
             assert workflow_id is not None
 
-            # Verify the issue_cache contains our custom issue
             call_args = mock_repository.create.call_args
             state = call_args[0][0]
             assert state.issue_cache is not None
@@ -957,7 +1044,6 @@ class TestStartWorkflowWithTaskFields:
         # Tracker should not be called when task_title is provided
         mock_create_tracker.assert_not_called()
 
-        # Verify the issue was constructed from the provided fields
         call_args = mock_repository.create.call_args
         state = call_args[0][0]
         issue = Issue.model_validate(state.issue_cache)
@@ -974,7 +1060,6 @@ class TestStartWorkflowWithTaskFields:
         """task_description defaults to task_title when not provided."""
         from amelia.core.types import Issue
 
-        # Create valid worktree
         worktree = tmp_path / "worktree"
         worktree.mkdir()
         (worktree / ".git").touch()
@@ -990,15 +1075,9 @@ class TestStartWorkflowWithTaskFields:
 
             call_args = mock_repository.create.call_args
             state = call_args[0][0]
-            # Description should default to title
             assert state.issue_cache is not None
             issue = Issue.model_validate(state.issue_cache)
             assert issue.description == "Fix typo in README"
-
-
-# =============================================================================
-# ModelProviderError Retry Tests
-# =============================================================================
 
 
 class ModelProviderErrorSetup:
@@ -1012,7 +1091,6 @@ class ModelProviderErrorSetup:
 @pytest.fixture
 def model_provider_error_setup(mock_repository: AsyncMock) -> ModelProviderErrorSetup:
     """Shared setup for ModelProviderError retry tests."""
-    # Setup blocked workflow with real ServerExecutionState
     mock_workflow = ServerExecutionState(
         id=uuid4(),
         issue_id="ISSUE-TEST",
@@ -1100,7 +1178,6 @@ async def test_model_provider_error_friendly_failure_reason(
     ):
         await orchestrator.approve_workflow(uuid4())
 
-    # Verify set_status was called with FAILED and a friendly failure_reason
     failed_calls = [
         call
         for call in mock_repository.set_status.call_args_list
@@ -1163,11 +1240,6 @@ async def test_httpx_connect_error_retried(
     # max_retries=2 means attempts 0, 1, 2 → astream called 3 times
     assert mock_graph.astream.call_count == 3
     assert mock_sleep.call_count == 2
-
-
-# =============================================================================
-# Resume Workflow Tests
-# =============================================================================
 
 
 async def test_resume_workflow_corrupted_checkpoint_raises_invalid_state(

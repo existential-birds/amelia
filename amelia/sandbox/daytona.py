@@ -124,7 +124,6 @@ class DaytonaSandboxProvider:
 
         worker_src = Path(__file__).parent / "worker.py"
         content = worker_src.read_bytes()
-        # Ensure parent directory exists.
         await sandbox.process.exec(f"mkdir -p {shlex.quote(str(Path(WORKER_PATH).parent))}")
         await sandbox.fs.upload_file(content, WORKER_PATH)
         logger.info("Uploaded standalone worker", path=WORKER_PATH, size=len(content))

@@ -16,7 +16,9 @@ Real components:
 - Exception handlers
 """
 
+import json
 import tempfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -26,25 +28,17 @@ import httpx
 import pytest
 from fastapi import status
 
+from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.state import WorkflowStatus
+from amelia.trajectory import WorkflowTrajectoryRecorder
 from tests.integration.conftest import create_test_workflow
-
-
-# =============================================================================
-# Fixtures
-# =============================================================================
 
 
 @pytest.fixture
 def test_client(orchestrator_test_client: httpx.AsyncClient) -> httpx.AsyncClient:
     """Alias shared orchestrator_test_client fixture for local use."""
     return orchestrator_test_client
-
-
-# =============================================================================
-# Test Classes
-# =============================================================================
 
 
 @pytest.mark.integration
@@ -487,3 +481,221 @@ class TestListActiveWorkflowsEndpoint:
         assert data["workflows"] == []
         assert data["total"] == 0
         assert data["has_more"] is False
+
+
+@pytest.mark.integration
+class TestGetWorkflowDetailEndpoint:
+    """Tests for GET /api/workflows/{id} serving history from trajectories.
+
+    Seeds a real trajectory file plus the trajectory_path index column and
+    asserts the detail response projects events/tokens from that file.
+    """
+
+    async def test_detail_serves_history_and_tokens_from_trajectory_file(
+        self,
+        test_client: httpx.AsyncClient,
+        test_repository: WorkflowRepository,
+        tmp_path: Path,
+    ) -> None:
+        """recent_events and token_usage are projected from the seeded file."""
+        workflow = await create_test_workflow(
+            test_repository, issue_id="TEST-TRAJ-1", workflow_status="completed"
+        )
+
+        recorder = WorkflowTrajectoryRecorder(
+            workflow_id=workflow.id,
+            trajectory_dir=tmp_path,
+            profile_snapshot={"profile_id": "test", "issue_id": "TEST-TRAJ-1"},
+        )
+        inv = recorder.begin_invocation("developer", model="claude-x")
+        inv.record_prompt(instructions="You are the developer.", prompt="Fix the bug.")
+        inv.record_messages([
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="write_file",
+                tool_input={"path": "a.py", "content": "print('hi')"},
+                tool_call_id="c1",
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="write_file",
+                tool_output="ok",
+                tool_call_id="c1",
+            ),
+            AgenticMessage(type=AgenticMessageType.RESULT, content="fixed"),
+        ])
+        inv.close(
+            usage=DriverUsage(input_tokens=10, output_tokens=5), cost_usd=0.01
+        )
+        path = await recorder.finalize(status="completed")
+        await test_repository.set_trajectory_index(
+            workflow.id, path, recorder.final_metrics
+        )
+
+        response = await test_client.get(f"/api/workflows/{workflow.id}")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        events = data["recent_events"]
+        assert events, "history must be projected from the trajectory file"
+        event_types = [e["event_type"] for e in events]
+        assert "claude_tool_call" in event_types
+        assert "claude_tool_result" in event_types
+        assert "agent_output" in event_types
+        tool_event = next(
+            e for e in events if e["event_type"] == "claude_tool_call"
+        )
+        assert tool_event["agent"] == "developer"
+        assert tool_event["tool_name"] == "write_file"
+
+        # Token summary matches the file's subagent final metrics.
+        file_data = json.loads(Path(path).read_text())
+        file_metrics = file_data["subagent_trajectories"][0]["final_metrics"]
+        token_usage = data["token_usage"]
+        assert token_usage is not None
+        assert token_usage["total_input_tokens"] == file_metrics["total_prompt_tokens"]
+        assert token_usage["total_output_tokens"] == file_metrics["total_completion_tokens"]
+        assert token_usage["total_cost_usd"] == pytest.approx(
+            file_metrics["total_cost_usd"], rel=1e-9
+        )
+        assert [u["agent"] for u in token_usage["breakdown"]] == ["developer"]
+
+    async def test_detail_with_missing_trajectory_file_returns_500(
+        self,
+        test_client: httpx.AsyncClient,
+        test_repository: WorkflowRepository,
+        tmp_path: Path,
+    ) -> None:
+        """A non-null trajectory_path pointing nowhere is a 500 with a generic
+        detail that does not disclose the internal path."""
+        workflow = await create_test_workflow(
+            test_repository, issue_id="TEST-TRAJ-2", workflow_status="completed"
+        )
+        missing = tmp_path / str(workflow.id) / "trajectory.json"
+        await test_repository.set_trajectory_index(workflow.id, missing, None)
+
+        response = await test_client.get(f"/api/workflows/{workflow.id}")
+
+        assert response.status_code == 500
+        detail = response.json()["detail"]
+        assert "trajectory" in detail.lower()
+        assert str(missing) not in detail
+
+    async def test_detail_with_null_trajectory_path_returns_empty_history(
+        self,
+        test_client: httpx.AsyncClient,
+        test_repository: WorkflowRepository,
+    ) -> None:
+        """Rows without a trajectory yield empty events and no token summary."""
+        workflow = await create_test_workflow(
+            test_repository, issue_id="TEST-TRAJ-3", workflow_status="completed"
+        )
+
+        response = await test_client.get(f"/api/workflows/{workflow.id}")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["recent_events"] == []
+        assert data["token_usage"] is None
+
+
+@pytest.mark.integration
+class TestUsageEndpoint:
+    """Tests for GET /api/usage aggregating from real trajectory files.
+
+    Exercises the real SQL date filter (``completed_at`` + non-null
+    ``trajectory_path``) and the file-based aggregation in one pass.
+    """
+
+    @staticmethod
+    async def _seed_finished_workflow(
+        repository: WorkflowRepository,
+        trajectory_dir: Path,
+        *,
+        issue_id: str,
+        completed_at: datetime,
+        cost: float,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> None:
+        """Create a completed workflow with a finalized trajectory file."""
+        workflow = await create_test_workflow(
+            repository, issue_id=issue_id, workflow_status="completed"
+        )
+        workflow.started_at = completed_at - timedelta(minutes=5)
+        workflow.completed_at = completed_at
+        await repository.update(workflow)
+
+        recorder = WorkflowTrajectoryRecorder(
+            workflow_id=workflow.id,
+            trajectory_dir=trajectory_dir,
+            profile_snapshot={"profile_id": "test", "issue_id": issue_id},
+        )
+        inv = recorder.begin_invocation("developer", model="claude-x")
+        inv.record_prompt(instructions="You are the developer.", prompt="Fix it.")
+        inv.record_messages([AgenticMessage(type=AgenticMessageType.RESULT, content="done")])
+        inv.close(
+            usage=DriverUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                duration_ms=300_000,
+            ),
+            cost_usd=cost,
+        )
+        path = await recorder.finalize(status="completed")
+        await repository.set_trajectory_index(
+            workflow.id, path, recorder.final_metrics,
+            execution_duration_ms=recorder.total_duration_ms,
+        )
+
+    async def test_usage_totals_from_trajectory_files_with_date_filter(
+        self,
+        test_client: httpx.AsyncClient,
+        test_repository: WorkflowRepository,
+        tmp_path: Path,
+    ) -> None:
+        """Two in-range workflows are summed; out-of-range ones are excluded."""
+        await self._seed_finished_workflow(
+            test_repository, tmp_path, issue_id="TEST-USAGE-1",
+            completed_at=datetime(2026, 6, 1, 12, 0, tzinfo=UTC),
+            cost=1.0, input_tokens=10, output_tokens=5,
+        )
+        await self._seed_finished_workflow(
+            test_repository, tmp_path, issue_id="TEST-USAGE-2",
+            completed_at=datetime(2026, 6, 2, 12, 0, tzinfo=UTC),
+            cost=2.0, input_tokens=20, output_tokens=10,
+        )
+        # In the previous window: feeds the comparison, not the totals.
+        await self._seed_finished_workflow(
+            test_repository, tmp_path, issue_id="TEST-USAGE-3",
+            completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
+            cost=4.0, input_tokens=40, output_tokens=20,
+        )
+        # Far outside range and previous window: contributes nothing.
+        await self._seed_finished_workflow(
+            test_repository, tmp_path, issue_id="TEST-USAGE-4",
+            completed_at=datetime(2026, 7, 20, 12, 0, tzinfo=UTC),
+            cost=8.0, input_tokens=80, output_tokens=40,
+        )
+
+        response = await test_client.get("/api/usage?start=2026-06-01&end=2026-06-05")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        summary = data["summary"]
+        assert summary["total_cost_usd"] == pytest.approx(3.0)
+        assert summary["total_workflows"] == 2
+        assert summary["total_tokens"] == 45
+        assert summary["total_duration_ms"] == 600_000  # 2 × 300_000ms agent execution
+        assert summary["previous_period_cost_usd"] == pytest.approx(4.0)
+        assert summary["successful_workflows"] == 2
+        assert summary["success_rate"] == 1.0
+
+        assert [p["date"] for p in data["trend"]] == ["2026-06-01", "2026-06-02"]
+        assert [p["cost_usd"] for p in data["trend"]] == [pytest.approx(1.0), pytest.approx(2.0)]
+
+        assert [m["model"] for m in data["by_model"]] == ["claude-x"]
+        assert data["by_model"][0]["workflows"] == 2
+        assert data["by_model"][0]["cost_usd"] == pytest.approx(3.0)
+        assert data["by_model"][0]["tokens"] == 45

@@ -112,7 +112,6 @@ describe("SessionListItem", () => {
       />
     );
 
-    // Click delete button
     await userEvent.click(screen.getByRole("button", { name: /delete session/i }));
 
     expect(onDelete).toHaveBeenCalledWith("s1");

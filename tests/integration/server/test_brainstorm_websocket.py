@@ -41,11 +41,6 @@ from .conftest import (
 )
 
 
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-
 @pytest.fixture
 def test_profile_repository(test_db: Database) -> ProfileRepository:
     """Create profile repository backed by test database."""
@@ -86,11 +81,6 @@ async def test_client(
         yield client
 
 
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-
 async def create_session_and_send_message(
     client: httpx.AsyncClient,
     message: str = "Test message",
@@ -122,11 +112,6 @@ async def create_session_and_send_message(
     )
 
     return session_id
-
-
-# =============================================================================
-# Test Classes
-# =============================================================================
 
 
 @pytest.mark.integration

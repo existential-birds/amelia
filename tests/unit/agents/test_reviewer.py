@@ -79,8 +79,6 @@ class TestAgenticReview:
         """
         source = inspect.getsource(Reviewer.agentic_review)
 
-        # Driver types that should NOT be checked via isinstance
-        # Check for common isinstance patterns with these driver types
         forbidden_patterns = [
             "isinstance(self.driver, ClaudeCliDriver)",
             "isinstance(self.driver, ApiDriver)",
@@ -105,7 +103,6 @@ class TestAgenticReview:
             goal="Implement feature",
         )
 
-        # Create mock AgenticMessage stream with beagle markdown format
         beagle_review_output = """## Review Summary
 
 Code looks good overall.
@@ -159,11 +156,10 @@ Rationale: No issues found, code is ready to merge.
         )
 
         assert result.approved is True
-        assert len(result.comments) == 0  # No issues found
+        assert len(result.comments) == 0
         assert result.severity == Severity.NONE
         assert session_id == "session-789"
 
-        # Verify execute_agentic was called
         mock_driver.execute_agentic.assert_called_once()
 
     async def test_agentic_review_emits_workflow_events(
@@ -178,7 +174,6 @@ Rationale: No issues found, code is ready to merge.
             goal="Implement feature",
         )
 
-        # Create mock AgenticMessage stream with various message types
         messages = [
             AgenticMessage(
                 type=AgenticMessageType.THINKING,
@@ -214,7 +209,6 @@ Rationale: No issues found, code is ready to merge.
         # At minimum 3 events during stream + 1 final output event
         assert mock_event_bus.emit.call_count >= 3
 
-        # Verify event types were properly mapped
         event_types = [call.args[0].event_type for call in mock_event_bus.emit.call_args_list]
         assert EventType.CLAUDE_THINKING in event_types
         assert EventType.CLAUDE_TOOL_CALL in event_types
@@ -230,7 +224,6 @@ Rationale: No issues found, code is ready to merge.
             goal="Implement feature",
         )
 
-        # Create mock AgenticMessage stream with error result
         messages = [
             AgenticMessage(
                 type=AgenticMessageType.THINKING,
@@ -253,7 +246,6 @@ Rationale: No issues found, code is ready to merge.
             workflow_id=uuid4(),
         )
 
-        # Should still return a result, but not approved
         assert result.approved is False
         assert session_id == "session-error"
 
@@ -269,7 +261,6 @@ Rationale: No issues found, code is ready to merge.
             goal="Implement feature",
         )
 
-        # Create mock AgenticMessage stream
         messages = [
             AgenticMessage(
                 type=AgenticMessageType.THINKING,
@@ -291,11 +282,10 @@ Rationale: No issues found, code is ready to merge.
             workflow_id=uuid4(),
         )
 
-        # Verify workflow events have correct agent and workflow_id (set by to_workflow_event)
         for call in mock_event_bus.emit.call_args_list:
             event = call.args[0]
             assert event.agent == "reviewer"
-            assert event.workflow_id is not None  # UUID propagated
+            assert event.workflow_id is not None
 
     async def test_agentic_review_parses_beagle_markdown_result(
         self,
@@ -308,7 +298,6 @@ Rationale: No issues found, code is ready to merge.
             goal="Implement feature",
         )
 
-        # Create mock AgenticMessage stream with beagle markdown format
         beagle_review_output = """## Review Summary
 
 Found 2 issues that should be addressed.
@@ -377,7 +366,6 @@ Rationale: Two major issues need to be fixed first.
             goal="Implement feature",
         )
 
-        # Create mock AgenticMessage with critical issue
         beagle_review_output = """## Review Summary
 
 Found a critical security issue.
@@ -564,7 +552,6 @@ class TestParseReviewResult:
         1. Regex r"Ready:\\s*(Yes|No|With fixes[^\\n]*)" doesn't match **Ready:** Yes
         2. Fallback finds "needs fixes" in rationale and incorrectly sets approved=False
         """
-        # Beagle markdown with bold formatting and "needs fixes" in rationale
         beagle_output = """## Review Summary
 
 Code looks good overall with no issues found.
@@ -589,7 +576,6 @@ Rationale: Code needs fixes for edge cases but they are out of scope.
         reviewer = create_reviewer()
         result = reviewer._parse_review_result(beagle_output, workflow_id=uuid4())
 
-        # Should be approved because verdict says "Ready: Yes"
         assert result.approved is True, (
             "Review should be approved when **Ready:** Yes is present, "
             "even if 'needs fixes' appears elsewhere in the output"
@@ -1000,7 +986,6 @@ class TestAgenticReviewDiffPath:
             diff_path="/tmp/test/diff.patch",
         )
 
-        # Verify the prompt passed to execute_agentic contains the diff path reference
         mock_driver.execute_agentic.assert_called_once()
         call_kwargs = mock_driver.execute_agentic.call_args
         prompt = call_kwargs[1].get("prompt") or call_kwargs[0][0]
@@ -1261,7 +1246,6 @@ Rationale: Major issue found.
             workflow_id=uuid4(),
         )
 
-        # Fallback markdown parsing should pick up the major issue
         assert result.approved is False
         assert result.severity == Severity.MAJOR
         assert len(result.comments) >= 1

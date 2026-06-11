@@ -185,7 +185,6 @@ class GitHubPRService:
         )
         graphql_data = json.loads(graphql_raw)
 
-        # Build mapping: comment database ID -> thread info
         threads = (
             graphql_data
             .get("data", {})
@@ -202,7 +201,6 @@ class GitHubPRService:
                 pr_number=pr_number,
             )
 
-        # Map comment databaseId -> (thread_id, is_resolved)
         comment_thread_map: dict[int, tuple[str, bool]] = {}
         for thread in thread_nodes:
             thread_id = thread["id"]
@@ -212,7 +210,6 @@ class GitHubPRService:
                 if db_id is not None:
                     comment_thread_map[db_id] = (thread_id, is_resolved)
 
-        # Build PRReviewComment instances, filtering as needed
         result: list[PRReviewComment] = []
         for comment in comments_data:
             comment_id = comment["id"]

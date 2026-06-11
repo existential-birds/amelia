@@ -84,11 +84,9 @@ export function formatDriver(driver: string): string {
  * ```
  */
 export function formatModel(model: string): string {
-  // Handle simple names like "sonnet", "opus", "haiku"
   if (/^(sonnet|opus|haiku)$/i.test(model)) {
     return model.charAt(0).toUpperCase() + model.slice(1).toLowerCase();
   }
-  // Handle longer model names - capitalize and clean up
   return model
     .split(/[-_]/)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -115,7 +113,6 @@ export function formatModel(model: string): string {
  * ```
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
-  // Try modern Clipboard API first
   if (navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(text);
@@ -125,7 +122,6 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     }
   }
 
-  // Fallback for iOS and older browsers
   const textArea = document.createElement('textarea');
   textArea.value = text;
 

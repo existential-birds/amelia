@@ -103,11 +103,9 @@ export function PlanImportSection({
   const isInitialMount = useRef(true);
   const previewRequestId = useRef(0);
 
-  // Update preview when content changes
   useEffect(() => {
     if (mode === 'paste' && content.trim()) {
       const parsed = parsePlanPreview(content);
-      // Only show preview if we extracted something meaningful
       if (parsed.goal || parsed.taskCount > 0 || parsed.keyFiles.length > 0) {
         setPreview(parsed);
       } else {
@@ -139,12 +137,11 @@ export function PlanImportSection({
     }
   }, [mode, filePath, content, filePreview, preview, onPlanChange]);
 
-  // Fetch file list when in file mode and planOutputDir is available
   useEffect(() => {
     if (mode !== 'file' || !planOutputDir || !worktreePath) return;
 
     setFilesLoading(true);
-    setFileError(null); // Clear previous errors
+    setFileError(null);
     api.listFiles(planOutputDir, '*.md', worktreePath)
       .then((res) => {
         setFiles(res.files);
@@ -152,7 +149,6 @@ export function PlanImportSection({
       .catch((err) => {
         setFiles([]);
 
-        // Show helpful error message to user
         const errorMsg = err instanceof ApiError
           ? err.message
           : 'Failed to load plan files';
@@ -275,7 +271,6 @@ export function PlanImportSection({
     }
   }, []);
 
-  // Auto-trigger preview when a file is selected from the combobox
   const selectedFileRef = useRef<FileEntry | null>(null);
   useEffect(() => {
     if (selectedFile && selectedFile !== selectedFileRef.current && filePath.trim() && worktreePath) {
@@ -284,7 +279,6 @@ export function PlanImportSection({
     }
   }, [selectedFile, filePath, worktreePath, handlePreview]);
 
-  // Derived state: select active preview based on current input mode
   const activePreview = mode === 'paste' ? preview : filePreview;
 
   return (

@@ -1,38 +1,23 @@
 """Unit tests for StreamEventEmitter.
 
-The emitter owns event sequencing and emission. These tests construct it
-directly with a REAL EventBus (so broadcasts are observable) and a repository
-mock at the database boundary. Assertions are on the WorkflowEvents the bus
-actually broadcasts, not on patched internals.
+The emitter owns event sequencing and emission. The event stream is
+transient: events are broadcast on a REAL EventBus (so broadcasts are
+observable) with purely in-memory per-workflow sequencing — no repository
+is involved. Assertions are on the WorkflowEvents the bus actually
+broadcasts, not on patched internals.
 """
 
 import asyncio
 import uuid
-from collections.abc import Callable
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.orchestrator.event_emitter import StreamEventEmitter
-
-
-@pytest.fixture
-def repository() -> AsyncMock:
-    """Repository mock at the database boundary.
-
-    Returns high-fidelity values (e.g. int from get_max_event_sequence) and
-    records the WorkflowEvent instances passed to save_event.
-    """
-    repo = AsyncMock(spec=WorkflowRepository)
-    repo.save_event = AsyncMock()
-    repo.get_max_event_sequence = AsyncMock(return_value=0)
-    return repo
 
 
 @pytest.fixture
@@ -50,9 +35,9 @@ def recorded_events(event_bus: EventBus) -> list[WorkflowEvent]:
 
 
 @pytest.fixture
-def emitter(repository: AsyncMock, event_bus: EventBus) -> StreamEventEmitter:
-    """Construct the emitter directly with real bus + boundary repo mock."""
-    return StreamEventEmitter(repository=repository, event_bus=event_bus)
+def emitter(event_bus: EventBus) -> StreamEventEmitter:
+    """Construct the emitter directly with a real bus — no repository."""
+    return StreamEventEmitter(event_bus)
 
 
 async def test_handle_stream_chunk_emits_summarized_stage_completed(
@@ -227,24 +212,24 @@ async def test_handle_combined_stream_chunk_skips_interrupts(
     assert recorded_events == []
 
 
-async def test_emit_persists_and_broadcasts(
+async def test_emit_broadcasts_with_in_memory_sequences(
     emitter: StreamEventEmitter,
-    repository: AsyncMock,
     recorded_events: list[WorkflowEvent],
 ) -> None:
-    """emit persists via repo and broadcasts the same WorkflowEvent via bus."""
-    wf_id = uuid4()
-    returned = await emitter.emit(wf_id, EventType.WORKFLOW_STARTED, "Test message")
+    """Two emits broadcast both events on the bus with sequences 1 and 2.
 
-    repository.save_event.assert_called_once()
-    saved = repository.save_event.call_args[0][0]
-    assert isinstance(saved, WorkflowEvent)
-    assert saved.event_type == EventType.WORKFLOW_STARTED
-    assert saved.message == "Test message"
-    assert saved.sequence == 1
-    assert saved.agent == "system"
-    assert recorded_events == [saved]
-    assert returned == saved
+    The emitter is constructed with only the event bus — there is no
+    repository, so no persistence call can occur.
+    """
+    wf_id = uuid4()
+    first = await emitter.emit(wf_id, EventType.WORKFLOW_STARTED, "Test message")
+    second = await emitter.emit(wf_id, EventType.STAGE_STARTED, "Next message")
+
+    assert recorded_events == [first, second]
+    assert first.event_type == EventType.WORKFLOW_STARTED
+    assert first.message == "Test message"
+    assert first.agent == "system"
+    assert [e.sequence for e in recorded_events] == [1, 2]
 
 
 async def test_emit_sequence_is_monotonic_per_workflow(
@@ -275,20 +260,6 @@ async def test_emit_independent_sequences_across_workflows(
     assert by_wf[wf2] == [1]
 
 
-async def test_emit_resumes_from_db_max_sequence(
-    emitter: StreamEventEmitter,
-    repository: AsyncMock,
-    recorded_events: list[WorkflowEvent],
-) -> None:
-    """First emit seeds the counter from the repository max sequence."""
-    repository.get_max_event_sequence.return_value = 42
-    wf_id = uuid4()
-    await emitter.emit(wf_id, EventType.WORKFLOW_STARTED, "Resume")
-
-    repository.get_max_event_sequence.assert_called_once_with(wf_id)
-    assert recorded_events[0].sequence == 43
-
-
 async def test_emit_concurrent_same_workflow_unique_sequences(
     emitter: StreamEventEmitter,
     recorded_events: list[WorkflowEvent],
@@ -304,43 +275,18 @@ async def test_emit_concurrent_same_workflow_unique_sequences(
     assert sequences == [1, 2, 3]
 
 
-async def test_emit_concurrent_lock_creation_race(
-    emitter: StreamEventEmitter,
-    repository: AsyncMock,
-    recorded_events: list[WorkflowEvent],
-) -> None:
-    """Concurrent first emits must not duplicate sequences via a lock race."""
-    original_get_max: Callable[[uuid.UUID], object] = repository.get_max_event_sequence
-
-    async def slow_get_max(workflow_id: uuid.UUID) -> int:
-        await asyncio.sleep(0.01)
-        result = await original_get_max(workflow_id)
-        return int(result)  # type: ignore[arg-type]
-
-    repository.get_max_event_sequence = slow_get_max  # type: ignore[method-assign]
-
-    wf_id = uuid4()
-    await asyncio.gather(
-        *(emitter.emit(wf_id, EventType.FILE_CREATED, f"File {i}") for i in range(10))
-    )
-    sequences = sorted(e.sequence for e in recorded_events)
-    assert sequences == list(range(1, 11))
-
-
 async def test_forget_purges_sequence_state(
     emitter: StreamEventEmitter,
     recorded_events: list[WorkflowEvent],
 ) -> None:
-    """forget() clears a workflow's sequence counter and lock."""
+    """forget() clears a workflow's sequence counter."""
     wf_id = uuid4()
     await emitter.emit(wf_id, EventType.WORKFLOW_STARTED, "a")
     assert wf_id in emitter._sequence_counters
-    assert wf_id in emitter._sequence_locks
 
     emitter.forget(wf_id)
     assert wf_id not in emitter._sequence_counters
-    assert wf_id not in emitter._sequence_locks
 
-    # After forget, the next emit re-seeds from the repo (starts again at 1).
+    # After forget, the next emit starts again at 1.
     await emitter.emit(wf_id, EventType.STAGE_STARTED, "b")
     assert recorded_events[-1].sequence == 1

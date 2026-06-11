@@ -94,10 +94,8 @@ class LocalWorktree:
         Raises:
             ValueError: If git worktree add fails.
         """
-        # Ensure parent dir exists
         self._worktree_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Remove stale worktree if path already exists
         if self._worktree_path.exists():
             logger.warning(
                 "Removing stale worktree path",
@@ -122,10 +120,8 @@ class LocalWorktree:
             self._repo_root, "worktree", "prune", check=False
         )
 
-        # Fetch origin
         await _run_git_cmd(self._repo_root, "fetch", "origin")
 
-        # Create detached worktree at origin/<branch>
         try:
             await _run_git_cmd(
                 self._repo_root,
@@ -191,7 +187,6 @@ class LocalWorktree:
                 error=str(cleanup_exc),
             )
             shutil.rmtree(self._worktree_path, ignore_errors=True)
-            # Also prune stale worktree entries
             with contextlib.suppress(Exception):
                 await _run_git_cmd(
                     self._repo_root,
@@ -490,19 +485,16 @@ class GitOperations:
         if branch in PROTECTED_BRANCHES:
             raise ValueError(f"Refusing to push to protected branch: {branch}")
 
-        # Fetch remote state (don't fail if branch doesn't exist)
         await self._run_git("fetch", "origin", branch, check=False)
 
         local_sha = await self._run_git("rev-parse", "HEAD")
 
-        # Check if remote branch exists
         remote_sha: str | None = None
         try:
             remote_sha = await self._run_git("rev-parse", f"origin/{branch}")
         except ValueError:
             remote_sha = None  # New branch, no remote tracking
 
-        # Divergence check
         if remote_sha is not None and remote_sha != local_sha:
             merge_base = await self._run_git("merge-base", local_sha, remote_sha)
             logger.info(

@@ -36,11 +36,6 @@ from tests.conftest import create_mock_execute_agentic
 from .conftest import _create_app_with_overrides
 
 
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-
 def create_mock_driver_with_usage(
     messages: list[AgenticMessage],
     usage: DriverUsage | None,
@@ -58,11 +53,6 @@ def create_mock_driver_with_usage(
     driver.execute_agentic = create_mock_execute_agentic(messages)
     driver.get_usage = MagicMock(return_value=usage)
     return driver
-
-
-# =============================================================================
-# Test Classes
-# =============================================================================
 
 
 @pytest.mark.integration

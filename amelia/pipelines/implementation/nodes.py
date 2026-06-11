@@ -28,8 +28,7 @@ from amelia.pipelines.implementation.utils import (
     extract_task_count,
     validate_plan_structure,
 )
-from amelia.pipelines.nodes import _save_token_usage
-from amelia.pipelines.utils import extract_node_config
+from amelia.pipelines.utils import extract_node_config, wrap_with_recording
 from amelia.tools.write_plan import execute_write_plan
 from amelia.tools.write_plan_schema import WritePlanInput
 
@@ -192,7 +191,6 @@ async def plan_validator_node(
         workflow_id=nc.workflow_id,
     )
 
-    # Read plan file - fail fast if not found
     if not plan_path.exists():
         raise ValueError(f"Plan file not found at {plan_path}")
 
@@ -264,7 +262,6 @@ async def plan_validator_node(
         key_files = _extract_key_files_from_plan(plan_content)
         total_tasks = extract_task_count(plan_content)
 
-    # Run structural validation
     validation_result = validate_plan_structure(goal, plan_content)
 
     revision_count = state.plan_revision_count
@@ -328,11 +325,12 @@ async def call_architect_node(
     if state.issue is None:
         raise ValueError("Cannot call Architect: no issue provided in state.")
 
-    # Extract all config params in one call
     nc = extract_node_config(config)
 
     agent_config = nc.profile.get_agent_config("architect")
     architect = Architect(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
+
+    wrap_with_recording(architect, nc.recorder, "architect", agent_config.model)
 
     # Ensure the plan directory exists before the architect runs
     plan_rel_path = resolve_plan_path(nc.profile.plan_path_pattern, state.issue.id)
@@ -351,8 +349,6 @@ async def call_architect_node(
         if nc.event_bus:
             nc.event_bus.emit(event)
 
-    await _save_token_usage(architect.driver, nc.workflow_id, "architect", nc.repository)
-
     # Fallback: If plan file doesn't exist, write it from Write tool call content
     # This handles cases where Claude Code's Write tool didn't persist the file
     plan_written = plan_path.exists()
@@ -363,7 +359,6 @@ async def call_architect_node(
             tool_calls_count=len(final_state.tool_calls),
         )
 
-        # Log all tool calls for diagnosis
         logger.debug(
             "All tool calls from architect",
             tool_calls_detail=[
@@ -455,7 +450,6 @@ async def human_approval_node(
     approved = typer.confirm("Do you approve this plan to proceed with development?", default=True)
     comment = typer.prompt("Add an optional comment for the audit log (press Enter to skip)", default="")
 
-    # Log the approval decision
     logger.info(
         "Human approval received",
         approved=approved,

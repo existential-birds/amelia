@@ -267,7 +267,6 @@ export type PromptInputProps = Omit<
   globalDrop?: boolean;
   // Render a hidden input with given name and keep it in sync for native form posts. Default false.
   syncHiddenInput?: boolean;
-  // Minimal constraints
   maxFiles?: number;
   maxFileSize?: number; // bytes
   onError?: (err: {
@@ -293,11 +292,9 @@ export const PromptInput = ({
   children,
   ...props
 }: PromptInputProps) => {
-  // Try to use a provider controller if present
   const controller = useOptionalPromptInputController();
   const usingProvider = !!controller;
 
-  // Refs
   const inputRef = useRef<HTMLInputElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
 
@@ -549,7 +546,6 @@ export const PromptInput = ({
     }
 
     try {
-      // Convert blob URLs to data URLs asynchronously
       const convertedFiles: FileUIPart[] = await Promise.all(
         files.map(async ({ id: _id, ...item }) => {
           if (item.url && item.url.startsWith("blob:")) {
@@ -589,7 +585,6 @@ export const PromptInput = ({
     }
   };
 
-  // Render with or without local provider
   const inner = (
     <>
       <input
@@ -662,7 +657,6 @@ export const PromptInputTextarea = forwardRef<
         }
         e.preventDefault();
 
-        // Check if the submit button is disabled before submitting
         const form = e.currentTarget.form;
         const submitButton = form?.querySelector(
           'button[type="submit"]'
@@ -674,7 +668,6 @@ export const PromptInputTextarea = forwardRef<
         form?.requestSubmit();
       }
 
-      // Remove last attachment when Backspace is pressed and textarea is empty
       if (
         e.key === "Backspace" &&
         e.currentTarget.value === "" &&

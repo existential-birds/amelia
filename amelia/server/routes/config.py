@@ -54,13 +54,10 @@ async def get_server_config(
         Server configuration including repo_root, max_concurrent, active_profile,
         and active_profile_info.
     """
-    # Get server settings for max_concurrent
     server_settings = await settings_repo.get_server_settings()
 
-    # Get active profile
     active_profile = await profile_repo.get_active_profile()
 
-    # Build response based on whether there's an active profile
     if active_profile is None:
         return ConfigResponse(
             repo_root="",

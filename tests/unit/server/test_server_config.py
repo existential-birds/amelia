@@ -1,6 +1,7 @@
 """Tests for server configuration."""
 
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -16,6 +17,13 @@ def _clean_amelia_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in list(os.environ):
         if key.startswith("AMELIA_"):
             monkeypatch.delenv(key)
+
+
+def test_trajectory_dir_default_and_env(monkeypatch):
+    monkeypatch.delenv("AMELIA_TRAJECTORY_DIR", raising=False)
+    assert ServerConfig().trajectory_dir == Path.home() / ".amelia" / "trajectories"
+    monkeypatch.setenv("AMELIA_TRAJECTORY_DIR", "/tmp/traj")
+    assert ServerConfig().trajectory_dir == Path("/tmp/traj")
 
 
 class TestServerConfig:
