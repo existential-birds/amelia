@@ -4,11 +4,7 @@
 
 [Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is multi-agent orchestration for software development with human-in-the-loop approval gates and end-to-end observability.
 
-- **Multiple LLM drivers** — OpenRouter API, Claude CLI, or Codex CLI with per-agent model configuration
-- **CLI + Real-time dashboard** — monitor workflows, review plans, track costs, and manage configuration
-- **Workflow queueing** — queue issues, batch-generate plans, and control execution
-- **Sandbox execution** — run agents locally, in Docker, or in cloud sandboxes (Daytona.io)
-- **(Next) Issue tracker integration** — work from GitHub or Jira issues directly
+This README covers installation and the CLI reference. For the architecture, design decisions, and full capability overview — drivers, dashboard, queueing, sandbox execution, and issue-tracker integration — see the **[project page](https://existentialbirds.com/projects/amelia)**.
 
 ## Prerequisites
 
@@ -58,7 +54,7 @@ In another terminal:
 
 ```bash
 cd my-app
-amelia start --task "Create a Python CLI that fetches weather for a city using wttr.in"
+amelia start --title "Create a Python CLI that fetches weather for a city using wttr.in"
 ```
 
 The Architect agent creates a plan. Open the dashboard at `localhost:8420` to review and approve it. Once approved, the Developer agent implements the code.
@@ -92,17 +88,11 @@ cd /path/to/your/project
 ```
 
 > [!NOTE]
-> Run commands from your project root—agents can't help with code they can't see. Configuration is stored in `~/.amelia/amelia.db` and shared across all projects.
+> Run commands from your project root—agents can't help with code they can't see. Configuration is stored in PostgreSQL and shared across all projects.
 
 ## How It Works
 
-Amelia orchestrates three specialized agents through a LangGraph state machine:
-
-- **Architect** — reads the issue and produces a step-by-step implementation plan
-- **Developer** — executes the plan, writing code and running commands
-- **Reviewer** — reviews the Developer's changes and requests fixes if needed
-
-See the [documentation](https://existentialbirds.com/projects/amelia) for architecture and concepts details.
+Amelia runs your task through specialized agents (Architect → Developer → Reviewer) on a LangGraph state machine, pausing at approval gates you control. See the **[project page](https://existentialbirds.com/projects/amelia)** for the full architecture and design decisions.
 
 ## CLI Commands
 
@@ -118,7 +108,7 @@ See the [documentation](https://existentialbirds.com/projects/amelia) for archit
 | Command | Description |
 |---------|-------------|
 | `amelia start 123` | Start workflow for issue #123 |
-| `amelia start --task "desc"` | Run ad-hoc task without issue tracker |
+| `amelia start --title "desc"` | Run ad-hoc task without issue tracker |
 | `amelia start 123 --queue` | Queue workflow for later execution |
 | `amelia run abc-123` | Start a queued workflow |
 | `amelia status` | Show active workflows |
@@ -136,9 +126,7 @@ See the **[documentation](https://existentialbirds.com/projects/amelia)** for th
 
 ## Configuration
 
-Configuration is stored in PostgreSQL and managed via CLI (`amelia config`) or the dashboard at `localhost:8420/settings`.
-
-See the [documentation](https://existentialbirds.com/projects/amelia) for profile setup, server settings, and Jira integration.
+Profiles and server settings are managed via the `amelia config` CLI or the dashboard at `localhost:8420/settings`. See the **[project page](https://existentialbirds.com/projects/amelia)** for profile setup, per-agent model routing, and Jira integration.
 
 ## License
 
