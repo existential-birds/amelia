@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-06-10
+
 ### Changed
 
-- **dashboard:** Migrate to Vite 8 / Rolldown — replace `rollupOptions.output.manualChunks` (function form) with `rolldownOptions.output.codeSplitting.groups` for vendor chunk splitting ([f7c794a](https://github.com/existential-birds/amelia/commit/f7c794a1))
+- **Breaking:** Replace the `workflow_log` / `token_usage` database stores with canonical ATIF-v1.7 trajectory files as the single persistent record of every implementation and PR auto-fix run — serving run history, fine-tuning export (via the harbor CLI), and configuration benchmarking. Trajectories are written to `{trajectory_dir}/{workflow_id}/trajectory.json`; new thin index columns (`trajectory_path`, `total_cost_usd`, `total_tokens`, `total_duration_ms`) are added to `workflows`. The persisted event stream is removed in favor of a bounded in-memory ring buffer (last 1000 events) for WebSocket reconnect backfill ([#626](https://github.com/existential-birds/amelia/pull/626))
+
+  **Migration:** Migration 016 drops the `workflow_log` and `token_usage` tables — historical run-history and token-usage rows are not carried forward. The dashboard wire format (`WorkflowEvent`) is unchanged, so no frontend changes are required. New runs are recorded as trajectory files going forward.
+
+- **dashboard:** Migrate chunk splitting to Vite 8 / Rolldown — replace `rollupOptions.output.manualChunks` (function form) with `rolldownOptions.output.codeSplitting.groups` for vendor chunk splitting ([#624](https://github.com/existential-birds/amelia/pull/624))
+
+### Fixed
+
+- **dashboard:** Resolve Vite 8 deprecation warnings ([#623](https://github.com/existential-birds/amelia/pull/623))
 
 ## [0.22.0] - 2026-06-07
 
@@ -588,7 +598,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/existential-birds/amelia/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/existential-birds/amelia/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/existential-birds/amelia/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/existential-birds/amelia/compare/v0.20.0...v0.20.1
