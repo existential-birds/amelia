@@ -575,6 +575,53 @@ async def test_reject_finalizes_recorder_and_forgets_sequence(
     assert wf_id not in orchestrator._events._sequence_counters
 
 
+async def test_start_review_workflow_registers_recorder(
+    orchestrator: OrchestratorService,
+    valid_worktree: str,
+    tmp_path: Path,
+) -> None:
+    """Launching a review workflow must register a trajectory recorder.
+
+    Without it ``finalize_trajectory`` early-returns (no recorder) and review
+    runs leave no trajectory file, no indexed totals, and empty history. The
+    observable consequence checked here is that finalize actually writes the
+    trajectory file once the workflow is launched.
+    """
+    import json
+
+    from amelia.trajectory.store import trajectory_path
+
+    orchestrator._trajectory_dir = tmp_path
+    block = asyncio.Event()
+
+    async def _hang(*_args: object, **_kwargs: object) -> None:
+        await block.wait()
+
+    with patch.object(orchestrator._runner, "run_review_workflow", new=_hang):
+        workflow_id = await orchestrator.start_review_workflow(
+            diff_content="diff --git a/x b/x",
+            worktree_path=valid_worktree,
+        )
+
+        assert orchestrator._recorders.get(workflow_id) is not None
+
+        await orchestrator._runner.finalize_trajectory(
+            workflow_id, status="completed", pipeline="review"
+        )
+
+        path = trajectory_path(tmp_path, workflow_id)
+        assert path.exists()
+        written = json.loads(path.read_text())
+        assert written["extra"]["outcome"]["pipeline"] == "review"
+        assert written["extra"]["issue_id"] == "LOCAL-REVIEW"
+        assert workflow_id not in orchestrator._recorders
+
+    _, task = orchestrator._active_tasks[valid_worktree]
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+
 async def test_post_task_cleanup_keeps_sequence_while_blocked(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,

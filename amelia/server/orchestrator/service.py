@@ -813,6 +813,7 @@ class OrchestratorService:
             )
 
             await self._repository.create(state)
+            self._ensure_recorder(new_id, state.issue_id, profile)
 
             task = asyncio.create_task(
                 self._runner.run_review_workflow(
