@@ -11,6 +11,8 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
+from langgraph.checkpoint.base import empty_checkpoint
+from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel
 
 from amelia.server.database.connection import Database
@@ -136,3 +138,72 @@ async def test_retention_missing_file_is_not_an_error(
     )
     assert row is not None
     assert row["trajectory_path"] is None
+
+
+async def _put_checkpoint(checkpointer: MemorySaver, thread_id: str) -> None:
+    """Write an empty checkpoint for a thread."""
+    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+    await checkpointer.aput(config, empty_checkpoint(), {}, {})
+
+
+def _has_checkpoint(checkpointer: MemorySaver, thread_id: str) -> bool:
+    """Return True if any checkpoint exists for the thread."""
+    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+    return checkpointer.get_tuple(config) is not None
+
+
+async def test_retention_cleans_checkpoint_for_row_about_to_be_deleted(
+    test_db: Database,
+    test_repository: WorkflowRepository,
+    tmp_path: Path,
+) -> None:
+    """A row past the log cutoff is deleted, and its checkpoint is cleaned even
+    though the (longer) checkpoint cutoff would not select it on its own.
+
+    Without force-cleaning the to-be-deleted ids, deleting the row removes the
+    only pointer to its checkpoint thread, orphaning it permanently.
+    """
+    checkpointer = MemorySaver()
+
+    # Old, finished, already swept (trajectory_path NULL) -> eligible for row
+    # deletion under a 30-day log cutoff.
+    deletable_id, _ = await _create_finished_workflow(
+        test_db,
+        test_repository,
+        tmp_path,
+        completed_at=datetime.now(UTC) - timedelta(days=45),
+    )
+    await test_db.execute(
+        "UPDATE workflows SET trajectory_path = NULL WHERE id = $1", deletable_id
+    )
+    await _put_checkpoint(checkpointer, str(deletable_id))
+
+    # Recent, still-active workflow: its checkpoint must survive.
+    keep_id = uuid4()
+    await test_repository.create(
+        ServerExecutionState(
+            id=keep_id,
+            issue_id=f"ISSUE-{keep_id.hex[:8]}",
+            worktree_path=f"/tmp/worktree-{keep_id.hex[:8]}",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC) - timedelta(hours=1),
+        )
+    )
+    await _put_checkpoint(checkpointer, str(keep_id))
+
+    config = _RetentionConfig(log_retention_days=30, checkpoint_retention_days=365)
+    service = LogRetentionService(db=test_db, config=config, checkpointer=checkpointer)
+    result = await service.cleanup_on_shutdown()
+
+    assert result.workflows_deleted == 1
+    assert result.checkpoints_deleted == 1
+
+    # The deleted row's checkpoint is gone (not orphaned), the active one stays.
+    assert not _has_checkpoint(checkpointer, str(deletable_id))
+    assert _has_checkpoint(checkpointer, str(keep_id))
+    assert (
+        await test_db.fetch_one(
+            "SELECT id FROM workflows WHERE id = $1", deletable_id
+        )
+        is None
+    )

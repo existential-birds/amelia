@@ -176,14 +176,14 @@ class TestWorkflowRowDeletion:
     async def test_deletes_rows_with_null_trajectory(
         self, mock_db: AsyncMock, mock_checkpointer: AsyncMock
     ) -> None:
-        """Issues DELETE for finished rows whose trajectory_path is already NULL."""
+        """Issues DELETE for the finished rows selected as deletable."""
         service = LogRetentionService(
             db=mock_db,
             config=MockConfig(checkpoint_retention_days=-1),
             checkpointer=mock_checkpointer,
         )
-        # No rows need trajectory sweep; one row is ready for deletion
-        mock_db.fetch_all.return_value = []
+        # No rows need trajectory sweep; one row is selected as deletable.
+        mock_db.fetch_all.side_effect = [[], [{"id": "ready-to-delete"}]]
         mock_db.execute.return_value = 1
 
         result = await service.cleanup_on_shutdown()
@@ -192,7 +192,7 @@ class TestWorkflowRowDeletion:
         delete_call = mock_db.execute.call_args_list[0]
         query = delete_call.args[0]
         assert "DELETE FROM workflows" in query
-        assert "trajectory_path IS NULL" in query
+        assert delete_call.args[1] == ["ready-to-delete"]
 
     async def test_no_rows_to_delete(
         self, mock_db: AsyncMock, mock_checkpointer: AsyncMock
@@ -250,8 +250,8 @@ class TestCheckpointCleanup:
         service = LogRetentionService(
             db=mock_db, config=config, checkpointer=mock_checkpointer
         )
-        # trajectory sweep rows, then finished workflows
-        mock_db.fetch_all.side_effect = [[], []]
+        # trajectory sweep rows, deletable ids, then finished workflows
+        mock_db.fetch_all.side_effect = [[], [], []]
 
         result = await service.cleanup_on_shutdown()
 
@@ -268,8 +268,9 @@ class TestCheckpointCleanup:
         service = LogRetentionService(
             db=mock_db, config=config, checkpointer=mock_checkpointer
         )
-        # trajectory sweep rows, then finished workflows
+        # trajectory sweep rows, deletable ids, then finished workflows
         mock_db.fetch_all.side_effect = [
+            [],
             [],
             [{"id": "completed-workflow-1"}, {"id": "completed-workflow-2"}],
         ]
@@ -309,8 +310,8 @@ class TestCheckpointCleanup:
         service = LogRetentionService(
             db=mock_db, config=config, checkpointer=mock_checkpointer
         )
-        # trajectory sweep rows, then finished workflows
-        mock_db.fetch_all.side_effect = [[], [{"id": "old-workflow"}]]
+        # trajectory sweep rows, deletable ids, then finished workflows
+        mock_db.fetch_all.side_effect = [[], [], [{"id": "old-workflow"}]]
 
         result = await service.cleanup_on_shutdown()
 
@@ -328,11 +329,11 @@ class TestCheckpointCleanup:
         service = LogRetentionService(
             db=mock_db, config=config, checkpointer=mock_checkpointer
         )
-        mock_db.fetch_all.side_effect = [[], []]
+        mock_db.fetch_all.side_effect = [[], [], []]
 
         await service.cleanup_on_shutdown()
 
-        # Second fetch_all call is the checkpoint query (PostgreSQL $1 style)
+        # Last fetch_all call is the checkpoint query (PostgreSQL $1 style)
         fetch_call = mock_db.fetch_all.call_args
         assert fetch_call is not None
         args = fetch_call.args
@@ -354,6 +355,84 @@ class TestCheckpointCleanup:
         # No checkpoints deleted because no checkpointer
         assert result.checkpoints_deleted == 0
 
+    async def test_force_cleans_deletable_ids_outside_retention(
+        self,
+        mock_db: AsyncMock,
+        mock_checkpointer: AsyncMock,
+    ) -> None:
+        """A row about to be deleted has its checkpoint cleaned even when the
+        checkpoint retention cutoff is longer than the row retention cutoff.
+
+        With checkpoint_retention_days far larger than log_retention_days, the
+        checkpoint retention pass selects nothing, yet the row's checkpoint must
+        still be deleted before the row vanishes — otherwise it orphans forever.
+        """
+        config = MockConfig(log_retention_days=30, checkpoint_retention_days=365)
+        service = LogRetentionService(
+            db=mock_db, config=config, checkpointer=mock_checkpointer
+        )
+        # trajectory sweep: none; deletable ids: the soon-to-be-deleted row;
+        # checkpoint retention pass: nothing within the 365-day cutoff.
+        mock_db.fetch_all.side_effect = [[], [{"id": "about-to-delete"}], []]
+        mock_db.execute.return_value = 1
+
+        result = await service.cleanup_on_shutdown()
+
+        assert result.workflows_deleted == 1
+        assert result.checkpoints_deleted == 1
+        mock_checkpointer.adelete_thread.assert_called_once_with("about-to-delete")
+        # Checkpoint deletion happens before the row DELETE.
+        assert mock_checkpointer.adelete_thread.await_count == 1
+        delete_query = mock_db.execute.call_args_list[0].args[0]
+        assert "DELETE FROM workflows" in delete_query
+
+    async def test_force_cleans_deletable_ids_with_retention_disabled(
+        self,
+        mock_db: AsyncMock,
+        mock_checkpointer: AsyncMock,
+    ) -> None:
+        """checkpoint_retention_days=-1 disables the retention pass but the
+        about-to-be-deleted ids must still be force-cleaned."""
+        config = MockConfig(checkpoint_retention_days=-1)
+        service = LogRetentionService(
+            db=mock_db, config=config, checkpointer=mock_checkpointer
+        )
+        # trajectory sweep: none; deletable ids: one row. No checkpoint
+        # retention query runs because retention is disabled.
+        mock_db.fetch_all.side_effect = [[], [{"id": "about-to-delete"}]]
+        mock_db.execute.return_value = 1
+
+        result = await service.cleanup_on_shutdown()
+
+        assert result.workflows_deleted == 1
+        assert result.checkpoints_deleted == 1
+        mock_checkpointer.adelete_thread.assert_called_once_with("about-to-delete")
+
+    async def test_dedupes_force_and_retention_ids(
+        self,
+        mock_db: AsyncMock,
+        mock_checkpointer: AsyncMock,
+    ) -> None:
+        """An id in both the deletable set and the retention set is cleaned once."""
+        config = MockConfig(checkpoint_retention_days=0)
+        service = LogRetentionService(
+            db=mock_db, config=config, checkpointer=mock_checkpointer
+        )
+        # deletable ids and retention pass both surface "shared".
+        mock_db.fetch_all.side_effect = [
+            [],
+            [{"id": "shared"}],
+            [{"id": "shared"}, {"id": "retention-only"}],
+        ]
+        mock_db.execute.return_value = 1
+
+        result = await service.cleanup_on_shutdown()
+
+        assert result.checkpoints_deleted == 2
+        assert mock_checkpointer.adelete_thread.await_count == 2
+        cleaned = {c.args[0] for c in mock_checkpointer.adelete_thread.call_args_list}
+        assert cleaned == {"shared", "retention-only"}
+
     async def test_handles_individual_failures(
         self,
         mock_db: AsyncMock,
@@ -364,8 +443,9 @@ class TestCheckpointCleanup:
         service = LogRetentionService(
             db=mock_db, config=config, checkpointer=mock_checkpointer
         )
-        # trajectory sweep rows, then finished workflows
+        # trajectory sweep rows, deletable ids, then finished workflows
         mock_db.fetch_all.side_effect = [
+            [],
             [],
             [{"id": "workflow-1"}, {"id": "workflow-2"}, {"id": "workflow-3"}],
         ]
