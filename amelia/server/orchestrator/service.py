@@ -1103,18 +1103,18 @@ class OrchestratorService:
             WorkflowNotFoundError: If workflow doesn't exist.
             InvalidStateError: If workflow is not in "blocked" state.
         """
-        workflow = await self._repository.get(workflow_id)
-        if not workflow:
-            raise WorkflowNotFoundError(workflow_id)
-
-        if workflow.workflow_status != WorkflowStatus.BLOCKED:
-            raise InvalidStateError(
-                f"Cannot reject workflow in '{workflow.workflow_status}' state",
-                workflow_id=workflow_id,
-                current_status=workflow.workflow_status,
-            )
-
         async with self._approval_lock:
+            workflow = await self._repository.get(workflow_id)
+            if not workflow:
+                raise WorkflowNotFoundError(workflow_id)
+
+            if workflow.workflow_status != WorkflowStatus.BLOCKED:
+                raise InvalidStateError(
+                    f"Cannot reject workflow in '{workflow.workflow_status}' state",
+                    workflow_id=workflow_id,
+                    current_status=workflow.workflow_status,
+                )
+
             await self._repository.set_status(
                 workflow_id, WorkflowStatus.FAILED, failure_reason=feedback
             )

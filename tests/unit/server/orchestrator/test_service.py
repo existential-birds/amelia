@@ -575,6 +575,52 @@ async def test_reject_finalizes_recorder_and_forgets_sequence(
     assert wf_id not in orchestrator._events._sequence_counters
 
 
+async def test_reject_workflow_revalidates_status_inside_lock(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+) -> None:
+    """A status change during reject's lock-wait must abort the rejection.
+
+    Reproduces the approve/reject race: reject reads BLOCKED, then another
+    approval transitions the workflow to IN_PROGRESS before reject acquires
+    the approval lock. reject must re-validate inside the lock and refuse —
+    never overwrite a no-longer-blocked workflow to FAILED.
+    """
+    state = ServerExecutionState(
+        id=uuid4(),
+        issue_id="ISSUE-123",
+        worktree_path="/path/to/worktree",
+        workflow_status=WorkflowStatus.BLOCKED,
+        started_at=datetime.now(UTC),
+        profile_id="test",
+    )
+    mock_repository.get.return_value = state
+
+    # Hold the approval lock so reject is forced to wait after entering it.
+    await orchestrator._approval_lock.acquire()
+    reject_task = asyncio.create_task(
+        orchestrator.reject_workflow(state.id, feedback="too complex")
+    )
+    # Let reject run up to the lock acquisition and block there.
+    await asyncio.sleep(0)
+
+    # Simulate a concurrent approval that transitioned the workflow.
+    state.workflow_status = WorkflowStatus.IN_PROGRESS
+
+    # Release the lock so reject proceeds and re-validates.
+    orchestrator._approval_lock.release()
+
+    with pytest.raises(InvalidStateError):
+        await reject_task
+
+    # The decisive assertion: FAILED was never written.
+    assert not any(
+        call.args[1:2] == (WorkflowStatus.FAILED,)
+        or WorkflowStatus.FAILED in call.args
+        for call in mock_repository.set_status.call_args_list
+    )
+
+
 async def test_start_review_workflow_registers_recorder(
     orchestrator: OrchestratorService,
     valid_worktree: str,
