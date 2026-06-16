@@ -85,11 +85,19 @@
   "pnpm": {
     "overrides": {
       "lodash-es": "^4.18.1",
-      "uuid": "^14.0.0"
+      "uuid": "^14.0.0",
+      "dompurify": "^3.4.9",
+      "esbuild": "^0.28.1",
+      "form-data": "^4.0.6",
+      "js-yaml": "^4.2.0"
     },
     "overridesComments": {
       "lodash-es": "Prototype pollution and code injection (Dependabot alerts #50, #51). chevrotain transitively pins lodash-es 4.17.21; force ^4.18.1 here. Remove this override once chevrotain updates its lodash-es peer.",
-      "uuid": "Missing buffer bounds check (Dependabot alert #67). mermaid transitively pins uuid ^11.1.0; force ^14.0.0 here. Remove this override once mermaid updates its uuid peer."
+      "uuid": "Missing buffer bounds check (Dependabot alert #67). mermaid transitively pins uuid ^11.1.0; force ^14.0.0 here. Remove this override once mermaid updates its uuid peer.",
+      "dompurify": "XSS / mXSS and prototype pollution (Dependabot alerts #102-#108). mermaid transitively pins dompurify 3.4.0; force ^3.4.9 here. Remove once mermaid updates its dompurify peer.",
+      "esbuild": "Dev-server request SSRF (Dependabot alerts #94, #95). vite transitively pins esbuild 0.27.7; force ^0.28.1 here. Remove once vite updates its esbuild peer.",
+      "form-data": "Unsafe random boundary generation (Dependabot alert #101). jsdom transitively pins form-data 4.0.5; force ^4.0.6 here. Remove once jsdom updates its form-data peer.",
+      "js-yaml": "Prototype pollution / special-char parsing (Dependabot alert #98). @eslint/eslintrc transitively pins js-yaml 4.1.1; force ^4.2.0 here. Remove once @eslint/eslintrc updates its js-yaml peer."
     }
   }
 }
