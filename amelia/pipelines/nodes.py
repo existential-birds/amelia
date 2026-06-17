@@ -288,49 +288,56 @@ async def call_reviewer_node(
         review_types=review_types,
     )
 
-    # Run a separate reviewer for each review type — wrap in try/finally for diff cleanup
-    reviews: list[ReviewResult] = []
-    new_session_id: str | None = None
+    # Run a separate reviewer per review type. Passes are independent (they share
+    # the read-only diff file written above), so run them concurrently. When more
+    # than one type is configured, give each pass a distinct display name so its
+    # live stream events stay separable; a single pass keeps the canonical name.
+    multi_pass = len(review_types) > 1
+
+    async def _run_pass(review_type: str) -> tuple[ReviewResult, str | None]:
+        guidelines = load_skills(tags, [review_type])
+        pass_name = f"{agent_name}:{review_type}" if multi_pass else agent_name
+        logger.info(
+            "Running review pass",
+            agent=pass_name,
+            review_type=review_type,
+            guidelines_length=len(guidelines),
+        )
+
+        reviewer = Reviewer(
+            agent_config,
+            event_bus=nc.event_bus,
+            prompts=nc.prompts,
+            agent_name=pass_name,
+            sandbox_provider=nc.sandbox_provider,
+            review_guidelines=guidelines,
+        )
+
+        wrap_with_recording(reviewer, nc.recorder, pass_name, agent_config.model)
+
+        review_result, session_id = await reviewer.agentic_review(
+            state, base_commit, nc.profile,
+            workflow_id=nc.workflow_id,
+            diff_path=str(diff_path),
+        )
+
+        review_result = review_result.model_copy(update={"reviewer_persona": review_type})
+        logger.info(
+            "Review pass completed",
+            agent=pass_name,
+            review_type=review_type,
+            severity=str(review_result.severity),
+            approved=review_result.approved,
+            issue_count=len(review_result.comments),
+        )
+        return review_result, session_id
 
     try:
-        for review_type in review_types:
-            guidelines = load_skills(tags, [review_type])
-            logger.info(
-                "Running review pass",
-                agent=agent_name,
-                review_type=review_type,
-                guidelines_length=len(guidelines),
-            )
-
-            reviewer = Reviewer(
-                agent_config,
-                event_bus=nc.event_bus,
-                prompts=nc.prompts,
-                agent_name=agent_name,
-                sandbox_provider=nc.sandbox_provider,
-                review_guidelines=guidelines,
-            )
-
-            wrap_with_recording(reviewer, nc.recorder, agent_name, agent_config.model)
-
-            review_result, session_id = await reviewer.agentic_review(
-                state, base_commit, nc.profile,
-                workflow_id=nc.workflow_id,
-                diff_path=str(diff_path),
-            )
-
-            review_result = review_result.model_copy(update={"reviewer_persona": review_type})
-            reviews.append(review_result)
-            new_session_id = session_id
-
-            logger.info(
-                "Review pass completed",
-                agent=agent_name,
-                review_type=review_type,
-                severity=str(review_result.severity),
-                approved=review_result.approved,
-                issue_count=len(review_result.comments),
-            )
+        # gather preserves input order regardless of completion order, so reviews
+        # stay in review_types order and the last pass's session id is deterministic.
+        pass_results = await asyncio.gather(*(_run_pass(rt) for rt in review_types))
+        reviews: list[ReviewResult] = [result for result, _ in pass_results]
+        new_session_id: str | None = pass_results[-1][1] if pass_results else None
 
         next_iteration = state.review_iteration + 1
 

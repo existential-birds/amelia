@@ -3,6 +3,7 @@
 Tests the review node behavior including base_commit fallback computation.
 """
 
+import asyncio
 from collections.abc import Callable
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -230,6 +231,106 @@ class TestCallReviewNodeMultipleReviewTypes:
             assert reviews[1].reviewer_persona == "security"
             assert reviews[1].approved is False
             assert reviews[1].comments == ["SQL injection risk"]
+
+    @pytest.mark.asyncio
+    async def test_review_passes_run_concurrently(
+        self,
+        mock_execution_state_factory,
+        mock_runnable_config,
+    ) -> None:
+        """Multiple review types run concurrently (not serially), each pass gets a
+        distinct display agent_name, and results stay ordered/deterministic."""
+        state, profile = mock_execution_state_factory(
+            goal="Test goal",
+            base_commit="abc123",
+        )
+
+        review_types = ["general", "security", "performance"]
+        original_get_config = profile.get_agent_config
+        mock_profile = MagicMock(wraps=profile)
+        mock_profile.repo_root = profile.repo_root
+
+        def patched_get_config(name: str):
+            cfg = original_get_config(name)
+            if name in ("reviewer", "task_reviewer"):
+                return cfg.model_copy(
+                    update={"options": {**cfg.options, "review_types": review_types}}
+                )
+            return cfg
+
+        mock_profile.get_agent_config = patched_get_config
+        config = mock_runnable_config(profile=mock_profile)
+
+        # Barrier proves concurrency: every pass must reach it before any returns.
+        # Serial execution deadlocks the first pass -> wait_for times out (FAIL pre-fix).
+        barrier = asyncio.Barrier(len(review_types))
+        captured_names: list[str] = []
+
+        def make_reviewer(*args: Any, **kwargs: Any) -> MagicMock:
+            name = kwargs["agent_name"]
+            captured_names.append(name)
+            reviewer = MagicMock()
+            reviewer.driver = MagicMock()
+
+            async def _agentic_review(
+                state, base_commit, profile, *, workflow_id, diff_path=None
+            ):
+                await barrier.wait()
+                review_type = name.split(":", 1)[1]
+                return (
+                    ReviewResult(
+                        reviewer_persona="raw",
+                        approved=True,
+                        comments=[],
+                        severity="none",
+                    ),
+                    f"sid-{review_type}",
+                )
+
+            reviewer.agentic_review = _agentic_review
+            return reviewer
+
+        with patch("amelia.pipelines.nodes.Reviewer", side_effect=make_reviewer):
+            result = await asyncio.wait_for(call_reviewer_node(state, config), timeout=2.0)
+
+        # Each pass tagged with a distinct display name (canonical base + ':<type>').
+        base = captured_names[0].split(":", 1)[0]
+        assert base in ("reviewer", "task_reviewer")
+        assert captured_names == [f"{base}:{rt}" for rt in review_types]
+        # Results preserved in configured order, tagged by review type.
+        assert [r.reviewer_persona for r in result["last_reviews"]] == review_types
+        # Session id is the last pass's, deterministically (gather preserves order).
+        assert result["driver_session_id"] == "sid-performance"
+
+    @pytest.mark.asyncio
+    async def test_single_review_type_keeps_canonical_name(
+        self,
+        mock_execution_state_factory,
+        mock_runnable_config,
+    ) -> None:
+        """With one review type there is no concurrency to disambiguate, so the
+        canonical agent_name is preserved (no ':<type>' suffix)."""
+        state, profile = mock_execution_state_factory(
+            goal="Test goal",
+            base_commit="abc123",
+        )
+        config = mock_runnable_config(profile=profile)
+
+        captured_names: list[str] = []
+
+        def make_reviewer(*args: Any, **kwargs: Any) -> MagicMock:
+            captured_names.append(kwargs["agent_name"])
+            reviewer = MagicMock()
+            reviewer.driver = MagicMock()
+            reviewer.agentic_review = AsyncMock(return_value=(_APPROVED_RESULT, "session-1"))
+            return reviewer
+
+        with patch("amelia.pipelines.nodes.Reviewer", side_effect=make_reviewer):
+            await call_reviewer_node(state, config)
+
+        assert len(captured_names) == 1
+        assert ":" not in captured_names[0]
+        assert captured_names[0] in ("reviewer", "task_reviewer")
 
     @pytest.mark.asyncio
     async def test_invalid_review_types_falls_back(
