@@ -362,7 +362,10 @@ async def call_reviewer_node(
         )
 
         return result_dict
-    except Exception:
+    except BaseException:
+        # BaseException (not just Exception) so that CancelledError — which
+        # subclasses BaseException since Py3.8 — also drains in-flight sibling
+        # passes before the finally block deletes the shared diff directory.
         for task in pass_tasks:
             task.cancel()
         await asyncio.gather(*pass_tasks, return_exceptions=True)
