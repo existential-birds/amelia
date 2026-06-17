@@ -30,6 +30,7 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastapi import status
+from langgraph.checkpoint.memory import MemorySaver
 
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.server.database.repository import WorkflowRepository
@@ -44,6 +45,7 @@ from amelia.server.models.state import (
     WorkflowType,
 )
 from amelia.server.orchestrator.service import OrchestratorService
+from tests.integration.conftest import await_review_tasks
 
 
 def _make_blocking_astream(event: asyncio.Event) -> Any:
@@ -270,8 +272,9 @@ class TestRequestReview:
                 source.id, **review_kwargs,
             )
 
-            # Wait for background task to execute (must be inside patch context)
-            await asyncio.sleep(0.2)
+            # Await the background review task (registered synchronously) so
+            # config capture is deterministic and not a timing guess.
+            await await_review_tasks(test_orchestrator)
 
         assert captured_config["configurable"][config_key] == expected_value
 
@@ -346,7 +349,7 @@ class TestRequestReview:
             event_bus=test_event_bus,
             repository=test_repository,
             profile_repo=test_profile_repository,
-            checkpointer=AsyncMock(),
+            checkpointer=MemorySaver(),
             max_concurrent=1,
         )
 
@@ -477,8 +480,8 @@ class TestStartReviewWorkflow:
                 worktree_path=valid_worktree,
             )
 
-            # Let the background task run
-            await asyncio.sleep(0.2)
+            # Await the background task instead of guessing with a sleep.
+            await await_review_tasks(test_orchestrator)
 
         state = await test_repository.get(workflow_id)
         assert state is not None
@@ -524,8 +527,8 @@ class TestRunReviewWorkflow:
                 WorkflowStatus.COMPLETED,
             )
 
-            # Wait for completion
-            await asyncio.sleep(0.2)
+            # Await the background task instead of guessing with a sleep.
+            await await_review_tasks(test_orchestrator)
 
         state = await test_repository.get(workflow_id)
         assert state is not None
@@ -557,8 +560,8 @@ class TestRunReviewWorkflow:
                 worktree_path=valid_worktree,
             )
 
-            # Wait for failure
-            await asyncio.sleep(0.2)
+            # Await the background task instead of guessing with a sleep.
+            await await_review_tasks(test_orchestrator)
 
         state = await test_repository.get(workflow_id)
         assert state is not None
@@ -602,7 +605,7 @@ class TestRunReviewWorkflow:
                 review_types=["security", "general"],
             )
 
-            await asyncio.sleep(0.2)
+            await await_review_tasks(test_orchestrator)
 
         assert captured_config["configurable"]["review_mode"] == "review_only"
         assert captured_config["configurable"]["review_types"] == ["security", "general"]
@@ -634,7 +637,7 @@ class TestRunReviewWorkflow:
             event_bus=event_bus,
             repository=test_repository,
             profile_repo=test_profile_repository,
-            checkpointer=AsyncMock(),
+            checkpointer=MemorySaver(),
         )
 
         mocks = langgraph_mock_factory(astream_items=[])
@@ -649,7 +652,7 @@ class TestRunReviewWorkflow:
                 worktree_path=valid_worktree,
             )
 
-            await asyncio.sleep(0.2)
+            await await_review_tasks(orchestrator)
 
         event_types = [e.event_type for e in emitted_events if e.workflow_id == workflow_id]
         assert EventType.WORKFLOW_STARTED in event_types

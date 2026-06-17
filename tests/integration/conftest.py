@@ -5,6 +5,8 @@ This module provides:
 - Fixtures for common test dependencies
 """
 
+import asyncio
+import contextlib
 import os
 import socket
 import subprocess
@@ -554,6 +556,27 @@ async def await_planning_task(orchestrator: OrchestratorService, workflow_id: uu
         await asyncio.sleep(0.01)
 
 
+async def await_review_tasks(orchestrator: OrchestratorService) -> None:
+    """Deterministically await fire-and-forget review/workflow tasks.
+
+    ``request_review`` / ``start_review_workflow`` register their background
+    task in ``_active_tasks`` synchronously before returning, so awaiting the
+    registered task lets assertions observe the completed side effects without
+    a brittle ``asyncio.sleep`` guess that flakes under load. Do not use this
+    for tests that intentionally keep a task blocked (e.g. conflict tests).
+    """
+    # Registration is synchronous; the small poll only covers scheduling slack.
+    tasks: list[asyncio.Task[None]] = []
+    for _ in range(100):  # 100 * 0.01 = 1 second max
+        tasks = [task for _wid, task in orchestrator._active_tasks.values()]
+        if tasks:
+            break
+        await asyncio.sleep(0.01)
+    for task in tasks:
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
 @asynccontextmanager
 async def mock_langgraph_for_planning(
     goal: str = "Test goal from architect",
@@ -642,22 +665,40 @@ def test_event_bus() -> EventBus:
 
 
 @pytest.fixture
-def test_orchestrator(
+async def test_orchestrator(
     test_event_bus: EventBus,
     test_repository: WorkflowRepository,
     test_profile_repository: ProfileRepository,
-) -> OrchestratorService:
+) -> AsyncGenerator[OrchestratorService, None]:
     """Create real OrchestratorService with test dependencies.
 
     Includes profile_repo so that replan and other profile-dependent
     operations work correctly.
+
+    On teardown, all background tasks (active workflows, planning, and
+    post-task drain tasks) are cancelled and awaited. Tests that kick off
+    fire-and-forget review/workflow tasks would otherwise let those tasks
+    outlive the function-scoped DB pool, producing intermittent
+    "pool is closing" errors during teardown.
     """
-    return OrchestratorService(
+    service = OrchestratorService(
         event_bus=test_event_bus,
         repository=test_repository,
         profile_repo=test_profile_repository,
-        checkpointer=AsyncMock(),
+        # Real saver: langgraph >=1.2 rejects non-BaseCheckpointSaver
+        # checkpointers at compile() time. A background review task can
+        # outlive the create_review_graph patch in some tests and reach a
+        # real compile(), so the fixture must hold a valid saver.
+        checkpointer=MemorySaver(),
     )
+    try:
+        yield service
+    finally:
+        await service.cancel_all_workflows(timeout=5.0)
+        for task in list(service._drain_tasks):
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+                await asyncio.wait_for(task, timeout=5.0)
 
 
 @pytest.fixture
