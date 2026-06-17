@@ -295,6 +295,7 @@ async def call_reviewer_node(
     multi_pass = len(review_types) > 1
 
     async def _run_pass(review_type: str) -> tuple[ReviewResult, str | None]:
+        """Run a single reviewer pass for one review type and return its result and session id."""
         guidelines = load_skills(tags, [review_type])
         pass_name = f"{agent_name}:{review_type}" if multi_pass else agent_name
         logger.info(
@@ -332,10 +333,11 @@ async def call_reviewer_node(
         )
         return review_result, session_id
 
+    pass_tasks = [asyncio.create_task(_run_pass(rt)) for rt in review_types]
     try:
         # gather preserves input order regardless of completion order, so reviews
         # stay in review_types order and the last pass's session id is deterministic.
-        pass_results = await asyncio.gather(*(_run_pass(rt) for rt in review_types))
+        pass_results = await asyncio.gather(*pass_tasks)
         reviews: list[ReviewResult] = [result for result, _ in pass_results]
         new_session_id: str | None = pass_results[-1][1] if pass_results else None
 
@@ -360,6 +362,11 @@ async def call_reviewer_node(
         )
 
         return result_dict
+    except Exception:
+        for task in pass_tasks:
+            task.cancel()
+        await asyncio.gather(*pass_tasks, return_exceptions=True)
+        raise
     finally:
         shutil.rmtree(diff_dir, ignore_errors=True)
         logger.debug("Cleaned up diff directory", diff_dir=str(diff_dir))
