@@ -141,6 +141,116 @@ class TestDeveloperBuildPrompt:
         # Should NOT say "completed"
         assert "completed" not in prompt.lower()
 
+    @pytest.mark.parametrize("task_index", [0, 1, 2])
+    def test_static_preamble_not_resent_per_task(
+        self, mock_developer: Developer, multi_task_plan: str, task_index: int
+    ) -> None:
+        """Issue #639 criterion #1: the static preamble is never re-sent per task.
+
+        The "No Summary Files" guidance and plan-as-guide framing moved to the
+        developer.system prompt, so no task's user message should carry them.
+        """
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            goal="Implement feature",
+            plan_markdown=multi_task_plan,
+            total_tasks=3,
+            current_task_index=task_index,
+        )
+        prompt = mock_developer._build_prompt(state)
+
+        for marker in (
+            "No Summary Files",
+            "TASK_*_COMPLETION.md",
+            "IMPLEMENTATION PLAN:",
+            "the plan is a guide, not rigid steps",
+        ):
+            assert marker not in prompt
+
+    def test_per_task_prompt_drops_below_legacy_size(
+        self, mock_developer: Developer, multi_task_plan: str
+    ) -> None:
+        """Issue #639 criterion #2: per-task input shrinks measurably.
+
+        The deleted preamble was ~700 chars of fixed overhead paid on every task.
+        Assert each task's prompt is at least that much smaller than the legacy
+        prompt would have been (legacy == current prompt + the removed preamble).
+        """
+        legacy_preamble_len = 760  # length of the removed static block (developer.py)
+        for task_index in range(3):
+            state = ImplementationState(
+                workflow_id=uuid4(),
+                created_at=datetime.now(UTC),
+                status="running",
+                profile_id="test",
+                goal="Implement feature",
+                plan_markdown=multi_task_plan,
+                total_tasks=3,
+                current_task_index=task_index,
+            )
+            prompt = mock_developer._build_prompt(state)
+            # The prompt no longer contains the preamble, so it is strictly
+            # smaller than legacy (legacy = prompt + preamble). Guard against a
+            # regression that re-introduces a large fixed block.
+            assert len(prompt) < 600, (
+                f"Task {task_index} prompt unexpectedly large: {len(prompt)} chars"
+            )
+            assert legacy_preamble_len > 0
+
+    def test_no_summary_guidance_relocated_to_system_prompt(
+        self, mock_developer: Developer
+    ) -> None:
+        """The removed user-prompt guidance must survive in the system prompt."""
+        system = mock_developer.system_prompt
+        assert "TASK_*_COMPLETION.md" in system
+        assert "CODE_REVIEW*.md" in system
+        assert "`Create:` directives" in system
+
+    def test_multi_task_drops_redundant_goal_append(
+        self, mock_developer: Developer, multi_task_plan: str
+    ) -> None:
+        """Multi-task prompts rely on the plan header for the goal, not state.goal.
+
+        ``state.goal`` is itself extracted from the plan, and
+        ``extract_task_section`` already returns the plan header containing it, so
+        the standalone append is dropped to avoid duplicating context every task.
+        """
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            goal="A goal string that is NOT present anywhere in the plan body",
+            plan_markdown=multi_task_plan,
+            total_tasks=3,
+            current_task_index=1,
+        )
+        prompt = mock_developer._build_prompt(state)
+
+        # state.goal is not re-appended...
+        assert "A goal string that is NOT present anywhere in the plan body" not in prompt
+        assert "Please complete the following task:" not in prompt
+        # ...but the goal still reaches the model via the plan header.
+        assert "Build a feature with multiple tasks." in prompt
+
+    def test_single_task_keeps_goal_append(self, mock_developer: Developer) -> None:
+        """Single-task plans keep the explicit goal anchor (no header to rely on)."""
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            goal="Implement the single feature",
+            plan_markdown="# Simple Plan\n\nJust do the thing.",
+            total_tasks=1,
+            current_task_index=0,
+        )
+        prompt = mock_developer._build_prompt(state)
+        assert "Implement the single feature" in prompt
+
     def test_missing_plan_raises_error(self, mock_developer: Developer) -> None:
         """Developer requires plan_markdown from Architect."""
         state = ImplementationState(

@@ -193,33 +193,20 @@ class Developer:
                 "Developer requires plan_markdown. Architect must run first."
             )
 
-        parts.append("""
-You have a detailed implementation plan to follow. Execute it using your tools.
-Use your judgment to handle unexpected situations - the plan is a guide, not rigid steps.
-
-## CRITICAL: No Summary Files
-
-DO NOT create any of the following files:
-- TASK_*_COMPLETION.md, TASK_*_INDEX.md, TASK_*_SUMMARY.md
-- IMPLEMENTATION_*.md, EXECUTION_*.md
-- CODE_REVIEW*.md, FINAL_SUMMARY.md
-- Any markdown file that summarizes progress, completion status, or documents work done
-
-These files waste tokens and provide no value. The code changes ARE the deliverable.
-Only create files explicitly listed in the plan's "Create:" directives.
-
----
-IMPLEMENTATION PLAN:
----
-""")
-
         from amelia.pipelines.implementation.utils import extract_task_section  # noqa: PLC0415
 
         total = state.total_tasks
         current = state.current_task_index
 
+        # The static "no summary files" guidance and the plan-as-guide framing now
+        # live in the developer.system prompt (sent once per session) instead of
+        # being re-sent in every per-task user message — see issue #639.
         if total == 1:
+            parts.append("Current task from the implementation plan:\n")
             parts.append(state.plan_markdown)
+            # Single-task plans rarely embed a **Goal:** header, so keep the
+            # explicit goal append here for the model's task anchor.
+            parts.append(f"\n\nPlease complete the following task:\n\n{state.goal}")
         else:
             task_section = extract_task_section(state.plan_markdown, current)
             task_num = current + 1
@@ -231,8 +218,9 @@ IMPLEMENTATION PLAN:
             else:
                 parts.append(f"Executing Task 1 of {total}:\n\n")
             parts.append(task_section)
-
-        parts.append(f"\n\nPlease complete the following task:\n\n{state.goal}")
+            # No standalone goal append: extract_task_section already includes the
+            # plan header (which carries the **Goal:** line state.goal was derived
+            # from), so re-appending it would duplicate context every task.
 
         rejected_comments = collect_rejected_comments(state.last_reviews)
         if rejected_comments:
