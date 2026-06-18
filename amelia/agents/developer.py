@@ -202,11 +202,8 @@ class Developer:
         # live in the developer.system prompt (sent once per session) instead of
         # being re-sent in every per-task user message — see issue #639.
         if total == 1:
-            parts.append("Current task from the implementation plan:\n")
+            parts.append("Executing Task 1 of 1:\n\n")
             parts.append(state.plan_markdown)
-            # Single-task plans rarely embed a **Goal:** header, so keep the
-            # explicit goal append here for the model's task anchor.
-            parts.append(f"\n\nPlease complete the following task:\n\n{state.goal}")
         else:
             task_section = extract_task_section(state.plan_markdown, current)
             task_num = current + 1

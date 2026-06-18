@@ -26,16 +26,13 @@ def mock_developer() -> Developer:
 @pytest.fixture
 def multi_task_plan() -> str:
     """A plan with header and 3 tasks."""
-    return """# Implementation Plan
+    return """# Multi-Task Feature Implementation Plan
 
-## Goal
-Build a feature with multiple tasks.
+**Goal:** Build a feature with multiple tasks.
 
-## Architecture
-Modular design with clear separation.
+**Architecture:** Modular design with clear separation.
 
-## Tech Stack
-Python, pytest
+**Tech Stack:** Python, pytest
 
 ---
 
@@ -170,16 +167,17 @@ class TestDeveloperBuildPrompt:
         ):
             assert marker not in prompt
 
-    def test_per_task_prompt_drops_below_legacy_size(
+    def test_per_task_prompt_contains_only_current_task(
         self, mock_developer: Developer, multi_task_plan: str
     ) -> None:
-        """Issue #639 criterion #2: per-task input shrinks measurably.
+        """Issue #639 criterion #2: per-task prompt contains only the current task section.
 
-        The deleted preamble was ~700 chars of fixed overhead paid on every task.
-        Assert each task's prompt is at least that much smaller than the legacy
-        prompt would have been (legacy == current prompt + the removed preamble).
+        Task extraction must omit the other tasks' sections from the prompt,
+        proving only the relevant section is sent rather than the whole document.
+        Preamble-removal is already covered by test_static_preamble_not_resent_per_task;
+        this test focuses on task isolation by checking absent sibling sections.
         """
-        legacy_preamble_len = 760  # length of the removed static block (developer.py)
+        all_task_markers = ["Task 1:", "Task 2:", "Task 3:"]
         for task_index in range(3):
             state = ImplementationState(
                 workflow_id=uuid4(),
@@ -192,13 +190,14 @@ class TestDeveloperBuildPrompt:
                 current_task_index=task_index,
             )
             prompt = mock_developer._build_prompt(state)
-            # The prompt no longer contains the preamble, so it is strictly
-            # smaller than legacy (legacy = prompt + preamble). Guard against a
-            # regression that re-introduces a large fixed block.
-            assert len(prompt) < 600, (
-                f"Task {task_index} prompt unexpectedly large: {len(prompt)} chars"
-            )
-            assert legacy_preamble_len > 0
+            current_marker = all_task_markers[task_index]
+            for sibling_marker in all_task_markers:
+                if sibling_marker == current_marker:
+                    continue
+                assert sibling_marker not in prompt, (
+                    f"Task {task_index + 1} prompt unexpectedly contains '{sibling_marker}'; "
+                    "task extraction may not be isolating the current section"
+                )
 
     def test_no_summary_guidance_relocated_to_system_prompt(
         self, mock_developer: Developer
@@ -236,20 +235,34 @@ class TestDeveloperBuildPrompt:
         # ...but the goal still reaches the model via the plan header.
         assert "Build a feature with multiple tasks." in prompt
 
-    def test_single_task_keeps_goal_append(self, mock_developer: Developer) -> None:
-        """Single-task plans keep the explicit goal anchor (no header to rely on)."""
+    def test_single_task_no_redundant_goal_append(self, mock_developer: Developer) -> None:
+        """Single-task plans must not double-send the goal via a standalone append.
+
+        Production plans always include a ``**Goal:**`` header (from the Architect),
+        so ``state.goal`` (which is extracted from that header) must not be
+        re-appended after the full plan_markdown — doing so sends the goal twice.
+        The plan body is the sole source of the goal anchor; state.goal is not
+        re-appended for single-task plans any more than it is for multi-task plans.
+        """
+        unique_goal = "A unique single-task goal NOT embedded in plan body"
         state = ImplementationState(
             workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
-            goal="Implement the single feature",
+            goal=unique_goal,
             plan_markdown="# Simple Plan\n\nJust do the thing.",
             total_tasks=1,
             current_task_index=0,
         )
         prompt = mock_developer._build_prompt(state)
-        assert "Implement the single feature" in prompt
+        # state.goal must not be appended separately — it is not in the plan body,
+        # so if it appears in the prompt, the double-send bug has been reintroduced.
+        assert unique_goal not in prompt
+        assert "Please complete the following task:" not in prompt
+        # The plan content itself must still be present.
+        assert "# Simple Plan" in prompt
+        assert "Just do the thing." in prompt
 
     def test_missing_plan_raises_error(self, mock_developer: Developer) -> None:
         """Developer requires plan_markdown from Architect."""
