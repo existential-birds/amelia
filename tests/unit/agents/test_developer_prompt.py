@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 from amelia.agents.developer import Developer
-from amelia.core.types import AgentConfig, DriverType, Issue, Profile
+from amelia.core.types import AgentConfig, DriverType, Issue, Profile, ReviewResult, Severity
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from tests.conftest import create_mock_execute_agentic
@@ -263,6 +263,64 @@ class TestDeveloperBuildPrompt:
         # The plan content itself must still be present.
         assert "# Simple Plan" in prompt
         assert "Just do the thing." in prompt
+
+    def test_rejected_comments_appended_on_review_retry(
+        self, mock_developer: Developer
+    ) -> None:
+        """Rejected review comments are appended when last_reviews contains non-approved reviews.
+
+        Covers Developer._build_prompt lines 222-225: the collect_rejected_comments
+        branch that rebuilds the prompt with reviewer feedback on a retry pass.
+        """
+        reviews = [
+            ReviewResult(
+                reviewer_persona="agentic",
+                approved=False,
+                comments=["Add type hints to helper functions"],
+                severity=Severity.MAJOR,
+            )
+        ]
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            goal="Implement feature",
+            plan_markdown="# Simple Plan\n\nJust do the thing.",
+            total_tasks=1,
+            current_task_index=0,
+            last_reviews=reviews,
+        )
+        prompt = mock_developer._build_prompt(state)
+
+        assert "Add type hints to helper functions" in prompt
+        assert "reviewer requested" in prompt.lower()
+
+    def test_approved_reviews_not_appended(self, mock_developer: Developer) -> None:
+        """Approved reviews do not contribute comments to the prompt."""
+        reviews = [
+            ReviewResult(
+                reviewer_persona="agentic",
+                approved=True,
+                comments=["Looks good"],
+                severity=Severity.NONE,
+            )
+        ]
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            goal="Implement feature",
+            plan_markdown="# Simple Plan\n\nJust do the thing.",
+            total_tasks=1,
+            current_task_index=0,
+            last_reviews=reviews,
+        )
+        prompt = mock_developer._build_prompt(state)
+
+        assert "Looks good" not in prompt
+        assert "reviewer requested" not in prompt.lower()
 
     def test_missing_plan_raises_error(self, mock_developer: Developer) -> None:
         """Developer requires plan_markdown from Architect."""
