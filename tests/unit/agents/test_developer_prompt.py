@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 from amelia.agents.developer import Developer
-from amelia.core.types import AgentConfig, DriverType, Issue, Profile
+from amelia.core.types import AgentConfig, DriverType, Issue, Profile, ReviewResult, Severity
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from tests.conftest import create_mock_execute_agentic
@@ -26,16 +26,13 @@ def mock_developer() -> Developer:
 @pytest.fixture
 def multi_task_plan() -> str:
     """A plan with header and 3 tasks."""
-    return """# Implementation Plan
+    return """# Multi-Task Feature Implementation Plan
 
-## Goal
-Build a feature with multiple tasks.
+**Goal:** Build a feature with multiple tasks.
 
-## Architecture
-Modular design with clear separation.
+**Architecture:** Modular design with clear separation.
 
-## Tech Stack
-Python, pytest
+**Tech Stack:** Python, pytest
 
 ---
 
@@ -140,6 +137,190 @@ class TestDeveloperBuildPrompt:
         assert "Executing Task 1 of 3" in prompt
         # Should NOT say "completed"
         assert "completed" not in prompt.lower()
+
+    @pytest.mark.parametrize("task_index", [0, 1, 2])
+    def test_static_preamble_not_resent_per_task(
+        self, mock_developer: Developer, multi_task_plan: str, task_index: int
+    ) -> None:
+        """Issue #639 criterion #1: the static preamble is never re-sent per task.
+
+        The "No Summary Files" guidance and plan-as-guide framing moved to the
+        developer.system prompt, so no task's user message should carry them.
+        """
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            goal="Implement feature",
+            plan_markdown=multi_task_plan,
+            total_tasks=3,
+            current_task_index=task_index,
+        )
+        prompt = mock_developer._build_prompt(state)
+
+        for marker in (
+            "No Summary Files",
+            "TASK_*_COMPLETION.md",
+            "IMPLEMENTATION PLAN:",
+            "the plan is a guide, not rigid steps",
+        ):
+            assert marker not in prompt
+
+    def test_per_task_prompt_contains_only_current_task(
+        self, mock_developer: Developer, multi_task_plan: str
+    ) -> None:
+        """Issue #639 criterion #2: per-task prompt contains only the current task section.
+
+        Task extraction must omit the other tasks' sections from the prompt,
+        proving only the relevant section is sent rather than the whole document.
+        Preamble-removal is already covered by test_static_preamble_not_resent_per_task;
+        this test focuses on task isolation by checking absent sibling sections.
+        """
+        all_task_markers = ["Task 1:", "Task 2:", "Task 3:"]
+        for task_index in range(3):
+            state = ImplementationState(
+                workflow_id=uuid4(),
+                created_at=datetime.now(UTC),
+                status="running",
+                profile_id="test",
+                goal="Implement feature",
+                plan_markdown=multi_task_plan,
+                total_tasks=3,
+                current_task_index=task_index,
+            )
+            prompt = mock_developer._build_prompt(state)
+            current_marker = all_task_markers[task_index]
+            for sibling_marker in all_task_markers:
+                if sibling_marker == current_marker:
+                    continue
+                assert sibling_marker not in prompt, (
+                    f"Task {task_index + 1} prompt unexpectedly contains '{sibling_marker}'; "
+                    "task extraction may not be isolating the current section"
+                )
+
+    def test_no_summary_guidance_relocated_to_system_prompt(
+        self, mock_developer: Developer
+    ) -> None:
+        """The removed user-prompt guidance must survive in the system prompt."""
+        system = mock_developer.system_prompt
+        assert "TASK_*_COMPLETION.md" in system
+        assert "CODE_REVIEW*.md" in system
+        assert "`Create:` directives" in system
+
+    def test_multi_task_drops_redundant_goal_append(
+        self, mock_developer: Developer, multi_task_plan: str
+    ) -> None:
+        """Multi-task prompts rely on the plan header for the goal, not state.goal.
+
+        ``state.goal`` is itself extracted from the plan, and
+        ``extract_task_section`` already returns the plan header containing it, so
+        the standalone append is dropped to avoid duplicating context every task.
+        """
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            goal="A goal string that is NOT present anywhere in the plan body",
+            plan_markdown=multi_task_plan,
+            total_tasks=3,
+            current_task_index=1,
+        )
+        prompt = mock_developer._build_prompt(state)
+
+        # state.goal is not re-appended...
+        assert "A goal string that is NOT present anywhere in the plan body" not in prompt
+        assert "Please complete the following task:" not in prompt
+        # ...but the goal still reaches the model via the plan header.
+        assert "Build a feature with multiple tasks." in prompt
+
+    def test_single_task_no_redundant_goal_append(self, mock_developer: Developer) -> None:
+        """Single-task plans must not double-send the goal via a standalone append.
+
+        Production plans always include a ``**Goal:**`` header (from the Architect),
+        so ``state.goal`` (which is extracted from that header) must not be
+        re-appended after the full plan_markdown — doing so sends the goal twice.
+        The plan body is the sole source of the goal anchor; state.goal is not
+        re-appended for single-task plans any more than it is for multi-task plans.
+        """
+        unique_goal = "A unique single-task goal NOT embedded in plan body"
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            goal=unique_goal,
+            plan_markdown="# Simple Plan\n\nJust do the thing.",
+            total_tasks=1,
+            current_task_index=0,
+        )
+        prompt = mock_developer._build_prompt(state)
+        # state.goal must not be appended separately — it is not in the plan body,
+        # so if it appears in the prompt, the double-send bug has been reintroduced.
+        assert unique_goal not in prompt
+        assert "Please complete the following task:" not in prompt
+        # The plan content itself must still be present.
+        assert "# Simple Plan" in prompt
+        assert "Just do the thing." in prompt
+
+    def test_rejected_comments_appended_on_review_retry(
+        self, mock_developer: Developer
+    ) -> None:
+        """Rejected review comments are appended when last_reviews contains non-approved reviews.
+
+        Covers Developer._build_prompt lines 222-225: the collect_rejected_comments
+        branch that rebuilds the prompt with reviewer feedback on a retry pass.
+        """
+        reviews = [
+            ReviewResult(
+                reviewer_persona="agentic",
+                approved=False,
+                comments=["Add type hints to helper functions"],
+                severity=Severity.MAJOR,
+            )
+        ]
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            goal="Implement feature",
+            plan_markdown="# Simple Plan\n\nJust do the thing.",
+            total_tasks=1,
+            current_task_index=0,
+            last_reviews=reviews,
+        )
+        prompt = mock_developer._build_prompt(state)
+
+        assert "Add type hints to helper functions" in prompt
+        assert "reviewer requested" in prompt.lower()
+
+    def test_approved_reviews_not_appended(self, mock_developer: Developer) -> None:
+        """Approved reviews do not contribute comments to the prompt."""
+        reviews = [
+            ReviewResult(
+                reviewer_persona="agentic",
+                approved=True,
+                comments=["Looks good"],
+                severity=Severity.NONE,
+            )
+        ]
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            goal="Implement feature",
+            plan_markdown="# Simple Plan\n\nJust do the thing.",
+            total_tasks=1,
+            current_task_index=0,
+            last_reviews=reviews,
+        )
+        prompt = mock_developer._build_prompt(state)
+
+        assert "Looks good" not in prompt
+        assert "reviewer requested" not in prompt.lower()
 
     def test_missing_plan_raises_error(self, mock_developer: Developer) -> None:
         """Developer requires plan_markdown from Architect."""

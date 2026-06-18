@@ -96,7 +96,7 @@ Guidelines:
 - Keep responses concise and factual. Focus on what you did and what happened, not narrative commentary.
 - When referencing code, use the pattern `file_path:line_number` (e.g., `src/app.py:42`) for easy navigation.
 - Output text to communicate with users; never use bash echo, code comments, or git commit messages as communication channels.
-- Do not create summary/progress markdown files unless explicitly requested. The deliverable is working code and tests, not status documents.
+- Do not create summary/progress markdown files (e.g. TASK_*_COMPLETION.md, TASK_*_SUMMARY.md, IMPLEMENTATION_*.md, EXECUTION_*.md, CODE_REVIEW*.md, FINAL_SUMMARY.md, or any markdown that documents progress/completion) unless explicitly requested. The code changes ARE the deliverable, not status documents. Only create files explicitly listed in the plan's `Create:` directives.
 
 # File Paths
 
