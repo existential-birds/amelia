@@ -3,6 +3,8 @@
 Tests the review node behavior including base_commit fallback computation.
 """
 
+import asyncio
+import shutil
 from collections.abc import Callable
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -230,6 +232,182 @@ class TestCallReviewNodeMultipleReviewTypes:
             assert reviews[1].reviewer_persona == "security"
             assert reviews[1].approved is False
             assert reviews[1].comments == ["SQL injection risk"]
+
+    @pytest.mark.asyncio
+    async def test_review_passes_run_concurrently(
+        self,
+        mock_execution_state_factory,
+        mock_runnable_config,
+    ) -> None:
+        """Multiple review types run concurrently (not serially), each pass gets a
+        distinct display agent_name, and results stay ordered/deterministic."""
+        state, profile = mock_execution_state_factory(
+            goal="Test goal",
+            base_commit="abc123",
+        )
+
+        review_types = ["general", "security", "performance"]
+        original_get_config = profile.get_agent_config
+        mock_profile = MagicMock(wraps=profile)
+        mock_profile.repo_root = profile.repo_root
+
+        def patched_get_config(name: str):
+            cfg = original_get_config(name)
+            if name in ("reviewer", "task_reviewer"):
+                return cfg.model_copy(
+                    update={"options": {**cfg.options, "review_types": review_types}}
+                )
+            return cfg
+
+        mock_profile.get_agent_config = patched_get_config
+        config = mock_runnable_config(profile=mock_profile)
+
+        # Barrier proves concurrency: every pass must reach it before any returns.
+        # Serial execution deadlocks the first pass -> wait_for times out (FAIL pre-fix).
+        barrier = asyncio.Barrier(len(review_types))
+        captured_names: list[str] = []
+
+        def make_reviewer(*args: Any, **kwargs: Any) -> MagicMock:
+            name = kwargs["agent_name"]
+            captured_names.append(name)
+            reviewer = MagicMock()
+            reviewer.driver = MagicMock()
+
+            async def _agentic_review(
+                state, base_commit, profile, *, workflow_id, diff_path=None
+            ):
+                await barrier.wait()
+                review_type = name.split(":", 1)[1]
+                return (
+                    ReviewResult(
+                        reviewer_persona="raw",
+                        approved=True,
+                        comments=[],
+                        severity="none",
+                    ),
+                    f"sid-{review_type}",
+                )
+
+            reviewer.agentic_review = _agentic_review
+            return reviewer
+
+        with patch("amelia.pipelines.nodes.Reviewer", side_effect=make_reviewer):
+            result = await asyncio.wait_for(call_reviewer_node(state, config), timeout=2.0)
+
+        # Each pass tagged with a distinct display name (canonical base + ':<type>').
+        base = captured_names[0].split(":", 1)[0]
+        assert base in ("reviewer", "task_reviewer")
+        assert captured_names == [f"{base}:{rt}" for rt in review_types]
+        # Results preserved in configured order, tagged by review type.
+        assert [r.reviewer_persona for r in result["last_reviews"]] == review_types
+        # Session id is the last pass's, deterministically (gather preserves order).
+        assert result["driver_session_id"] == "sid-performance"
+
+    @pytest.mark.asyncio
+    async def test_pass_cancellation_drains_sibling_before_diff_cleanup(
+        self,
+        mock_execution_state_factory,
+        mock_runnable_config,
+    ) -> None:
+        """When ONE pass raises ``CancelledError`` mid-review, ``asyncio.gather``
+        (return_exceptions=False) re-raises immediately *without* cancelling or
+        waiting for the sibling passes — they keep reading the shared ``diff_path``.
+        The node must drain those in-flight siblings before deleting the diff dir.
+
+        Regression: the drain step lived under ``except Exception``, which does NOT
+        catch ``CancelledError`` (a ``BaseException`` since Py3.8). So the sibling was
+        left running while ``finally`` ran ``rmtree`` — a read-vs-delete race. The
+        breaking shape is N>1 passes where one self-cancels while another is live.
+        """
+        state, profile = mock_execution_state_factory(goal="Test goal", base_commit="abc123")
+
+        review_types = ["general", "security"]
+        original_get_config = profile.get_agent_config
+        mock_profile = MagicMock(wraps=profile)
+        mock_profile.repo_root = profile.repo_root
+
+        def patched_get_config(name: str):
+            cfg = original_get_config(name)
+            if name in ("reviewer", "task_reviewer"):
+                return cfg.model_copy(
+                    update={"options": {**cfg.options, "review_types": review_types}}
+                )
+            return cfg
+
+        mock_profile.get_agent_config = patched_get_config
+        config = mock_runnable_config(profile=mock_profile)
+
+        events: list[str] = []
+        sibling_running = asyncio.Event()
+
+        def make_reviewer(*args: Any, **kwargs: Any) -> MagicMock:
+            # The "general" pass self-cancels; "security" is the live sibling.
+            is_canceller = kwargs["agent_name"].endswith(":general")
+            reviewer = MagicMock()
+            reviewer.driver = MagicMock()
+
+            async def _agentic_review(state, base_commit, profile, *, workflow_id, diff_path=None):
+                if is_canceller:
+                    # Wait until the sibling is actively reading diff_path, then this
+                    # pass is cancelled on its own (e.g. driver timeout).
+                    await sibling_running.wait()
+                    raise asyncio.CancelledError
+                sibling_running.set()
+                try:
+                    await asyncio.sleep(30)  # still reading diff_path
+                except asyncio.CancelledError:
+                    events.append("sibling-drained")
+                    raise
+                return _APPROVED_RESULT, "sid"  # pragma: no cover - never reached
+
+            reviewer.agentic_review = _agentic_review
+            return reviewer
+
+        real_rmtree = shutil.rmtree
+
+        def spy_rmtree(*args: Any, **kwargs: Any):
+            events.append("rmtree")
+            return real_rmtree(*args, **kwargs)
+
+        with (
+            patch("amelia.pipelines.nodes.Reviewer", side_effect=make_reviewer),
+            patch("amelia.pipelines.nodes.shutil.rmtree", side_effect=spy_rmtree),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await asyncio.wait_for(call_reviewer_node(state, config), timeout=2.0)
+
+        # The live sibling was cancelled and fully drained BEFORE the diff dir was removed.
+        assert events == ["sibling-drained", "rmtree"]
+
+    @pytest.mark.asyncio
+    async def test_single_review_type_keeps_canonical_name(
+        self,
+        mock_execution_state_factory,
+        mock_runnable_config,
+    ) -> None:
+        """With one review type there is no concurrency to disambiguate, so the
+        canonical agent_name is preserved (no ':<type>' suffix)."""
+        state, profile = mock_execution_state_factory(
+            goal="Test goal",
+            base_commit="abc123",
+        )
+        config = mock_runnable_config(profile=profile)
+
+        captured_names: list[str] = []
+
+        def make_reviewer(*args: Any, **kwargs: Any) -> MagicMock:
+            captured_names.append(kwargs["agent_name"])
+            reviewer = MagicMock()
+            reviewer.driver = MagicMock()
+            reviewer.agentic_review = AsyncMock(return_value=(_APPROVED_RESULT, "session-1"))
+            return reviewer
+
+        with patch("amelia.pipelines.nodes.Reviewer", side_effect=make_reviewer):
+            await call_reviewer_node(state, config)
+
+        assert len(captured_names) == 1
+        assert ":" not in captured_names[0]
+        assert captured_names[0] in ("reviewer", "task_reviewer")
 
     @pytest.mark.asyncio
     async def test_invalid_review_types_falls_back(
