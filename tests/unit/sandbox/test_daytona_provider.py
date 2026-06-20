@@ -712,7 +712,8 @@ class TestDaytonaSandboxProviderExecStream:
             assert lines == ["partial"]
 
     @pytest.mark.asyncio
-    async def test_exec_stream_cleans_up_session_on_error(self) -> None:
+    async def test_exec_stream_does_not_delete_session_on_error(self) -> None:
+        """The reusable session survives a failed command (deleted at teardown)."""
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -734,10 +735,10 @@ class TestDaytonaSandboxProviderExecStream:
                 async for _ in provider.exec_stream(["false"]):
                     pass
 
-            mock_sandbox.process.delete_session.assert_called_once()
+            mock_sandbox.process.delete_session.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_exec_stream_cleans_up_session_on_success(self) -> None:
+    async def test_exec_stream_does_not_delete_session_on_success(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -758,10 +759,10 @@ class TestDaytonaSandboxProviderExecStream:
             async for _ in provider.exec_stream(["echo", "ok"]):
                 pass
 
-            mock_sandbox.process.delete_session.assert_called_once()
+            mock_sandbox.process.delete_session.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_exec_stream_cleans_up_on_early_break(self) -> None:
+    async def test_exec_stream_does_not_delete_session_on_early_break(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -784,7 +785,124 @@ class TestDaytonaSandboxProviderExecStream:
                 break  # Break after first line
             await stream.aclose()
 
-            mock_sandbox.process.delete_session.assert_called_once()
+            mock_sandbox.process.delete_session.assert_not_called()
+
+
+class TestDaytonaSandboxProviderSessionReuse:
+    """A single Daytona session is created per sandbox and reused (#641)."""
+
+    @pytest.mark.asyncio
+    async def test_session_created_once_across_multiple_commands(self) -> None:
+        """create_session called once; both commands run in the same session."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = _make_mock_sandbox(["out\n"])
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+            mock_sandbox.process.create_session.reset_mock()
+
+            async for _ in provider.exec_stream(["echo", "one"]):
+                pass
+            async for _ in provider.exec_stream(["echo", "two"]):
+                pass
+
+            # Session created exactly once across two commands.
+            mock_sandbox.process.create_session.assert_called_once()
+            reused_session_id = mock_sandbox.process.create_session.call_args[0][0]
+
+            # Both commands executed against the SAME session id.
+            exec_calls = mock_sandbox.process.execute_session_command.call_args_list
+            assert len(exec_calls) == 2
+            assert exec_calls[0][0][0] == reused_session_id
+            assert exec_calls[1][0][0] == reused_session_id
+
+            # No per-command teardown.
+            mock_sandbox.process.delete_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_teardown_deletes_session_exactly_once(self) -> None:
+        """Reusable session is deleted once at teardown, before the sandbox."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = _make_mock_sandbox(["out\n"])
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            async for _ in provider.exec_stream(["echo", "one"]):
+                pass
+            async for _ in provider.exec_stream(["echo", "two"]):
+                pass
+
+            session_id = mock_sandbox.process.create_session.call_args[0][0]
+            await provider.teardown()
+
+            mock_sandbox.process.delete_session.assert_called_once_with(session_id)
+            mock_sandbox.delete.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_teardown_cleans_up_session_after_command_error(self) -> None:
+        """Error path: failed command still leaves session cleaned up at teardown."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = _make_mock_sandbox([], exit_code=1)
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            with pytest.raises(RuntimeError):
+                async for _ in provider.exec_stream(["false"]):
+                    pass
+
+            session_id = mock_sandbox.process.create_session.call_args[0][0]
+            # Not deleted by the failed command itself.
+            mock_sandbox.process.delete_session.assert_not_called()
+
+            await provider.teardown()
+            mock_sandbox.process.delete_session.assert_called_once_with(session_id)
+
+    @pytest.mark.asyncio
+    async def test_teardown_without_session_skips_session_delete(self) -> None:
+        """No commands ran => no session created => teardown deletes only sandbox."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+            await provider.teardown()
+
+            mock_sandbox.process.delete_session.assert_not_called()
+            mock_sandbox.delete.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_exec_stream_bakes_cwd_and_env_into_command(self) -> None:

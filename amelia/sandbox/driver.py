@@ -154,6 +154,10 @@ class ContainerDriver:
     async def _write_prompt(self, prompt: str, workflow_id: str | None = None) -> str:
         """Write the prompt to a temp file inside the container.
 
+        The file lives under ``/tmp`` in the sandbox's ephemeral filesystem
+        and is reclaimed when the sandbox is torn down, so callers need not
+        issue a per-command ``rm`` round-trip to clean it up (#641).
+
         Args:
             prompt: The prompt text to write.
             workflow_id: Optional workflow identifier for the filename.
@@ -165,15 +169,6 @@ class ContainerDriver:
         prompt_path = f"/tmp/prompt-{suffix}.txt"
         await self._provider.write_file(prompt_path, prompt.encode())
         return prompt_path
-
-    async def _cleanup_prompt(self, prompt_path: str) -> None:
-        """Remove the temp prompt file from the container.
-
-        Args:
-            prompt_path: Path to the temp file to remove.
-        """
-        async for _ in self._provider.exec_stream(["rm", "-f", prompt_path]):
-            pass
 
     async def execute_agentic(
         self,
@@ -236,24 +231,24 @@ class ContainerDriver:
         # One-shot fallback: fresh worker process per call.
         workflow_id = kwargs.get("workflow_id")
         prompt_path = await self._write_prompt(prompt, workflow_id=workflow_id)
-        try:
-            cmd = [
-                *self._provider.worker_cmd, "agentic",
-                "--prompt-file", prompt_path,
-                "--cwd", sandbox_cwd,
-                "--model", self.model,
-            ]
-            if instructions:
-                cmd.extend(["--instructions", instructions])
+        # The prompt file lives in the sandbox's ephemeral filesystem and is
+        # reclaimed when the sandbox is torn down, so there is no per-call
+        # `rm -f` remote round-trip (#641).
+        cmd = [
+            *self._provider.worker_cmd, "agentic",
+            "--prompt-file", prompt_path,
+            "--cwd", sandbox_cwd,
+            "--model", self.model,
+        ]
+        if instructions:
+            cmd.extend(["--instructions", instructions])
 
-            async for line in self._provider.exec_stream(cmd, cwd=sandbox_cwd, env=self._env):
-                msg = _parse_worker_message(line)
-                if msg.type == AgenticMessageType.USAGE:
-                    self._last_usage = msg.usage
-                else:
-                    yield msg
-        finally:
-            await self._cleanup_prompt(prompt_path)
+        async for line in self._provider.exec_stream(cmd, cwd=sandbox_cwd, env=self._env):
+            msg = _parse_worker_message(line)
+            if msg.type == AgenticMessageType.USAGE:
+                self._last_usage = msg.usage
+            else:
+                yield msg
 
     async def generate(
         self,
@@ -309,23 +304,21 @@ class ContainerDriver:
             # One-shot fallback: fresh worker process per call.
             workflow_id = kwargs.get("workflow_id")
             prompt_path = await self._write_prompt(prompt, workflow_id=workflow_id)
-            try:
-                cmd = [
-                    *self._provider.worker_cmd, "generate",
-                    "--prompt-file", prompt_path,
-                    "--model", self.model,
-                ]
-                if schema_path:
-                    cmd.extend(["--schema", schema_path])
+            # Prompt file is reclaimed at sandbox teardown — no per-call rm (#641).
+            cmd = [
+                *self._provider.worker_cmd, "generate",
+                "--prompt-file", prompt_path,
+                "--model", self.model,
+            ]
+            if schema_path:
+                cmd.extend(["--schema", schema_path])
 
-                async for line in self._provider.exec_stream(cmd, env=self._env):
-                    msg = _parse_worker_message(line)
-                    if msg.type == AgenticMessageType.USAGE:
-                        self._last_usage = msg.usage
-                    elif msg.type == AgenticMessageType.RESULT:
-                        result_content = msg.content
-            finally:
-                await self._cleanup_prompt(prompt_path)
+            async for line in self._provider.exec_stream(cmd, env=self._env):
+                msg = _parse_worker_message(line)
+                if msg.type == AgenticMessageType.USAGE:
+                    self._last_usage = msg.usage
+                elif msg.type == AgenticMessageType.RESULT:
+                    result_content = msg.content
 
         if result_content is None:
             raise RuntimeError("Worker did not emit a RESULT message")

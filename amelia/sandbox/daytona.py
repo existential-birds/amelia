@@ -101,6 +101,10 @@ class DaytonaSandboxProvider:
         self._workflow_branch = workflow_branch
         self._worker_env: dict[str, str] = dict(worker_env) if worker_env else {}
         self._sandbox: AsyncSandbox | None = None
+        # One reusable command session per sandbox, created lazily on the
+        # first exec_stream and deleted only at teardown (#641). Avoids a
+        # create/delete round-trip on every command.
+        self._session_id: str | None = None
 
     @property
     def _git_auth(self) -> dict[str, str]:
@@ -184,6 +188,8 @@ class DaytonaSandboxProvider:
             with contextlib.suppress(Exception):
                 await self._sandbox.delete()
             self._sandbox = None
+            # The old sandbox (and its session) is gone; force a fresh one.
+            self._session_id = None
 
         logger.info("Creating Daytona sandbox", target=self._target)
 
@@ -310,6 +316,20 @@ class DaytonaSandboxProvider:
                     await created_sandbox.delete()
             raise
 
+    async def _ensure_session(self, sandbox: AsyncSandbox) -> str:
+        """Return the reusable command session id, creating it on first use.
+
+        A single session is created per sandbox and reused across every
+        command, rather than created and deleted per call. It is deleted
+        only at teardown.
+        """
+        if self._session_id is None:
+            session_id = f"amelia-{uuid.uuid4().hex[:12]}"
+            await sandbox.process.create_session(session_id)
+            self._session_id = session_id
+            logger.debug("Created reusable Daytona session", session_id=session_id)
+        return self._session_id
+
     def resolve_cwd(self, cwd: str) -> str:
         """Map host paths to the sandbox repo path.
 
@@ -363,18 +383,13 @@ class DaytonaSandboxProvider:
         if cwd:
             cmd_str = f"cd {shlex.quote(cwd)} && {cmd_str}"
 
-        session_id = f"amelia-{uuid.uuid4().hex[:12]}"
-        await sandbox.process.create_session(session_id)
+        # Reuse one session per sandbox; create lazily, delete at teardown.
+        session_id = await self._ensure_session(sandbox)
 
-        try:
-            resp = await sandbox.process.execute_session_command(
-                session_id,
-                SessionExecuteRequest(command=cmd_str, run_async=True),
-            )
-        except Exception:
-            with contextlib.suppress(Exception):
-                await sandbox.process.delete_session(session_id)
-            raise
+        resp = await sandbox.process.execute_session_command(
+            session_id,
+            SessionExecuteRequest(command=cmd_str, run_async=True),
+        )
         cmd_id = resp.cmd_id
 
         queue: asyncio.Queue[str | None] = asyncio.Queue()
@@ -423,24 +438,19 @@ class DaytonaSandboxProvider:
                 if task_exc is not None:
                     raise task_exc
 
-            # Check exit code before deleting the session.
-            try:
-                cmd_info = await sandbox.process.get_session_command(
-                    session_id, cmd_id,
-                )
-                if cmd_info.exit_code is not None and cmd_info.exit_code != 0:
-                    stderr_text = "".join(stderr_chunks).strip()
-                    detail = f"Command exited with code {cmd_info.exit_code}: {cmd_str}"
-                    if stderr_text:
-                        # Limit stderr to last 2000 chars to avoid huge error messages.
-                        tail = stderr_text[-2000:]
-                        detail += f"\n\nStderr:\n{tail}"
-                    raise RuntimeError(detail)
-            finally:
-                try:
-                    await sandbox.process.delete_session(session_id)
-                except Exception as exc:
-                    logger.debug("Failed to delete Daytona session", session_id=session_id, error=exc)
+            # Check exit code. The session is reused across commands and is
+            # deleted only at teardown — no per-command delete round-trip.
+            cmd_info = await sandbox.process.get_session_command(
+                session_id, cmd_id,
+            )
+            if cmd_info.exit_code is not None and cmd_info.exit_code != 0:
+                stderr_text = "".join(stderr_chunks).strip()
+                detail = f"Command exited with code {cmd_info.exit_code}: {cmd_str}"
+                if stderr_text:
+                    # Limit stderr to last 2000 chars to avoid huge error messages.
+                    tail = stderr_text[-2000:]
+                    detail += f"\n\nStderr:\n{tail}"
+                raise RuntimeError(detail)
 
     async def write_file(self, path: str, content: bytes) -> None:
         """Write content to a file inside the sandbox via Daytona FS API."""
@@ -461,10 +471,22 @@ class DaytonaSandboxProvider:
         await self._sandbox.git.pull(path, **self._git_auth)
 
     async def teardown(self) -> None:
-        """Delete the ephemeral Daytona sandbox."""
+        """Delete the reusable session, then the ephemeral Daytona sandbox."""
         if self._sandbox is None:
             return
         logger.info("Tearing down Daytona sandbox", sandbox_id=self._sandbox.id)
+        # Delete the reusable command session before destroying the sandbox.
+        if self._session_id is not None:
+            try:
+                await self._sandbox.process.delete_session(self._session_id)
+            except Exception as exc:
+                logger.debug(
+                    "Failed to delete Daytona session",
+                    session_id=self._session_id,
+                    error=exc,
+                )
+            finally:
+                self._session_id = None
         try:
             await self._sandbox.delete()
         except Exception as exc:
