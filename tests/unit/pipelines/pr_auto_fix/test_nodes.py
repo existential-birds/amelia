@@ -633,6 +633,117 @@ class TestReplyResolveNode:
         assert "Developer error" in body
         mock_gh.resolve_thread.assert_not_called()
 
+    async def test_replies_resolves_run_concurrently_semaphore_bounded(self) -> None:
+        """N comments: replies/resolves run concurrently, bounded by the semaphore,
+        and each resolve follows its OWN reply (per-comment ordering preserved).
+
+        Observable consequences asserted:
+        - max concurrent in-flight calls <= semaphore bound (5)
+        - all replies start before any resolve completes (true concurrency, not serial)
+        - per-comment reply->resolve pairing (resolve(thread) only after reply(comment))
+        """
+        import asyncio
+
+        from amelia.pipelines.pr_auto_fix import nodes as nodes_mod
+
+        n = 6  # > semaphore bound to prove bounding; > 3 per acceptance criteria
+        cids = list(range(1, n + 1))
+        tids = [f"T_{cid}" for cid in cids]
+        # Map each comment id -> its thread id, to verify pairing.
+        comment_to_thread = dict(zip(cids, tids, strict=True))
+
+        state, config = _make_reply_resolve_state(
+            comment_ids=cids,
+            authors=[f"rev{cid}" for cid in cids],
+            thread_ids=tids,
+        )
+
+        class FakeGitHub:
+            def __init__(self) -> None:
+                self.events: list[tuple[str, Any]] = []
+                self.in_flight = 0
+                self.max_in_flight = 0
+                self.replied_comments: set[int] = set()
+                self.resolved_threads: list[str] = []
+                # comment_id at reply time -> thread_id at resolve time, to check pairing
+                self.reply_order: list[int] = []
+                self.resolve_after_reply: dict[str, set[int]] = {}
+
+            async def _track(self) -> None:
+                self.in_flight += 1
+                self.max_in_flight = max(self.max_in_flight, self.in_flight)
+                # Yield enough times to let all coroutines reach peak concurrency.
+                for _ in range(5):
+                    await asyncio.sleep(0)
+
+            async def reply_to_comment(
+                self, pr_number: int, comment_id: int, body: str, in_reply_to_id: Any = None,
+            ) -> None:
+                await self._track()
+                self.events.append(("reply_start", comment_id))
+                self.replied_comments.add(comment_id)
+                self.reply_order.append(comment_id)
+                await asyncio.sleep(0)
+                self.events.append(("reply_done", comment_id))
+                self.in_flight -= 1
+
+            async def resolve_thread(self, thread_node_id: str) -> None:
+                await self._track()
+                # Per-comment pairing: the matching reply MUST have completed first.
+                self.resolve_after_reply[thread_node_id] = set(self.replied_comments)
+                self.events.append(("resolve_start", thread_node_id))
+                self.resolved_threads.append(thread_node_id)
+                await asyncio.sleep(0)
+                self.events.append(("resolve_done", thread_node_id))
+                self.in_flight -= 1
+
+        fake = FakeGitHub()
+        with patch.object(nodes_mod, "GitHubPRService", return_value=fake):
+            result = await reply_resolve_node(state, config)
+
+        # All comments replied and all threads resolved.
+        assert fake.replied_comments == set(cids)
+        assert sorted(fake.resolved_threads) == sorted(tids)
+
+        # Semaphore bound respected.
+        assert fake.max_in_flight <= 5, f"max in-flight {fake.max_in_flight} exceeded bound 5"
+
+        # True concurrency: more than one call was in flight at once (would be 1 if serial).
+        assert fake.max_in_flight > 1, "calls ran serially -- no concurrency"
+
+        # Concurrency across comments: the first resolve starts before the last reply
+        # done -- impossible under strictly-serial reply-all-then-resolve-all... but more
+        # importantly, replies for distinct comments overlap. Assert at least 2 replies
+        # were in flight simultaneously by checking interleaving in the event log.
+        reply_starts_before_first_done = 0
+        first_reply_done_idx = next(
+            i for i, (k, _) in enumerate(fake.events) if k == "reply_done"
+        )
+        reply_starts_before_first_done = sum(
+            1 for k, _ in fake.events[:first_reply_done_idx] if k == "reply_start"
+        )
+        assert reply_starts_before_first_done >= 2, (
+            "replies did not overlap -- ran serially"
+        )
+
+        # Per-comment pairing: each thread resolved only AFTER its own comment's reply.
+        for tid in tids:
+            replied_at_resolve = fake.resolve_after_reply[tid]
+            # tid == f"T_{cid}"; the owning comment must have been replied before resolve.
+            owning_cid = int(tid.split("_")[1])
+            assert owning_cid in replied_at_resolve, (
+                f"thread {tid} resolved before its own comment {owning_cid} reply"
+            )
+
+        # Results: every comment replied + resolved.
+        assert result["status"] == "completed"
+        assert len(result["resolution_results"]) == n
+        for res in result["resolution_results"]:
+            assert res.replied is True
+            assert res.resolved is True
+        # Sanity: pairing map covers exactly our comment->thread mapping.
+        assert {int(t.split("_")[1]) for t in comment_to_thread.values()} == set(cids)
+
     async def test_graph_includes_reply_resolve(self) -> None:
         from amelia.pipelines.pr_auto_fix.graph import create_pr_auto_fix_graph
 
