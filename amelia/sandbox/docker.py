@@ -16,7 +16,56 @@ from pathlib import Path
 from loguru import logger
 
 from amelia.sandbox.network import generate_allowlist_rules
-from amelia.sandbox.provider import SandboxProvider
+from amelia.sandbox.provider import SandboxProvider, WorkerProcess
+
+
+class DockerWorkerProcess(WorkerProcess):
+    """Duplex handle to a long-lived ``docker exec -i ... serve`` process.
+
+    The worker imports the heavy stack once at startup; this handle ferries
+    request frames to its stdin and response-frame lines from its stdout. One
+    instance is reused for the whole sandbox lifetime.
+    """
+
+    def __init__(self, proc: asyncio.subprocess.Process) -> None:
+        self._proc = proc
+
+    @property
+    def alive(self) -> bool:
+        return self._proc.returncode is None
+
+    async def write(self, data: bytes) -> None:
+        if self._proc.stdin is None:
+            raise RuntimeError("Worker stdin is not available")
+        self._proc.stdin.write(data)
+        await self._proc.stdin.drain()
+
+    async def readline(self) -> str:
+        if self._proc.stdout is None:
+            raise RuntimeError("Worker stdout is not available")
+        raw = await self._proc.stdout.readline()
+        if not raw:
+            return ""
+        return raw.decode().rstrip("\n")
+
+    async def close(self) -> None:
+        """Close stdin (signals EOF -> clean exit), then ensure termination."""
+        if self._proc.returncode is not None:
+            return
+        if self._proc.stdin is not None:
+            with contextlib.suppress(Exception):
+                self._proc.stdin.close()
+        try:
+            await asyncio.wait_for(self._proc.wait(), timeout=5.0)
+        except TimeoutError:
+            with contextlib.suppress(ProcessLookupError):
+                self._proc.terminate()
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(self._proc.wait(), timeout=5.0)
+            if self._proc.returncode is None:
+                with contextlib.suppress(ProcessLookupError):
+                    self._proc.kill()
+                await self._proc.wait()
 
 
 class DockerSandboxProvider(SandboxProvider):
@@ -47,6 +96,9 @@ class DockerSandboxProvider(SandboxProvider):
 
         self.container_name = f"amelia-sandbox-{profile_name}"
         self.proxy_token = secrets.token_urlsafe(32)
+        # Long-lived worker processes spawned via spawn_worker(), tracked so
+        # teardown() can stop them and avoid leaking docker exec processes.
+        self._workers: list[DockerWorkerProcess] = []
 
     async def ensure_running(self) -> None:
         """Ensure the sandbox container is ready. Start if not running."""
@@ -131,8 +183,55 @@ class DockerSandboxProvider(SandboxProvider):
                 f"{stderr_text}"
             )
 
+    @property
+    def supports_persistent_worker(self) -> bool:
+        """Docker holds a duplex pipe via ``docker exec -i``."""
+        return True
+
+    async def spawn_worker(
+        self,
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
+    ) -> DockerWorkerProcess:
+        """Start a long-lived ``serve`` worker via ``docker exec -i``.
+
+        The process imports the heavy stack once and then services many
+        request frames over its stdin. The handle is tracked so teardown()
+        stops it.
+
+        Args:
+            cwd: Working directory inside the container.
+            env: Additional environment variables for the worker.
+
+        Returns:
+            A DockerWorkerProcess wrapping the running serve process.
+        """
+        cmd = ["docker", "exec", "-i", "--user", "vscode"]
+        if cwd:
+            cmd.extend(["--workdir", cwd])
+        if env:
+            for key, value in env.items():
+                cmd.extend(["-e", f"{key}={value}"])
+        cmd.append(self.container_name)
+        cmd.extend([*self.worker_cmd, "serve"])
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        worker = DockerWorkerProcess(proc)
+        self._workers.append(worker)
+        logger.info("Spawned long-lived sandbox worker", container=self.container_name)
+        return worker
+
     async def teardown(self) -> None:
-        """Stop and remove the container."""
+        """Stop and remove the container (and any long-lived workers)."""
+        for w in self._workers:
+            with contextlib.suppress(Exception):
+                await w.close()
+        self._workers.clear()
         proc = await asyncio.create_subprocess_exec(
             "docker", "rm", "-f", self.container_name,
             stdout=asyncio.subprocess.PIPE,
