@@ -20,6 +20,7 @@ from deepagents.backends.protocol import (
 )
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain.agents.structured_output import ToolStrategy
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.checkpoint.memory import MemorySaver
 from loguru import logger
@@ -206,6 +207,35 @@ class ApiDriver(DriverInterface):
         self.api_key_env_var = api_key_env_var
         self.cwd = cwd
         self._usage: DriverUsage | None = None
+        # Cached chat model (and its underlying httpx/openai client) built once
+        # per (provider, model, base_url, api_key_env_var) so back-to-back calls
+        # reuse the HTTP connection instead of doing a fresh TCP+TLS handshake.
+        self._chat_model: BaseChatModel | None = None
+        # Memoized non-agentic generate() agents keyed by (system_prompt, schema, backend_root).
+        # The generate() tool set is fixed, so the LangGraph graph is built once
+        # per distinct generate backend config rather than rebuilt on every call.
+        self._generate_agents: dict[
+            tuple[str, type[BaseModel] | None, str], Any
+        ] = {}
+
+    def _get_chat_model(self) -> BaseChatModel:
+        """Return the cached chat model, building it once on first use.
+
+        Reuses the underlying HTTP client across calls. The missing-API-key
+        error still surfaces on first construction; the key rarely changes
+        within a process, so caching the model afterward is safe.
+
+        Returns:
+            The cached :class:`BaseChatModel` for this driver's provider config.
+        """
+        if self._chat_model is None:
+            self._chat_model = _create_chat_model(
+                self.model,
+                provider=self.provider,
+                base_url=self.base_url,
+                api_key_env_var=self.api_key_env_var,
+            )
+        return self._chat_model
 
     @classmethod
     def _sessions_lock_for_loop(cls) -> asyncio.Lock:
@@ -261,24 +291,29 @@ class ApiDriver(DriverInterface):
             raise ValueError("Prompt cannot be empty")
 
         try:
-            chat_model = _create_chat_model(
-                self.model,
-                provider=self.provider,
-                base_url=self.base_url,
-                api_key_env_var=self.api_key_env_var,
-            )
-            # Use FilesystemBackend for non-agentic generation - no shell execution needed
-            backend = FilesystemBackend(root_dir=self.cwd or ".", virtual_mode=False)
+            chat_model = self._get_chat_model()
 
-            agent_kwargs: dict[str, Any] = {
-                "model": chat_model,
-                "system_prompt": system_prompt or "",
-                "backend": backend,
-            }
-            if schema:
-                agent_kwargs["response_format"] = ToolStrategy(schema=schema)
+            # The generate() tool set is fixed, so memoize the built agent per
+            # (system_prompt, schema, backend root) instead of rebuilding the LangGraph graph
+            # (and rebinding tools) on every call.
+            effective_system_prompt = system_prompt or ""
+            backend_root = self.cwd or "."
+            agent_key = (effective_system_prompt, schema, backend_root)
+            agent = self._generate_agents.get(agent_key)
+            if agent is None:
+                # Use FilesystemBackend for non-agentic generation - no shell execution needed
+                backend = FilesystemBackend(root_dir=backend_root, virtual_mode=False)
 
-            agent = create_deep_agent(**agent_kwargs)
+                agent_kwargs: dict[str, Any] = {
+                    "model": chat_model,
+                    "system_prompt": effective_system_prompt,
+                    "backend": backend,
+                }
+                if schema:
+                    agent_kwargs["response_format"] = ToolStrategy(schema=schema)
+
+                agent = create_deep_agent(**agent_kwargs)
+                self._generate_agents[agent_key] = agent
 
             result = await agent.ainvoke({"messages": [HumanMessage(content=prompt)]})
 
@@ -437,12 +472,7 @@ class ApiDriver(DriverInterface):
         seen_message_ids: set[int] = set()
 
         try:
-            chat_model = _create_chat_model(
-                self.model,
-                provider=self.provider,
-                base_url=self.base_url,
-                api_key_env_var=self.api_key_env_var,
-            )
+            chat_model = self._get_chat_model()
             # virtual_mode=True ensures paths like "docs/plans/..." resolve relative
             # to cwd (e.g., /project/docs/plans/...) rather than being treated as
             # absolute paths from filesystem root (e.g., /docs/plans/...)
