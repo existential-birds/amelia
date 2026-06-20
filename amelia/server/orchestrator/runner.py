@@ -291,7 +291,11 @@ class GraphRunner:
         else:
             # Fallback: fetch from tracker (shouldn't normally happen)
             tracker = create_tracker(profile)
-            issue = tracker.get_issue(state.issue_id, cwd=state.worktree_path)
+            # Off-load the blocking subprocess/HTTP fetch so a slow tracker
+            # does not freeze the event loop (issue #644).
+            issue = await asyncio.to_thread(
+                tracker.get_issue, state.issue_id, cwd=state.worktree_path
+            )
 
         # Get current HEAD as base commit (we're starting fresh)
         base_commit = await get_git_head(state.worktree_path)

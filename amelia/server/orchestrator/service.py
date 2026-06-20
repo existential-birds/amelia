@@ -352,7 +352,11 @@ class OrchestratorService:
             )
         else:
             tracker = create_tracker(profile)
-            issue = tracker.get_issue(issue_id, cwd=worktree_path)
+            # Off-load the blocking subprocess/HTTP fetch so a slow tracker
+            # does not freeze the event loop (issue #644).
+            issue = await asyncio.to_thread(
+                tracker.get_issue, issue_id, cwd=worktree_path
+            )
 
         base_commit = await get_git_head(worktree_path)
 
@@ -1573,7 +1577,11 @@ class OrchestratorService:
             else:
                 # Fallback: fetch from tracker
                 tracker = create_tracker(profile)
-                issue = tracker.get_issue(workflow.issue_id, cwd=workflow.worktree_path)
+                # Off-load the blocking subprocess/HTTP fetch so a slow tracker
+                # does not freeze the event loop (issue #644).
+                issue = await asyncio.to_thread(
+                    tracker.get_issue, workflow.issue_id, cwd=workflow.worktree_path
+                )
 
             base_commit = await get_git_head(workflow.worktree_path)
 
