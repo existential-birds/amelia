@@ -211,10 +211,12 @@ class ApiDriver(DriverInterface):
         # per (provider, model, base_url, api_key_env_var) so back-to-back calls
         # reuse the HTTP connection instead of doing a fresh TCP+TLS handshake.
         self._chat_model: BaseChatModel | None = None
-        # Memoized non-agentic generate() agents keyed by (system_prompt, schema).
+        # Memoized non-agentic generate() agents keyed by (system_prompt, schema, backend_root).
         # The generate() tool set is fixed, so the LangGraph graph is built once
-        # per distinct (system_prompt, schema) rather than rebuilt on every call.
-        self._generate_agents: dict[tuple[str, type[BaseModel] | None], Any] = {}
+        # per distinct generate backend config rather than rebuilt on every call.
+        self._generate_agents: dict[
+            tuple[str, type[BaseModel] | None, str], Any
+        ] = {}
 
     def _get_chat_model(self) -> BaseChatModel:
         """Return the cached chat model, building it once on first use.
@@ -292,16 +294,15 @@ class ApiDriver(DriverInterface):
             chat_model = self._get_chat_model()
 
             # The generate() tool set is fixed, so memoize the built agent per
-            # (system_prompt, schema) instead of rebuilding the LangGraph graph
+            # (system_prompt, schema, backend root) instead of rebuilding the LangGraph graph
             # (and rebinding tools) on every call.
             effective_system_prompt = system_prompt or ""
-            agent_key = (effective_system_prompt, schema)
+            backend_root = self.cwd or "."
+            agent_key = (effective_system_prompt, schema, backend_root)
             agent = self._generate_agents.get(agent_key)
             if agent is None:
                 # Use FilesystemBackend for non-agentic generation - no shell execution needed
-                backend = FilesystemBackend(
-                    root_dir=self.cwd or ".", virtual_mode=False
-                )
+                backend = FilesystemBackend(root_dir=backend_root, virtual_mode=False)
 
                 agent_kwargs: dict[str, Any] = {
                     "model": chat_model,

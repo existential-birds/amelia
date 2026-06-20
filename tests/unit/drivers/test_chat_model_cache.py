@@ -119,6 +119,26 @@ class TestGenerateAgentMemoized:
 
         assert mock_deepagents_filesystem.create_deep_agent.call_count == 2
 
+    async def test_generate_rebuilds_agent_when_driver_cwd_changes(
+        self, mock_deepagents_filesystem: MagicMock
+    ) -> None:
+        """A different backend root yields a distinct memoized agent."""
+        driver = ApiDriver(model="test/model", cwd="/test-a", provider="openrouter")
+        mock_deepagents_filesystem.agent_result["messages"] = [
+            AIMessage(content="response")
+        ]
+
+        await driver.generate(prompt="one", system_prompt="sys")
+        driver.cwd = "/test-b"
+        await driver.generate(prompt="two", system_prompt="sys")
+
+        assert mock_deepagents_filesystem.create_deep_agent.call_count == 2
+        roots = [
+            call.kwargs["root_dir"]
+            for call in mock_deepagents_filesystem.backend_class.call_args_list
+        ]
+        assert roots == ["/test-a", "/test-b"]
+
 
 class TestKeyMissingStillRaises:
     """The cached path must not swallow the missing-API-key error."""
