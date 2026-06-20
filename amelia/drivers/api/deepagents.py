@@ -115,7 +115,14 @@ class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):
             )
 
     async def aexecute(self, command: str) -> ExecuteResponse:
-        """Async wrapper for execute (runs in thread pool)."""
+        """Async entry point for shell execution.
+
+        The blocking ``subprocess.run(..., shell=True)`` in ``execute`` must
+        never run on the event loop, so it is offloaded to a worker thread via
+        ``asyncio.to_thread``. The deepagents tool layer awaits this method
+        (not the sync ``execute``), keeping the loop responsive during long or
+        slow commands.
+        """
         return await asyncio.to_thread(self.execute, command)
 
 
