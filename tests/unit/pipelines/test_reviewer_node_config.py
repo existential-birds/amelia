@@ -8,6 +8,7 @@ import pytest
 from amelia.core.types import AgentConfig, Issue, Profile, ReviewResult
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.nodes import call_reviewer_node
+from amelia.skills.review import load_skills_by_type
 
 
 @pytest.fixture
@@ -213,3 +214,70 @@ async def test_call_reviewer_node_cleans_up_diff_on_error(profile_with_agents, m
 
     # The diff directory must be cleaned up even after an exception
     assert not expected_dir.exists(), "diff directory must be cleaned up even on error"
+
+
+@pytest.mark.asyncio
+async def test_call_reviewer_node_loads_skills_once_for_multiple_types(
+    profile_with_agents, mock_state
+):
+    """Skills must be resolved once per node invocation, not once per review type.
+
+    With N>1 review types configured, the node must call load_skills_by_type a
+    single time (tags/diff are fixed for the invocation), and each review type's
+    pass must still receive its own correct guidelines.
+    """
+    config = {
+        "configurable": {
+            "profile": profile_with_agents,
+            "thread_id": str(uuid4()),
+            "review_types": ["general", "security"],
+        }
+    }
+
+    mock_review_result = ReviewResult(
+        severity="none",
+        approved=True,
+        comments=[],
+        reviewer_persona="Senior Engineer",
+    )
+
+    # Capture the guidelines each Reviewer pass was constructed with.
+    guidelines_by_call: list[str] = []
+
+    def reviewer_factory(*args, **kwargs):
+        guidelines_by_call.append(kwargs.get("review_guidelines"))
+        mock_reviewer = MagicMock()
+        mock_reviewer.agentic_review = AsyncMock(return_value=(mock_review_result, "session-1"))
+        mock_reviewer.driver = MagicMock()
+        return mock_reviewer
+
+    with patch("amelia.pipelines.nodes.Reviewer", side_effect=reviewer_factory), patch(
+        "amelia.pipelines.nodes.load_skills_by_type",
+        wraps=load_skills_by_type,
+    ) as spy_load, patch(
+        "amelia.pipelines.nodes._run_git_command", new_callable=AsyncMock
+    ) as mock_git:
+        mock_git.side_effect = [
+            "src/app.py",  # --name-only
+            "diff --git a/src/app.py b/src/app.py\n+new",  # diff
+            "1 file changed",  # --stat
+        ]
+
+        await call_reviewer_node(mock_state, config)
+
+    # load_skills_by_type must be invoked exactly once despite N=2 review types.
+    assert spy_load.call_count == 1, "skills must be resolved once per node invocation, not per type"
+    call_review_types = spy_load.call_args[0][1]
+    assert call_review_types == ["general", "security"]
+
+    # Each review type's pass receives correct, distinct guidelines.
+    assert len(guidelines_by_call) == 2, "expected one Reviewer pass per review type"
+    general_guidelines, security_guidelines = guidelines_by_call
+    # general gets the general/verification base skills...
+    assert "General Code Review" in general_guidelines
+    assert "verification" in general_guidelines.lower()
+    # ...and the python tag skill (detected from src/app.py).
+    assert "Python Code Review" in general_guidelines
+    # security gets its own base skill, not the general one.
+    assert "Security" in security_guidelines
+    assert "General Code Review" not in security_guidelines
