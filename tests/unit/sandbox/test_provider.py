@@ -37,6 +37,17 @@ class FakeSandboxProvider:
     def worker_env(self) -> dict[str, str]:
         return {}
 
+    @property
+    def supports_persistent_worker(self) -> bool:
+        return False
+
+    async def spawn_worker(
+        self,
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
+    ) -> object:
+        raise NotImplementedError
+
     async def health_check(self) -> bool:
         return True
 
