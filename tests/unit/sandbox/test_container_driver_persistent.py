@@ -279,7 +279,7 @@ class TestEarlyExitResetsWorker:
         provider = TwoWorkerProvider()
         driver = ContainerDriver(model="m", provider=provider)
 
-        with pytest.raises(Exception):  # noqa: B017 - pydantic ValidationError
+        with pytest.raises(RuntimeError, match="Failed to parse worker output"):
             await driver.generate(prompt="garbage")
 
         assert leaky.closed is True

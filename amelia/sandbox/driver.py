@@ -97,7 +97,13 @@ class _PersistentWorker:
                         continue
                     # frame.frame == "msg"
                     if frame.msg is not None and error is None:
-                        yield AgenticMessage.model_validate_json(frame.msg)
+                        try:
+                            message = AgenticMessage.model_validate_json(frame.msg)
+                        except ValidationError as exc:
+                            raise RuntimeError(
+                                f"Failed to parse worker output: {frame.msg[:200]}"
+                            ) from exc
+                        yield message
             finally:
                 # Any exit before ``done`` (crash EOF, caller cancellation, or a
                 # parse failure) leaves unread frames on the shared pipe. Drop
