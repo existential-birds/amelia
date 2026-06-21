@@ -57,27 +57,27 @@ class DockerWorkerProcess(WorkerProcess):
         return raw.decode().rstrip("\n")
 
     async def close(self) -> None:
-        """Close stdin (signals EOF -> clean exit), then ensure termination."""
-        if self._proc.returncode is not None:
-            return
-        if self._proc.stdin is not None:
-            with contextlib.suppress(Exception):
-                self._proc.stdin.close()
-        try:
-            await asyncio.wait_for(self._proc.wait(), timeout=5.0)
-        except TimeoutError:
-            with contextlib.suppress(ProcessLookupError):
-                self._proc.terminate()
+        """Close stdin (EOF -> clean exit), escalating to terminate/kill if needed."""
+        if self._proc.returncode is None:
+            if self._proc.stdin is not None:
+                with contextlib.suppress(Exception):
+                    self._proc.stdin.close()
+            try:
+                await asyncio.wait_for(self._proc.wait(), timeout=5.0)
+            except TimeoutError:
+                with contextlib.suppress(ProcessLookupError):
+                    self._proc.terminate()
+                try:
+                    await asyncio.wait_for(self._proc.wait(), timeout=5.0)
+                except TimeoutError:
+                    with contextlib.suppress(ProcessLookupError):
+                        self._proc.kill()
+                    await self._proc.wait()
+        # Always stop the stderr drain task once the process is gone.
         if not self._stderr_task.done():
             self._stderr_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._stderr_task
-            with contextlib.suppress(Exception):
-                await asyncio.wait_for(self._proc.wait(), timeout=5.0)
-            if self._proc.returncode is None:
-                with contextlib.suppress(ProcessLookupError):
-                    self._proc.kill()
-                await self._proc.wait()
 
 
 class DockerSandboxProvider(SandboxProvider):

@@ -32,6 +32,24 @@ from amelia.sandbox.protocol import (
 from amelia.sandbox.provider import SandboxProvider, WorkerProcess
 
 
+def _parse_worker_message(raw: str) -> AgenticMessage:
+    """Validate a worker AgenticMessage JSON payload, normalizing failures.
+
+    Args:
+        raw: A JSON-encoded AgenticMessage emitted by the worker.
+
+    Returns:
+        The parsed AgenticMessage.
+
+    Raises:
+        RuntimeError: If the payload is not a valid AgenticMessage.
+    """
+    try:
+        return AgenticMessage.model_validate_json(raw)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise RuntimeError(f"Failed to parse worker output: {raw[:200]}") from exc
+
+
 class _PersistentWorker:
     """Owns one long-lived ``serve`` process and dispatches commands to it.
 
@@ -97,13 +115,7 @@ class _PersistentWorker:
                         continue
                     # frame.frame == "msg"
                     if frame.msg is not None and error is None:
-                        try:
-                            message = AgenticMessage.model_validate_json(frame.msg)
-                        except ValidationError as exc:
-                            raise RuntimeError(
-                                f"Failed to parse worker output: {frame.msg[:200]}"
-                            ) from exc
-                        yield message
+                        yield _parse_worker_message(frame.msg)
             finally:
                 # Any exit before ``done`` (crash EOF, caller cancellation, or a
                 # parse failure) leaves unread frames on the shared pipe. Drop
@@ -162,25 +174,6 @@ class ContainerDriver:
         """
         async for _ in self._provider.exec_stream(["rm", "-f", prompt_path]):
             pass
-
-    def _parse_line(self, line: str) -> AgenticMessage:
-        """Parse a JSON line from the worker into an AgenticMessage.
-
-        Args:
-            line: JSON-encoded line from the worker process.
-
-        Returns:
-            Parsed AgenticMessage.
-
-        Raises:
-            RuntimeError: If the line cannot be parsed.
-        """
-        try:
-            return AgenticMessage.model_validate_json(line)
-        except (json.JSONDecodeError, ValidationError) as exc:
-            raise RuntimeError(
-                f"Failed to parse worker output: {line[:200]}"
-            ) from exc
 
     async def execute_agentic(
         self,
@@ -254,7 +247,7 @@ class ContainerDriver:
                 cmd.extend(["--instructions", instructions])
 
             async for line in self._provider.exec_stream(cmd, cwd=sandbox_cwd, env=self._env):
-                msg = self._parse_line(line)
+                msg = _parse_worker_message(line)
                 if msg.type == AgenticMessageType.USAGE:
                     self._last_usage = msg.usage
                 else:
@@ -326,7 +319,7 @@ class ContainerDriver:
                     cmd.extend(["--schema", schema_path])
 
                 async for line in self._provider.exec_stream(cmd, env=self._env):
-                    msg = self._parse_line(line)
+                    msg = _parse_worker_message(line)
                     if msg.type == AgenticMessageType.USAGE:
                         self._last_usage = msg.usage
                     elif msg.type == AgenticMessageType.RESULT:

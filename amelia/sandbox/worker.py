@@ -555,31 +555,26 @@ async def _serve(stdin: Any = None, stdout: _LineSink = sys.stdout) -> None:
 
 
 class _FramingWriter:
-    """File-like adapter that re-frames each written AgenticMessage line.
+    """File-like sink that wraps each emitted AgenticMessage line in a frame.
 
-    The run functions call ``_emit_line`` which does ``file.write(json + "\\n")``
-    then ``file.flush()``. This adapter intercepts those writes, wraps each
-    complete JSON line in a ``msg`` response frame via ``frame_fn``, and
-    forwards it to the real stdout.
+    The only writers are ``_emit_line``/``_emit_usage``, which each write
+    exactly one ``json + "\\n"`` line (compact JSON never contains a literal
+    newline) then flush. This sink wraps that line in a ``msg`` response frame
+    via ``frame_fn`` and forwards it to the real stdout, so serve-mode output
+    is framed without changing the run functions.
     """
 
     def __init__(self, out: _LineSink, frame_fn: Any) -> None:
         self._out = out
         self._frame_fn = frame_fn
-        self._partial = ""
 
     def write(self, data: str) -> int:
-        self._partial += data
-        while "\n" in self._partial:
-            line, self._partial = self._partial.split("\n", 1)
-            if line:
-                self._out.write(self._frame_fn(line))
+        line = data.rstrip("\n")
+        if line:
+            self._out.write(self._frame_fn(line))
         return len(data)
 
     def flush(self) -> None:
-        if self._partial.strip():
-            self._out.write(self._frame_fn(self._partial))
-        self._partial = ""
         self._out.flush()
 
 
