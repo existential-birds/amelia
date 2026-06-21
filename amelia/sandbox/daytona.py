@@ -43,6 +43,7 @@ _WORKER_DEPS = ["deepagents", "pydantic", "loguru", "httpx", "langchain-openai"]
 
 if TYPE_CHECKING:
     from amelia.core.types import DaytonaResources
+    from amelia.sandbox.provider import WorkerProcess
 
 
 class DaytonaSandboxProvider:
@@ -117,6 +118,27 @@ class DaytonaSandboxProvider:
     def worker_env(self) -> dict[str, str]:
         """Environment variables needed by the worker inside the sandbox."""
         return dict(self._worker_env)
+
+    @property
+    def supports_persistent_worker(self) -> bool:
+        """Daytona sessions cannot hold a duplex stdin pipe.
+
+        The driver therefore uses the per-call one-shot worker path for
+        Daytona. (Daytona's dominant cost is network round-trips, not the
+        local import, so the long-lived worker's benefit does not apply.)
+        """
+        return False
+
+    async def spawn_worker(
+        self,
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
+    ) -> WorkerProcess:
+        """Not supported — Daytona sessions have no persistent stdin pipe."""
+        raise NotImplementedError(
+            "DaytonaSandboxProvider does not support a persistent worker; "
+            "supports_persistent_worker is False"
+        )
 
     async def _upload_worker(self, sandbox: AsyncSandbox) -> None:
         """Upload the standalone worker.py script into the sandbox."""
