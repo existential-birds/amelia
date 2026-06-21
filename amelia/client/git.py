@@ -7,8 +7,9 @@ def get_worktree_context() -> tuple[str, str]:
     """Returns (worktree_path, worktree_name) for current directory.
 
     Detects the current git worktree root and derives a human-readable name
-    from the current branch or directory name. All worktree context is
-    resolved in a SINGLE git invocation to avoid serial subprocess overhead.
+    from the current branch or directory name. Worktree context is resolved in
+    a single git invocation for the common (non-detached) case; detached HEAD
+    requires a second targeted call to obtain the short commit sha.
 
     Handles edge cases:
     - Detached HEAD: Uses short commit hash as name (e.g., "detached-abc1234")
@@ -37,7 +38,12 @@ def get_worktree_context() -> tuple[str, str]:
     #   2. --is-bare-repository    -> "true" / "false"
     #   3. --show-toplevel         -> absolute worktree root path
     #   4. --abbrev-ref HEAD       -> branch name, or "HEAD" if detached
-    #   5. --short HEAD            -> short commit sha (used for detached HEAD)
+    #
+    # NOTE: --abbrev-ref is a sticky output-format mode in git rev-parse.
+    # Appending --short HEAD after --abbrev-ref HEAD does NOT produce a short
+    # sha; the sticky abbrev-ref mode causes git to emit the abbrev-ref value
+    # ("HEAD") again instead.  The short sha for detached HEAD is therefore
+    # fetched with a separate targeted call only when needed (see below).
     #
     # In a bare repo or non-repo, --show-toplevel makes rev-parse exit non-zero;
     # we re-probe --is-bare-repository in that path to distinguish the two cases.
@@ -50,8 +56,6 @@ def get_worktree_context() -> tuple[str, str]:
             "--show-toplevel",
             "--abbrev-ref",
             "HEAD",
-            "--short",
-            "HEAD",
         ],
         capture_output=True,
         text=True,
@@ -59,7 +63,7 @@ def get_worktree_context() -> tuple[str, str]:
 
     lines = result.stdout.splitlines()
 
-    if result.returncode != 0 or not lines or lines[0].strip() != "true":
+    if not lines or lines[0].strip() != "true":
         # rev-parse failed (or reported we're not in a work tree). Distinguish a
         # bare repository from "not a repo at all" with a single follow-up probe.
         bare_check = subprocess.run(
@@ -71,9 +75,9 @@ def get_worktree_context() -> tuple[str, str]:
             raise ValueError("Cannot run workflows in a bare repository")
         raise ValueError("Not inside a git repository")
 
-    # lines: [is_inside_work_tree, is_bare, toplevel, branch, short_sha]
-    # The branch line may legitimately be empty (unborn branch), and the short
-    # sha line may be empty too — but the toplevel/branch lines must be present.
+    # lines: [is_inside_work_tree, is_bare, toplevel, branch]
+    # The branch line may legitimately be empty (unborn branch), but the
+    # toplevel/branch lines must be present.
     if len(lines) < 4:
         raise RuntimeError(
             f"Failed to determine worktree root: unexpected git output {lines!r}"
@@ -81,11 +85,19 @@ def get_worktree_context() -> tuple[str, str]:
 
     worktree_path = lines[2].strip()
     branch = lines[3].strip()
-    short_hash = lines[4].strip() if len(lines) > 4 else ""
 
     # Handle detached HEAD state: --abbrev-ref reports "HEAD", so name from sha.
+    # Fetch the short sha with a separate call; combining --short with
+    # --abbrev-ref in one invocation produces the wrong output due to sticky
+    # output-format modes in git rev-parse (--abbrev-ref overrides --short).
     if branch == "HEAD":
-        branch = f"detached-{short_hash}" if short_hash else "detached"
+        sha_result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        short_hash = sha_result.stdout.strip() if sha_result.returncode == 0 else ""
+        branch = f"detached-{short_hash}" if short_hash else ""
 
     # Use directory name if branch is empty.
     return worktree_path, branch or Path(worktree_path).name
