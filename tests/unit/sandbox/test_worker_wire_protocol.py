@@ -107,6 +107,13 @@ class TestEofAndErrors:
         with pytest.raises(ValueError, match="Invalid request length"):
             read_request(stream)
 
+    def test_encode_rejects_oversized_request(self) -> None:
+        req = WorkerRequest(
+            mode="generate", prompt="x" * (MAX_REQUEST_BYTES + 1), model="m",
+        )
+        with pytest.raises(ValueError, match="Request is too large"):
+            encode_request(req)
+
 
 class TestResponseFrames:
     def test_msg_frame_carries_agentic_message(self) -> None:

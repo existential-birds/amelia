@@ -83,8 +83,17 @@ def encode_request(request: WorkerRequest) -> bytes:
     Returns:
         ``[4-byte big-endian length][JSON]`` ready to write to the worker's
         stdin.
+
+    Raises:
+        ValueError: If the serialized payload exceeds ``MAX_REQUEST_BYTES``.
+            Rejecting here fails locally instead of killing the worker when it
+            rejects the oversized frame on the read side.
     """
     payload = request.model_dump_json().encode("utf-8")
+    if len(payload) > MAX_REQUEST_BYTES:
+        raise ValueError(
+            f"Request is too large: {len(payload)} bytes (max {MAX_REQUEST_BYTES})"
+        )
     return _LENGTH_STRUCT.pack(len(payload)) + payload
 
 

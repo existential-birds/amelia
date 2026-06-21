@@ -198,9 +198,93 @@ class TestErrorPropagation:
         with pytest.raises(RuntimeError, match="exited unexpectedly"):
             await driver.generate(prompt="first")
 
+        # The crashed worker is dropped and closed so it cannot serve stale frames.
+        assert crashing.closed is True
+
         # Next call respawns a fresh worker and succeeds.
         out, _ = await driver.generate(prompt="second")
         assert out == "recovered"
+        assert provider.spawn_count == 2
+
+
+class TestEarlyExitResetsWorker:
+    """A dispatch that unwinds before ``done`` must close the worker.
+
+    Otherwise unread frames from the abandoned command stay buffered on the
+    shared pipe and the next command reads them as its own output.
+    """
+
+    async def test_caller_cancellation_midstream_resets_worker(self) -> None:
+        # First command streams two messages then ``done``; the caller stops
+        # consuming after the first, leaving the second msg + done unread.
+        def responder(req: WorkerRequest) -> list[str]:
+            if req.prompt == "partial":
+                return [
+                    msg_frame(AgenticMessage(type=AgenticMessageType.RESULT, content="a")),
+                    msg_frame(AgenticMessage(type=AgenticMessageType.RESULT, content="b")),
+                    done_frame(),
+                ]
+            return _result_then_usage(f"r:{req.prompt}")
+
+        leaky = FakeWorkerProcess(responder)
+        healthy = FakeWorkerProcess(responder)
+
+        class TwoWorkerProvider(FakeProvider):
+            def __init__(self) -> None:
+                super().__init__(leaky)
+                self._workers = [leaky, healthy]
+
+            async def spawn_worker(self, cwd=None, env=None):
+                self.spawn_count += 1
+                return self._workers.pop(0)
+
+        provider = TwoWorkerProvider()
+        driver = ContainerDriver(model="m", provider=provider)
+
+        # Drive the production entrypoint and cancel mid-stream, exactly as a
+        # caller that stops consuming would. ``aclosing`` in execute_agentic must
+        # propagate the close down to dispatch so the worker is reset.
+        stream = driver.execute_agentic(prompt="partial", cwd="/w")
+        first = await stream.__anext__()
+        assert first.content == "a"
+        await stream.aclose()  # caller stops consuming mid-command
+
+        # The abandoned worker was closed; the next call respawns a clean one
+        # and gets its own result rather than the leaked "b"/done frames.
+        assert leaky.closed is True
+        out, _ = await driver.generate(prompt="next")
+        assert out == "r:next"
+        assert provider.spawn_count == 2
+
+    async def test_parse_failure_midcommand_resets_worker(self) -> None:
+        # First command emits a structurally valid frame whose payload is not a
+        # valid AgenticMessage, so model_validate_json raises before ``done``.
+        def responder(req: WorkerRequest) -> list[str]:
+            if req.prompt == "garbage":
+                return ['{"frame": "msg", "msg": "not-a-message"}', done_frame()]
+            return _result_then_usage(f"r:{req.prompt}")
+
+        leaky = FakeWorkerProcess(responder)
+        healthy = FakeWorkerProcess(responder)
+
+        class TwoWorkerProvider(FakeProvider):
+            def __init__(self) -> None:
+                super().__init__(leaky)
+                self._workers = [leaky, healthy]
+
+            async def spawn_worker(self, cwd=None, env=None):
+                self.spawn_count += 1
+                return self._workers.pop(0)
+
+        provider = TwoWorkerProvider()
+        driver = ContainerDriver(model="m", provider=provider)
+
+        with pytest.raises(Exception):  # noqa: B017 - pydantic ValidationError
+            await driver.generate(prompt="garbage")
+
+        assert leaky.closed is True
+        out, _ = await driver.generate(prompt="next")
+        assert out == "r:next"
         assert provider.spawn_count == 2
 
 

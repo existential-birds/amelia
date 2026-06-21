@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import aclosing
 from typing import Any
 from uuid import uuid4
 
@@ -57,7 +58,7 @@ class _PersistentWorker:
             self._proc = await self._provider.spawn_worker(cwd=self._cwd, env=self._env)
         return self._proc
 
-    async def dispatch(self, request: WorkerRequest) -> AsyncIterator[AgenticMessage]:
+    async def dispatch(self, request: WorkerRequest) -> AsyncGenerator[AgenticMessage]:
         """Send one request and yield its AgenticMessages until ``done``.
 
         Args:
@@ -71,32 +72,39 @@ class _PersistentWorker:
         """
         async with self._lock:
             proc = await self._ensure()
-            await proc.write(encode_request(request))
-            error: str | None = None
-            while True:
-                line = await proc.readline()
-                if not line:
-                    # EOF before ``done`` — the worker crashed. Drop the handle
-                    # so the next command respawns a fresh worker.
+            completed = False
+            try:
+                await proc.write(encode_request(request))
+                error: str | None = None
+                while True:
+                    line = await proc.readline()
+                    if not line:
+                        raise RuntimeError("Sandbox worker exited unexpectedly mid-command")
+                    frame = parse_frame(line)
+                    if frame.frame == "done":
+                        # ``done`` always terminates a command (success OR error).
+                        # Surface a deferred error only after fully draining the
+                        # command's frames, so the pipe is left clean for the next
+                        # command (no stale trailing ``done``).
+                        completed = True
+                        if error is not None:
+                            raise RuntimeError(f"Sandbox worker error: {error}")
+                        return
+                    if frame.frame == "error":
+                        # Record and keep reading until ``done`` (protocol guarantees
+                        # ``error`` is followed by ``done``).
+                        error = frame.error
+                        continue
+                    # frame.frame == "msg"
+                    if frame.msg is not None and error is None:
+                        yield AgenticMessage.model_validate_json(frame.msg)
+            finally:
+                # Any exit before ``done`` (crash EOF, caller cancellation, or a
+                # parse failure) leaves unread frames on the shared pipe. Drop
+                # and close the worker so the next command respawns a clean one.
+                if not completed and self._proc is proc:
                     self._proc = None
-                    raise RuntimeError("Sandbox worker exited unexpectedly mid-command")
-                frame = parse_frame(line)
-                if frame.frame == "done":
-                    # ``done`` always terminates a command (success OR error).
-                    # Surface a deferred error only after fully draining the
-                    # command's frames, so the pipe is left clean for the next
-                    # command (no stale trailing ``done``).
-                    if error is not None:
-                        raise RuntimeError(f"Sandbox worker error: {error}")
-                    return
-                if frame.frame == "error":
-                    # Record and keep reading until ``done`` (protocol guarantees
-                    # ``error`` is followed by ``done``).
-                    error = frame.error
-                    continue
-                # frame.frame == "msg"
-                if frame.msg is not None and error is None:
-                    yield AgenticMessage.model_validate_json(frame.msg)
+                    await asyncio.shield(proc.close())
 
     async def close(self) -> None:
         if self._proc is not None:
@@ -218,11 +226,12 @@ class ContainerDriver:
                 instructions=instructions,
             )
             worker = self._persistent_worker()
-            async for msg in worker.dispatch(request):
-                if msg.type == AgenticMessageType.USAGE:
-                    self._last_usage = msg.usage
-                else:
-                    yield msg
+            async with aclosing(worker.dispatch(request)) as stream:
+                async for msg in stream:
+                    if msg.type == AgenticMessageType.USAGE:
+                        self._last_usage = msg.usage
+                    else:
+                        yield msg
             return
 
         # One-shot fallback: fresh worker process per call.
@@ -291,11 +300,12 @@ class ContainerDriver:
                 schema_path=schema_path,
             )
             worker = self._persistent_worker()
-            async for msg in worker.dispatch(request):
-                if msg.type == AgenticMessageType.USAGE:
-                    self._last_usage = msg.usage
-                elif msg.type == AgenticMessageType.RESULT:
-                    result_content = msg.content
+            async with aclosing(worker.dispatch(request)) as stream:
+                async for msg in stream:
+                    if msg.type == AgenticMessageType.USAGE:
+                        self._last_usage = msg.usage
+                    elif msg.type == AgenticMessageType.RESULT:
+                        result_content = msg.content
         else:
             # One-shot fallback: fresh worker process per call.
             workflow_id = kwargs.get("workflow_id")
