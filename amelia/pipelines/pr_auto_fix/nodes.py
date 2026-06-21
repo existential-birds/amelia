@@ -498,10 +498,10 @@ async def reply_resolve_node(
     # Bound concurrent gh subprocesses to stay polite to the GitHub API. Replies
     # across DIFFERENT comments are independent; resolve depends only on its own
     # reply, so we chain reply->resolve WITHIN each per-comment coroutine and run
-    # those coroutines concurrently under a semaphore.
+    # those coroutines concurrently, with each GitHub call using the semaphore.
     semaphore = asyncio.Semaphore(_REPLY_RESOLVE_CONCURRENCY)
 
-    tasks: list[asyncio.Task[ResolutionResult | None]] = []
+    tasks: list[asyncio.Task[ResolutionResult]] = []
     for group_result in state.group_results:
         for comment_id in group_result.comment_ids:
             comment = comments_by_id.get(comment_id)
@@ -526,8 +526,7 @@ async def reply_resolve_node(
     # gather preserves input order, so resolution_results stays deterministic
     # regardless of completion order. No shared mutable state across coroutines:
     # each builds and returns its own ResolutionResult.
-    gathered = await asyncio.gather(*tasks)
-    resolution_results: list[ResolutionResult] = [r for r in gathered if r is not None]
+    resolution_results: list[ResolutionResult] = list(await asyncio.gather(*tasks))
 
     return {"status": "completed", "resolution_results": resolution_results}
 
@@ -538,11 +537,11 @@ async def _reply_resolve_comment(
     group_result: GroupFixResult,
     comment: PRReviewComment,
     semaphore: asyncio.Semaphore,
-) -> ResolutionResult | None:
+) -> ResolutionResult:
     """Reply to one comment and (conditionally) resolve its thread.
 
     Runs reply->resolve serially WITHIN this coroutine (resolve depends on its
-    own reply), but the coroutine itself runs concurrently with others under the
+    own reply), but each GitHub service call is individually bounded by the
     shared semaphore. Owns all its local state; returns a single ResolutionResult.
     """
     # Guard: skip reply/resolve when commit or push failed.
@@ -586,55 +585,56 @@ async def _reply_resolve_comment(
         group_result.error,
     )
 
-    async with semaphore:
-        try:
+    try:
+        async with semaphore:
             await github_service.reply_to_comment(
                 state.pr_number,
                 comment.id,
                 body,
                 in_reply_to_id=comment.in_reply_to_id,
             )
-            replied = True
-        except Exception as e:
-            logger.error(
-                "Failed to reply to comment",
-                comment_id=comment.id,
-                error=str(e),
-            )
-            error_msg = str(e)
-
-        should_resolve = (
-            group_result.status == GroupFixStatus.FIXED
-            or (
-                group_result.status == GroupFixStatus.NO_CHANGES
-                and state.autofix_config.resolve_no_changes
-            )
+        replied = True
+    except Exception as e:
+        logger.error(
+            "Failed to reply to comment",
+            comment_id=comment.id,
+            error=str(e),
         )
+        error_msg = str(e)
 
-        if should_resolve and replied:
-            if comment.thread_id:
-                try:
+    should_resolve = (
+        group_result.status == GroupFixStatus.FIXED
+        or (
+            group_result.status == GroupFixStatus.NO_CHANGES
+            and state.autofix_config.resolve_no_changes
+        )
+    )
+
+    if should_resolve and replied:
+        if comment.thread_id:
+            try:
+                async with semaphore:
                     await github_service.resolve_thread(comment.thread_id)
-                    resolved = True
-                except Exception as e:
-                    logger.error(
-                        "Failed to resolve thread",
-                        comment_id=comment.id,
-                        thread_id=comment.thread_id,
-                        error=str(e),
-                    )
-                    error_msg = str(e)
-            else:
-                logger.warning(
-                    "No thread_id for comment, skipping resolve",
+                resolved = True
+            except Exception as e:
+                logger.error(
+                    "Failed to resolve thread",
                     comment_id=comment.id,
+                    thread_id=comment.thread_id,
+                    error=str(e),
                 )
-        elif should_resolve and not replied:
+                error_msg = str(e)
+        else:
             logger.warning(
-                "Skipping thread resolve because reply was not posted",
+                "No thread_id for comment, skipping resolve",
                 comment_id=comment.id,
-                thread_id=comment.thread_id,
             )
+    elif should_resolve and not replied:
+        logger.warning(
+            "Skipping thread resolve because reply was not posted",
+            comment_id=comment.id,
+            thread_id=comment.thread_id,
+        )
 
     return ResolutionResult(
         comment_id=comment.id,

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.runnables import RunnableConfig
 
 from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 from amelia.agents.schemas.classifier import CommentCategory
@@ -448,10 +450,10 @@ def _make_reply_resolve_state(
     error: str | None = None,
     commit_sha: str = "abc1234567890",
     authors: list[str] | None = None,
-    thread_ids: list[str | None] | None = None,
+    thread_ids: Sequence[str | None] | None = None,
     autofix_config: PRAutoFixConfig | None = None,
     pipeline_status: str = "pending",
-) -> tuple[Any, dict[str, Any]]:
+) -> tuple[Any, RunnableConfig]:
     """Build state + config for reply_resolve_node tests."""
     cids = comment_ids or [1]
     auths = authors or ["reviewer1"] * len(cids)
@@ -485,7 +487,7 @@ class TestReplyResolveNode:
 
     @staticmethod
     async def _run_node(
-        state: Any, config: dict[str, Any], *, setup_mock: Any = None,
+        state: Any, config: RunnableConfig, *, setup_mock: Any = None,
     ) -> tuple[dict[str, Any], AsyncMock]:
         with patch("amelia.pipelines.pr_auto_fix.nodes.GitHubPRService") as mock_gh_cls:
             mock_gh = AsyncMock()
@@ -639,7 +641,7 @@ class TestReplyResolveNode:
 
         Observable consequences asserted:
         - max concurrent in-flight calls <= semaphore bound (5)
-        - all replies start before any resolve completes (true concurrency, not serial)
+        - semaphore scope is one GitHub call, not one whole per-comment sequence
         - per-comment reply->resolve pairing (resolve(thread) only after reply(comment))
         """
         import asyncio
@@ -679,19 +681,19 @@ class TestReplyResolveNode:
             async def reply_to_comment(
                 self, pr_number: int, comment_id: int, body: str, in_reply_to_id: Any = None,
             ) -> None:
-                await self._track()
                 self.events.append(("reply_start", comment_id))
-                self.replied_comments.add(comment_id)
+                await self._track()
                 self.reply_order.append(comment_id)
                 await asyncio.sleep(0)
                 self.events.append(("reply_done", comment_id))
                 self.in_flight -= 1
+                self.replied_comments.add(comment_id)
 
             async def resolve_thread(self, thread_node_id: str) -> None:
+                self.events.append(("resolve_start", thread_node_id))
                 await self._track()
                 # Per-comment pairing: the matching reply MUST have completed first.
                 self.resolve_after_reply[thread_node_id] = set(self.replied_comments)
-                self.events.append(("resolve_start", thread_node_id))
                 self.resolved_threads.append(thread_node_id)
                 await asyncio.sleep(0)
                 self.events.append(("resolve_done", thread_node_id))
@@ -724,6 +726,16 @@ class TestReplyResolveNode:
         )
         assert reply_starts_before_first_done >= 2, (
             "replies did not overlap -- ran serially"
+        )
+
+        first_resolve_start_idx = next(
+            i for i, (k, _) in enumerate(fake.events) if k == "resolve_start"
+        )
+        reply_starts_before_first_resolve = sum(
+            1 for k, _ in fake.events[:first_resolve_start_idx] if k == "reply_start"
+        )
+        assert reply_starts_before_first_resolve == n, (
+            "semaphore was held across an entire per-comment reply/resolve sequence"
         )
 
         # Per-comment pairing: each thread resolved only AFTER its own comment's reply.

@@ -10,6 +10,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.runnables import RunnableConfig
 
 from amelia.agents.schemas.classifier import CommentCategory, CommentClassification
 from amelia.core.types import (
@@ -109,7 +110,7 @@ def make_node_profile() -> Profile:
     )
 
 
-def make_runnable_config(profile: Profile | None = None) -> dict[str, Any]:
+def make_runnable_config(profile: Profile | None = None) -> RunnableConfig:
     """Build a LangGraph-style RunnableConfig."""
     if profile is None:
         profile = make_node_profile()
