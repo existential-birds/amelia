@@ -96,13 +96,22 @@ def _read_exactly(stream: IO[bytes], count: int) -> bytes | None:
         count: Number of bytes required.
 
     Returns:
-        The bytes, or ``None`` if EOF is reached before any/all bytes arrive.
+        The bytes, or ``None`` if EOF is reached before the first byte arrives
+        (clean EOF — no message started).
+
+    Raises:
+        EOFError: If EOF arrives after at least one byte has been read
+            (truncated frame — a protocol error).
     """
     chunks: list[bytes] = []
     remaining = count
     while remaining > 0:
         chunk = stream.read(remaining)
         if not chunk:
+            if chunks:
+                raise EOFError(
+                    f"Truncated read: expected {count} bytes, got {count - remaining}"
+                )
             return None
         chunks.append(chunk)
         remaining -= len(chunk)
@@ -121,7 +130,9 @@ def read_request(stream: IO[bytes]) -> WorkerRequest | None:
         The parsed request, or ``None`` on clean EOF (no more commands).
 
     Raises:
-        ValueError: If the length prefix is corrupt or implausibly large.
+        EOFError: If EOF arrives mid-header (truncated length prefix).
+        ValueError: If the length prefix is corrupt or implausibly large,
+            or if EOF arrives mid-payload.
     """
     header = _read_exactly(stream, LENGTH_PREFIX_BYTES)
     if header is None:
@@ -129,7 +140,10 @@ def read_request(stream: IO[bytes]) -> WorkerRequest | None:
     (length,) = _LENGTH_STRUCT.unpack(header)
     if length == 0 or length > MAX_REQUEST_BYTES:
         raise ValueError(f"Invalid request length: {length}")
-    payload = _read_exactly(stream, length)
+    try:
+        payload = _read_exactly(stream, length)
+    except EOFError as exc:
+        raise ValueError("Truncated request") from exc
     if payload is None:
         raise ValueError("Truncated request: EOF before payload complete")
     return WorkerRequest.model_validate_json(payload)

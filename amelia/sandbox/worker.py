@@ -579,7 +579,7 @@ class _FramingWriter:
     def flush(self) -> None:
         if self._partial.strip():
             self._out.write(self._frame_fn(self._partial))
-            self._partial = ""
+        self._partial = ""
         self._out.flush()
 
 

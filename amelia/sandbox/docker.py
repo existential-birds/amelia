@@ -29,6 +29,14 @@ class DockerWorkerProcess(WorkerProcess):
 
     def __init__(self, proc: asyncio.subprocess.Process) -> None:
         self._proc = proc
+        # Continuously drain stderr so the OS pipe buffer never fills and
+        # deadlocks the worker (same pattern as exec_stream's _drain_stderr).
+        self._stderr_task: asyncio.Task[None] = asyncio.create_task(self._drain_stderr())
+
+    async def _drain_stderr(self) -> None:
+        if self._proc.stderr:
+            async for _ in self._proc.stderr:
+                pass  # discard; we only need the buffer drained
 
     @property
     def alive(self) -> bool:
@@ -60,6 +68,10 @@ class DockerWorkerProcess(WorkerProcess):
         except TimeoutError:
             with contextlib.suppress(ProcessLookupError):
                 self._proc.terminate()
+        if not self._stderr_task.done():
+            self._stderr_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._stderr_task
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(self._proc.wait(), timeout=5.0)
             if self._proc.returncode is None:
@@ -220,8 +232,12 @@ class DockerSandboxProvider(SandboxProvider):
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            limit=4 * 1024 * 1024,  # 4 MiB: msg_frame_raw double-encodes JSON, ~2x payload size
         )
         worker = DockerWorkerProcess(proc)
+        # Evict dead handles before tracking the new one so crashed-and-respawned
+        # workers don't accumulate in the list (memory leak + O(N) teardown).
+        self._workers = [w for w in self._workers if w.alive]
         self._workers.append(worker)
         logger.info("Spawned long-lived sandbox worker", container=self.container_name)
         return worker

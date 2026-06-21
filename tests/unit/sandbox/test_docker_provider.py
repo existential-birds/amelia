@@ -168,7 +168,17 @@ def _mock_serve_proc() -> AsyncMock:
     proc.stdin = MagicMock()
     proc.stdin.drain = AsyncMock()
     proc.stdout = AsyncMock()
+    # stderr is a real StreamReader in production (async-iterable over bytes);
+    # the worker drains it in a background task. Yield nothing so the drain
+    # task completes cleanly instead of leaving an unawaited AsyncMock coroutine.
+    proc.stderr = AsyncMock()
+    proc.stderr.__aiter__ = lambda self: _async_iter([])
     proc.wait = AsyncMock(return_value=0)
+    # kill()/terminate() are synchronous on asyncio.subprocess.Process — model
+    # them as sync so close()'s force-kill path doesn't leak an unawaited
+    # coroutine (AsyncMock would make every call awaitable).
+    proc.kill = MagicMock()
+    proc.terminate = MagicMock()
     return proc
 
 

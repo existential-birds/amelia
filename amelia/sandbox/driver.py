@@ -119,10 +119,10 @@ class ContainerDriver:
         self._last_usage: DriverUsage | None = None
         self._worker: _PersistentWorker | None = None
 
-    def _persistent_worker(self, cwd: str | None) -> _PersistentWorker:
+    def _persistent_worker(self) -> _PersistentWorker:
         """Return the shared persistent worker, creating it on first use."""
         if self._worker is None:
-            self._worker = _PersistentWorker(self._provider, cwd=cwd, env=self._env)
+            self._worker = _PersistentWorker(self._provider, cwd=None, env=self._env)
         return self._worker
 
     async def _write_prompt(self, prompt: str, workflow_id: str | None = None) -> str:
@@ -217,7 +217,7 @@ class ContainerDriver:
                 cwd=sandbox_cwd,
                 instructions=instructions,
             )
-            worker = self._persistent_worker(sandbox_cwd)
+            worker = self._persistent_worker()
             async for msg in worker.dispatch(request):
                 if msg.type == AgenticMessageType.USAGE:
                     self._last_usage = msg.usage
@@ -290,7 +290,7 @@ class ContainerDriver:
                 model=self.model,
                 schema_path=schema_path,
             )
-            worker = self._persistent_worker(None)
+            worker = self._persistent_worker()
             async for msg in worker.dispatch(request):
                 if msg.type == AgenticMessageType.USAGE:
                     self._last_usage = msg.usage
