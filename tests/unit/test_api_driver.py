@@ -354,6 +354,33 @@ class TestLocalSandbox:
         assert sync_result.output == async_result.output
         assert sync_result.exit_code == async_result.exit_code
 
+    async def test_aexecute_runs_blocking_subprocess_off_event_loop(
+        self, sandbox: LocalSandbox
+    ) -> None:
+        """The blocking shell subprocess must not run on the event loop thread.
+
+        Observable consequence: the thread that runs ``execute`` (and therefore
+        the blocking ``subprocess.run``) is a worker thread, distinct from the
+        event-loop thread. If ``aexecute`` ever called ``execute`` directly, the
+        captured thread id would equal the loop thread and the loop would block.
+        """
+        import threading
+
+        loop_thread_id = threading.get_ident()
+        captured: dict[str, int] = {}
+
+        original_execute = sandbox.execute
+
+        def _spy(command: str):  # type: ignore[no-untyped-def]
+            captured["thread_id"] = threading.get_ident()
+            return original_execute(command)
+
+        with patch.object(sandbox, "execute", side_effect=_spy):
+            result = await sandbox.aexecute("echo offloaded")
+
+        assert "offloaded" in result.output
+        assert captured["thread_id"] != loop_thread_id
+
     def test_virtual_mode_resolves_virtual_paths_under_cwd(self, tmp_path: Path) -> None:
         """virtual_mode=True should resolve /path/to/file as {cwd}/path/to/file.
 

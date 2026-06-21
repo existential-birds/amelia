@@ -1,5 +1,6 @@
 """Tests for FileBundler utility."""
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -38,9 +39,8 @@ class TestBundleFiles:
     """Tests for the bundle_files async function."""
 
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
-    @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_single_file(
-        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
+        self, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files should gather a single file matching a pattern."""
         repo = tmp_path / "repo"
@@ -58,9 +58,8 @@ class TestBundleFiles:
         assert bundle.total_tokens > 0
 
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
-    @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_glob_pattern(
-        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
+        self, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files should resolve glob patterns."""
         repo = tmp_path / "repo"
@@ -79,9 +78,8 @@ class TestBundleFiles:
         assert paths == ["src/a.py", "src/b.py"]
 
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
-    @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_respects_gitignore(
-        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
+        self, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files should exclude gitignored files (via mocked tracked set)."""
         repo = tmp_path / "repo"
@@ -100,9 +98,8 @@ class TestBundleFiles:
         assert "ignored.py" not in paths
 
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
-    @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_skips_binary_files(
-        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
+        self, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files should skip binary files (null bytes detected)."""
         repo = tmp_path / "repo"
@@ -119,9 +116,8 @@ class TestBundleFiles:
         assert "binary.bin" not in paths
 
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
-    @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_path_traversal_blocked(
-        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
+        self, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files should reject paths that escape working_dir."""
         repo = tmp_path / "repo"
@@ -134,9 +130,8 @@ class TestBundleFiles:
             )
 
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
-    @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_exclude_patterns(
-        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
+        self, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files should respect exclude_patterns."""
         repo = tmp_path / "repo"
@@ -170,10 +165,78 @@ class TestBundleFiles:
         assert "main.py" in paths
         assert "node_modules/dep.js" not in paths
 
+    async def test_ls_files_failure_falls_back_without_extra_probe(
+        self, tmp_path: Path
+    ):
+        """A failing `git ls-files` alone signals non-git mode.
+
+        The redundant `rev-parse --git-dir` probe is gone: `git ls-files` is the
+        only git subprocess, and when it exits non-zero the bundler falls back to
+        non-git mode (default directory exclusions) without any second probe.
+        """
+        work = tmp_path / "work"
+        work.mkdir()
+        (work / "main.py").write_text("main")
+        node_modules = work / "node_modules"
+        node_modules.mkdir()
+        (node_modules / "dep.js").write_text("dep")
+
+        with patch("amelia.tools.file_bundler.subprocess.run") as mock_run:
+            # ls-files fails -> _get_git_tracked_files returns None -> non-git mode.
+            mock_run.return_value = MagicMock(
+                returncode=128, stdout="", stderr="not a git repository"
+            )
+
+            bundle = await bundle_files(
+                working_dir=str(work),
+                patterns=["**/*.py", "**/*.js"],
+            )
+
+        # Exactly one git subprocess (ls-files); no separate rev-parse pre-check.
+        assert mock_run.call_count == 1
+        invoked_args = mock_run.call_args.args[0]
+        assert invoked_args[:2] == ["git", "ls-files"]
+
+        # Observable consequence: non-git exclusions applied (node_modules dropped).
+        paths = [f.path for f in bundle.files]
+        assert "main.py" in paths
+        assert "node_modules/dep.js" not in paths
+
+    async def test_git_mode_uses_real_ls_files(self, tmp_path: Path):
+        """Real `git ls-files` in an actual repo respects tracking/.gitignore.
+
+        Drives the production subprocess path (no mocks) to confirm the single
+        ls-files probe correctly distinguishes tracked from gitignored files.
+        """
+        import subprocess as real_subprocess
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@t",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@t",
+        }
+        real_subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        (repo / ".gitignore").write_text("ignored.py\n")
+        (repo / "tracked.py").write_text("x = 1")
+        (repo / "ignored.py").write_text("y = 2")
+        real_subprocess.run(["git", "add", "-A"], cwd=repo, check=True, env=env)
+        real_subprocess.run(
+            ["git", "commit", "-qm", "init"], cwd=repo, check=True, env=env
+        )
+
+        bundle = await bundle_files(working_dir=str(repo), patterns=["*.py"])
+
+        paths = [f.path for f in bundle.files]
+        assert "tracked.py" in paths
+        assert "ignored.py" not in paths
+
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
-    @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_empty_patterns(
-        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
+        self, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files with no matching patterns should return empty bundle."""
         repo = tmp_path / "repo"
