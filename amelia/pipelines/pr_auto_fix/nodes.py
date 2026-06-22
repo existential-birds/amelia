@@ -8,6 +8,7 @@ resolve threads).
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,11 @@ from amelia.services.classifier import (
 )
 from amelia.services.github_pr import GitHubPRService
 from amelia.tools.git_utils import GitOperations
+
+
+# Max concurrent gh subprocesses for per-comment reply/resolve in reply_resolve_node.
+# Keeps the resolution phase ~constant in comment count while staying polite to the API.
+_REPLY_RESOLVE_CONCURRENCY = 5
 
 
 async def classify_node(
@@ -489,8 +495,13 @@ async def reply_resolve_node(
         c.id: c for c in state.comments
     }
 
-    resolution_results: list[ResolutionResult] = []
+    # Bound concurrent gh subprocesses to stay polite to the GitHub API. Replies
+    # across DIFFERENT comments are independent; resolve depends only on its own
+    # reply, so we chain reply->resolve WITHIN each per-comment coroutine and run
+    # those coroutines concurrently, with each GitHub call using the semaphore.
+    semaphore = asyncio.Semaphore(_REPLY_RESOLVE_CONCURRENCY)
 
+    tasks: list[asyncio.Task[ResolutionResult]] = []
     for group_result in state.group_results:
         for comment_id in group_result.comment_ids:
             comment = comments_by_id.get(comment_id)
@@ -500,109 +511,134 @@ async def reply_resolve_node(
                     comment_id=comment_id,
                 )
                 continue
-
-            # Guard: skip reply/resolve when commit or push failed.
-            if group_result.status == GroupFixStatus.FIXED and not state.commit_sha:
-                # Developer "completed" without producing real file changes
-                logger.warning(
-                    "Group marked FIXED but no commit was made, skipping reply/resolve",
-                    comment_id=comment_id,
-                    file_path=group_result.file_path,
-                )
-                resolution_results.append(
-                    ResolutionResult(
-                        comment_id=comment.id,
-                        replied=False,
-                        resolved=False,
-                        error="No commit was made despite FIXED status",
+            tasks.append(
+                asyncio.create_task(
+                    _reply_resolve_comment(
+                        github_service,
+                        state,
+                        group_result,
+                        comment,
+                        semaphore,
                     )
                 )
-                continue
-
-            if group_result.status == GroupFixStatus.FIXED and state.status == "failed":
-                # Commit succeeded but push failed — changes aren't on the remote
-                logger.warning(
-                    "Group marked FIXED but push failed, skipping reply/resolve",
-                    comment_id=comment_id,
-                    file_path=group_result.file_path,
-                    commit_sha=state.commit_sha,
-                )
-                resolution_results.append(
-                    ResolutionResult(
-                        comment_id=comment.id,
-                        replied=False,
-                        resolved=False,
-                        error="Fix committed but push to remote failed",
-                    )
-                )
-                continue
-
-            replied = False
-            resolved = False
-            error_msg: str | None = None
-
-            body = _build_reply_body(
-                group_result.status,
-                comment.author,
-                state.commit_sha,
-                group_result.error,
             )
+
+    # gather preserves input order, so resolution_results stays deterministic
+    # regardless of completion order. No shared mutable state across coroutines:
+    # each builds and returns its own ResolutionResult.
+    resolution_results: list[ResolutionResult] = list(await asyncio.gather(*tasks))
+
+    return {"status": "completed", "resolution_results": resolution_results}
+
+
+async def _reply_resolve_comment(
+    github_service: GitHubPRService,
+    state: PRAutoFixState,
+    group_result: GroupFixResult,
+    comment: PRReviewComment,
+    semaphore: asyncio.Semaphore,
+) -> ResolutionResult:
+    """Reply to one comment and (conditionally) resolve its thread.
+
+    Runs reply->resolve serially WITHIN this coroutine (resolve depends on its
+    own reply), but each GitHub service call is individually bounded by the
+    shared semaphore. Owns all its local state; returns a single ResolutionResult.
+    """
+    # Guard: skip reply/resolve when commit or push failed.
+    if group_result.status == GroupFixStatus.FIXED and not state.commit_sha:
+        # Developer "completed" without producing real file changes
+        logger.warning(
+            "Group marked FIXED but no commit was made, skipping reply/resolve",
+            comment_id=comment.id,
+            file_path=group_result.file_path,
+        )
+        return ResolutionResult(
+            comment_id=comment.id,
+            replied=False,
+            resolved=False,
+            error="No commit was made despite FIXED status",
+        )
+
+    if group_result.status == GroupFixStatus.FIXED and state.status == "failed":
+        # Commit succeeded but push failed — changes aren't on the remote
+        logger.warning(
+            "Group marked FIXED but push failed, skipping reply/resolve",
+            comment_id=comment.id,
+            file_path=group_result.file_path,
+            commit_sha=state.commit_sha,
+        )
+        return ResolutionResult(
+            comment_id=comment.id,
+            replied=False,
+            resolved=False,
+            error="Fix committed but push to remote failed",
+        )
+
+    replied = False
+    resolved = False
+    error_msg: str | None = None
+
+    body = _build_reply_body(
+        group_result.status,
+        comment.author,
+        state.commit_sha,
+        group_result.error,
+    )
+
+    try:
+        async with semaphore:
+            await github_service.reply_to_comment(
+                state.pr_number,
+                comment.id,
+                body,
+                in_reply_to_id=comment.in_reply_to_id,
+            )
+        replied = True
+    except Exception as e:
+        logger.error(
+            "Failed to reply to comment",
+            comment_id=comment.id,
+            error=str(e),
+        )
+        error_msg = str(e)
+
+    should_resolve = (
+        group_result.status == GroupFixStatus.FIXED
+        or (
+            group_result.status == GroupFixStatus.NO_CHANGES
+            and state.autofix_config.resolve_no_changes
+        )
+    )
+
+    if should_resolve and replied:
+        if comment.thread_id:
             try:
-                await github_service.reply_to_comment(
-                    state.pr_number,
-                    comment.id,
-                    body,
-                    in_reply_to_id=comment.in_reply_to_id,
-                )
-                replied = True
+                async with semaphore:
+                    await github_service.resolve_thread(comment.thread_id)
+                resolved = True
             except Exception as e:
                 logger.error(
-                    "Failed to reply to comment",
+                    "Failed to resolve thread",
                     comment_id=comment.id,
+                    thread_id=comment.thread_id,
                     error=str(e),
                 )
                 error_msg = str(e)
-
-            should_resolve = (
-                group_result.status == GroupFixStatus.FIXED
-                or (
-                    group_result.status == GroupFixStatus.NO_CHANGES
-                    and state.autofix_config.resolve_no_changes
-                )
+        else:
+            logger.warning(
+                "No thread_id for comment, skipping resolve",
+                comment_id=comment.id,
             )
+    elif should_resolve and not replied:
+        logger.warning(
+            "Skipping thread resolve because reply was not posted",
+            comment_id=comment.id,
+            thread_id=comment.thread_id,
+        )
 
-            if should_resolve and replied:
-                if comment.thread_id:
-                    try:
-                        await github_service.resolve_thread(comment.thread_id)
-                        resolved = True
-                    except Exception as e:
-                        logger.error(
-                            "Failed to resolve thread",
-                            comment_id=comment.id,
-                            thread_id=comment.thread_id,
-                            error=str(e),
-                        )
-                        error_msg = str(e)
-                else:
-                    logger.warning(
-                        "No thread_id for comment, skipping resolve",
-                        comment_id=comment.id,
-                    )
-            elif should_resolve and not replied:
-                logger.warning(
-                    "Skipping thread resolve because reply was not posted",
-                    comment_id=comment.id,
-                    thread_id=comment.thread_id,
-                )
-
-            resolution_results.append(
-                ResolutionResult(
-                    comment_id=comment.id,
-                    replied=replied,
-                    resolved=resolved,
-                    error=error_msg,
-                )
-            )
-
-    return {"status": "completed", "resolution_results": resolution_results}
+    return ResolutionResult(
+        comment_id=comment.id,
+        replied=replied,
+        resolved=resolved,
+        error=error_msg,
+    )

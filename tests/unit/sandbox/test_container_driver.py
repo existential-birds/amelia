@@ -22,10 +22,15 @@ class SampleSchema(BaseModel):
 
 
 def _make_provider_mock(lines: list[str]) -> AsyncMock:
-    """Create a mock SandboxProvider whose exec_stream returns the given lines."""
+    """Create a one-shot mock provider whose exec_stream returns the given lines.
+
+    ``supports_persistent_worker`` is False so the driver uses the per-call
+    fallback path these tests exercise (the path Daytona uses in production).
+    """
     provider = AsyncMock(spec=SandboxProvider)
     provider.ensure_running = AsyncMock()
     provider.write_file = AsyncMock()
+    provider.supports_persistent_worker = False
 
     call_count = 0
 
@@ -128,6 +133,7 @@ class TestExecuteAgentic:
         provider = AsyncMock(spec=SandboxProvider)
         provider.ensure_running = AsyncMock()
         provider.write_file = AsyncMock()
+        provider.supports_persistent_worker = False
 
         call_count = 0
 
@@ -159,6 +165,7 @@ class TestExecuteAgentic:
         provider = AsyncMock(spec=SandboxProvider)
         provider.ensure_running = AsyncMock()
         provider.write_file = AsyncMock()
+        provider.supports_persistent_worker = False
 
         call_count = 0
 

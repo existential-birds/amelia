@@ -85,45 +85,20 @@ def _is_binary(data: bytes) -> bool:
     return b"\x00" in data[:512]
 
 
-def _is_git_repo(working_dir: Path) -> bool:
-    """Check if working_dir is inside a git repository.
-
-    Args:
-        working_dir: Directory to check.
-
-    Returns:
-        True if inside a git repo.
-    """
-    try:
-        # Strip GIT_* env vars so the check reflects the actual directory,
-        # not inherited context from a parent process or hook.
-        clean_env = {
-            k: v for k, v in os.environ.items()
-            if not k.startswith("GIT_")
-        }
-        result = subprocess.run(
-            ["git", "rev-parse", "--git-dir"],
-            cwd=working_dir,
-            capture_output=True,
-            text=True,
-            timeout=5,
-            env=clean_env,
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, OSError):
-        return False
-
-
 def _get_git_tracked_files(working_dir: Path) -> set[str] | None:
     """Get all git-tracked files (respects .gitignore).
 
-    Uses ``git ls-files`` which excludes gitignored files.
+    Uses ``git ls-files`` which excludes gitignored files. This single probe
+    doubles as the git-repo check: outside a repository ``git ls-files`` exits
+    non-zero, which we report as ``None`` so the caller falls back to non-git
+    mode. No separate ``rev-parse --git-dir`` pre-check is needed.
 
     Args:
-        working_dir: Git repository root.
+        working_dir: Directory to inspect (a git repository root, or not).
 
     Returns:
-        Set of relative file paths tracked by git, or None on failure.
+        Set of relative file paths tracked by git, or None when the directory
+        is not a git repository or ``git ls-files`` otherwise fails.
     """
     try:
         clean_env = {
@@ -274,12 +249,11 @@ async def bundle_files(
         ValueError: If any resolved path escapes working_dir.
     """
     wd = Path(working_dir)
-    is_git = await asyncio.to_thread(_is_git_repo, wd)
-    tracked: set[str] | None = None
-    if is_git:
-        tracked = await asyncio.to_thread(_get_git_tracked_files, wd)
-        if tracked is None:
-            logger.warning("git ls-files failed, falling back to non-git mode")
+    # A single `git ls-files` both detects the repo and lists tracked files.
+    # Returns None outside a repo (or on failure) -> non-git fallback mode.
+    tracked: set[str] | None = await asyncio.to_thread(_get_git_tracked_files, wd)
+    if tracked is None:
+        logger.debug("git ls-files unavailable, using non-git mode", working_dir=working_dir)
 
     file_paths = await asyncio.to_thread(_resolve_globs, wd, patterns, tracked, exclude_patterns)
 

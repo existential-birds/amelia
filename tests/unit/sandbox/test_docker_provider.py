@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from amelia.sandbox.docker import DockerSandboxProvider
-from amelia.sandbox.provider import SandboxProvider
+from amelia.sandbox.docker import DockerSandboxProvider, DockerWorkerProcess
+from amelia.sandbox.provider import SandboxProvider, WorkerProcess
 
 
 async def _async_iter[T](items: list[T]) -> AsyncIterator[T]:
@@ -159,6 +159,95 @@ class TestTeardown:
         assert "rm" in args
         assert "-f" in args
         assert "amelia-sandbox-test" in args
+
+
+def _mock_serve_proc() -> AsyncMock:
+    """A mock asyncio subprocess that looks like a live ``serve`` worker."""
+    proc = AsyncMock()
+    proc.returncode = None  # alive
+    proc.stdin = MagicMock()
+    proc.stdin.drain = AsyncMock()
+    proc.stdout = AsyncMock()
+    # stderr is a real StreamReader in production (async-iterable over bytes);
+    # the worker drains it in a background task. Yield nothing so the drain
+    # task completes cleanly instead of leaving an unawaited AsyncMock coroutine.
+    proc.stderr = AsyncMock()
+    proc.stderr.__aiter__ = lambda self: _async_iter([])
+    proc.wait = AsyncMock(return_value=0)
+    # kill()/terminate() are synchronous on asyncio.subprocess.Process — model
+    # them as sync so close()'s force-kill path doesn't leak an unawaited
+    # coroutine (AsyncMock would make every call awaitable).
+    proc.kill = MagicMock()
+    proc.terminate = MagicMock()
+    return proc
+
+
+class TestPersistentWorker:
+    """Docker provider supports a long-lived serve worker (issue #640)."""
+
+    def test_supports_persistent_worker_is_true(self) -> None:
+        provider = DockerSandboxProvider(profile_name="test")
+        assert provider.supports_persistent_worker is True
+
+    async def test_spawn_worker_runs_serve_with_interactive_stdin(self) -> None:
+        provider = DockerSandboxProvider(profile_name="test")
+        proc = _mock_serve_proc()
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc) as mock_exec:
+            worker = await provider.spawn_worker(cwd="/workspace/repo", env={"K": "V"})
+
+        assert isinstance(worker, DockerWorkerProcess)
+        assert isinstance(worker, WorkerProcess)
+        args = mock_exec.call_args[0]
+        # docker exec -i (interactive stdin) ... python -m amelia.sandbox.worker serve
+        assert args[:4] == ("docker", "exec", "-i", "--user")
+        assert "--workdir" in args
+        assert "/workspace/repo" in args
+        assert "-e" in args and "K=V" in args
+        assert "amelia-sandbox-test" in args
+        assert args[-4:] == ("python", "-m", "amelia.sandbox.worker", "serve")
+        # stdin must be a pipe so we can stream request frames.
+        assert mock_exec.call_args[1]["stdin"] is not None
+
+    async def test_teardown_closes_spawned_workers(self) -> None:
+        """teardown() must stop long-lived workers — no leaked processes."""
+        provider = DockerSandboxProvider(profile_name="test")
+        serve_proc = _mock_serve_proc()
+        rm_proc = AsyncMock()
+        rm_proc.communicate.return_value = (b"", b"")
+        rm_proc.returncode = 0
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            side_effect=[serve_proc, rm_proc],
+        ):
+            worker = await provider.spawn_worker()
+            await provider.teardown()
+
+        # Worker stdin was closed (EOF -> clean exit) and the process awaited.
+        serve_proc.stdin.close.assert_called_once()
+        serve_proc.wait.assert_awaited()
+        # The tracked-workers list is cleared so a second teardown is a no-op.
+        assert provider._workers == []
+        # The handle we got back is the one that was closed.
+        assert worker is not None
+
+    async def test_worker_write_and_readline_round_trip(self) -> None:
+        """DockerWorkerProcess forwards bytes to stdin and reads stdout lines."""
+        proc = _mock_serve_proc()
+        proc.stdout.readline = AsyncMock(return_value=b'{"frame":"done"}\n')
+
+        worker = DockerWorkerProcess(proc)
+        await worker.write(b"\x00\x00\x00\x02{}")
+        proc.stdin.write.assert_called_once_with(b"\x00\x00\x00\x02{}")
+        line = await worker.readline()
+        assert line == '{"frame":"done"}'
+
+    async def test_worker_readline_eof_returns_empty(self) -> None:
+        proc = _mock_serve_proc()
+        proc.stdout.readline = AsyncMock(return_value=b"")
+        worker = DockerWorkerProcess(proc)
+        assert await worker.readline() == ""
 
 
 class TestEnsureRunning:
