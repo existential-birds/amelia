@@ -712,7 +712,8 @@ class TestDaytonaSandboxProviderExecStream:
             assert lines == ["partial"]
 
     @pytest.mark.asyncio
-    async def test_exec_stream_cleans_up_session_on_error(self) -> None:
+    async def test_exec_stream_does_not_delete_session_on_error(self) -> None:
+        """The reusable session survives a failed command (deleted at teardown)."""
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -734,10 +735,10 @@ class TestDaytonaSandboxProviderExecStream:
                 async for _ in provider.exec_stream(["false"]):
                     pass
 
-            mock_sandbox.process.delete_session.assert_called_once()
+            mock_sandbox.process.delete_session.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_exec_stream_cleans_up_session_on_success(self) -> None:
+    async def test_exec_stream_does_not_delete_session_on_success(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -758,10 +759,19 @@ class TestDaytonaSandboxProviderExecStream:
             async for _ in provider.exec_stream(["echo", "ok"]):
                 pass
 
-            mock_sandbox.process.delete_session.assert_called_once()
+            mock_sandbox.process.delete_session.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_exec_stream_cleans_up_on_early_break(self) -> None:
+    async def test_exec_stream_early_break_preserves_reusable_session(self) -> None:
+        """Early break leaks the server-side command; accept-and-bound it.
+
+        Contract: the Daytona SDK exposes no per-command stop/terminate API
+        (only whole-session delete_session), and deleting the session here
+        would defeat the deliberate per-sandbox session reuse (#641). So we
+        accept that the run_async=True command keeps running server-side, and
+        bound it by (a) cancelling local streaming and (b) leaving the session
+        intact and reusable for the next command.
+        """
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -777,6 +787,7 @@ class TestDaytonaSandboxProviderExecStream:
                 repo_url="https://github.com/org/repo.git",
             )
             await provider.ensure_running()
+            mock_sandbox.process.create_session.reset_mock()
             mock_sandbox.process.delete_session.reset_mock()
 
             stream = provider.exec_stream(["echo", "hello"])
@@ -784,10 +795,311 @@ class TestDaytonaSandboxProviderExecStream:
                 break  # Break after first line
             await stream.aclose()
 
-            mock_sandbox.process.delete_session.assert_called_once()
+            # Accept: we do NOT tear down the (reused) session to stop the
+            # leaked server-side command.
+            mock_sandbox.process.delete_session.assert_not_called()
+
+            # Bound: the leaked command does not poison the session — a
+            # follow-up command reuses it (no new create_session).
+            async for _ in provider.exec_stream(["echo", "again"]):
+                pass
+
+            mock_sandbox.process.create_session.assert_called_once()
+            reused_id = mock_sandbox.process.create_session.call_args[0][0]
+            exec_calls = mock_sandbox.process.execute_session_command.call_args_list
+            assert len(exec_calls) == 2
+            assert exec_calls[0][0][0] == reused_id
+            assert exec_calls[1][0][0] == reused_id
+            mock_sandbox.process.delete_session.assert_not_called()
+
+
+class TestDaytonaSandboxProviderSessionReuse:
+    """A single Daytona session is created per sandbox and reused (#641)."""
+
+    @pytest.mark.asyncio
+    async def test_session_created_once_across_multiple_commands(self) -> None:
+        """create_session called once; both commands run in the same session."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = _make_mock_sandbox(["out\n"])
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+            mock_sandbox.process.create_session.reset_mock()
+
+            async for _ in provider.exec_stream(["echo", "one"]):
+                pass
+            async for _ in provider.exec_stream(["echo", "two"]):
+                pass
+
+            # Session created exactly once across two commands.
+            mock_sandbox.process.create_session.assert_called_once()
+            reused_session_id = mock_sandbox.process.create_session.call_args[0][0]
+
+            # Both commands executed against the SAME session id.
+            exec_calls = mock_sandbox.process.execute_session_command.call_args_list
+            assert len(exec_calls) == 2
+            assert exec_calls[0][0][0] == reused_session_id
+            assert exec_calls[1][0][0] == reused_session_id
+
+            # No per-command teardown.
+            mock_sandbox.process.delete_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_concurrent_exec_stream_creates_one_session(self) -> None:
+        """Concurrent exec_stream calls share one session (no orphans).
+
+        Regression guard for the check-then-act race in _ensure_session: an
+        asyncio.gather fan-out on a shared provider (e.g. parallel review
+        passes) must not let each caller create its own session and orphan
+        the losers (#641). ``create_session`` yields to the loop so every
+        caller reaches the create point before any assigns ``_session_id``,
+        which forces the race on the unlocked path (create_session would be
+        called once per caller instead of once total).
+        """
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = _make_mock_sandbox(["out\n"])
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            # Yield at the create point so concurrent callers overlap inside
+            # _ensure_session's check-then-create window.
+            async def slow_create_session(_sid: str) -> None:
+                await asyncio.sleep(0)
+
+            mock_sandbox.process.create_session.side_effect = slow_create_session
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            async def run(cmd: str) -> list[str]:
+                return [line async for line in provider.exec_stream([cmd])]
+
+            await asyncio.gather(run("one"), run("two"), run("three"))
+
+            # Exactly one session created across three concurrent commands.
+            mock_sandbox.process.create_session.assert_called_once()
+            # All three commands ran against that single session id.
+            exec_calls = mock_sandbox.process.execute_session_command.call_args_list
+            assert len(exec_calls) == 3
+            session_id = mock_sandbox.process.create_session.call_args[0][0]
+            for call in exec_calls:
+                assert call[0][0] == session_id
+
+    @pytest.mark.asyncio
+    async def test_teardown_deletes_session_exactly_once(self) -> None:
+        """Reusable session is deleted once at teardown, before the sandbox."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = _make_mock_sandbox(["out\n"])
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            async for _ in provider.exec_stream(["echo", "one"]):
+                pass
+            async for _ in provider.exec_stream(["echo", "two"]):
+                pass
+
+            session_id = mock_sandbox.process.create_session.call_args[0][0]
+            await provider.teardown()
+
+            mock_sandbox.process.delete_session.assert_called_once_with(session_id)
+            mock_sandbox.delete.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_teardown_cleans_up_session_after_command_error(self) -> None:
+        """Error path: failed command still leaves session cleaned up at teardown."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = _make_mock_sandbox([], exit_code=1)
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            with pytest.raises(RuntimeError):
+                async for _ in provider.exec_stream(["false"]):
+                    pass
+
+            session_id = mock_sandbox.process.create_session.call_args[0][0]
+            # Not deleted by the failed command itself.
+            mock_sandbox.process.delete_session.assert_not_called()
+
+            await provider.teardown()
+            mock_sandbox.process.delete_session.assert_called_once_with(session_id)
+
+    @pytest.mark.asyncio
+    async def test_teardown_without_session_skips_session_delete(self) -> None:
+        """No commands ran => no session created => teardown deletes only sandbox."""
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = _mock_sandbox_with_install()
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+            await provider.teardown()
+
+            mock_sandbox.process.delete_session.assert_not_called()
+            mock_sandbox.delete.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_session_reset_when_sandbox_replaced(self) -> None:
+        """Replacing an unhealthy sandbox forces the next command to create a new session."""
+        with (
+            patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls,
+            patch("amelia.sandbox.daytona.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            first_sandbox = _make_mock_sandbox(["first\n"])
+            second_sandbox = _make_mock_sandbox(["second\n"])
+            mock_client.create.side_effect = [first_sandbox, second_sandbox]
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+            async for _ in provider.exec_stream(["echo", "first"]):
+                pass
+            first_session_id = first_sandbox.process.create_session.call_args[0][0]
+
+            provider.health_check = AsyncMock(return_value=False)  # type: ignore[method-assign]
+            await provider.ensure_running()
+            async for _ in provider.exec_stream(["echo", "second"]):
+                pass
+            second_session_id = second_sandbox.process.create_session.call_args[0][0]
+
+            assert mock_client.create.call_count == 2
+            first_sandbox.delete.assert_called_once()
+            first_sandbox.process.create_session.assert_called_once()
+            second_sandbox.process.create_session.assert_called_once()
+            assert first_session_id != second_session_id
+
+    @pytest.mark.asyncio
+    async def test_stale_session_is_recovered_on_next_command(self) -> None:
+        """A stale/evicted session (session-level error at launch) is recovered.
+
+        The cached session id is dropped, a fresh session is created, and the
+        command is retried once — without duplicate output (#641). health_check
+        probes outside the session, so exec_stream must self-heal here.
+        """
+        from daytona_sdk import DaytonaError
+
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = _make_mock_sandbox(["out\n"])
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            # First exec establishes the reusable session.
+            async for _ in provider.exec_stream(["echo", "one"]):
+                pass
+            first_session_id = mock_sandbox.process.create_session.call_args[0][0]
+            mock_sandbox.process.create_session.reset_mock()
+            mock_sandbox.process.execute_session_command.reset_mock()
+
+            # Simulate the cached session going stale: the launch fails with a
+            # session-level error, then succeeds on the retry.
+            mock_sandbox.process.execute_session_command.side_effect = [
+                DaytonaError("Failed to execute session command: not found (404)"),
+                MagicMock(cmd_id="recovered-cmd-id"),
+            ]
+
+            lines: list[str] = []
+            async for line in provider.exec_stream(["echo", "two"]):
+                lines.append(line)
+
+            # Stale id dropped, fresh session created for the retry.
+            mock_sandbox.process.create_session.assert_called_once()
+            second_session_id = mock_sandbox.process.create_session.call_args[0][0]
+            assert second_session_id != first_session_id
+            # Command launched twice (first failed, retry succeeded).
+            assert mock_sandbox.process.execute_session_command.call_count == 2
+            # Output delivered exactly once (no duplicate from the retry).
+            assert lines == ["out"]
+            assert provider._session_id == second_session_id
+
+    @pytest.mark.asyncio
+    async def test_repeated_session_error_propagates_after_one_retry(self) -> None:
+        """A session error that persists past the single retry is raised."""
+        from daytona_sdk import DaytonaError
+
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = _make_mock_sandbox(["out\n"])
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            # Every launch fails — the single retry also fails.
+            mock_sandbox.process.execute_session_command.side_effect = DaytonaError(
+                "Failed to execute session command: not found (404)"
+            )
+
+            with pytest.raises(DaytonaError):
+                async for _ in provider.exec_stream(["echo", "x"]):
+                    pass
+
+            # Exactly two attempts (initial + one retry).
+            assert mock_sandbox.process.execute_session_command.call_count == 2
+            # A fresh session is created for each attempt (id dropped on retry).
+            assert mock_sandbox.process.create_session.call_count == 2
 
     @pytest.mark.asyncio
     async def test_exec_stream_bakes_cwd_and_env_into_command(self) -> None:
+        """env is applied per-command so it never leaks into the reused session."""
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
 
@@ -814,6 +1126,7 @@ class TestDaytonaSandboxProviderExecStream:
             assert "cd" in req.command
             assert "/workspace" in req.command
             assert "FOO=bar" in req.command
+            assert "export" not in req.command
             assert req.run_async is True
 
 

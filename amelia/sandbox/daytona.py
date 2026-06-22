@@ -21,6 +21,7 @@ from daytona_sdk import (
     CreateSandboxFromImageParams,
     CreateSandboxFromSnapshotParams,
     DaytonaConfig,
+    DaytonaError,
     Image,
     Resources,
     SessionExecuteRequest,
@@ -101,6 +102,16 @@ class DaytonaSandboxProvider:
         self._workflow_branch = workflow_branch
         self._worker_env: dict[str, str] = dict(worker_env) if worker_env else {}
         self._sandbox: AsyncSandbox | None = None
+        # One reusable command session per sandbox, created lazily on the
+        # first exec_stream and deleted only at teardown (#641). Avoids a
+        # create/delete round-trip on every command.
+        self._session_id: str | None = None
+        # Guards the _session_id check-then-create in _ensure_session so
+        # concurrent exec_stream calls (e.g. an asyncio.gather fan-out on a
+        # shared provider) can't each create their own session and orphan
+        # the losers. Only session creation is serialized; concurrent
+        # commands still run in parallel (each gets its own cmd_id).
+        self._session_lock = asyncio.Lock()
 
     @property
     def _git_auth(self) -> dict[str, str]:
@@ -184,6 +195,8 @@ class DaytonaSandboxProvider:
             with contextlib.suppress(Exception):
                 await self._sandbox.delete()
             self._sandbox = None
+            # The old sandbox (and its session) is gone; force a fresh one.
+            self._session_id = None
 
         logger.info("Creating Daytona sandbox", target=self._target)
 
@@ -310,6 +323,31 @@ class DaytonaSandboxProvider:
                     await created_sandbox.delete()
             raise
 
+    async def _ensure_session(self, sandbox: AsyncSandbox) -> str:
+        """Return the reusable command session id, creating it on first use.
+
+        A single session is created per sandbox and reused across every
+        command, rather than created and deleted per call. It is deleted
+        only at teardown. The session is cumulative: shell state (cwd,
+        exported env vars, created files) persists across every command on
+        this sandbox.
+
+        Uses double-checked locking: the fast path (session already exists)
+        returns without acquiring the lock, while the slow path re-checks
+        under the lock so two concurrent callers can't both create a
+        session and orphan one.
+        """
+        if self._session_id is not None:
+            return self._session_id
+        async with self._session_lock:
+            if self._session_id is not None:
+                return self._session_id
+            session_id = f"amelia-{uuid.uuid4().hex[:12]}"
+            await sandbox.process.create_session(session_id)
+            self._session_id = session_id
+            logger.debug("Created reusable Daytona session", session_id=session_id)
+        return self._session_id
+
     def resolve_cwd(self, cwd: str) -> str:
         """Map host paths to the sandbox repo path.
 
@@ -355,26 +393,43 @@ class DaytonaSandboxProvider:
             logger.warning("Daytona exec_stream does not support stdin — use write_file() instead")
 
         # Build command string with cwd/env baked in (session API has no
-        # cwd/env params).
+        # cwd/env params). Env is applied per-command via `env` rather than
+        # `export`, so it does not mutate the reused session's environment and
+        # leak into later no-env commands (session reuse, #641).
         cmd_str = shlex.join(command)
         if env:
             exports = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
-            cmd_str = f"export {exports} && {cmd_str}"
+            cmd_str = f"env {exports} {cmd_str}"
         if cwd:
             cmd_str = f"cd {shlex.quote(cwd)} && {cmd_str}"
 
-        session_id = f"amelia-{uuid.uuid4().hex[:12]}"
-        await sandbox.process.create_session(session_id)
-
-        try:
-            resp = await sandbox.process.execute_session_command(
-                session_id,
-                SessionExecuteRequest(command=cmd_str, run_async=True),
-            )
-        except Exception:
-            with contextlib.suppress(Exception):
-                await sandbox.process.delete_session(session_id)
-            raise
+        # Launch the command against the reusable session. A stale/evicted
+        # session surfaces here as a session-level DaytonaError *before* the
+        # command starts server-side, so retrying is safe. health_check probes
+        # via process.exec('true') (not through the session), so a dead session
+        # would never trip it or trigger sandbox replacement. Recover the way
+        # the old per-call design did: drop the cached id, re-enter
+        # _ensure_session to create a fresh one, and retry the launch once.
+        attempt = 0
+        while True:
+            session_id = await self._ensure_session(sandbox)
+            try:
+                resp = await sandbox.process.execute_session_command(
+                    session_id,
+                    SessionExecuteRequest(command=cmd_str, run_async=True),
+                )
+            except DaytonaError as exc:
+                if attempt == 0:
+                    logger.warning(
+                        "Daytona session error, recreating session and retrying",
+                        session_id=session_id,
+                        error=str(exc),
+                    )
+                    self._session_id = None
+                    attempt += 1
+                    continue
+                raise
+            break
         cmd_id = resp.cmd_id
 
         queue: asyncio.Queue[str | None] = asyncio.Queue()
@@ -412,6 +467,14 @@ class DaytonaSandboxProvider:
             if buf:
                 yield buf
         finally:
+            # Accept-and-bound contract for early break / cancellation /
+            # exception: the server-side command (run_async=True) keeps running
+            # to completion. The Daytona SDK exposes no per-command
+            # stop/terminate API (only whole-session delete_session), and
+            # deleting the session here would defeat the deliberate per-sandbox
+            # session reuse (#641). We accept the leak and bound it locally:
+            # cancel the streaming task so we stop consuming, and leave the
+            # session intact so the next command reuses it.
             if not log_task.done():
                 log_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -423,24 +486,19 @@ class DaytonaSandboxProvider:
                 if task_exc is not None:
                     raise task_exc
 
-            # Check exit code before deleting the session.
-            try:
-                cmd_info = await sandbox.process.get_session_command(
-                    session_id, cmd_id,
-                )
-                if cmd_info.exit_code is not None and cmd_info.exit_code != 0:
-                    stderr_text = "".join(stderr_chunks).strip()
-                    detail = f"Command exited with code {cmd_info.exit_code}: {cmd_str}"
-                    if stderr_text:
-                        # Limit stderr to last 2000 chars to avoid huge error messages.
-                        tail = stderr_text[-2000:]
-                        detail += f"\n\nStderr:\n{tail}"
-                    raise RuntimeError(detail)
-            finally:
-                try:
-                    await sandbox.process.delete_session(session_id)
-                except Exception as exc:
-                    logger.debug("Failed to delete Daytona session", session_id=session_id, error=exc)
+            # Check exit code. The session is reused across commands and is
+            # deleted only at teardown — no per-command delete round-trip.
+            cmd_info = await sandbox.process.get_session_command(
+                session_id, cmd_id,
+            )
+            if cmd_info.exit_code is not None and cmd_info.exit_code != 0:
+                stderr_text = "".join(stderr_chunks).strip()
+                detail = f"Command exited with code {cmd_info.exit_code}: {cmd_str}"
+                if stderr_text:
+                    # Limit stderr to last 2000 chars to avoid huge error messages.
+                    tail = stderr_text[-2000:]
+                    detail += f"\n\nStderr:\n{tail}"
+                raise RuntimeError(detail)
 
     async def write_file(self, path: str, content: bytes) -> None:
         """Write content to a file inside the sandbox via Daytona FS API."""
@@ -461,10 +519,22 @@ class DaytonaSandboxProvider:
         await self._sandbox.git.pull(path, **self._git_auth)
 
     async def teardown(self) -> None:
-        """Delete the ephemeral Daytona sandbox."""
+        """Delete the reusable session, then the ephemeral Daytona sandbox."""
         if self._sandbox is None:
             return
         logger.info("Tearing down Daytona sandbox", sandbox_id=self._sandbox.id)
+        # Delete the reusable command session before destroying the sandbox.
+        if self._session_id is not None:
+            try:
+                await self._sandbox.process.delete_session(self._session_id)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to delete Daytona session",
+                    session_id=self._session_id,
+                    error=exc,
+                )
+            finally:
+                self._session_id = None
         try:
             await self._sandbox.delete()
         except Exception as exc:

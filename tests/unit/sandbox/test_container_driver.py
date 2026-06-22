@@ -123,7 +123,13 @@ class TestExecuteAgentic:
             async for _ in driver.execute_agentic(prompt="test", cwd="/work"):
                 pass
 
-    async def test_prompt_file_cleanup_on_success(self) -> None:
+    async def test_no_per_call_rm_round_trip_on_success(self) -> None:
+        """No per-command `rm -f` remote round-trip (#641).
+
+        The temp prompt lives in the sandbox's ephemeral filesystem and is
+        reclaimed when the sandbox is torn down, so the worker is the ONLY
+        exec_stream call.
+        """
         from amelia.sandbox.driver import ContainerDriver
 
         result = AgenticMessage(type=AgenticMessageType.RESULT, content="Done")
@@ -153,12 +159,12 @@ class TestExecuteAgentic:
         async for _ in driver.execute_agentic(prompt="test", cwd="/work"):
             pass
 
-        # 2 exec_stream calls: worker + rm (write_file replaces tee)
-        assert len(calls) == 2
-        assert calls[1][0] == "rm"
-        assert calls[1][1] == "-f"
+        # Exactly one exec_stream call (the worker). No `rm` round-trip.
+        assert len(calls) == 1
+        assert all(cmd[0] != "rm" for cmd in calls)
 
-    async def test_prompt_file_cleanup_on_exception(self) -> None:
+    async def test_no_per_call_rm_round_trip_on_exception(self) -> None:
+        """Even when the worker output is malformed, no `rm` round-trip fires."""
         from amelia.sandbox.driver import ContainerDriver
 
         calls: list[list[str]] = []
@@ -185,7 +191,9 @@ class TestExecuteAgentic:
             async for _ in driver.execute_agentic(prompt="test", cwd="/work"):
                 pass
 
-        assert any(cmd[0] == "rm" for cmd in calls)
+        # Exactly one exec_stream call (the worker) even on the parse-error path.
+        assert len(calls) == 1
+        assert all(cmd[0] != "rm" for cmd in calls)
 
 
 class TestGenerate:
