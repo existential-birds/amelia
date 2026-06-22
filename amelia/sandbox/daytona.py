@@ -21,6 +21,7 @@ from daytona_sdk import (
     CreateSandboxFromImageParams,
     CreateSandboxFromSnapshotParams,
     DaytonaConfig,
+    DaytonaError,
     Image,
     Resources,
     SessionExecuteRequest,
@@ -327,7 +328,9 @@ class DaytonaSandboxProvider:
 
         A single session is created per sandbox and reused across every
         command, rather than created and deleted per call. It is deleted
-        only at teardown.
+        only at teardown. The session is cumulative: shell state (cwd,
+        exported env vars, created files) persists across every command on
+        this sandbox.
 
         Uses double-checked locking: the fast path (session already exists)
         returns without acquiring the lock, while the slow path re-checks
@@ -390,21 +393,43 @@ class DaytonaSandboxProvider:
             logger.warning("Daytona exec_stream does not support stdin — use write_file() instead")
 
         # Build command string with cwd/env baked in (session API has no
-        # cwd/env params).
+        # cwd/env params). Env is applied per-command via `env` rather than
+        # `export`, so it does not mutate the reused session's environment and
+        # leak into later no-env commands (session reuse, #641).
         cmd_str = shlex.join(command)
         if env:
             exports = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
-            cmd_str = f"export {exports} && {cmd_str}"
+            cmd_str = f"env {exports} {cmd_str}"
         if cwd:
             cmd_str = f"cd {shlex.quote(cwd)} && {cmd_str}"
 
-        # Reuse one session per sandbox; create lazily, delete at teardown.
-        session_id = await self._ensure_session(sandbox)
-
-        resp = await sandbox.process.execute_session_command(
-            session_id,
-            SessionExecuteRequest(command=cmd_str, run_async=True),
-        )
+        # Launch the command against the reusable session. A stale/evicted
+        # session surfaces here as a session-level DaytonaError *before* the
+        # command starts server-side, so retrying is safe. health_check probes
+        # via process.exec('true') (not through the session), so a dead session
+        # would never trip it or trigger sandbox replacement. Recover the way
+        # the old per-call design did: drop the cached id, re-enter
+        # _ensure_session to create a fresh one, and retry the launch once.
+        attempt = 0
+        while True:
+            session_id = await self._ensure_session(sandbox)
+            try:
+                resp = await sandbox.process.execute_session_command(
+                    session_id,
+                    SessionExecuteRequest(command=cmd_str, run_async=True),
+                )
+            except DaytonaError as exc:
+                if attempt == 0:
+                    logger.warning(
+                        "Daytona session error, recreating session and retrying",
+                        session_id=session_id,
+                        error=str(exc),
+                    )
+                    self._session_id = None
+                    attempt += 1
+                    continue
+                raise
+            break
         cmd_id = resp.cmd_id
 
         queue: asyncio.Queue[str | None] = asyncio.Queue()
@@ -442,6 +467,14 @@ class DaytonaSandboxProvider:
             if buf:
                 yield buf
         finally:
+            # Accept-and-bound contract for early break / cancellation /
+            # exception: the server-side command (run_async=True) keeps running
+            # to completion. The Daytona SDK exposes no per-command
+            # stop/terminate API (only whole-session delete_session), and
+            # deleting the session here would defeat the deliberate per-sandbox
+            # session reuse (#641). We accept the leak and bound it locally:
+            # cancel the streaming task so we stop consuming, and leave the
+            # session intact so the next command reuses it.
             if not log_task.done():
                 log_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
