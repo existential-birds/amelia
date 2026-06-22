@@ -1,11 +1,14 @@
 # tests/unit/server/orchestrator/test_start_pending.py
 """Tests for start_pending_workflow orchestrator method."""
 
+import asyncio
+import threading
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
+from amelia.core.types import AgentConfig, DriverType, Issue, Profile, TrackerType
 from amelia.server.exceptions import (
     ConcurrencyLimitError,
     InvalidStateError,
@@ -196,3 +199,92 @@ class TestStartPendingWorkflow:
 
         # Workflow should have started
         assert "/path/to/repo" in orchestrator._active_tasks
+
+
+class _SlowBlockingTracker:
+    """A tracker whose ``get_issue`` blocks the calling thread (issue #644).
+
+    Mirrors the helper in ``test_tracker_offloading``: if the fetch runs on
+    the event loop, a concurrent coroutine cannot advance and the call times
+    out; if it runs in a worker thread, the loop keeps spinning and the
+    concurrent coroutine releases it.
+    """
+
+    def __init__(self) -> None:
+        self.started = threading.Event()
+        self.release = threading.Event()
+
+    def get_issue(self, issue_id: str, *, cwd: str | None = None) -> Issue:
+        self.started.set()
+        if not self.release.wait(timeout=5.0):
+            raise AssertionError(
+                "get_issue was never released by a concurrent coroutine"
+            )
+        return Issue(id=issue_id, title="slow", description="slow", status="open")
+
+
+@pytest.mark.asyncio
+async def test_prepare_workflow_state_tracker_fetch_does_not_stall_concurrent_coroutine(
+    orchestrator: OrchestratorService,
+) -> None:
+    """_prepare_workflow_state's tracker fetch must not freeze the loop (issue #644).
+
+    When no ``task_title`` is supplied, ``_prepare_workflow_state`` fetches the
+    issue from the tracker. That fetch must run off the loop so concurrent
+    coroutines keep advancing. Mirrors ``test_tracker_offloading`` for the
+    ``_prepare_workflow_state`` call site.
+    """
+    tracker = _SlowBlockingTracker()
+    profile = Profile(
+        name="test",
+        tracker=TrackerType.NOOP,
+        repo_root="/tmp/test-repo",
+        agents={"architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet")},
+    )
+
+    progressed = False
+
+    async def concurrent_work() -> None:
+        nonlocal progressed
+        while not tracker.started.is_set():
+            await asyncio.sleep(0.005)
+        progressed = True
+        tracker.release.set()
+
+    with (
+        patch.object(
+            orchestrator,
+            "_resolve_profile",
+            new_callable=AsyncMock,
+            return_value=profile,
+        ),
+        patch.object(
+            orchestrator,
+            "_setup_workflow_branch",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "amelia.trackers.factory.create_tracker",
+            return_value=tracker,
+        ),
+        patch(
+            "amelia.server.orchestrator.service.get_git_head",
+            new_callable=AsyncMock,
+            return_value="abc123",
+        ),
+    ):
+        gathered = await asyncio.wait_for(
+            asyncio.gather(
+                orchestrator._prepare_workflow_state(
+                    uuid4(), "/tmp/test-repo", "ISSUE-644"
+                ),
+                concurrent_work(),
+            ),
+            timeout=10.0,
+        )
+
+    assert progressed, "concurrent coroutine never advanced — fetch blocked the loop"
+    _, _, execution_state, _ = gathered[0]
+    assert execution_state.issue is not None
+    assert execution_state.issue.id == "ISSUE-644"

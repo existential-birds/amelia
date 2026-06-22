@@ -113,7 +113,7 @@ async def test_slow_tracker_fetch_does_not_stall_concurrent_coroutine(
 
     with (
         patch(
-            "amelia.server.orchestrator.runner.create_tracker",
+            "amelia.trackers.factory.create_tracker",
             return_value=tracker,
         ),
         patch(

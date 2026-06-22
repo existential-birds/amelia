@@ -115,7 +115,7 @@ def mock_github_tracker(
     )
 
     with patch(
-        "amelia.server.orchestrator.service.create_tracker",
+        "amelia.trackers.factory.create_tracker",
         return_value=mock_tracker,
     ):
         yield mock_tracker

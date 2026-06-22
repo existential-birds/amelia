@@ -43,7 +43,7 @@ from amelia.server.orchestrator._common import (
 )
 from amelia.server.orchestrator.event_emitter import StreamEventEmitter
 from amelia.server.orchestrator.runner import GraphRunner
-from amelia.trackers.factory import create_tracker
+from amelia.trackers.factory import fetch_issue
 from amelia.trajectory import WorkflowTrajectoryRecorder
 
 
@@ -351,12 +351,9 @@ class OrchestratorService:
                 description=task_description or task_title,
             )
         else:
-            tracker = create_tracker(profile)
-            # Off-load the blocking subprocess/HTTP fetch so a slow tracker
-            # does not freeze the event loop (issue #644).
-            issue = await asyncio.to_thread(
-                tracker.get_issue, issue_id, cwd=worktree_path
-            )
+            # Off-load the blocking tracker fetch so a slow tracker does not
+            # freeze the event loop (issue #644).
+            issue = await fetch_issue(profile, issue_id, cwd=worktree_path)
 
         base_commit = await get_git_head(worktree_path)
 
@@ -1576,11 +1573,10 @@ class OrchestratorService:
                 issue = Issue.model_validate(workflow.issue_cache)
             else:
                 # Fallback: fetch from tracker
-                tracker = create_tracker(profile)
-                # Off-load the blocking subprocess/HTTP fetch so a slow tracker
-                # does not freeze the event loop (issue #644).
-                issue = await asyncio.to_thread(
-                    tracker.get_issue, workflow.issue_id, cwd=workflow.worktree_path
+                # Off-load the blocking tracker fetch so a slow tracker does not
+                # freeze the event loop (issue #644).
+                issue = await fetch_issue(
+                    profile, workflow.issue_id, cwd=workflow.worktree_path
                 )
 
             base_commit = await get_git_head(workflow.worktree_path)

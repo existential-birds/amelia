@@ -43,7 +43,7 @@ from amelia.server.orchestrator.event_emitter import (
     StreamEventEmitter,
     is_interrupt_chunk,
 )
-from amelia.trackers.factory import create_tracker
+from amelia.trackers.factory import fetch_issue
 from amelia.trajectory import finalize_and_index
 
 
@@ -290,11 +290,10 @@ class GraphRunner:
             issue = Issue.model_validate(state.issue_cache)
         else:
             # Fallback: fetch from tracker (shouldn't normally happen)
-            tracker = create_tracker(profile)
-            # Off-load the blocking subprocess/HTTP fetch so a slow tracker
-            # does not freeze the event loop (issue #644).
-            issue = await asyncio.to_thread(
-                tracker.get_issue, state.issue_id, cwd=state.worktree_path
+            # Off-load the blocking tracker fetch so a slow tracker does not
+            # freeze the event loop (issue #644).
+            issue = await fetch_issue(
+                profile, state.issue_id, cwd=state.worktree_path
             )
 
         # Get current HEAD as base commit (we're starting fresh)
