@@ -18,7 +18,7 @@ from amelia.agents.reviewer import Reviewer
 from amelia.core.types import ReviewResult
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.utils import extract_node_config, wrap_with_recording
-from amelia.skills.review import REVIEW_TYPE_SKILLS, detect_stack, load_skills
+from amelia.skills.review import REVIEW_TYPE_SKILLS, detect_stack, load_skills_by_type
 from amelia.tools.git_utils import get_current_commit
 
 
@@ -267,9 +267,9 @@ async def call_reviewer_node(
     changed_files = [f for f in changed_files_raw.splitlines() if f.strip()]
     tags = detect_stack(changed_files, diff_content)
 
-    # Write diff to a shared temp file (written once, read by all review passes)
+    # Write diff to a shared temp file (written once, read by all review passes).
+    # mkdir/write_text are synchronous, so run them off the event loop.
     diff_dir = Path(f"/tmp/amelia-review-{nc.workflow_id}")
-    diff_dir.mkdir(parents=True, exist_ok=True)
     diff_path = diff_dir / "diff.patch"
 
     file_list_str = "\n".join(f"  {f}" for f in changed_files)
@@ -278,7 +278,8 @@ async def call_reviewer_node(
         f"Changed files:\n{file_list_str}\n\n"
         f"{diff_content}"
     )
-    diff_path.write_text(diff_file_content)
+    await asyncio.to_thread(diff_dir.mkdir, parents=True, exist_ok=True)
+    await asyncio.to_thread(diff_path.write_text, diff_file_content)
     logger.info("Wrote diff file for review", diff_path=str(diff_path), size=len(diff_file_content))
 
     logger.info(
@@ -288,6 +289,12 @@ async def call_reviewer_node(
         review_types=review_types,
     )
 
+    # Tags and diff are fixed for this invocation, so resolve every review
+    # type's skills in a single off-event-loop pass. Shared base/tag skill
+    # files are read from disk only once here instead of once per pass and per
+    # retry iteration.
+    guidelines_by_type = await asyncio.to_thread(load_skills_by_type, tags, review_types)
+
     # Run a separate reviewer per review type. Passes are independent (they share
     # the read-only diff file written above), so run them concurrently. When more
     # than one type is configured, give each pass a distinct display name so its
@@ -296,7 +303,7 @@ async def call_reviewer_node(
 
     async def _run_pass(review_type: str) -> tuple[ReviewResult, str | None]:
         """Run a single reviewer pass for one review type and return its result and session id."""
-        guidelines = load_skills(tags, [review_type])
+        guidelines = guidelines_by_type[review_type]
         pass_name = f"{agent_name}:{review_type}" if multi_pass else agent_name
         logger.info(
             "Running review pass",

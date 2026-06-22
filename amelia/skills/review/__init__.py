@@ -118,8 +118,48 @@ def detect_stack(file_paths: list[str], diff_content: str) -> set[str]:
     return tags
 
 
+def _read_skill_files(rel_paths: list[str], cache: dict[str, str]) -> str:
+    """Read and concatenate skill files, reading each file at most once.
+
+    Args:
+        rel_paths: Skill file paths to include (order-independent; output is
+            sorted for determinism).
+        cache: Mutable cache mapping rel_path -> stripped file content. Shared
+            across calls so the same base/general skill file is read from disk
+            only once even when multiple review types reference it.
+
+    Returns:
+        Concatenated markdown content joined with "---" separators.
+    """
+    sections: list[str] = []
+    for rel_path in sorted(set(rel_paths)):
+        if rel_path not in cache:
+            full_path = _SKILLS_DIR / rel_path
+            cache[rel_path] = (
+                full_path.read_text(encoding="utf-8").strip() if full_path.exists() else ""
+            )
+        content = cache[rel_path]
+        if content:
+            sections.append(content)
+    return "\n\n---\n\n".join(sections)
+
+
+def _collect_paths(tags: set[str], review_types: list[str]) -> list[str]:
+    """Collect skill file paths for the given tags and review types."""
+    paths: list[str] = []
+    for review_type in review_types:
+        paths.extend(REVIEW_TYPE_SKILLS.get(review_type, []))
+    for tag in sorted(tags):
+        paths.extend(REVIEW_SKILLS.get(tag, []))
+    return paths
+
+
 def load_skills(tags: set[str], review_types: list[str]) -> str:
     """Load and concatenate review skill files for the given tags and types.
+
+    Retained as the parity oracle for ``load_skills_by_type`` — all production
+    callers route through the batched variant. Tests in
+    ``tests/unit/skills/test_review.py`` verify both produce identical output.
 
     Args:
         tags: Technology tags from detect_stack().
@@ -128,25 +168,27 @@ def load_skills(tags: set[str], review_types: list[str]) -> str:
     Returns:
         Concatenated markdown content from all matched skill files.
     """
-    seen_paths: set[str] = set()
-    sections: list[str] = []
+    return _read_skill_files(_collect_paths(tags, review_types), cache={})
 
-    # Collect file paths from review types
-    for review_type in review_types:
-        for rel_path in REVIEW_TYPE_SKILLS.get(review_type, []):
-            if rel_path not in seen_paths:
-                seen_paths.add(rel_path)
 
-    # Collect file paths from technology tags
-    for tag in sorted(tags):
-        for rel_path in REVIEW_SKILLS.get(tag, []):
-            if rel_path not in seen_paths:
-                seen_paths.add(rel_path)
+def load_skills_by_type(tags: set[str], review_types: list[str]) -> dict[str, str]:
+    """Load review skills for several review types in a single pass.
 
-    # Read and concatenate
-    for rel_path in sorted(seen_paths):
-        full_path = _SKILLS_DIR / rel_path
-        if full_path.exists():
-            sections.append(full_path.read_text(encoding="utf-8").strip())
+    Tag-based skills are shared across review types while each review type has
+    its own base skills. This reads every distinct skill file from disk at most
+    once (shared tag/base files are cached), so callers can resolve guidelines
+    for all configured review types without re-reading shared files per type or
+    per retry iteration.
 
-    return "\n\n---\n\n".join(sections)
+    Args:
+        tags: Technology tags from detect_stack() (fixed for the invocation).
+        review_types: Review types to resolve (e.g., ["general", "security"]).
+
+    Returns:
+        Mapping of review_type -> concatenated markdown guidelines.
+    """
+    cache: dict[str, str] = {}
+    return {
+        review_type: _read_skill_files(_collect_paths(tags, [review_type]), cache)
+        for review_type in review_types
+    }

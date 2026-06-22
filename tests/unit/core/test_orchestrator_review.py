@@ -33,7 +33,10 @@ def _mock_skill_detection():
             return_value="",
         ),
         patch("amelia.pipelines.nodes.detect_stack", return_value=set()),
-        patch("amelia.pipelines.nodes.load_skills", return_value=""),
+        patch(
+            "amelia.pipelines.nodes.load_skills_by_type",
+            side_effect=lambda tags, review_types: {rt: "" for rt in review_types},
+        ),
     ):
         yield
 
@@ -207,7 +210,10 @@ class TestCallReviewNodeMultipleReviewTypes:
                 side_effect=mock_git_cmd,
             ),
             patch("amelia.pipelines.nodes.detect_stack", return_value={"python"}),
-            patch("amelia.pipelines.nodes.load_skills", return_value="# Guidelines") as mock_load,
+            patch(
+                "amelia.pipelines.nodes.load_skills_by_type",
+                return_value={"general": "# General", "security": "# Security"},
+            ) as mock_load,
             patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_cls,
         ):
             mock_reviewer = MagicMock()
@@ -219,10 +225,8 @@ class TestCallReviewNodeMultipleReviewTypes:
 
             # Reviewer constructed twice (once per review type)
             assert mock_reviewer_cls.call_count == 2
-            # load_skills called once per review type
-            assert mock_load.call_count == 2
-            mock_load.assert_any_call({"python"}, ["general"])
-            mock_load.assert_any_call({"python"}, ["security"])
+            # Skills resolved once for the whole invocation, covering all types.
+            mock_load.assert_called_once_with({"python"}, ["general", "security"])
 
             # Result contains both reviews, tagged with review type
             reviews = result["last_reviews"]
@@ -451,7 +455,10 @@ class TestCallReviewNodeMultipleReviewTypes:
                 return_value="",
             ),
             patch("amelia.pipelines.nodes.detect_stack", return_value=set()),
-            patch("amelia.pipelines.nodes.load_skills", return_value="") as mock_load,
+            patch(
+                "amelia.pipelines.nodes.load_skills_by_type",
+                return_value={"general": ""},
+            ) as mock_load,
             patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_cls,
         ):
             mock_reviewer = MagicMock()

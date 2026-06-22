@@ -1,5 +1,7 @@
 """Tests for review skill detection and loading."""
-from amelia.skills.review import detect_stack, load_skills
+from unittest.mock import patch
+
+from amelia.skills.review import detect_stack, load_skills, load_skills_by_type
 
 
 class TestDetectStack:
@@ -118,3 +120,47 @@ class TestLoadSkills:
         content = load_skills({"python"}, ["general"])
         # Count occurrences of a unique header
         assert content.count("# Python Code Review") == 1
+
+
+class TestLoadSkillsByType:
+    """Tests for load_skills_by_type()."""
+
+    def test_returns_per_type_guidelines(self) -> None:
+        result = load_skills_by_type({"python"}, ["general", "security"])
+        assert set(result.keys()) == {"general", "security"}
+        # general gets its base skills + the shared python tag skill
+        assert "General Code Review" in result["general"]
+        assert "Python Code Review" in result["general"]
+        # security gets its own base skill + the same shared python tag skill,
+        # but not general's base skills
+        assert "Security" in result["security"]
+        assert "Python Code Review" in result["security"]
+        assert "General Code Review" not in result["security"]
+
+    def test_matches_per_type_load_skills(self) -> None:
+        """Each entry must equal the single-type load_skills() result."""
+        tags = {"python", "fastapi"}
+        result = load_skills_by_type(tags, ["general", "security"])
+        assert result["general"] == load_skills(tags, ["general"])
+        assert result["security"] == load_skills(tags, ["security"])
+
+    def test_reads_shared_files_once(self) -> None:
+        """A skill file shared across review types is read from disk only once.
+
+        The python tag skill is shared by both review types here; across the
+        two types the underlying file must be read exactly once, proving the
+        per-type dedup that the old per-pass loop lacked.
+        """
+        from pathlib import Path as _Path
+
+        real_read_text = _Path.read_text
+        read_counts: dict[str, int] = {}
+
+        def counting_read_text(self: _Path, *args, **kwargs):
+            read_counts[self.name] = read_counts.get(self.name, 0) + 1
+            return real_read_text(self, *args, **kwargs)
+
+        with patch.object(_Path, "read_text", counting_read_text):
+            load_skills_by_type({"python"}, ["general", "security"])
+
+        assert read_counts.get("python.md") == 1, "shared python skill must be read exactly once"

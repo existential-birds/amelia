@@ -16,8 +16,8 @@ class TestSkillInjection:
         mock_execution_state_factory,
         mock_runnable_config,
     ) -> None:
-        """Verify detect_stack and load_skills are called and review_guidelines
-        is passed to the Reviewer constructor."""
+        """Verify detect_stack and load_skills_by_type are called and
+        review_guidelines is passed to the Reviewer constructor."""
         state, profile = mock_execution_state_factory(
             goal="Test goal",
             base_commit="abc123",
@@ -38,8 +38,8 @@ class TestSkillInjection:
                 return_value={"python", "fastapi"},
             ) as mock_detect,
             patch(
-                "amelia.pipelines.nodes.load_skills",
-                return_value="# Python Review Guidelines\n...",
+                "amelia.pipelines.nodes.load_skills_by_type",
+                return_value={"general": "# Python Review Guidelines\n..."},
             ) as mock_load,
             patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_cls,
             patch(
@@ -66,7 +66,8 @@ class TestSkillInjection:
                 "from fastapi import FastAPI\n",
             )
 
-            # Verify load_skills was called per review type (default: ["general"])
+            # Verify load_skills_by_type was called once with the default
+            # review type list (skills resolved once per node invocation).
             mock_load.assert_called_once_with({"python", "fastapi"}, ["general"])
 
             # Verify Reviewer was constructed with review_guidelines
@@ -81,7 +82,7 @@ class TestSkillInjection:
         mock_execution_state_factory,
         mock_runnable_config,
     ) -> None:
-        """Verify review_types from agent_config.options are passed to load_skills."""
+        """Verify review_types from agent_config.options are passed to load_skills_by_type."""
         state, profile = mock_execution_state_factory(
             goal="Test goal",
             base_commit="abc123",
@@ -116,8 +117,8 @@ class TestSkillInjection:
                 return_value={"python"},
             ),
             patch(
-                "amelia.pipelines.nodes.load_skills",
-                return_value="# Guidelines",
+                "amelia.pipelines.nodes.load_skills_by_type",
+                return_value={"general": "# Guidelines", "security": "# Security Guidelines"},
             ) as mock_load,
             patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_cls,
             patch(
@@ -136,10 +137,10 @@ class TestSkillInjection:
 
             await call_reviewer_node(state, config)
 
-            # Verify load_skills was called once per review type
-            assert mock_load.call_count == 2
-            mock_load.assert_any_call({"python"}, ["general"])
-            mock_load.assert_any_call({"python"}, ["security"])
+            # Skills are resolved once per node invocation: a single
+            # load_skills_by_type call covering all configured review types,
+            # not one call per type.
+            mock_load.assert_called_once_with({"python"}, ["general", "security"])
 
     @pytest.mark.asyncio
     async def test_empty_skills_when_no_matching_tags(
@@ -168,8 +169,8 @@ class TestSkillInjection:
                 return_value=set(),
             ),
             patch(
-                "amelia.pipelines.nodes.load_skills",
-                return_value="",
+                "amelia.pipelines.nodes.load_skills_by_type",
+                return_value={"general": ""},
             ),
             patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_cls,
             patch(
