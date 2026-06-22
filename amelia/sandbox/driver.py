@@ -1,12 +1,18 @@
 """ContainerDriver — DriverInterface implementation for sandboxed execution.
 
-Delegates LLM execution to a container worker via SandboxProvider.exec_stream().
-The worker runs inside a Docker container and streams AgenticMessage JSON lines.
+Delegates LLM execution to a container worker. When the provider supports a
+persistent worker (e.g. Docker via ``docker exec -i``), a single long-lived
+``serve`` process is spawned once per sandbox and reused across every agent
+call, so the heavy LangChain/deepagents import cost is paid once rather than
+on every call. Providers without a duplex stdin pipe (e.g. Daytona) fall back
+to the per-call one-shot worker path.
 """
 from __future__ import annotations
 
+import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import aclosing
 from typing import Any
 from uuid import uuid4
 
@@ -18,7 +24,110 @@ from amelia.drivers.base import (
     DriverUsage,
     GenerateResult,
 )
-from amelia.sandbox.provider import SandboxProvider
+from amelia.sandbox.protocol import (
+    WorkerRequest,
+    encode_request,
+    parse_frame,
+)
+from amelia.sandbox.provider import SandboxProvider, WorkerProcess
+
+
+def _parse_worker_message(raw: str) -> AgenticMessage:
+    """Validate a worker AgenticMessage JSON payload, normalizing failures.
+
+    Args:
+        raw: A JSON-encoded AgenticMessage emitted by the worker.
+
+    Returns:
+        The parsed AgenticMessage.
+
+    Raises:
+        RuntimeError: If the payload is not a valid AgenticMessage.
+    """
+    try:
+        return AgenticMessage.model_validate_json(raw)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise RuntimeError(f"Failed to parse worker output: {raw[:200]}") from exc
+
+
+class _PersistentWorker:
+    """Owns one long-lived ``serve`` process and dispatches commands to it.
+
+    The worker is spawned lazily on first use and reused for the sandbox's
+    lifetime. Commands are serialized with a lock so frames from concurrent
+    callers never interleave on the shared pipe. A crashed worker is detected
+    (EOF mid-command) and reset so the next command respawns a fresh one.
+    """
+
+    def __init__(
+        self,
+        provider: SandboxProvider,
+        cwd: str | None,
+        env: dict[str, str] | None,
+    ) -> None:
+        self._provider = provider
+        self._cwd = cwd
+        self._env = env
+        self._proc: WorkerProcess | None = None
+        self._lock = asyncio.Lock()
+
+    async def _ensure(self) -> WorkerProcess:
+        if self._proc is None or not self._proc.alive:
+            self._proc = await self._provider.spawn_worker(cwd=self._cwd, env=self._env)
+        return self._proc
+
+    async def dispatch(self, request: WorkerRequest) -> AsyncGenerator[AgenticMessage]:
+        """Send one request and yield its AgenticMessages until ``done``.
+
+        Args:
+            request: The command to run.
+
+        Yields:
+            AgenticMessage objects (including USAGE).
+
+        Raises:
+            RuntimeError: If the worker reports an error or crashes mid-command.
+        """
+        async with self._lock:
+            proc = await self._ensure()
+            completed = False
+            try:
+                await proc.write(encode_request(request))
+                error: str | None = None
+                while True:
+                    line = await proc.readline()
+                    if not line:
+                        raise RuntimeError("Sandbox worker exited unexpectedly mid-command")
+                    frame = parse_frame(line)
+                    if frame.frame == "done":
+                        # ``done`` always terminates a command (success OR error).
+                        # Surface a deferred error only after fully draining the
+                        # command's frames, so the pipe is left clean for the next
+                        # command (no stale trailing ``done``).
+                        completed = True
+                        if error is not None:
+                            raise RuntimeError(f"Sandbox worker error: {error}")
+                        return
+                    if frame.frame == "error":
+                        # Record and keep reading until ``done`` (protocol guarantees
+                        # ``error`` is followed by ``done``).
+                        error = frame.error
+                        continue
+                    # frame.frame == "msg"
+                    if frame.msg is not None and error is None:
+                        yield _parse_worker_message(frame.msg)
+            finally:
+                # Any exit before ``done`` (crash EOF, caller cancellation, or a
+                # parse failure) leaves unread frames on the shared pipe. Drop
+                # and close the worker so the next command respawns a clean one.
+                if not completed and self._proc is proc:
+                    self._proc = None
+                    await asyncio.shield(proc.close())
+
+    async def close(self) -> None:
+        if self._proc is not None:
+            await self._proc.close()
+            self._proc = None
 
 
 class ContainerDriver:
@@ -34,6 +143,13 @@ class ContainerDriver:
         self._provider = provider
         self._env = env
         self._last_usage: DriverUsage | None = None
+        self._worker: _PersistentWorker | None = None
+
+    def _persistent_worker(self) -> _PersistentWorker:
+        """Return the shared persistent worker, creating it on first use."""
+        if self._worker is None:
+            self._worker = _PersistentWorker(self._provider, cwd=None, env=self._env)
+        return self._worker
 
     async def _write_prompt(self, prompt: str, workflow_id: str | None = None) -> str:
         """Write the prompt to a temp file inside the container.
@@ -58,25 +174,6 @@ class ContainerDriver:
         """
         async for _ in self._provider.exec_stream(["rm", "-f", prompt_path]):
             pass
-
-    def _parse_line(self, line: str) -> AgenticMessage:
-        """Parse a JSON line from the worker into an AgenticMessage.
-
-        Args:
-            line: JSON-encoded line from the worker process.
-
-        Returns:
-            Parsed AgenticMessage.
-
-        Raises:
-            RuntimeError: If the line cannot be parsed.
-        """
-        try:
-            return AgenticMessage.model_validate_json(line)
-        except (json.JSONDecodeError, ValidationError) as exc:
-            raise RuntimeError(
-                f"Failed to parse worker output: {line[:200]}"
-            ) from exc
 
     async def execute_agentic(
         self,
@@ -114,13 +211,31 @@ class ContainerDriver:
             raise ValueError("Prompt cannot be empty")
 
         await self._provider.ensure_running()
-        workflow_id = kwargs.get("workflow_id")
-        prompt_path = await self._write_prompt(prompt, workflow_id=workflow_id)
 
         # Translate host path to sandbox-internal path (no-op for Docker,
         # maps to /workspace/repo for Daytona).
         sandbox_cwd = self._provider.resolve_cwd(cwd)
 
+        if self._provider.supports_persistent_worker:
+            request = WorkerRequest(
+                mode="agentic",
+                prompt=prompt,
+                model=self.model,
+                cwd=sandbox_cwd,
+                instructions=instructions,
+            )
+            worker = self._persistent_worker()
+            async with aclosing(worker.dispatch(request)) as stream:
+                async for msg in stream:
+                    if msg.type == AgenticMessageType.USAGE:
+                        self._last_usage = msg.usage
+                    else:
+                        yield msg
+            return
+
+        # One-shot fallback: fresh worker process per call.
+        workflow_id = kwargs.get("workflow_id")
+        prompt_path = await self._write_prompt(prompt, workflow_id=workflow_id)
         try:
             cmd = [
                 *self._provider.worker_cmd, "agentic",
@@ -132,7 +247,7 @@ class ContainerDriver:
                 cmd.extend(["--instructions", instructions])
 
             async for line in self._provider.exec_stream(cmd, cwd=sandbox_cwd, env=self._env):
-                msg = self._parse_line(line)
+                msg = _parse_worker_message(line)
                 if msg.type == AgenticMessageType.USAGE:
                     self._last_usage = msg.usage
                 else:
@@ -172,27 +287,45 @@ class ContainerDriver:
             raise ValueError("Prompt cannot be empty")
 
         await self._provider.ensure_running()
-        workflow_id = kwargs.get("workflow_id")
-        prompt_path = await self._write_prompt(prompt, workflow_id=workflow_id)
 
-        try:
-            cmd = [
-                *self._provider.worker_cmd, "generate",
-                "--prompt-file", prompt_path,
-                "--model", self.model,
-            ]
-            if schema:
-                cmd.extend(["--schema", f"{schema.__module__}:{schema.__name__}"])
+        schema_path = f"{schema.__module__}:{schema.__name__}" if schema else None
+        result_content: str | None = None
 
-            result_content: str | None = None
-            async for line in self._provider.exec_stream(cmd, env=self._env):
-                msg = self._parse_line(line)
-                if msg.type == AgenticMessageType.USAGE:
-                    self._last_usage = msg.usage
-                elif msg.type == AgenticMessageType.RESULT:
-                    result_content = msg.content
-        finally:
-            await self._cleanup_prompt(prompt_path)
+        if self._provider.supports_persistent_worker:
+            request = WorkerRequest(
+                mode="generate",
+                prompt=prompt,
+                model=self.model,
+                schema_path=schema_path,
+            )
+            worker = self._persistent_worker()
+            async with aclosing(worker.dispatch(request)) as stream:
+                async for msg in stream:
+                    if msg.type == AgenticMessageType.USAGE:
+                        self._last_usage = msg.usage
+                    elif msg.type == AgenticMessageType.RESULT:
+                        result_content = msg.content
+        else:
+            # One-shot fallback: fresh worker process per call.
+            workflow_id = kwargs.get("workflow_id")
+            prompt_path = await self._write_prompt(prompt, workflow_id=workflow_id)
+            try:
+                cmd = [
+                    *self._provider.worker_cmd, "generate",
+                    "--prompt-file", prompt_path,
+                    "--model", self.model,
+                ]
+                if schema_path:
+                    cmd.extend(["--schema", schema_path])
+
+                async for line in self._provider.exec_stream(cmd, env=self._env):
+                    msg = _parse_worker_message(line)
+                    if msg.type == AgenticMessageType.USAGE:
+                        self._last_usage = msg.usage
+                    elif msg.type == AgenticMessageType.RESULT:
+                        result_content = msg.content
+            finally:
+                await self._cleanup_prompt(prompt_path)
 
         if result_content is None:
             raise RuntimeError("Worker did not emit a RESULT message")

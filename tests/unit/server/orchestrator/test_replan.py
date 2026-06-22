@@ -1,11 +1,12 @@
 """Unit tests for replan_workflow orchestrator method."""
 import asyncio
+import threading
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.pipelines.implementation.state import rebuild_implementation_state
 from amelia.server.events.bus import EventBus
 from amelia.server.exceptions import InvalidStateError, WorkflowConflictError, WorkflowNotFoundError
@@ -16,6 +17,28 @@ from amelia.server.orchestrator.service import OrchestratorService
 
 # Rebuild Pydantic models so forward references resolve correctly
 rebuild_implementation_state()
+
+
+class _SlowBlockingTracker:
+    """A tracker whose ``get_issue`` blocks the calling thread (issue #644).
+
+    Mirrors the helper in ``test_tracker_offloading``: if the fetch runs on
+    the event loop, a concurrent coroutine cannot advance and the call times
+    out; if it runs in a worker thread, the loop keeps spinning and the
+    concurrent coroutine releases it.
+    """
+
+    def __init__(self) -> None:
+        self.started = threading.Event()
+        self.release = threading.Event()
+
+    def get_issue(self, issue_id: str, *, cwd: str | None = None) -> Issue:
+        self.started.set()
+        if not self.release.wait(timeout=5.0):
+            raise AssertionError(
+                "get_issue was never released by a concurrent coroutine"
+            )
+        return Issue(id=issue_id, title="slow", description="slow", status="open")
 
 
 @pytest.fixture
@@ -218,6 +241,53 @@ class TestReplanWorkflow:
         stage_events = [e for e in received_events if e.event_type == EventType.STAGE_STARTED]
         assert len(stage_events) >= 1
         assert any("replan" in (e.message or "").lower() for e in stage_events)
+
+    async def test_replan_tracker_fetch_does_not_stall_concurrent_coroutine(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ) -> None:
+        """replan_workflow's tracker fallback must not freeze the event loop (issue #644).
+
+        With no ``issue_cache``, replan falls back to fetching the issue from
+        the tracker. That fetch must run off the loop so concurrent coroutines
+        keep advancing. Mirrors ``test_tracker_offloading`` for the
+        ``replan_workflow`` call site.
+        """
+        tracker = _SlowBlockingTracker()
+        workflow = make_blocked_workflow()
+        # No issue_cache -> forces the tracker fetch fallback in replan_workflow.
+        assert workflow.issue_cache is None
+        mock_repository.get.return_value = workflow
+
+        progressed = False
+
+        async def concurrent_work() -> None:
+            nonlocal progressed
+            while not tracker.started.is_set():
+                await asyncio.sleep(0.005)
+            progressed = True
+            tracker.release.set()
+
+        with (
+            patch(
+                "amelia.trackers.factory.create_tracker",
+                return_value=tracker,
+            ),
+            patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock),
+            patch.object(
+                orchestrator._runner, "run_planning_task", new_callable=AsyncMock
+            ),
+        ):
+            await asyncio.wait_for(
+                asyncio.gather(
+                    orchestrator.replan_workflow(workflow.id),
+                    concurrent_work(),
+                ),
+                timeout=10.0,
+            )
+
+        assert progressed, "concurrent coroutine never advanced — fetch blocked the loop"
 
     async def test_replan_missing_profile_raises_without_failing_workflow(
         self,
