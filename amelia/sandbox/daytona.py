@@ -528,7 +528,7 @@ class DaytonaSandboxProvider:
             try:
                 await self._sandbox.process.delete_session(self._session_id)
             except Exception as exc:
-                logger.debug(
+                logger.warning(
                     "Failed to delete Daytona session",
                     session_id=self._session_id,
                     error=exc,
