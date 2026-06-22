@@ -105,6 +105,12 @@ class DaytonaSandboxProvider:
         # first exec_stream and deleted only at teardown (#641). Avoids a
         # create/delete round-trip on every command.
         self._session_id: str | None = None
+        # Guards the _session_id check-then-create in _ensure_session so
+        # concurrent exec_stream calls (e.g. an asyncio.gather fan-out on a
+        # shared provider) can't each create their own session and orphan
+        # the losers. Only session creation is serialized; concurrent
+        # commands still run in parallel (each gets its own cmd_id).
+        self._session_lock = asyncio.Lock()
 
     @property
     def _git_auth(self) -> dict[str, str]:
@@ -322,8 +328,17 @@ class DaytonaSandboxProvider:
         A single session is created per sandbox and reused across every
         command, rather than created and deleted per call. It is deleted
         only at teardown.
+
+        Uses double-checked locking: the fast path (session already exists)
+        returns without acquiring the lock, while the slow path re-checks
+        under the lock so two concurrent callers can't both create a
+        session and orphan one.
         """
-        if self._session_id is None:
+        if self._session_id is not None:
+            return self._session_id
+        async with self._session_lock:
+            if self._session_id is not None:
+                return self._session_id
             session_id = f"amelia-{uuid.uuid4().hex[:12]}"
             await sandbox.process.create_session(session_id)
             self._session_id = session_id

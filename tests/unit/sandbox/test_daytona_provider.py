@@ -828,6 +828,53 @@ class TestDaytonaSandboxProviderSessionReuse:
             mock_sandbox.process.delete_session.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_concurrent_exec_stream_creates_one_session(self) -> None:
+        """Concurrent exec_stream calls share one session (no orphans).
+
+        Regression guard for the check-then-act race in _ensure_session: an
+        asyncio.gather fan-out on a shared provider (e.g. parallel review
+        passes) must not let each caller create its own session and orphan
+        the losers (#641). ``create_session`` yields to the loop so every
+        caller reaches the create point before any assigns ``_session_id``,
+        which forces the race on the unlocked path (create_session would be
+        called once per caller instead of once total).
+        """
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = _make_mock_sandbox(["out\n"])
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            # Yield at the create point so concurrent callers overlap inside
+            # _ensure_session's check-then-create window.
+            async def slow_create_session(_sid: str) -> None:
+                await asyncio.sleep(0)
+
+            mock_sandbox.process.create_session.side_effect = slow_create_session
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            async def run(cmd: str) -> list[str]:
+                return [line async for line in provider.exec_stream([cmd])]
+
+            await asyncio.gather(run("one"), run("two"), run("three"))
+
+            # Exactly one session created across three concurrent commands.
+            mock_sandbox.process.create_session.assert_called_once()
+            # All three commands ran against that single session id.
+            exec_calls = mock_sandbox.process.execute_session_command.call_args_list
+            assert len(exec_calls) == 3
+            session_id = mock_sandbox.process.create_session.call_args[0][0]
+            for call in exec_calls:
+                assert call[0][0] == session_id
+
+    @pytest.mark.asyncio
     async def test_teardown_deletes_session_exactly_once(self) -> None:
         """Reusable session is deleted once at teardown, before the sandbox."""
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
