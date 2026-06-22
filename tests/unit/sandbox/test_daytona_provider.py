@@ -905,6 +905,42 @@ class TestDaytonaSandboxProviderSessionReuse:
             mock_sandbox.delete.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_session_reset_when_sandbox_replaced(self) -> None:
+        """Replacing an unhealthy sandbox forces the next command to create a new session."""
+        with (
+            patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls,
+            patch("amelia.sandbox.daytona.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            first_sandbox = _make_mock_sandbox(["first\n"])
+            second_sandbox = _make_mock_sandbox(["second\n"])
+            mock_client.create.side_effect = [first_sandbox, second_sandbox]
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+            async for _ in provider.exec_stream(["echo", "first"]):
+                pass
+            first_session_id = first_sandbox.process.create_session.call_args[0][0]
+
+            provider.health_check = AsyncMock(return_value=False)  # type: ignore[method-assign]
+            await provider.ensure_running()
+            async for _ in provider.exec_stream(["echo", "second"]):
+                pass
+            second_session_id = second_sandbox.process.create_session.call_args[0][0]
+
+            assert mock_client.create.call_count == 2
+            first_sandbox.delete.assert_called_once()
+            first_sandbox.process.create_session.assert_called_once()
+            second_sandbox.process.create_session.assert_called_once()
+            assert first_session_id != second_session_id
+
+    @pytest.mark.asyncio
     async def test_exec_stream_bakes_cwd_and_env_into_command(self) -> None:
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider

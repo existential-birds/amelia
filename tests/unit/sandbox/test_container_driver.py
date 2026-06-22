@@ -191,6 +191,8 @@ class TestExecuteAgentic:
             async for _ in driver.execute_agentic(prompt="test", cwd="/work"):
                 pass
 
+        # Exactly one exec_stream call (the worker) even on the parse-error path.
+        assert len(calls) == 1
         assert all(cmd[0] != "rm" for cmd in calls)
 
 
