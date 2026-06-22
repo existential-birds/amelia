@@ -1075,7 +1075,7 @@ class TestStartWorkflowWithTaskFields:
 
         with (
             patch(
-                "amelia.server.orchestrator.service.create_tracker"
+                "amelia.trackers.factory.create_tracker"
             ) as mock_create_tracker,
             patch.object(orchestrator._runner, "run_workflow_with_retry", new=AsyncMock()),
         ):
