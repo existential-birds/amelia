@@ -149,13 +149,17 @@ def _collect_paths(tags: set[str], review_types: list[str]) -> list[str]:
     paths: list[str] = []
     for review_type in review_types:
         paths.extend(REVIEW_TYPE_SKILLS.get(review_type, []))
-    for tag in tags:
+    for tag in sorted(tags):
         paths.extend(REVIEW_SKILLS.get(tag, []))
     return paths
 
 
 def load_skills(tags: set[str], review_types: list[str]) -> str:
     """Load and concatenate review skill files for the given tags and types.
+
+    Retained as the parity oracle for ``load_skills_by_type`` — all production
+    callers route through the batched variant. Tests in
+    ``tests/unit/skills/test_review.py`` verify both produce identical output.
 
     Args:
         tags: Technology tags from detect_stack().
