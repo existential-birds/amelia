@@ -14,13 +14,13 @@ amelia is async-only, so no synchronous ``wrap_tool_call`` is provided.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
+from pydantic import BaseModel, ConfigDict
 
 from amelia.core.constants import normalize_tool_name
 from amelia.tools.registry.registry import registry
@@ -31,8 +31,7 @@ from amelia.tools.registry.spec import RiskLevel
 type _AsyncToolHandler = Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]]
 
 
-@dataclass(frozen=True)
-class ToolPolicy:
+class ToolPolicy(BaseModel):
     """Declarative policy governing which tools a run may invoke.
 
     Attributes:
@@ -41,6 +40,8 @@ class ToolPolicy:
         max_risk: Risk ceiling. A permitted tool whose ``risk_level`` exceeds
             this is still denied. Defaults to ``EXECUTE`` (permissive).
     """
+
+    model_config = ConfigDict(frozen=True)
 
     allowed: frozenset[str]
     max_risk: RiskLevel = RiskLevel.EXECUTE
@@ -87,7 +88,13 @@ class ToolPolicyMiddleware(AgentMiddleware):
             )
 
         spec = registry.get(name)
-        if spec is not None and spec.risk_level > self.policy.max_risk:
+        if spec is None:
+            return ToolMessage(
+                content=f"Denied: tool '{name}' is not registered.",
+                tool_call_id=tool_call_id,
+                status="error",
+            )
+        if spec.risk_level > self.policy.max_risk:
             return ToolMessage(
                 content=(
                     f"Denied: tool '{name}' risk level ({spec.risk_level.name}) "

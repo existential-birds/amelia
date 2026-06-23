@@ -77,7 +77,9 @@ class TestToolPolicy:
 
     def test_frozen(self):
         policy = ToolPolicy(allowed=frozenset({"read_file"}))
-        with pytest.raises((AttributeError, TypeError)):
+        from pydantic import ValidationError
+
+        with pytest.raises((AttributeError, TypeError, ValidationError)):
             policy.allowed = frozenset({"write_file"})  # type: ignore[misc]
 
 
@@ -176,4 +178,29 @@ async def test_policy_normalizes_cli_tool_name_aliases(tmp_path):
     result2 = await mw2.awrap_tool_call(request2, handler2)
     assert result2.status == "error"
     assert "denied" in result2.content.lower()
+
+
+async def test_policy_denies_unregistered_tool_in_allowed_set():
+    """A tool name in the allowed set but missing from the registry is denied.
+
+    Defense-in-depth: an unregistered tool has no risk metadata, so the policy
+    must refuse to forward it to the handler rather than silently executing it.
+    """
+    from langgraph.prebuilt.tool_node import ToolCallRequest
+
+    policy = ToolPolicy(allowed=frozenset({"nonexistent_tool"}), max_risk=RiskLevel.EXECUTE)
+    mw = ToolPolicyMiddleware(policy=policy)
+
+    async def handler(_req: ToolCallRequest) -> ToolMessage:
+        return ToolMessage(content="should-not-run", tool_call_id="c6")
+
+    request = ToolCallRequest(
+        tool_call={"name": "nonexistent_tool", "args": {}, "id": "c6", "type": "tool_call"},
+        tool=None,
+        state={},
+        runtime=None,  # type: ignore[arg-type]
+    )
+    result = await mw.awrap_tool_call(request, handler)
+    assert result.status == "error"
+    assert "not registered" in result.content.lower()
 
