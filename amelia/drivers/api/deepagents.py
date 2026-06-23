@@ -392,6 +392,81 @@ class ApiDriver(DriverInterface):
         except Exception as e:
             raise RuntimeError(f"ApiDriver generation failed: {e}") from e
 
+    def _resolve_allowed(
+        self,
+        allowed_tools: list[str],
+        ctx: Any | None,
+    ) -> tuple[list[Any], set[str]]:
+        """Resolve an allowed_tools list into rendered tools + a policy allow-set.
+
+        For each canonical name:
+
+        * **Unknown name** — skipped (logged at debug).
+        * **Factory tool** — rendered only when ``ctx`` can supply its deps. If
+          the factory returns ``None`` (deps missing) the tool is omitted
+          entirely so the policy middleware refuses any model attempt to call it.
+        * **Handler tool** — rendered to a LangChain ``StructuredTool`` and added
+          to the allow-set.
+        * **Stub** (no handler, no factory — e.g. library-injected
+          ``read_file``) — added to the allow-set only; the deepagents
+          ``FilesystemMiddleware`` injects the actual implementation.
+
+        Args:
+            allowed_tools: Canonical tool names requested by the caller.
+            ctx: Optional ``ToolContext`` for factory tools.
+
+        Returns:
+            ``(custom_tools, allow_set)`` where ``custom_tools`` is the list of
+            rendered LangChain tools and ``allow_set`` is the set of canonical
+            names the ``ToolPolicyMiddleware`` will permit.
+        """
+        from amelia.tools.registry import registry  # noqa: PLC0415
+        from amelia.tools.registry.adapters import to_langchain  # noqa: PLC0415
+
+        custom_tools: list[Any] = []
+        allow_set: set[str] = set()
+
+        for name in allowed_tools:
+            spec = registry.get(name)
+            if spec is None:
+                logger.debug("allowed_tools: skipping unknown tool", name=name)
+                continue
+
+            if spec.factory is not None:
+                # Factory tools need a ToolContext; without one (or when the
+                # factory reports the deps unavailable) skip entirely.
+                if ctx is None:
+                    logger.debug(
+                        "allowed_tools: omitting factory tool (no context)",
+                        name=name,
+                    )
+                    continue
+                try:
+                    handler = spec.factory(ctx)
+                except Exception:  # noqa: BLE001
+                    logger.exception(
+                        "allowed_tools: factory raised, omitting tool",
+                        name=name,
+                    )
+                    continue
+                if handler is None:
+                    logger.debug(
+                        "allowed_tools: factory returned None, omitting",
+                        name=name,
+                    )
+                    continue
+                bound = spec.model_copy(update={"handler": handler, "factory": None})
+                custom_tools.append(to_langchain(bound))
+                allow_set.add(name)
+            elif spec.handler is not None:
+                custom_tools.append(to_langchain(spec))
+                allow_set.add(name)
+            else:
+                # Stub (library-provided) — FilesystemMiddleware injects it.
+                allow_set.add(name)
+
+        return custom_tools, allow_set
+
     async def execute_agentic(
         self,
         prompt: str,
@@ -416,7 +491,11 @@ class ApiDriver(DriverInterface):
             instructions: Optional system prompt for the agent. Passed with
                 every request to preserve system-level guidance.
             schema: Unused (structured output not supported in agentic mode).
-            allowed_tools: Not supported. Raises NotImplementedError if set.
+            allowed_tools: Optional list of canonical tool names to allow. When
+                set, the driver renders custom tools for specs that carry a real
+                handler (or a factory + runtime context) and inserts a
+                ``ToolPolicyMiddleware`` that vetoes any tool not in the resolved
+                allow-set. When ``None`` (default), no restriction is applied.
             tools: Optional list of tools to provide to the agent. If None,
                 uses default tools (ls, read_file, write_file, edit_file,
                 glob, grep, execute, write_todos).
@@ -436,17 +515,27 @@ class ApiDriver(DriverInterface):
         if not prompt or not prompt.strip():
             raise ValueError("Prompt cannot be empty")
 
-        if allowed_tools is not None:
-            raise NotImplementedError(
-                "allowed_tools is not supported by ApiDriver. "
-                "Use ClaudeCliDriver for tool-restricted execution."
-            )
-
         tools: list[Any] | None = kwargs.get("tools")
         middleware: list[AgentMiddleware] | None = kwargs.get("middleware")
         required_tool: str | None = kwargs.get("required_tool")
         required_file_path: str | None = kwargs.get("required_file_path")
         max_continuations: int = kwargs.get("max_continuations", 10)
+
+        # Resolve allowed_tools: render custom tools from the registry and
+        # install a ToolPolicyMiddleware that vetoes anything outside the
+        # resolved allow-set. When allowed_tools is None, behavior is unchanged.
+        if allowed_tools is not None:
+            ctx = kwargs.get("tool_context")
+            custom_tools, allow_set = self._resolve_allowed(allowed_tools, ctx)
+            if custom_tools:
+                tools = (tools or []) + custom_tools
+            if allow_set:
+                from amelia.tools.registry import ToolPolicy, ToolPolicyMiddleware  # noqa: PLC0415
+
+                policy_mw = ToolPolicyMiddleware(
+                    policy=ToolPolicy(allowed=frozenset(allow_set))
+                )
+                middleware = [policy_mw, *(middleware or [])]
 
         # Convert SubmitToolDef instances to LangChain StructuredTools and
         # set required_tool so the agent is prompted to call at least one.

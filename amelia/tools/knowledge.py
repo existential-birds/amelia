@@ -1,5 +1,7 @@
 """Knowledge Library tool for agent access."""
 
+from __future__ import annotations
+
 from collections.abc import Callable, Coroutine
 from typing import Any
 
@@ -9,7 +11,7 @@ from amelia.knowledge.embeddings import EmbeddingClient
 from amelia.knowledge.models import SearchResult
 from amelia.knowledge.repository import KnowledgeRepository
 from amelia.knowledge.search import knowledge_search as _search
-from amelia.tools.registry import Permission, RiskLevel, ToolSpec, register
+from amelia.tools.registry import Permission, RiskLevel, ToolContext, ToolSpec, register
 
 
 class KnowledgeSearchInput(BaseModel):
@@ -63,6 +65,17 @@ def create_knowledge_tool(
     return knowledge_search
 
 
+def _knowledge_factory(ctx: ToolContext) -> Callable[..., Coroutine[Any, Any, list[SearchResult]]] | None:
+    """Build the knowledge_search handler from a ToolContext.
+
+    Returns ``None`` when the runtime deps (embedding client + repository) are
+    absent so the resolver can silently omit the tool (graceful degradation).
+    """
+    if ctx.embedding_client is None or ctx.knowledge_repo is None:
+        return None
+    return create_knowledge_tool(ctx.embedding_client, ctx.knowledge_repo)
+
+
 register(
     ToolSpec(
         name="knowledge_search",
@@ -72,7 +85,7 @@ register(
         ),
         input_schema=KnowledgeSearchInput,
         handler=None,
-        factory=create_knowledge_tool,
+        factory=_knowledge_factory,
         risk_level=RiskLevel.READ_ONLY,
         required_permissions=frozenset({Permission.NET_READ}),
         toolsets=frozenset({"knowledge"}),

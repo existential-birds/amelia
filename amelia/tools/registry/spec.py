@@ -44,7 +44,9 @@ class Permission(StrEnum):
 # Pydantic's perspective (validated via ``arbitrary_types_allowed``).
 AvailabilityCheck = Callable[[], Awaitable[bool]]
 ToolHandler = Callable[..., Awaitable[Any]]
-ToolFactory = Callable[..., ToolHandler]
+# A factory may return ``None`` to signal "deps unavailable, omit this tool"
+# (e.g. knowledge_search when no knowledge repo is configured).
+ToolFactory = Callable[..., "ToolHandler | None"]
 
 
 class ToolSpec(BaseModel):
