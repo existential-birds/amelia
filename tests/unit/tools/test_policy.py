@@ -180,6 +180,7 @@ async def test_policy_normalizes_cli_tool_name_aliases(tmp_path):
     assert "denied" in result2.content.lower()
 
 
+@pytest.mark.asyncio
 async def test_policy_denies_unregistered_tool_in_allowed_set():
     """A tool name in the allowed set but missing from the registry is denied.
 
