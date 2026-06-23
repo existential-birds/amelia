@@ -7,7 +7,13 @@ Re-exports the public surface so callers can write::
 
 from __future__ import annotations
 
-from amelia.tools.registry.registry import ToolRegistry, get, register, registry
+from amelia.tools.registry.registry import (
+    ToolRegistry,
+    discover_builtin_tools,
+    get,
+    register,
+    registry,
+)
 from amelia.tools.registry.spec import (
     Permission,
     RiskLevel,
@@ -20,6 +26,7 @@ __all__ = [
     "RiskLevel",
     "ToolRegistry",
     "ToolSpec",
+    "discover_builtin_tools",
     "get",
     "register",
     "registry",

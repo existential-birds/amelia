@@ -1,14 +1,52 @@
 """The tool registry — a module-level singleton tools self-register against.
 
 Public surface:
-    registry   — the singleton ``ToolRegistry`` instance.
-    register() — convenience wrapper around ``registry.register``.
-    get()      — convenience wrapper around ``registry.get``.
+    registry             — the singleton ``ToolRegistry`` instance.
+    register()           — convenience wrapper around ``registry.register``.
+    get()                — convenience wrapper around ``registry.get``.
+    discover_builtin_tools() — AST-scan ``amelia/tools/*.py`` and import every
+                          module that self-registers a tool at module level.
 """
 
 from __future__ import annotations
 
+import ast
+import importlib
+from pathlib import Path
+
+from loguru import logger
+
 from amelia.tools.registry.spec import ToolSpec
+
+
+# Directory containing tool modules that may self-register. Resolved relative to
+# this file so discovery works regardless of the current working directory.
+_TOOLS_DIR = Path(__file__).resolve().parent.parent
+_TOOLS_PACKAGE = "amelia.tools"
+
+
+def _module_registers_tools(module_path: Path) -> bool:
+    """Return True if ``module_path`` has a top-level ``register(...)`` call.
+
+    We deliberately only look at *top-level* statements so that helper modules
+    which mention ``register`` inside functions/classes are not imported for
+    their side effects.
+    """
+    try:
+        tree = ast.parse(module_path.read_text(encoding="utf-8"))
+    except (SyntaxError, OSError):
+        return False
+
+    for node in tree.body:
+        if not isinstance(node, ast.Expr):
+            continue
+        call = node.value
+        if not isinstance(call, ast.Call):
+            continue
+        func = call.func
+        if isinstance(func, ast.Name) and func.id == "register":
+            return True
+    return False
 
 
 class ToolRegistry:
@@ -93,3 +131,32 @@ def register(spec: ToolSpec, *, override: bool = False) -> None:
 def get(name: str) -> ToolSpec | None:
     """Look up ``name`` in the module-level singleton."""
     return registry.get(name)
+
+
+def discover_builtin_tools() -> list[str]:
+    """Import every ``amelia/tools/*.py`` module that self-registers a tool.
+
+    Uses an AST scan (no execution) to decide which modules to import, then
+    imports them so their top-level ``register(ToolSpec(...))`` calls populate
+    the module-level ``registry``.
+
+    The registry is a plain dict and Python caches imported modules, so this
+    function is idempotent: calling it more than once neither raises on
+    duplicate registration nor re-runs module-level code.
+
+    Returns:
+        Sorted list of all tool names registered after discovery.
+    """
+    for path in sorted(_TOOLS_DIR.glob("*.py")):
+        # Skip package init — it triggers discovery itself and never registers.
+        if path.name == "__init__.py":
+            continue
+        if not _module_registers_tools(path):
+            continue
+        module_name = f"{_TOOLS_PACKAGE}.{path.stem}"
+        try:
+            importlib.import_module(module_name)
+        except Exception:
+            # A failing tool module must not break discovery for the rest.
+            logger.exception("Failed to import self-registering tool module", module=module_name)
+    return sorted(registry.all_names())
