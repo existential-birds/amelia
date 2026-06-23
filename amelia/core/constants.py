@@ -18,6 +18,12 @@ class ToolName(StrEnum):
     # Execution
     RUN_SHELL_COMMAND = "run_shell_command"
     EXECUTE_TOOL = "execute"
+    # Quality gates
+    RUN_TESTS = "run_tests"
+    RUN_LINTER = "run_linter"
+    # Version control (read-only)
+    GIT_DIFF = "git_diff"
+    GIT_LOG = "git_log"
     # Agent orchestration
     TASK = "task"
     TASK_OUTPUT = "task_output"
@@ -64,6 +70,10 @@ TOOL_NAME_ALIASES: dict[str, str] = {
     "WebFetch": ToolName.WEB_FETCH,
     "WebSearch": ToolName.WEB_SEARCH,
     "KnowledgeSearch": ToolName.KNOWLEDGE_SEARCH,
+    "RunTests": ToolName.RUN_TESTS,
+    "RunLinter": ToolName.RUN_LINTER,
+    "GitDiff": ToolName.GIT_DIFF,
+    "GitLog": ToolName.GIT_LOG,
 }
 
 # Inverse mapping: canonical → CLI name.  Built iteratively so that duplicate
