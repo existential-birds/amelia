@@ -45,8 +45,9 @@ def test_tool_name_enum_has_all_canonical_names() -> None:
     invertible) are verified by other tests. This test catches unintentional
     enum changes — update the count when adding a new tool deliberately.
     """
-    # 22 CLI-SDK tools + bundle_files + execute (registry/library tools).
-    assert len(ToolName) == 24
+    # 22 CLI-SDK tools + bundle_files + execute (registry/library tools)
+    # + 4 agent-only tools (run_tests, run_linter, git_diff, git_log).
+    assert len(ToolName) == 28
 
 
 def test_tool_name_aliases_covers_all_cli_sdk_names() -> None:
@@ -57,6 +58,7 @@ def test_tool_name_aliases_covers_all_cli_sdk_names() -> None:
         "Task", "TaskOutput", "TaskStop", "EnterPlanMode", "ExitPlanMode",
         "WritePlan", "AskUserQuestion", "Skill", "TaskCreate", "TaskGet",
         "TaskUpdate", "TaskList", "WebFetch", "WebSearch", "KnowledgeSearch",
+        "RunTests", "RunLinter", "GitDiff", "GitLog",
     }
     assert set(TOOL_NAME_ALIASES.keys()) == expected_cli_names
 

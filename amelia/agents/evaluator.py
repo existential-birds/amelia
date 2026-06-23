@@ -20,6 +20,7 @@ from amelia.agents.schemas.evaluator import (
     EvaluationOutput,
     EvaluationResult,
 )
+from amelia.agents.tool_profiles import resolve_agent_tools
 from amelia.core.types import AgentConfig, Profile, collect_all_comments
 from amelia.drivers.base import AgenticMessageType, SubmitToolDef
 from amelia.server.models.events import (
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
     from amelia.pipelines.implementation.state import ImplementationState
     from amelia.sandbox.provider import SandboxProvider
     from amelia.server.events.bus import EventBus
+    from amelia.tools.registry import ToolContext
 
 
 
@@ -86,6 +88,7 @@ Provide clear evidence for each disposition decision."""
         event_bus: EventBus | None = None,
         prompts: dict[str, str] | None = None,
         sandbox_provider: SandboxProvider | None = None,
+        tool_context: ToolContext | None = None,
     ):
         """Initialize the Evaluator agent.
 
@@ -94,6 +97,8 @@ Provide clear evidence for each disposition decision."""
             event_bus: Optional EventBus for emitting workflow events.
             prompts: Optional dict of prompt_id -> content for customization.
             sandbox_provider: Optional shared sandbox provider for sandbox reuse.
+            tool_context: Optional runtime context; when set, the evaluator is
+                restricted to its read-only tool profile.
 
         """
         _init = init_agent_driver(
@@ -105,6 +110,7 @@ Provide clear evidence for each disposition decision."""
         self.options = _init.options
         self._prompts = _init.prompts
         self._event_bus = event_bus
+        self._tool_context = tool_context
 
         if self.PROMPT_KEY_SYSTEM not in self._prompts:
             logger.debug(
@@ -318,12 +324,19 @@ You MUST call `submit_evaluation` exactly once with all items.""")
         stream_result_input: Any | None = None  # fallback for drivers/tests that don't invoke on_call
         driver_error: str | None = None
 
+        agentic_kwargs: dict[str, Any] = {"submit_tools": [submit_tool]}
+        if self._tool_context is not None:
+            agentic_kwargs["allowed_tools"] = [
+                t.name for t in resolve_agent_tools("evaluator", self._tool_context)
+            ]
+            agentic_kwargs["tool_context"] = self._tool_context
+
         async for msg in self.driver.execute_agentic(
             prompt=prompt,
             cwd=profile.repo_root,
             session_id=None,  # Fresh session to avoid bias from prior agent context
             instructions=self.system_prompt,
-            submit_tools=[submit_tool],
+            **agentic_kwargs,
         ):
             if msg.type == AgenticMessageType.RESULT:
                 new_session_id = msg.session_id

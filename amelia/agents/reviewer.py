@@ -12,9 +12,11 @@ from loguru import logger
 
 from amelia.agents._driver_init import init_agent_driver
 from amelia.agents.schemas.reviewer import SubmitReviewInput
+from amelia.agents.tool_profiles import resolve_agent_tools
 from amelia.core.types import AgentConfig, Profile, ReviewResult, Severity
 from amelia.drivers.base import AgenticMessageType, SubmitToolDef
 from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
+from amelia.tools.registry import ToolContext
 
 
 if TYPE_CHECKING:
@@ -120,6 +122,7 @@ class Reviewer:
         agent_name: str = "reviewer",
         sandbox_provider: SandboxProvider | None = None,
         review_guidelines: str | None = None,
+        tool_context: ToolContext | None = None,
     ):
         """Initialize the Reviewer agent.
 
@@ -133,6 +136,8 @@ class Reviewer:
             sandbox_provider: Optional shared sandbox provider for sandbox reuse.
             review_guidelines: Pre-loaded review skill content injected into
                 the system prompt. When empty, the reviewer uses generic guidelines.
+            tool_context: Optional runtime context; when set, the reviewer is
+                restricted to its read-only tool profile.
 
         """
         _init = init_agent_driver(
@@ -146,6 +151,7 @@ class Reviewer:
         self._event_bus = event_bus
         self._agent_name = agent_name
         self._review_guidelines = review_guidelines or ""
+        self._tool_context = tool_context
 
     @property
     def agentic_prompt(self) -> str:
@@ -337,6 +343,13 @@ The changes are in git - diff against commit: {base_commit}"""
         stream_review_data: dict[str, Any] | None = None  # fallback: captured from stream
         stream_already_called = False
 
+        agentic_kwargs: dict[str, Any] = {"submit_tools": [submit_tool]}
+        if self._tool_context is not None:
+            agentic_kwargs["allowed_tools"] = [
+                t.name for t in resolve_agent_tools("reviewer", self._tool_context)
+            ]
+            agentic_kwargs["tool_context"] = self._tool_context
+
         for attempt in range(_MAX_REVIEW_ATTEMPTS):
             attempt_result: str | None = None
             attempt_session_id: str | None = None
@@ -347,7 +360,7 @@ The changes are in git - diff against commit: {base_commit}"""
                 cwd=cwd,
                 session_id=session_id,
                 instructions=system_prompt,
-                submit_tools=[submit_tool],
+                **agentic_kwargs,
             ):
                 if self._event_bus is not None and msg.type != AgenticMessageType.RESULT:
                     event = msg.to_workflow_event(workflow_id=workflow_id, agent=self._agent_name)

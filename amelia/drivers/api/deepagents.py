@@ -521,25 +521,12 @@ class ApiDriver(DriverInterface):
         required_file_path: str | None = kwargs.get("required_file_path")
         max_continuations: int = kwargs.get("max_continuations", 10)
 
-        # Resolve allowed_tools: render custom tools from the registry and
-        # install a ToolPolicyMiddleware that vetoes anything outside the
-        # resolved allow-set. When allowed_tools is None, behavior is unchanged.
-        if allowed_tools is not None:
-            ctx = kwargs.get("tool_context")
-            custom_tools, allow_set = self._resolve_allowed(allowed_tools, ctx)
-            if custom_tools:
-                tools = (tools or []) + custom_tools
-            if allow_set:
-                from amelia.tools.registry import ToolPolicy, ToolPolicyMiddleware  # noqa: PLC0415
-
-                policy_mw = ToolPolicyMiddleware(
-                    policy=ToolPolicy(allowed=frozenset(allow_set))
-                )
-                middleware = [policy_mw, *(middleware or [])]
-
         # Convert SubmitToolDef instances to LangChain StructuredTools and
         # set required_tool so the agent is prompted to call at least one.
+        # Done before allowed_tools resolution so submit tool names can be
+        # merged into the policy allow-set (they must never be vetoed).
         submit_tools: list[SubmitToolDef] | None = kwargs.get("submit_tools")
+        lc_submit_tools: list[Any] = []
         if submit_tools:
             from langchain_core.tools import StructuredTool  # noqa: PLC0415
 
@@ -555,10 +542,29 @@ class ApiDriver(DriverInterface):
                     args_schema=td.schema,
                 )
 
-            lc_submit_tools: list[Any] = [_make_lc_tool(td) for td in submit_tools]
+            lc_submit_tools = [_make_lc_tool(td) for td in submit_tools]
             tools = lc_submit_tools + (tools or [])
             if required_tool is None and lc_submit_tools:
                 required_tool = submit_tools[0].name
+
+        # Resolve allowed_tools: render custom tools from the registry and
+        # install a ToolPolicyMiddleware that vetoes anything outside the
+        # resolved allow-set. When allowed_tools is None, behavior is unchanged.
+        if allowed_tools is not None:
+            ctx = kwargs.get("tool_context")
+            custom_tools, allow_set = self._resolve_allowed(allowed_tools, ctx)
+            if custom_tools:
+                tools = (tools or []) + custom_tools
+            # Submit tools are always permitted — they're agent-controlled
+            # structured output, not user-facing capabilities.
+            allow_set.update(td.name for td in (submit_tools or []))
+            if allow_set:
+                from amelia.tools.registry import ToolPolicy, ToolPolicyMiddleware  # noqa: PLC0415
+
+                policy_mw = ToolPolicyMiddleware(
+                    policy=ToolPolicy(allowed=frozenset(allow_set))
+                )
+                middleware = [policy_mw, *(middleware or [])]
 
         start_time = time.perf_counter()
         total_input = 0
