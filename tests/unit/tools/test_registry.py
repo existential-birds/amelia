@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from amelia.tools.registry.registry import ToolRegistry
+from amelia.tools.registry.registry import ToolRegistry, registry
 from amelia.tools.registry.spec import Permission, RiskLevel, ToolSpec
 
 
@@ -138,3 +138,48 @@ class TestToolRegistry:
         # The module-level singleton must be a ToolRegistry instance.
         assert isinstance(registry, ToolRegistry)
         assert callable(register)
+
+
+class TestBuiltinDiscovery:
+    """Integration: self-registering tool modules populate the singleton."""
+
+    def test_discover_registers_builtin_tools(self):
+        from amelia.tools.registry.registry import discover_builtin_tools
+
+        discover_builtin_tools()
+
+        run = registry.get("run_shell_command")
+        assert run is not None
+        assert run.risk_level == RiskLevel.EXECUTE
+
+        knowledge = registry.get("knowledge_search")
+        assert knowledge is not None
+        assert knowledge.handler is None  # factory-tool
+        assert knowledge.factory is not None
+
+        bundle = registry.get("bundle_files")
+        assert bundle is not None
+        assert bundle.handler is not None  # static handler
+
+        write_plan = registry.get("write_plan")
+        assert write_plan is not None
+        assert write_plan.factory is not None  # factory-tool
+
+    def test_library_stubs_registered_with_no_handler(self):
+        from amelia.tools.registry.registry import discover_builtin_tools
+
+        discover_builtin_tools()
+        # The 6 library stubs named in the spec (filesystem + sandbox execute)
+        # plus web_fetch/web_search, which are registered as stubs so the
+        # READONLY_TOOLS drift guard holds (they belong to the Codex
+        # observe-only preset, consumed by drivers/cli/codex.py).
+        stub_names = {
+            "read_file", "write_file", "edit_file", "glob", "grep", "execute",
+            "web_fetch", "web_search",
+        }
+        for name in stub_names:
+            spec = registry.get(name)
+            assert spec is not None, f"missing stub {name}"
+            assert spec.handler is None, f"{name} stub must not carry a handler"
+            assert spec.factory is None, f"{name} stub must not carry a factory"
+            assert spec.is_stub

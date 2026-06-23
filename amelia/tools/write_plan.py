@@ -16,6 +16,8 @@ from langchain_core.tools import StructuredTool
 from loguru import logger
 from pydantic import ValidationError
 
+from amelia.tools.registry import Permission, RiskLevel, ToolSpec, register
+from amelia.tools.registry.spec import ToolHandler
 from amelia.tools.write_plan_renderer import render_plan_markdown
 from amelia.tools.write_plan_schema import WritePlanInput
 
@@ -115,17 +117,17 @@ async def execute_write_plan(
     )
 
 
-def create_write_plan_tool(root_dir: str) -> StructuredTool:
-    """Create a LangChain StructuredTool for write_plan.
+def create_write_plan_handler(root_dir: str) -> ToolHandler:
+    """Build an async ``write_plan`` handler bound to ``root_dir``.
 
-    This tool is injected into the API driver's tool list so the LLM
-    calls it instead of generic write_file for plan generation.
+    Shared by the registry factory and the LangChain tool wrapper so the
+    validation/render/write behavior lives in exactly one place.
 
     Args:
-        root_dir: Root directory for resolving file paths.
+        root_dir: Root directory for resolving relative file paths.
 
     Returns:
-        Configured StructuredTool instance.
+        Async callable accepting the ``WritePlanInput`` fields.
     """
 
     async def _invoke(
@@ -153,8 +155,23 @@ def create_write_plan_tool(root_dir: str) -> StructuredTool:
             f"Goal: {result.goal}"
         )
 
+    return _invoke
+
+
+def create_write_plan_tool(root_dir: str) -> StructuredTool:
+    """Create a LangChain StructuredTool for write_plan.
+
+    This tool is injected into the API driver's tool list so the LLM
+    calls it instead of generic write_file for plan generation.
+
+    Args:
+        root_dir: Root directory for resolving file paths.
+
+    Returns:
+        Configured StructuredTool instance.
+    """
     return StructuredTool.from_function(
-        coroutine=_invoke,
+        coroutine=create_write_plan_handler(root_dir),
         name="write_plan",
         description=(
             "Write a structured implementation plan to a markdown file. "
@@ -165,3 +182,20 @@ def create_write_plan_tool(root_dir: str) -> StructuredTool:
         ),
         args_schema=WritePlanInput,
     )
+
+
+register(
+    ToolSpec(
+        name="write_plan",
+        description=(
+            "Write a structured implementation plan to a markdown file. "
+            "Validates input, renders consistent markdown, and writes to disk."
+        ),
+        input_schema=WritePlanInput,
+        handler=None,
+        factory=create_write_plan_handler,
+        risk_level=RiskLevel.WRITE,
+        required_permissions=frozenset({Permission.FS_WRITE}),
+        toolsets=frozenset({"planning"}),
+    )
+)

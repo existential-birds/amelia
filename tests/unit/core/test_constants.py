@@ -45,7 +45,8 @@ def test_tool_name_enum_has_all_canonical_names() -> None:
     invertible) are verified by other tests. This test catches unintentional
     enum changes — update the count when adding a new tool deliberately.
     """
-    assert len(ToolName) == 22
+    # 22 CLI-SDK tools + bundle_files + execute (registry/library tools).
+    assert len(ToolName) == 24
 
 
 def test_tool_name_aliases_covers_all_cli_sdk_names() -> None:
@@ -69,9 +70,21 @@ def test_canonical_to_cli_is_inverse_of_aliases() -> None:
 
 
 def test_canonical_to_cli_covers_all_tool_names() -> None:
-    """CANONICAL_TO_CLI has an entry for every ToolName enum member."""
+    """CANONICAL_TO_CLI has an entry for every CLI-facing ToolName member.
+
+    A small, deliberate set of registry/library tools (no Claude CLI SDK
+    equivalent) are exempt — ``claude.py`` passes unknown names through via
+    ``CANONICAL_TO_CLI.get(name, name)``, so missing entries are safe there.
+    Keep this allowlist explicit so accidental omissions of *real* CLI tools
+    still trip this guard.
+    """
     from amelia.core.constants import CANONICAL_TO_CLI
+
+    # Tools implemented by amelia/deepagents rather than the Claude CLI SDK.
+    no_cli_alias = {"bundle_files", "execute"}
     for member in ToolName:
+        if member.value in no_cli_alias:
+            continue
         assert member.value in CANONICAL_TO_CLI, f"Missing CANONICAL_TO_CLI entry for {member}"
 
 

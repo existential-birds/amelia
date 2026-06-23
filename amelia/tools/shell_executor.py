@@ -3,6 +3,18 @@
 import asyncio
 import shlex
 
+from pydantic import BaseModel
+
+from amelia.tools.registry import Permission, RiskLevel, ToolSpec, register
+
+
+class RunShellCommandInput(BaseModel):
+    """Input schema for the ``run_shell_command`` tool."""
+
+    command: str
+    timeout: int | None = 30
+    cwd: str | None = None
+
 
 async def run_shell_command(
     command: str,
@@ -52,3 +64,19 @@ async def run_shell_command(
         process.kill()
         await process.wait()
         raise RuntimeError(f"Command timed out after {timeout} seconds") from None
+
+
+register(
+    ToolSpec(
+        name="run_shell_command",
+        description=(
+            "Execute a shell command and return its stdout. "
+            "Use for build, test, and git operations."
+        ),
+        input_schema=RunShellCommandInput,
+        handler=run_shell_command,
+        risk_level=RiskLevel.EXECUTE,
+        required_permissions=frozenset({Permission.SHELL_EXEC}),
+        toolsets=frozenset({"execute"}),
+    )
+)
