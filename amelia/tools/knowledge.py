@@ -3,10 +3,21 @@
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from pydantic import BaseModel
+
 from amelia.knowledge.embeddings import EmbeddingClient
 from amelia.knowledge.models import SearchResult
 from amelia.knowledge.repository import KnowledgeRepository
 from amelia.knowledge.search import knowledge_search as _search
+from amelia.tools.registry import Permission, RiskLevel, ToolSpec, register
+
+
+class KnowledgeSearchInput(BaseModel):
+    """Input schema for the ``knowledge_search`` tool."""
+
+    query: str
+    top_k: int = 5
+    tags: list[str] | None = None
 
 
 def create_knowledge_tool(
@@ -50,3 +61,20 @@ def create_knowledge_tool(
         )
 
     return knowledge_search
+
+
+register(
+    ToolSpec(
+        name="knowledge_search",
+        description=(
+            "Search uploaded documentation for relevant information using "
+            "semantic search. Useful for looking up framework APIs or docs."
+        ),
+        input_schema=KnowledgeSearchInput,
+        handler=None,
+        factory=create_knowledge_tool,
+        risk_level=RiskLevel.READ_ONLY,
+        required_permissions=frozenset({Permission.NET_READ}),
+        toolsets=frozenset({"knowledge"}),
+    )
+)

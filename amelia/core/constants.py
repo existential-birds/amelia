@@ -14,8 +14,10 @@ class ToolName(StrEnum):
     NOTEBOOK_EDIT = "notebook_edit"
     GLOB = "glob"
     GREP = "grep"
+    BUNDLE_FILES = "bundle_files"
     # Execution
     RUN_SHELL_COMMAND = "run_shell_command"
+    EXECUTE_TOOL = "execute"
     # Agent orchestration
     TASK = "task"
     TASK_OUTPUT = "task_output"

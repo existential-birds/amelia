@@ -15,6 +15,8 @@ import tiktoken
 from loguru import logger
 from pydantic import BaseModel
 
+from amelia.tools.registry import Permission, RiskLevel, ToolSpec, register
+
 
 class BundledFile(BaseModel):
     """A single file with its content and metadata.
@@ -42,6 +44,14 @@ class FileBundle(BaseModel):
     files: list[BundledFile]
     total_tokens: int
     working_dir: str
+
+
+class BundleFilesInput(BaseModel):
+    """Input schema for the ``bundle_files`` tool."""
+
+    working_dir: str
+    patterns: list[str]
+    exclude_patterns: list[str] | None = None
 
 
 # Hardcoded exclusions for non-git directories
@@ -296,3 +306,19 @@ async def bundle_files(
         total_tokens=total_tokens,
         working_dir=working_dir,
     )
+
+
+register(
+    ToolSpec(
+        name="bundle_files",
+        description=(
+            "Gather codebase files by glob patterns with token estimation. "
+            "Returns a structured bundle for use as LLM context."
+        ),
+        input_schema=BundleFilesInput,
+        handler=bundle_files,
+        risk_level=RiskLevel.READ_ONLY,
+        required_permissions=frozenset({Permission.FS_READ}),
+        toolsets=frozenset({"filesystem"}),
+    )
+)
