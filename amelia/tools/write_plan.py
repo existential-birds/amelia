@@ -16,7 +16,7 @@ from langchain_core.tools import StructuredTool
 from loguru import logger
 from pydantic import ValidationError
 
-from amelia.tools.registry import Permission, RiskLevel, ToolSpec, register
+from amelia.tools.registry import Permission, RiskLevel, ToolContext, ToolSpec, register
 from amelia.tools.registry.spec import ToolHandler
 from amelia.tools.write_plan_renderer import render_plan_markdown
 from amelia.tools.write_plan_schema import WritePlanInput
@@ -158,6 +158,13 @@ def create_write_plan_handler(root_dir: str) -> ToolHandler:
     return _invoke
 
 
+
+def create_write_plan_handler_from_context(ctx: ToolContext) -> ToolHandler | None:
+    """Build a write_plan handler from ToolContext, or omit when cwd is absent."""
+    if ctx.cwd is None:
+        return None
+    return create_write_plan_handler(ctx.cwd)
+
 def create_write_plan_tool(root_dir: str) -> StructuredTool:
     """Create a LangChain StructuredTool for write_plan.
 
@@ -193,7 +200,7 @@ register(
         ),
         input_schema=WritePlanInput,
         handler=None,
-        factory=create_write_plan_handler,
+        factory=create_write_plan_handler_from_context,
         risk_level=RiskLevel.WRITE,
         required_permissions=frozenset({Permission.FS_WRITE}),
         toolsets=frozenset({"planning"}),
