@@ -205,3 +205,27 @@ async def test_policy_denies_unregistered_tool_in_allowed_set():
     assert result.status == "error"
     assert "not registered" in result.content.lower()
 
+
+@pytest.mark.parametrize("scaffold", ["ls", "write_todos", "task"])
+async def test_policy_permits_registered_scaffolding_tools_when_allowed(scaffold):
+    """deepagents scaffolding tools are permitted via registry allow-set entries."""
+    from langgraph.prebuilt.tool_node import ToolCallRequest
+
+    policy = ToolPolicy(allowed=frozenset({scaffold}), max_risk=RiskLevel.EXECUTE)
+    mw = ToolPolicyMiddleware(policy=policy)
+
+    invoked: list[str] = []
+
+    async def handler(_req: ToolCallRequest) -> ToolMessage:
+        invoked.append("yes")
+        return ToolMessage(content="ok", tool_call_id="c7")
+
+    request = ToolCallRequest(
+        tool_call={"name": scaffold, "args": {}, "id": "c7", "type": "tool_call"},
+        tool=None,
+        state={},
+        runtime=None,  # type: ignore[arg-type]
+    )
+    result = await mw.awrap_tool_call(request, handler)
+    assert invoked == ["yes"], f"registered scaffolding tool {scaffold!r} must reach handler"
+    assert result.content == "ok"

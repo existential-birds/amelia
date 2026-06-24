@@ -8,6 +8,7 @@ class ToolName(StrEnum):
     """Standard tool names used across drivers."""
 
     # File operations
+    LS = "ls"
     READ_FILE = "read_file"
     WRITE_FILE = "write_file"
     EDIT_FILE = "edit_file"
@@ -18,6 +19,12 @@ class ToolName(StrEnum):
     # Execution
     RUN_SHELL_COMMAND = "run_shell_command"
     EXECUTE_TOOL = "execute"
+    # Quality gates
+    RUN_TESTS = "run_tests"
+    RUN_LINTER = "run_linter"
+    # Version control (read-only)
+    GIT_DIFF = "git_diff"
+    GIT_LOG = "git_log"
     # Agent orchestration
     TASK = "task"
     TASK_OUTPUT = "task_output"
@@ -30,6 +37,7 @@ class ToolName(StrEnum):
     ASK_USER_QUESTION = "ask_user_question"
     SKILL = "skill"
     # Task tracking
+    WRITE_TODOS = "write_todos"
     TASK_CREATE = "task_create"
     TASK_GET = "task_get"
     TASK_UPDATE = "task_update"
@@ -64,6 +72,10 @@ TOOL_NAME_ALIASES: dict[str, str] = {
     "WebFetch": ToolName.WEB_FETCH,
     "WebSearch": ToolName.WEB_SEARCH,
     "KnowledgeSearch": ToolName.KNOWLEDGE_SEARCH,
+    "RunTests": ToolName.RUN_TESTS,
+    "RunLinter": ToolName.RUN_LINTER,
+    "GitDiff": ToolName.GIT_DIFF,
+    "GitLog": ToolName.GIT_LOG,
 }
 
 # Inverse mapping: canonical → CLI name.  Built iteratively so that duplicate
@@ -80,9 +92,13 @@ for _cli_name, _canonical in TOOL_NAME_ALIASES.items():
 # Preset for agents that should only observe (e.g. Reviewer).
 # Not yet consumed — introduce the reference when agent allowed_tools land.
 READONLY_TOOLS: tuple[ToolName, ...] = (
+    ToolName.LS,
     ToolName.READ_FILE,
     ToolName.GLOB,
     ToolName.GREP,
+    ToolName.BUNDLE_FILES,
+    ToolName.GIT_DIFF,
+    ToolName.GIT_LOG,
     ToolName.WEB_FETCH,
     ToolName.WEB_SEARCH,
 )

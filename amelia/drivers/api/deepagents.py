@@ -392,6 +392,86 @@ class ApiDriver(DriverInterface):
         except Exception as e:
             raise RuntimeError(f"ApiDriver generation failed: {e}") from e
 
+    def _resolve_allowed(
+        self,
+        allowed_tools: list[str],
+        ctx: Any | None,
+    ) -> tuple[list[Any], set[str], Any]:
+        """Resolve an allowed_tools list into rendered tools + a policy allow-set.
+
+        For each canonical name:
+
+        * **Unknown name** — skipped (logged at debug).
+        * **Factory tool** — rendered only when ``ctx`` can supply its deps. If
+          the factory returns ``None`` (deps missing) the tool is omitted
+          entirely so the policy middleware refuses any model attempt to call it.
+        * **Handler tool** — rendered to a LangChain ``StructuredTool`` and added
+          to the allow-set.
+        * **Stub** (no handler, no factory — e.g. library-injected
+          ``read_file``) — added to the allow-set only; the deepagents
+          ``FilesystemMiddleware`` injects the actual implementation.
+
+        Args:
+            allowed_tools: Canonical tool names requested by the caller.
+            ctx: Optional ``ToolContext`` for factory tools.
+
+        Returns:
+            ``(custom_tools, allow_set, max_risk)`` where ``custom_tools`` is
+            the list of rendered LangChain tools, ``allow_set`` is the set of
+            canonical names the ``ToolPolicyMiddleware`` will permit, and
+            ``max_risk`` is the highest risk level among resolved specs.
+        """
+        from amelia.tools.registry import RiskLevel, registry  # noqa: PLC0415
+        from amelia.tools.registry.adapters import to_langchain  # noqa: PLC0415
+
+        custom_tools: list[Any] = []
+        allow_set: set[str] = set()
+        max_risk = RiskLevel.READ_ONLY
+
+        for name in allowed_tools:
+            spec = registry.get(name)
+            if spec is None:
+                logger.debug("allowed_tools: skipping unknown tool", name=name)
+                continue
+
+            if spec.risk_level > max_risk:
+                max_risk = spec.risk_level
+
+            if spec.factory is not None:
+                # Factory tools need a ToolContext; without one (or when the
+                # factory reports the deps unavailable) skip entirely.
+                if ctx is None:
+                    logger.debug(
+                        "allowed_tools: omitting factory tool (no context)",
+                        name=name,
+                    )
+                    continue
+                try:
+                    handler = spec.factory(ctx)
+                except Exception:  # noqa: BLE001
+                    logger.exception(
+                        "allowed_tools: factory raised, omitting tool",
+                        name=name,
+                    )
+                    continue
+                if handler is None:
+                    logger.debug(
+                        "allowed_tools: factory returned None, omitting",
+                        name=name,
+                    )
+                    continue
+                bound = spec.model_copy(update={"handler": handler, "factory": None})
+                custom_tools.append(to_langchain(bound))
+                allow_set.add(name)
+            elif spec.handler is not None:
+                custom_tools.append(to_langchain(spec))
+                allow_set.add(name)
+            else:
+                # Stub (library-provided) — FilesystemMiddleware injects it.
+                allow_set.add(name)
+
+        return custom_tools, allow_set, max_risk
+
     async def execute_agentic(
         self,
         prompt: str,
@@ -416,7 +496,11 @@ class ApiDriver(DriverInterface):
             instructions: Optional system prompt for the agent. Passed with
                 every request to preserve system-level guidance.
             schema: Unused (structured output not supported in agentic mode).
-            allowed_tools: Not supported. Raises NotImplementedError if set.
+            allowed_tools: Optional list of canonical tool names to allow. When
+                set, the driver renders custom tools for specs that carry a real
+                handler (or a factory + runtime context) and inserts a
+                ``ToolPolicyMiddleware`` that vetoes any tool not in the resolved
+                allow-set. When ``None`` (default), no restriction is applied.
             tools: Optional list of tools to provide to the agent. If None,
                 uses default tools (ls, read_file, write_file, edit_file,
                 glob, grep, execute, write_todos).
@@ -436,12 +520,6 @@ class ApiDriver(DriverInterface):
         if not prompt or not prompt.strip():
             raise ValueError("Prompt cannot be empty")
 
-        if allowed_tools is not None:
-            raise NotImplementedError(
-                "allowed_tools is not supported by ApiDriver. "
-                "Use ClaudeCliDriver for tool-restricted execution."
-            )
-
         tools: list[Any] | None = kwargs.get("tools")
         middleware: list[AgentMiddleware] | None = kwargs.get("middleware")
         required_tool: str | None = kwargs.get("required_tool")
@@ -450,7 +528,10 @@ class ApiDriver(DriverInterface):
 
         # Convert SubmitToolDef instances to LangChain StructuredTools and
         # set required_tool so the agent is prompted to call at least one.
+        # Done before allowed_tools resolution so submit tool names can be
+        # merged into the policy allow-set (they must never be vetoed).
         submit_tools: list[SubmitToolDef] | None = kwargs.get("submit_tools")
+        lc_submit_tools: list[Any] = []
         if submit_tools:
             from langchain_core.tools import StructuredTool  # noqa: PLC0415
 
@@ -466,10 +547,33 @@ class ApiDriver(DriverInterface):
                     args_schema=td.schema,
                 )
 
-            lc_submit_tools: list[Any] = [_make_lc_tool(td) for td in submit_tools]
+            lc_submit_tools = [_make_lc_tool(td) for td in submit_tools]
             tools = lc_submit_tools + (tools or [])
             if required_tool is None and lc_submit_tools:
                 required_tool = submit_tools[0].name
+
+        # Resolve allowed_tools: render custom tools from the registry and
+        # install a ToolPolicyMiddleware that vetoes anything outside the
+        # resolved allow-set. When allowed_tools is None, behavior is unchanged.
+        if allowed_tools is not None:
+            ctx = kwargs.get("tool_context")
+            custom_tools, allow_set, max_risk = self._resolve_allowed(allowed_tools, ctx)
+            if custom_tools:
+                tools = (tools or []) + custom_tools
+            # Submit tools are always permitted — they're agent-controlled
+            # structured output, not user-facing capabilities.
+            submit_tool_names = frozenset(td.name for td in (submit_tools or []))
+            allow_set.update(submit_tool_names)
+            from amelia.tools.registry import ToolPolicy, ToolPolicyMiddleware  # noqa: PLC0415
+
+            policy_mw = ToolPolicyMiddleware(
+                policy=ToolPolicy(
+                    allowed=frozenset(allow_set),
+                    max_risk=max_risk,
+                    allow_unregistered=submit_tool_names,
+                )
+            )
+            middleware = [policy_mw, *(middleware or [])]
 
         start_time = time.perf_counter()
         total_input = 0

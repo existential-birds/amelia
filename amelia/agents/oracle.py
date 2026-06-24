@@ -12,12 +12,14 @@ from uuid import uuid4
 from loguru import logger
 from pydantic import BaseModel
 
+from amelia.agents.tool_profiles import resolve_agent_tools
 from amelia.core.types import AgentConfig, OracleConsultation
 from amelia.drivers.base import AgenticMessageType
 from amelia.drivers.factory import get_driver
 from amelia.server.events.bus import EventBus
 from amelia.server.models.events import EventDomain, EventType, WorkflowEvent
 from amelia.tools.file_bundler import bundle_files
+from amelia.tools.registry import ToolContext
 
 
 class OracleConsultResult(BaseModel):
@@ -60,11 +62,13 @@ class Oracle:
         self,
         config: AgentConfig,
         event_bus: EventBus | None = None,
+        tool_context: ToolContext | None = None,
     ):
         self._driver = get_driver(config.driver, model=config.model)
         self._event_bus = event_bus
         self._config = config
         self._seq = 0
+        self._tool_context = tool_context
 
     def _emit(self, event: WorkflowEvent) -> None:
         """Emit event via EventBus if available."""
@@ -188,11 +192,18 @@ class Oracle:
         # so programming errors in event construction propagate naturally.
         advice = ""
         driver_error: Exception | None = None
+        agentic_kwargs: dict[str, Any] = {}
+        if self._tool_context is not None:
+            agentic_kwargs["allowed_tools"] = [
+                t.name for t in resolve_agent_tools("oracle", self._tool_context)
+            ]
+            agentic_kwargs["tool_context"] = self._tool_context
         try:
             async for message in self._driver.execute_agentic(
                 prompt=user_prompt,
                 cwd=working_dir,
                 instructions=_SYSTEM_PROMPT,
+                **agentic_kwargs,
             ):
                 if message.type == AgenticMessageType.THINKING:
                     self._emit(self._make_event(

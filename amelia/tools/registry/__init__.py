@@ -7,6 +7,7 @@ Re-exports the public surface so callers can write::
 
 from __future__ import annotations
 
+from amelia.tools.registry.context import ToolContext
 from amelia.tools.registry.policy import ToolPolicy, ToolPolicyMiddleware
 from amelia.tools.registry.registry import (
     ToolRegistry,
@@ -25,6 +26,7 @@ from amelia.tools.registry.spec import (
 __all__ = [
     "Permission",
     "RiskLevel",
+    "ToolContext",
     "ToolPolicy",
     "ToolPolicyMiddleware",
     "ToolRegistry",

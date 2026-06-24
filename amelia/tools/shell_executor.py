@@ -77,6 +77,9 @@ register(
         handler=run_shell_command,
         risk_level=RiskLevel.EXECUTE,
         required_permissions=frozenset({Permission.SHELL_EXEC}),
-        toolsets=frozenset({"execute"}),
+        # Not in the 'execute' toolset: that toolset advertises the library
+        # 'execute' stub (rendered by the deepagents ExecuteTools middleware).
+        # Listing both would advertise two overlapping shell tools to agents.
+        toolsets=frozenset(),
     )
 )

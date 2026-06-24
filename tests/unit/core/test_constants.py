@@ -45,8 +45,10 @@ def test_tool_name_enum_has_all_canonical_names() -> None:
     invertible) are verified by other tests. This test catches unintentional
     enum changes — update the count when adding a new tool deliberately.
     """
-    # 22 CLI-SDK tools + bundle_files + execute (registry/library tools).
-    assert len(ToolName) == 24
+    # 22 CLI-SDK tools + bundle_files + execute (registry/library tools)
+    # + 4 agent-only tools (run_tests, run_linter, git_diff, git_log)
+    # + 2 deepagents scaffolding/library tools (ls, write_todos).
+    assert len(ToolName) == 30
 
 
 def test_tool_name_aliases_covers_all_cli_sdk_names() -> None:
@@ -57,6 +59,7 @@ def test_tool_name_aliases_covers_all_cli_sdk_names() -> None:
         "Task", "TaskOutput", "TaskStop", "EnterPlanMode", "ExitPlanMode",
         "WritePlan", "AskUserQuestion", "Skill", "TaskCreate", "TaskGet",
         "TaskUpdate", "TaskList", "WebFetch", "WebSearch", "KnowledgeSearch",
+        "RunTests", "RunLinter", "GitDiff", "GitLog",
     }
     assert set(TOOL_NAME_ALIASES.keys()) == expected_cli_names
 
@@ -81,7 +84,7 @@ def test_canonical_to_cli_covers_all_tool_names() -> None:
     from amelia.core.constants import CANONICAL_TO_CLI
 
     # Tools implemented by amelia/deepagents rather than the Claude CLI SDK.
-    no_cli_alias = {"bundle_files", "execute"}
+    no_cli_alias = {"bundle_files", "execute", "ls", "write_todos"}
     for member in ToolName:
         if member.value in no_cli_alias:
             continue
@@ -92,9 +95,13 @@ def test_readonly_tools_contains_expected_tools() -> None:
     """READONLY_TOOLS preset includes only safe read/search tools."""
     from amelia.core.constants import READONLY_TOOLS
     expected = (
+        ToolName.LS,
         ToolName.READ_FILE,
         ToolName.GLOB,
         ToolName.GREP,
+        ToolName.BUNDLE_FILES,
+        ToolName.GIT_DIFF,
+        ToolName.GIT_LOG,
         ToolName.WEB_FETCH,
         ToolName.WEB_SEARCH,
     )

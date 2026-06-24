@@ -169,3 +169,84 @@ class TestDeveloperRunNoDoubleCount:
         )
         assert final_state.tool_results[0].call_id == "new-1"
         assert final_state.tool_results[0].tool_name == "bash"
+
+
+async def test_developer_passes_allowed_tools_when_tool_context_set(
+    mock_issue_factory,
+    mock_profile_factory,
+) -> None:
+    """With a ToolContext, Developer.run resolves the developer profile and
+    passes allowed_tools + tool_context to execute_agentic."""
+    from amelia.tools.registry import ToolContext
+    from amelia.tools.registry.registry import discover_builtin_tools
+
+    discover_builtin_tools()
+    issue = mock_issue_factory(title="Implement feature", description="Feature desc")
+    profile = mock_profile_factory()
+    state = ImplementationState(
+        workflow_id=uuid4(),
+        created_at=datetime.now(UTC),
+        status="running",
+        profile_id="test",
+        issue=issue,
+        goal="implement feature",
+        plan_markdown="# Plan\n\nImplement the feature.",
+    )
+    config = AgentConfig(driver="api", model="anthropic/claude-sonnet-4")
+
+    captured: dict[str, Any] = {}
+
+    async def mock_stream(*args: Any, **kwargs: Any) -> AsyncIterator[AgenticMessage]:
+        captured.update(kwargs)
+        yield AgenticMessage(type=AgenticMessageType.RESULT, content="done", session_id="s")
+
+    mock_driver = MagicMock()
+    mock_driver.execute_agentic = mock_stream
+
+    with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
+        developer = Developer(config, tool_context=ToolContext(cwd="/tmp"))
+        async for _ in developer.run(state, profile, workflow_id=uuid4()):
+            pass
+
+    assert "allowed_tools" in captured
+    assert captured["allowed_tools"] is not None
+    # The developer profile includes the vcs + quality toolsets.
+    assert "git_diff" in captured["allowed_tools"]
+    assert "run_tests" in captured["allowed_tools"]
+    # tool_context is forwarded so factory tools can resolve.
+    assert captured.get("tool_context") is not None
+
+
+async def test_developer_omits_allowed_tools_without_tool_context(
+    mock_issue_factory,
+    mock_profile_factory,
+) -> None:
+    """Without a ToolContext, Developer.run must NOT restrict tools (backward compat)."""
+    issue = mock_issue_factory(title="Implement feature", description="Feature desc")
+    profile = mock_profile_factory()
+    state = ImplementationState(
+        workflow_id=uuid4(),
+        created_at=datetime.now(UTC),
+        status="running",
+        profile_id="test",
+        issue=issue,
+        goal="implement feature",
+        plan_markdown="# Plan\n\nImplement the feature.",
+    )
+    config = AgentConfig(driver="api", model="anthropic/claude-sonnet-4")
+
+    captured: dict[str, Any] = {}
+
+    async def mock_stream(*args: Any, **kwargs: Any) -> AsyncIterator[AgenticMessage]:
+        captured.update(kwargs)
+        yield AgenticMessage(type=AgenticMessageType.RESULT, content="done", session_id="s")
+
+    mock_driver = MagicMock()
+    mock_driver.execute_agentic = mock_stream
+
+    with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
+        developer = Developer(config)
+        async for _ in developer.run(state, profile, workflow_id=uuid4()):
+            pass
+
+    assert "allowed_tools" not in captured or captured.get("allowed_tools") is None

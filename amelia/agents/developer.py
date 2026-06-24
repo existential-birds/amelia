@@ -7,16 +7,18 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator, Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from amelia.agents._driver_init import init_agent_driver
 from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
+from amelia.agents.tool_profiles import resolve_agent_tools
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.types import AgentConfig, Profile, collect_rejected_comments
 from amelia.drivers.base import AgenticMessageType
 from amelia.server.models.events import WorkflowEvent
+from amelia.tools.registry import ToolContext
 
 
 if TYPE_CHECKING:
@@ -44,6 +46,7 @@ class Developer:
         config: AgentConfig,
         prompts: dict[str, str] | None = None,
         sandbox_provider: SandboxProvider | None = None,
+        tool_context: ToolContext | None = None,
     ):
         """Initialize the Developer agent.
 
@@ -52,6 +55,10 @@ class Developer:
             prompts: Optional dict mapping prompt IDs to custom content.
                 Supports key: "developer.system".
             sandbox_provider: Optional shared sandbox provider for sandbox reuse.
+            tool_context: Optional runtime context for factory tools. When set,
+                the agent restricts its tools to the "developer" profile via
+                :func:`resolve_agent_tools`; when ``None`` (default), no
+                restriction is applied (backward compatible).
         """
         _init = init_agent_driver(
             config,
@@ -61,6 +68,7 @@ class Developer:
         self.driver = _init.driver
         self.options = _init.options
         self._prompts = _init.prompts
+        self._tool_context = tool_context
 
     @property
     def system_prompt(self) -> str:
@@ -110,6 +118,15 @@ class Developer:
         )
         agent_instructions = instructions if instructions is not None else self.system_prompt
 
+        # Resolve the developer's tool profile when a ToolContext is available.
+        # Without one, pass no restriction (backward compatible).
+        agentic_kwargs: dict[str, Any] = {}
+        if self._tool_context is not None:
+            agentic_kwargs["allowed_tools"] = [
+                t.name for t in resolve_agent_tools("developer", self._tool_context)
+            ]
+            agentic_kwargs["tool_context"] = self._tool_context
+
         tool_calls: list[ToolCall] = []
         tool_results: list[ToolResult] = []
         current_state = state
@@ -120,6 +137,7 @@ class Developer:
             cwd=cwd,
             session_id=session_id,
             instructions=agent_instructions,
+            **agentic_kwargs,
         ):
             event: WorkflowEvent | None = None
 
