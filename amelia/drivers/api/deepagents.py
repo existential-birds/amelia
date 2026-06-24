@@ -559,6 +559,14 @@ class ApiDriver(DriverInterface):
             ctx = kwargs.get("tool_context")
             custom_tools, allow_set, max_risk = self._resolve_allowed(allowed_tools, ctx)
             if custom_tools:
+                existing_tool_names = {
+                    getattr(tool, "name", None) for tool in (tools or [])
+                }
+                custom_tools = [
+                    tool for tool in custom_tools
+                    if getattr(tool, "name", None) not in existing_tool_names
+                ]
+            if custom_tools:
                 tools = (tools or []) + custom_tools
             # Submit tools are always permitted — they're agent-controlled
             # structured output, not user-facing capabilities.

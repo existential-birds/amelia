@@ -19,6 +19,7 @@ from dataclasses import dataclass
 
 from amelia.tools.registry import ToolContext, ToolSpec, registry
 from amelia.tools.registry.spec import RiskLevel
+from amelia.tools.registry.toolsets import readonly_tool_names
 
 
 @dataclass(frozen=True)
@@ -99,7 +100,10 @@ def resolve_agent_tools(
 
     candidate_names: set[str] = set()
     for toolset in profile.toolsets:
-        candidate_names |= registry.names_for_toolset(toolset)
+        if toolset == "readonly":
+            candidate_names |= set(readonly_tool_names())
+        else:
+            candidate_names |= registry.names_for_toolset(toolset)
     candidate_names |= set(profile.extra_tools)
 
     resolved: list[ToolSpec] = []
