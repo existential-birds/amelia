@@ -63,6 +63,16 @@ export interface UsageByModel {
   successful_workflows?: number | null;
   /** Success rate (0-1), successful_workflows / workflows. */
   success_rate?: number | null;
+  /** Peak tokens occupying the model context window. */
+  context_tokens?: number | null;
+  /** Model context window size in tokens. */
+  context_window_tokens?: number | null;
+  /** Peak context fill fraction (0-1). */
+  context_utilization?: number | null;
+  /** Whether context utilization crossed the configured warning threshold. */
+  context_window_warning?: boolean;
+  /** Warning threshold fraction (defaults to 0.8). */
+  context_warning_threshold?: number;
 }
 
 /**

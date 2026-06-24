@@ -15,7 +15,7 @@ from uuid import uuid4
 from harbor.models.trajectories import ContentPart, FinalMetrics, Step, Trajectory
 
 from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
-from amelia.server.models.tokens import TokenSummary, TokenUsage
+from amelia.server.models.tokens import STATIC_CONTEXT_WINDOWS, TokenSummary, TokenUsage
 from amelia.server.models.usage import (
     UsageByModel,
     UsageResponse,
@@ -357,6 +357,17 @@ def aggregate_usage(
             )
             if model_workflows[model]
             else 0.0,
+            context_tokens=model_tokens[model] if model in STATIC_CONTEXT_WINDOWS else None,
+            context_window_tokens=STATIC_CONTEXT_WINDOWS.get(model),
+            context_utilization=(
+                min(round(model_tokens[model] / STATIC_CONTEXT_WINDOWS[model], 6), 1.0)
+                if model in STATIC_CONTEXT_WINDOWS
+                else None
+            ),
+            context_window_warning=(
+                model in STATIC_CONTEXT_WINDOWS
+                and model_tokens[model] / STATIC_CONTEXT_WINDOWS[model] >= 0.8
+            ),
         )
         for model in sorted(model_cost, key=lambda m: model_cost[m], reverse=True)
     ]

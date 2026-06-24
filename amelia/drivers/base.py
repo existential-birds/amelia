@@ -27,6 +27,11 @@ class DriverUsage(BaseModel):
     duration_ms: int | None = None
     num_turns: int | None = None
     model: str | None = None
+    context_tokens: int | None = None
+    context_window_tokens: int | None = None
+    context_utilization: float | None = None
+    context_warning_threshold: float | None = None
+    context_window_warning: bool | None = None
 
 
 class AgenticMessageType(StrEnum):

@@ -21,8 +21,10 @@ from amelia.server.models.tokens import (
     ModelPricing,
     TokenSummary,
     TokenUsage,
+    calculate_context_utilization,
     calculate_token_cost,
     fetch_openrouter_pricing,
+    get_context_window_tokens,
     get_pricing,
     resolve_driver_cost,
 )
@@ -142,6 +144,38 @@ class TestStaticFallbackPricing:
         """Static fallback should NOT have OpenRouter-prefixed models."""
         for key in STATIC_FALLBACK_PRICING:
             assert "/" not in key, f"Found OpenRouter model {key} in static fallback"
+
+
+class TestContextWindowMetadata:
+    """Tests for model context window metadata and utilization helpers."""
+
+    async def test_known_static_model_reports_context_utilization(self) -> None:
+        """Known models report context windows and fractions from token usage."""
+        assert await get_context_window_tokens("claude-sonnet-4-5-20251101") == 200_000
+        assert await calculate_context_utilization(
+            model="claude-sonnet-4-5-20251101",
+            context_tokens=100_000,
+        ) == 0.5
+
+    async def test_openrouter_model_alias_reports_context_utilization(self) -> None:
+        """OpenRouter-prefixed well-known models resolve to documented windows."""
+        assert await get_context_window_tokens("openai/gpt-4o") == 128_000
+        assert await calculate_context_utilization("openai/gpt-4o", 102_400) == 0.8
+
+    async def test_database_context_length_preferred_when_available(self) -> None:
+        """Fresh database model metadata supplies context windows before fallbacks."""
+        repo = MagicMock()
+        repo.get_model = AsyncMock(return_value=make_cached_model_entry("custom/model"))
+        repo.is_stale = AsyncMock(return_value=False)
+
+        with patch("amelia.server.models.tokens._get_model_cache_repository", return_value=repo):
+            assert await get_context_window_tokens("custom/model") == 200_000
+            assert await calculate_context_utilization("custom/model", 50_000) == 0.25
+
+    async def test_unknown_model_context_utilization_is_none(self) -> None:
+        """Unknown models return None rather than inventing a window size."""
+        assert await get_context_window_tokens("unknown/model") is None
+        assert await calculate_context_utilization("unknown/model", 10_000) is None
 
 
 class TestFetchOpenRouterPricing:

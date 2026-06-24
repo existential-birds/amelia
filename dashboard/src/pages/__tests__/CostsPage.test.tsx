@@ -39,12 +39,19 @@ const mockLoaderData = {
         workflows: 18,
         tokens: 892000,
         cost_usd: 42.17,
+        context_window_tokens: 200000,
+        context_tokens: 120000,
+        context_utilization: 0.6,
       },
       {
         model: 'gpt-4o',
         workflows: 6,
         tokens: 308000,
         cost_usd: 85.33,
+        context_window_tokens: 128000,
+        context_tokens: 102400,
+        context_utilization: 0.8,
+        context_window_warning: true,
       },
     ],
   },
@@ -108,6 +115,21 @@ describe('CostsPage', () => {
     expect(claudeElements.length).toBeGreaterThan(0);
     const gpt4oElements = screen.getAllByText('gpt-4o');
     expect(gpt4oElements.length).toBeGreaterThan(0);
+  });
+
+  it('should render context window gauges and threshold alerts', () => {
+    render(
+      <MemoryRouter>
+        <CostsPage />
+      </MemoryRouter>
+    );
+
+    expect(screen.getAllByText('Context').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('60%').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('80%').length).toBeGreaterThan(0);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'gpt-4o context window is 80% full'
+    );
   });
 });
 

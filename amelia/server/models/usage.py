@@ -38,6 +38,11 @@ class UsageByModel(BaseModel):
     trend: list[float] | None = None  # Daily costs array for sparkline
     successful_workflows: int | None = None  # Workflows not cancelled or failed
     success_rate: float | None = None  # 0-1, successful_workflows / workflows
+    context_tokens: int | None = None
+    context_window_tokens: int | None = None
+    context_utilization: float | None = None
+    context_window_warning: bool = False
+    context_warning_threshold: float = 0.8
 
 
 class UsageResponse(BaseModel):

@@ -30,6 +30,33 @@ class ModelPricing(BaseModel):
     cache_write: float
 
 
+# Documented context windows for common models used when live model metadata is
+# unavailable. Values are tokens.
+STATIC_CONTEXT_WINDOWS: dict[str, int] = {
+    # Anthropic Claude models
+    "claude-opus-4-5-20251101": 200_000,
+    "claude-sonnet-4-5-20251101": 200_000,
+    "claude-haiku-4-5-20251101": 200_000,
+    "claude-opus-4-20250514": 200_000,
+    "claude-sonnet-4-20250514": 200_000,
+    "claude-3-5-sonnet-20241022": 200_000,
+    "claude-3-5-haiku-20241022": 200_000,
+    "claude-3-opus-20240229": 200_000,
+    "claude-3-haiku-20240307": 200_000,
+    "sonnet": 200_000,
+    "opus": 200_000,
+    "haiku": 200_000,
+    # OpenRouter/provider-prefixed aliases commonly surfaced in usage data.
+    "anthropic/claude-sonnet-4": 200_000,
+    "anthropic/claude-3.5-sonnet": 200_000,
+    "openai/gpt-4o": 128_000,
+    "gpt-4o": 128_000,
+    "openai/gpt-4o-mini": 128_000,
+    "gpt-4o-mini": 128_000,
+    "minimax/minimax-m2": 196_000,
+}
+
+
 # Static fallback pricing for Anthropic models used via direct API.
 # Only contains Anthropic models + short aliases (~12 entries).
 # Sources: https://www.anthropic.com/pricing (last updated: 2026-01-19)
@@ -103,6 +130,28 @@ def _pricing_from_cache_entry(entry: ModelCacheEntry) -> ModelPricing | None:
         cache_read=entry.cache_read_cost_per_m or 0.0,
         cache_write=entry.cache_write_cost_per_m or 0.0,
     )
+
+
+async def get_context_window_tokens(model: str) -> int | None:
+    """Return the known context window size for a model, in tokens."""
+    repo = _get_model_cache_repository()
+    if repo is not None:
+        cached_entry = await repo.get_model(model)
+        if cached_entry is not None and not await repo.is_stale(model):
+            return cached_entry.context_length
+
+    return STATIC_CONTEXT_WINDOWS.get(model)
+
+
+async def calculate_context_utilization(
+    model: str,
+    context_tokens: int,
+) -> float | None:
+    """Return the fraction of a model's context window currently occupied."""
+    window = await get_context_window_tokens(model)
+    if window is None or window <= 0:
+        return None
+    return min(round(max(context_tokens, 0) / window, 6), 1.0)
 
 
 async def fetch_openrouter_pricing() -> dict[str, ModelPricing]:
@@ -253,6 +302,22 @@ class TokenUsage(BaseModel):
     cost_usd: float = Field(..., description="Calculated cost in USD")
     duration_ms: int = Field(default=0, ge=0, description="Execution time in milliseconds")
     num_turns: int = Field(default=1, ge=1, description="Number of conversation turns")
+    context_tokens: int | None = Field(default=None, ge=0, description="Peak context tokens")
+    context_window_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        description="Model context window size in tokens",
+    )
+    context_utilization: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Peak context window utilization fraction",
+    )
+    context_window_warning: bool = Field(
+        default=False,
+        description="Whether utilization crossed the warning threshold",
+    )
     timestamp: datetime = Field(..., description="When consumed")
 
 
