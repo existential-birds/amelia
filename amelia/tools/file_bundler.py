@@ -319,6 +319,6 @@ register(
         handler=bundle_files,
         risk_level=RiskLevel.READ_ONLY,
         required_permissions=frozenset({Permission.FS_READ}),
-        toolsets=frozenset({"filesystem"}),
+        toolsets=frozenset({"readonly", "filesystem"}),
     )
 )

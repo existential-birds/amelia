@@ -39,12 +39,15 @@ class ToolPolicy(BaseModel):
             normalized name is not in this set is denied.
         max_risk: Risk ceiling. A permitted tool whose ``risk_level`` exceeds
             this is still denied. Defaults to ``EXECUTE`` (permissive).
+        allow_unregistered: Dynamic tool names that are allowed even though
+            they are not in the registry, such as per-run submit tools.
     """
 
     model_config = ConfigDict(frozen=True)
 
     allowed: frozenset[str]
     max_risk: RiskLevel = RiskLevel.EXECUTE
+    allow_unregistered: frozenset[str] = frozenset()
 
 
 class ToolPolicyMiddleware(AgentMiddleware):
@@ -89,6 +92,8 @@ class ToolPolicyMiddleware(AgentMiddleware):
 
         spec = registry.get(name)
         if spec is None:
+            if name in self.policy.allow_unregistered:
+                return await handler(request)
             return ToolMessage(
                 content=f"Denied: tool '{name}' is not registered.",
                 tool_call_id=tool_call_id,

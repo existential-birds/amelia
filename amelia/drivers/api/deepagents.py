@@ -562,14 +562,18 @@ class ApiDriver(DriverInterface):
                 tools = (tools or []) + custom_tools
             # Submit tools are always permitted — they're agent-controlled
             # structured output, not user-facing capabilities.
-            allow_set.update(td.name for td in (submit_tools or []))
-            if allow_set:
-                from amelia.tools.registry import ToolPolicy, ToolPolicyMiddleware  # noqa: PLC0415
+            submit_tool_names = frozenset(td.name for td in (submit_tools or []))
+            allow_set.update(submit_tool_names)
+            from amelia.tools.registry import ToolPolicy, ToolPolicyMiddleware  # noqa: PLC0415
 
-                policy_mw = ToolPolicyMiddleware(
-                    policy=ToolPolicy(allowed=frozenset(allow_set), max_risk=max_risk)
+            policy_mw = ToolPolicyMiddleware(
+                policy=ToolPolicy(
+                    allowed=frozenset(allow_set),
+                    max_risk=max_risk,
+                    allow_unregistered=submit_tool_names,
                 )
-                middleware = [policy_mw, *(middleware or [])]
+            )
+            middleware = [policy_mw, *(middleware or [])]
 
         start_time = time.perf_counter()
         total_input = 0

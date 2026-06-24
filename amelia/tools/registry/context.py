@@ -9,12 +9,13 @@ agent construction. ``ToolContext`` is the single carrier for those deps so
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
     from amelia.knowledge.embeddings import EmbeddingClient
     from amelia.knowledge.repository import KnowledgeRepository
+    from amelia.server.events.bus import EventBus
 
 
 @dataclass(frozen=True)
@@ -34,4 +35,4 @@ class ToolContext:
     cwd: str | None = None
     embedding_client: EmbeddingClient | None = None
     knowledge_repo: KnowledgeRepository | None = None
-    event_bus: Any = None
+    event_bus: EventBus | None = None

@@ -96,6 +96,9 @@ READONLY_TOOLS: tuple[ToolName, ...] = (
     ToolName.READ_FILE,
     ToolName.GLOB,
     ToolName.GREP,
+    ToolName.BUNDLE_FILES,
+    ToolName.GIT_DIFF,
+    ToolName.GIT_LOG,
     ToolName.WEB_FETCH,
     ToolName.WEB_SEARCH,
 )

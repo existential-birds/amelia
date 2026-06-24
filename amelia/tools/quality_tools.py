@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from amelia.tools.registry import Permission, RiskLevel, ToolSpec, register
 
 
-# Maximum captured output before truncation (256 KB).
+# Maximum captured decoded output before truncation (characters).
 _MAX_OUTPUT = 256_000
 
 

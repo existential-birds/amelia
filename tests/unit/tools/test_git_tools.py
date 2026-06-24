@@ -28,6 +28,7 @@ async def test_git_diff_returns_diff_text(tmp_path: Path) -> None:
     discover_builtin_tools()
     _init_repo(tmp_path)
     (tmp_path / "f.py").write_text("x = 2\n", encoding="utf-8")
+    subprocess.run(["git", "add", "f.py"], cwd=tmp_path, check=True, capture_output=True)
 
     spec = registry.get("git_diff")
     assert spec is not None

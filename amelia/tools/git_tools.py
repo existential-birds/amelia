@@ -18,7 +18,6 @@ class GitDiffInput(BaseModel):
 
     repo_path: str
     target: str | None = None
-    max_count: int | None = None
 
 
 class GitLogInput(BaseModel):
@@ -32,25 +31,20 @@ class GitLogInput(BaseModel):
 async def git_diff(
     repo_path: str,
     target: str | None = None,
-    max_count: int | None = None,
 ) -> str:
     """Return the git diff for a repository.
 
     Args:
         repo_path: Path to the git repository root.
         target: Optional ref/path to diff against (e.g. ``HEAD~1``). When
-            ``None``, returns the unstaged + staged diff of the working tree.
-        max_count: Optional limit on the number of diff entries.
+            ``None``, returns changes against ``HEAD`` (staged + unstaged).
 
     Returns:
         The raw ``git diff`` output as a string.
     """
     ops = GitOperations(repo_path)
     args: list[str] = ["--no-color"]
-    if max_count is not None:
-        args.extend(["--max-count", str(max_count)])
-    if target is not None:
-        args.append(target)
+    args.append(target if target is not None else "HEAD")
     return await ops._run_git("diff", *args, check=False)
 
 
@@ -87,7 +81,7 @@ register(
         handler=git_diff,
         risk_level=RiskLevel.READ_ONLY,
         required_permissions=frozenset({Permission.FS_READ}),
-        toolsets=frozenset({"vcs"}),
+        toolsets=frozenset({"readonly", "vcs"}),
     )
 )
 register(
@@ -100,6 +94,6 @@ register(
         handler=git_log,
         risk_level=RiskLevel.READ_ONLY,
         required_permissions=frozenset({Permission.FS_READ}),
-        toolsets=frozenset({"vcs"}),
+        toolsets=frozenset({"readonly", "vcs"}),
     )
 )
