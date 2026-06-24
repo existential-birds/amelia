@@ -10,7 +10,8 @@ import pytest
 from amelia.agents.developer import Developer
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.types import AgentConfig, SandboxConfig
-from amelia.drivers.base import AgenticMessage, AgenticMessageType
+from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage
+from amelia.pipelines.implementation.context_compaction import COMPACTION_MARKER_TOOL_NAME
 from amelia.pipelines.implementation.state import ImplementationState
 
 
@@ -169,6 +170,65 @@ class TestDeveloperRunNoDoubleCount:
         )
         assert final_state.tool_results[0].call_id == "new-1"
         assert final_state.tool_results[0].tool_name == "bash"
+
+    async def test_run_compacts_when_context_utilization_crosses_threshold(
+        self,
+        mock_driver,
+        state_with_existing_tool_data,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Developer.run() should compact returned state and emit a visible event."""
+        state, profile = state_with_existing_tool_data
+        state = state.model_copy(update={
+            "tool_calls": [
+                ToolCall(id=f"old-{i}", tool_name="read_file", tool_input={"path": f"{i}.py"})
+                for i in range(6)
+            ],
+            "tool_results": [
+                ToolResult(
+                    call_id=f"old-{i}",
+                    tool_name="read_file",
+                    output=f"old output {i}",
+                    success=True,
+                )
+                for i in range(6)
+            ],
+        })
+        monkeypatch.setenv("AMELIA_CONTEXT_COMPACTION_THRESHOLD", "0.8")
+        monkeypatch.setenv("AMELIA_CONTEXT_KEEP_LAST_TURNS", "2")
+
+        async def mock_stream(*args: Any, **kwargs: Any) -> AsyncIterator[AgenticMessage]:
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="bash",
+                tool_input={"command": "true"},
+                tool_call_id="new-1",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="bash",
+                tool_output="ok",
+                tool_call_id="new-1",
+            )
+            yield AgenticMessage(type=AgenticMessageType.RESULT, content="Done", session_id="sess-1")
+
+        mock_driver.execute_agentic = mock_stream
+        mock_driver.get_usage.return_value = DriverUsage(context_utilization=0.9)
+        config = AgentConfig(driver="claude", model="sonnet")
+
+        yielded = []
+        with patch("amelia.agents._driver_init.get_driver", return_value=mock_driver):
+            developer = Developer(config)
+            async for item in developer.run(state, profile, workflow_id=state.workflow_id):
+                yielded.append(item)
+
+        compacted_state, compaction_event = yielded[-1]
+        assert compaction_event.event_type == "context_compacted"
+        assert any(
+            result.tool_name == COMPACTION_MARKER_TOOL_NAME
+            for result in compacted_state.tool_results
+        )
+        assert len(compacted_state.tool_results) < 7
 
 
 async def test_developer_passes_allowed_tools_when_tool_context_set(

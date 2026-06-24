@@ -73,6 +73,7 @@ class EventType(StrEnum):
     SYSTEM_ERROR = "system_error"
     SYSTEM_WARNING = "system_warning"
     TOOL_POLICY_DECISION = "tool_policy_decision"
+    CONTEXT_COMPACTED = "context_compacted"
 
     # Streaming (ephemeral, not persisted)
     STREAM = "stream"
@@ -213,6 +214,7 @@ _INFO_TYPES: frozenset[AnyEventType] = frozenset({
     EventType.PR_AUTO_FIX_STARTED,
     EventType.PR_AUTO_FIX_COMPLETED,
     EventType.PR_COMMENTS_RESOLVED,
+    EventType.CONTEXT_COMPACTED,
 })
 
 

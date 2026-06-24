@@ -5,6 +5,7 @@ autonomous tool-calling LLM execution rather than structured step-by-step plans.
 """
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import AsyncIterator, Callable
 from typing import TYPE_CHECKING, Any
@@ -17,6 +18,12 @@ from amelia.agents.tool_profiles import resolve_agent_tools
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.types import AgentConfig, Profile, collect_rejected_comments
 from amelia.drivers.base import AgenticMessageType
+from amelia.pipelines.implementation.context_compaction import (
+    DEFAULT_COMPACTION_THRESHOLD,
+    DEFAULT_KEEP_LAST_N_TURNS,
+    compact_implementation_context,
+    should_compact_context,
+)
 from amelia.server.models.events import WorkflowEvent
 from amelia.tools.registry import ToolContext
 
@@ -188,6 +195,48 @@ class Developer:
                     "error": message.content if message.is_error else None,
                 })
                 yield current_state, event
+
+                usage = self.driver.get_usage()
+                threshold = float(
+                    os.environ.get(
+                        "AMELIA_CONTEXT_COMPACTION_THRESHOLD",
+                        str(DEFAULT_COMPACTION_THRESHOLD),
+                    )
+                )
+                keep_last = int(
+                    os.environ.get(
+                        "AMELIA_CONTEXT_KEEP_LAST_TURNS",
+                        str(DEFAULT_KEEP_LAST_N_TURNS),
+                    )
+                )
+                if should_compact_context(
+                    state.model_copy(update={
+                        "tool_calls": [*state.tool_calls, *tool_calls],
+                        "tool_results": [*state.tool_results, *tool_results],
+                    }),
+                    context_utilization=usage.context_utilization if usage else None,
+                    threshold=threshold,
+                    keep_last_n_turns=keep_last,
+                ):
+                    current_state, compaction_event = compact_implementation_context(
+                        state.model_copy(update={
+                            "tool_calls": [*state.tool_calls, *tool_calls],
+                            "tool_results": [*state.tool_results, *tool_results],
+                            "driver_session_id": session_id,
+                            "agentic_status": "completed" if is_complete else "failed",
+                            "final_response": message.content if is_complete else None,
+                            "error": message.content if message.is_error else None,
+                        }),
+                        keep_last_n_turns=keep_last,
+                        reason=(
+                            f"context utilization {usage.context_utilization:.1%} "
+                            f"crossed threshold {threshold:.1%}"
+                            if usage and usage.context_utilization is not None
+                            else "context threshold crossed"
+                        ),
+                    )
+                    if compaction_event is not None:
+                        yield current_state, compaction_event
                 continue  # Result is the final message
 
             if event:

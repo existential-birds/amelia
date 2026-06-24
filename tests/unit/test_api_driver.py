@@ -8,7 +8,12 @@ from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from pydantic import BaseModel
 
-from amelia.drivers.api.deepagents import ApiDriver, LocalSandbox, _create_chat_model
+from amelia.drivers.api.deepagents import (
+    ApiDriver,
+    LocalSandbox,
+    _create_chat_model,
+    truncate_text_to_token_budget,
+)
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 
 
@@ -332,6 +337,42 @@ class TestLocalSandbox:
         from amelia.drivers.api.deepagents import _DEFAULT_TIMEOUT
 
         assert _DEFAULT_TIMEOUT == 300
+
+    def test_execute_truncates_output_by_token_budget_not_bytes(self, tmp_path: Path) -> None:
+        """Large tool output should be bounded by model-token budget, not byte count."""
+        sandbox = LocalSandbox(
+            root_dir=str(tmp_path),
+            virtual_mode=False,
+            max_output_tokens=8,
+        )
+
+        result = sandbox.execute(
+            "python - <<'PY'\nprint('antidisestablishmentarianism ' * 40)\nPY"
+        )
+
+        assert result.truncated is True
+        assert "[tool output truncated to 8 tokens" in result.output
+        assert len(sandbox.tokenizer.encode(result.output)) < 40
+
+
+class TestTokenAwareTruncation:
+    @pytest.fixture
+    def sandbox(self, tmp_path: Path) -> LocalSandbox:
+        return LocalSandbox(root_dir=str(tmp_path), virtual_mode=False)
+
+    def test_truncate_text_to_token_budget_uses_tokenizer_not_bytes(self) -> None:
+        text = "antidisestablishmentarianism " * 20
+
+        truncated, was_truncated, original_tokens = truncate_text_to_token_budget(
+            text,
+            max_tokens=10,
+        )
+
+        assert was_truncated is True
+        assert original_tokens > 10
+        assert len(ApiDriver.tokenizer.encode(truncated)) <= 18
+        assert len(truncated.encode()) > 10
+        assert "[tool output truncated to 10 tokens" in truncated
 
     def test_execute_returns_timeout_error_on_slow_command(
         self, tmp_path: Path

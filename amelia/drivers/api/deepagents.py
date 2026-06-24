@@ -12,6 +12,7 @@ from weakref import WeakKeyDictionary
 
 import httpx
 import openai
+import tiktoken
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import (
@@ -44,12 +45,39 @@ from amelia.drivers.base import (
 from amelia.logging import log_claude_result, log_todos
 
 
-__all__ = ["ApiDriver", "LocalSandbox"]
+__all__ = ["ApiDriver", "LocalSandbox", "truncate_text_to_token_budget"]
 
 # Maximum output size before truncation (100KB)
 _MAX_OUTPUT_SIZE = 100_000
+# Default token budget for shell/tool output returned to the model.
+_MAX_OUTPUT_TOKENS = int(os.environ.get("AMELIA_MAX_TOOL_OUTPUT_TOKENS", "12000"))
 # Default command timeout in seconds
 _DEFAULT_TIMEOUT = 300
+
+
+def _default_tokenizer() -> tiktoken.Encoding:
+    """Return a stable tokenizer for local budgeting."""
+    return tiktoken.get_encoding("cl100k_base")
+
+
+def truncate_text_to_token_budget(
+    text: str,
+    *,
+    max_tokens: int,
+    tokenizer: tiktoken.Encoding | None = None,
+) -> tuple[str, bool, int]:
+    """Truncate text by token count and include an explicit marker."""
+    enc = tokenizer or _default_tokenizer()
+    tokens = enc.encode(text)
+    original_tokens = len(tokens)
+    if original_tokens <= max_tokens:
+        return text, False, original_tokens
+
+    marker = f"\n... [tool output truncated to {max_tokens} tokens from {original_tokens}]"
+    marker_tokens = enc.encode(marker)
+    content_budget = max(0, max_tokens - len(marker_tokens))
+    truncated = enc.decode(tokens[:content_budget]) + marker
+    return truncated, True, original_tokens
 
 
 class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):
@@ -67,6 +95,17 @@ class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):
     Attributes:
         cwd: Working directory for command execution.
     """
+
+    def __init__(
+        self,
+        *args: Any,
+        max_output_tokens: int | None = None,
+        tokenizer: tiktoken.Encoding | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.max_output_tokens = max_output_tokens or _MAX_OUTPUT_TOKENS
+        self.tokenizer = tokenizer or _default_tokenizer()
 
     @property
     def id(self) -> str:
@@ -93,14 +132,19 @@ class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):
                 timeout=_DEFAULT_TIMEOUT,
             )
             output = result.stdout + result.stderr
-            truncated = len(output) > _MAX_OUTPUT_SIZE
-            if truncated:
-                output = output[:_MAX_OUTPUT_SIZE] + "\n... [output truncated]"
+            output, truncated_by_tokens, _ = truncate_text_to_token_budget(
+                output,
+                max_tokens=self.max_output_tokens,
+                tokenizer=self.tokenizer,
+            )
+            truncated_by_bytes = len(output) > _MAX_OUTPUT_SIZE
+            if truncated_by_bytes:
+                output = output[:_MAX_OUTPUT_SIZE] + "\n... [output truncated by byte safety limit]"
 
             return ExecuteResponse(
                 output=output,
                 exit_code=result.returncode,
-                truncated=truncated,
+                truncated=truncated_by_tokens or truncated_by_bytes,
             )
         except subprocess.TimeoutExpired:
             return ExecuteResponse(
@@ -164,6 +208,7 @@ class ApiDriver(DriverInterface):
     """
 
     DEFAULT_MODEL = "minimax/minimax-m2"
+    tokenizer: ClassVar[tiktoken.Encoding] = _default_tokenizer()
 
     # Maximum number of sessions to retain before evicting oldest
     # Configurable via AMELIA_DRIVER_MAX_SESSIONS environment variable

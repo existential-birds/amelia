@@ -20,7 +20,6 @@ global namespace. See rebuild_implementation_state() for the implementation.
 
 from __future__ import annotations
 
-import operator
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
 
@@ -29,6 +28,7 @@ from pydantic import Field
 from amelia.core.agentic_state import AgenticStatus, ToolCall, ToolResult
 from amelia.core.types import Design, Issue, PlanValidationResult, ReviewResult
 from amelia.pipelines.base import BasePipelineState
+from amelia.pipelines.implementation.context_compaction import compacting_list_reducer
 from amelia.tools.write_plan_schema import WritePlanInput
 
 
@@ -49,8 +49,8 @@ class ImplementationState(BasePipelineState):
     # Override pipeline_type with literal
     pipeline_type: Literal["implementation"] = "implementation"
 
-    tool_calls: Annotated[list[ToolCall], operator.add] = Field(default_factory=list)
-    tool_results: Annotated[list[ToolResult], operator.add] = Field(default_factory=list)
+    tool_calls: Annotated[list[ToolCall], compacting_list_reducer] = Field(default_factory=list)
+    tool_results: Annotated[list[ToolResult], compacting_list_reducer] = Field(default_factory=list)
     agentic_status: AgenticStatus = AgenticStatus.RUNNING
 
     issue: Issue | None = None
