@@ -206,6 +206,30 @@ async def test_policy_denies_unregistered_tool_in_allowed_set():
     assert "not registered" in result.content.lower()
 
 
+def test_sync_wrap_tool_call_vetoes_without_running_handler():
+    """The sync middleware hook must enforce the same veto path as async callers."""
+    from langgraph.prebuilt.tool_node import ToolCallRequest
+
+    policy = ToolPolicy(allowed=frozenset({"read_file"}), max_risk=RiskLevel.READ_ONLY)
+    mw = ToolPolicyMiddleware(policy=policy)
+    invoked: list[str] = []
+
+    def handler(_req: ToolCallRequest) -> ToolMessage:
+        invoked.append("yes")
+        return ToolMessage(content="should-not-run", tool_call_id="c_sync")
+
+    request = ToolCallRequest(
+        tool_call={"name": "write_file", "args": {}, "id": "c_sync", "type": "tool_call"},
+        tool=None,
+        state={},
+        runtime=None,  # type: ignore[arg-type]
+    )
+    result = mw.wrap_tool_call(request, handler)
+    assert result.status == "error"
+    assert "denied" in result.content.lower()
+    assert invoked == []
+
+
 @pytest.mark.parametrize("scaffold", ["ls", "write_todos", "task"])
 async def test_policy_permits_registered_scaffolding_tools_when_allowed(scaffold):
     """deepagents scaffolding tools are permitted via registry allow-set entries."""
