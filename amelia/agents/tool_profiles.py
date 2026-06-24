@@ -39,24 +39,24 @@ class AgentToolProfile:
 # Profile table — see .beagle/concepts/tool-wiring/spec.md §2.2.
 AGENT_TOOL_PROFILES: dict[str, AgentToolProfile] = {
     "developer": AgentToolProfile(
-        toolsets=frozenset({"filesystem", "execute", "vcs", "knowledge", "quality"}),
+        toolsets=frozenset({"filesystem", "execute", "vcs", "knowledge", "quality", "agent_state", "coordination"}),
         max_risk=RiskLevel.EXECUTE,
     ),
     "architect": AgentToolProfile(
-        toolsets=frozenset({"readonly", "knowledge"}),
+        toolsets=frozenset({"readonly", "knowledge", "agent_state"}),
         extra_tools=frozenset({"write_plan"}),
         max_risk=RiskLevel.WRITE,
     ),
     "oracle": AgentToolProfile(
-        toolsets=frozenset({"readonly", "knowledge"}),
+        toolsets=frozenset({"readonly", "knowledge", "agent_state"}),
         max_risk=RiskLevel.READ_ONLY,
     ),
     "reviewer": AgentToolProfile(
-        toolsets=frozenset({"readonly", "knowledge"}),
+        toolsets=frozenset({"readonly", "knowledge", "agent_state"}),
         max_risk=RiskLevel.READ_ONLY,
     ),
     "evaluator": AgentToolProfile(
-        toolsets=frozenset({"readonly"}),
+        toolsets=frozenset({"readonly", "agent_state"}),
         max_risk=RiskLevel.READ_ONLY,
     ),
 }

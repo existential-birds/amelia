@@ -18,6 +18,10 @@ from pydantic import BaseModel
 from amelia.tools.registry import Permission, RiskLevel, ToolSpec, register
 
 
+class _LsInput(BaseModel):
+    path: str | None = None
+
+
 class _ReadFileInput(BaseModel):
     file_path: str
     offset: int | None = None
@@ -51,6 +55,15 @@ class _ExecuteInput(BaseModel):
     timeout: int | None = 30
 
 
+class _TaskInput(BaseModel):
+    description: str
+    prompt: str
+
+
+class _WriteTodosInput(BaseModel):
+    todos: list[dict[str, object]]
+
+
 class _WebFetchInput(BaseModel):
     url: str
     prompt: str | None = None
@@ -60,6 +73,16 @@ class _WebSearchInput(BaseModel):
     query: str
 
 
+register(
+    ToolSpec(
+        name="ls",
+        description="List files and directories in the sandbox.",
+        input_schema=_LsInput,
+        risk_level=RiskLevel.READ_ONLY,
+        required_permissions=frozenset({Permission.FS_READ}),
+        toolsets=frozenset({"readonly", "filesystem"}),
+    )
+)
 register(
     ToolSpec(
         name="read_file",
@@ -138,5 +161,26 @@ register(
         risk_level=RiskLevel.READ_ONLY,
         required_permissions=frozenset({Permission.NET_READ}),
         toolsets=frozenset({"readonly", "web"}),
+    )
+)
+
+register(
+    ToolSpec(
+        name="write_todos",
+        description="Update the agent's internal todo list.",
+        input_schema=_WriteTodosInput,
+        risk_level=RiskLevel.READ_ONLY,
+        required_permissions=frozenset(),
+        toolsets=frozenset({"agent_state"}),
+    )
+)
+register(
+    ToolSpec(
+        name="task",
+        description="Delegate a subtask to a subagent.",
+        input_schema=_TaskInput,
+        risk_level=RiskLevel.EXECUTE,
+        required_permissions=frozenset(),
+        toolsets=frozenset({"coordination"}),
     )
 )

@@ -47,6 +47,19 @@ async def test_git_log_returns_log_text(tmp_path: Path) -> None:
     assert "initial" in result
 
 
+async def test_git_diff_surfaces_stderr_on_bad_ref(tmp_path: Path) -> None:
+    """git_diff must not make git failures look like an empty diff."""
+    discover_builtin_tools()
+    _init_repo(tmp_path)
+
+    spec = registry.get("git_diff")
+    assert spec is not None
+    result = await spec.handler(repo_path=str(tmp_path), target="definitely-not-a-ref")
+    assert "git diff" in result
+    assert "failed" in result
+    assert "definitely-not-a-ref" in result
+
+
 def test_git_tools_registered_with_correct_metadata() -> None:
     """Both git tools are registered read-only in the vcs toolset."""
     discover_builtin_tools()

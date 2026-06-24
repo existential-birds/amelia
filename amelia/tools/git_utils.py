@@ -425,12 +425,25 @@ class GitOperations:
             cmd_str = f"git {' '.join(args)}"
             raise ValueError(f"Git command timed out after {timeout}s: {cmd_str}") from e
 
-        if check and process.returncode != 0:
+        stdout_text = stdout.decode().strip()
+        if process.returncode != 0:
             stderr_text = stderr.decode().strip()
             cmd_str = f"git {' '.join(args)}"
-            raise ValueError(f"{cmd_str} failed: {stderr_text}")
+            if check:
+                raise ValueError(f"{cmd_str} failed: {stderr_text}")
+            # check=False: expected failures are results, not exceptions.
+            # Surface stderr so read-only tools (git_diff/git_log) don't
+            # confuse a git error with an empty diff/log.
+            logger.warning(
+                "Git command failed (check=False), returning failure text",
+                cmd=cmd_str,
+                returncode=process.returncode,
+                stderr=stderr_text,
+            )
+            detail = stderr_text or stdout_text or "no output"
+            return f"{cmd_str} failed (exit {process.returncode}): {detail}"
 
-        return stdout.decode().strip()
+        return stdout_text
 
     async def has_changes(self) -> bool:
         """Check if there are uncommitted changes in the repository.

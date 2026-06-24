@@ -19,7 +19,7 @@ async def test_resolve_allowed_returns_allow_set_for_library_stubs() -> None:
     """Library stubs (no handler) are allowed by name but not rendered as tools."""
     discover_builtin_tools()
     driver = ApiDriver(model="test/model", cwd="/tmp")
-    custom_tools, allow_set = driver._resolve_allowed(
+    custom_tools, allow_set, max_risk = driver._resolve_allowed(
         allowed_tools=["read_file", "glob", "grep"],
         ctx=None,
     )
@@ -28,13 +28,14 @@ async def test_resolve_allowed_returns_allow_set_for_library_stubs() -> None:
     assert "grep" in allow_set
     # Stubs have no handler -> not rendered as custom StructuredTools.
     assert custom_tools == []
+    assert max_risk.name == "READ_ONLY"
 
 
 async def test_resolve_allowed_renders_handler_tools_as_structured_tools() -> None:
     """Tools with a real handler (e.g. git_diff) become LangChain tools."""
     discover_builtin_tools()
     driver = ApiDriver(model="test/model", cwd="/tmp")
-    custom_tools, allow_set = driver._resolve_allowed(
+    custom_tools, allow_set, max_risk = driver._resolve_allowed(
         allowed_tools=["read_file", "git_diff"],
         ctx=None,
     )
@@ -42,19 +43,36 @@ async def test_resolve_allowed_renders_handler_tools_as_structured_tools() -> No
     assert "read_file" in allow_set
     names = [getattr(t, "name", "") for t in custom_tools]
     assert "git_diff" in names
+    assert max_risk.name == "READ_ONLY"
+
+
+async def test_resolve_allowed_tracks_execute_risk_ceiling() -> None:
+    """Resolved max_risk reflects executable tools for runtime enforcement."""
+    discover_builtin_tools()
+    driver = ApiDriver(model="test/model", cwd="/tmp")
+    custom_tools, allow_set, max_risk = driver._resolve_allowed(
+        allowed_tools=["read_file", "run_tests"],
+        ctx=None,
+    )
+    assert "run_tests" in allow_set
+    assert "read_file" in allow_set
+    names = [getattr(t, "name", "") for t in custom_tools]
+    assert "run_tests" in names
+    assert max_risk.name == "EXECUTE"
 
 
 async def test_resolve_allowed_skips_unknown_tools() -> None:
     """Unknown tool names are skipped (logged) without raising."""
     discover_builtin_tools()
     driver = ApiDriver(model="test/model", cwd="/tmp")
-    custom_tools, allow_set = driver._resolve_allowed(
+    custom_tools, allow_set, max_risk = driver._resolve_allowed(
         allowed_tools=["read_file", "definitely_not_a_tool"],
         ctx=None,
     )
     assert "read_file" in allow_set
     assert "definitely_not_a_tool" not in allow_set
     assert custom_tools == []
+    assert max_risk.name == "READ_ONLY"
 
 
 async def test_execute_agentic_no_longer_raises_on_allowed_tools() -> None:
@@ -103,13 +121,14 @@ async def test_resolve_allowed_calls_factory_when_ctx_provided() -> None:
         knowledge_repo=mock_repo,
     )
     driver = ApiDriver(model="test/model", cwd="/tmp")
-    custom_tools, allow_set = driver._resolve_allowed(
+    custom_tools, allow_set, max_risk = driver._resolve_allowed(
         allowed_tools=["knowledge_search"],
         ctx=ctx,
     )
     assert "knowledge_search" in allow_set
     names = [getattr(t, "name", "") for t in custom_tools]
     assert "knowledge_search" in names
+    assert max_risk.name == "READ_ONLY"
 
 
 async def test_resolve_allowed_skips_factory_when_ctx_missing() -> None:
@@ -120,9 +139,10 @@ async def test_resolve_allowed_skips_factory_when_ctx_missing() -> None:
     """
     _make_factory_spec()
     driver = ApiDriver(model="test/model", cwd="/tmp")
-    custom_tools, allow_set = driver._resolve_allowed(
+    custom_tools, allow_set, max_risk = driver._resolve_allowed(
         allowed_tools=["knowledge_search"],
         ctx=None,
     )
     assert "knowledge_search" not in allow_set
     assert custom_tools == []
+    assert max_risk.name == "READ_ONLY"

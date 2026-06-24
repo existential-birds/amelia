@@ -396,7 +396,7 @@ class ApiDriver(DriverInterface):
         self,
         allowed_tools: list[str],
         ctx: Any | None,
-    ) -> tuple[list[Any], set[str]]:
+    ) -> tuple[list[Any], set[str], Any]:
         """Resolve an allowed_tools list into rendered tools + a policy allow-set.
 
         For each canonical name:
@@ -416,21 +416,26 @@ class ApiDriver(DriverInterface):
             ctx: Optional ``ToolContext`` for factory tools.
 
         Returns:
-            ``(custom_tools, allow_set)`` where ``custom_tools`` is the list of
-            rendered LangChain tools and ``allow_set`` is the set of canonical
-            names the ``ToolPolicyMiddleware`` will permit.
+            ``(custom_tools, allow_set, max_risk)`` where ``custom_tools`` is
+            the list of rendered LangChain tools, ``allow_set`` is the set of
+            canonical names the ``ToolPolicyMiddleware`` will permit, and
+            ``max_risk`` is the highest risk level among resolved specs.
         """
-        from amelia.tools.registry import registry  # noqa: PLC0415
+        from amelia.tools.registry import RiskLevel, registry  # noqa: PLC0415
         from amelia.tools.registry.adapters import to_langchain  # noqa: PLC0415
 
         custom_tools: list[Any] = []
         allow_set: set[str] = set()
+        max_risk = RiskLevel.READ_ONLY
 
         for name in allowed_tools:
             spec = registry.get(name)
             if spec is None:
                 logger.debug("allowed_tools: skipping unknown tool", name=name)
                 continue
+
+            if spec.risk_level > max_risk:
+                max_risk = spec.risk_level
 
             if spec.factory is not None:
                 # Factory tools need a ToolContext; without one (or when the
@@ -465,7 +470,7 @@ class ApiDriver(DriverInterface):
                 # Stub (library-provided) — FilesystemMiddleware injects it.
                 allow_set.add(name)
 
-        return custom_tools, allow_set
+        return custom_tools, allow_set, max_risk
 
     async def execute_agentic(
         self,
@@ -552,7 +557,7 @@ class ApiDriver(DriverInterface):
         # resolved allow-set. When allowed_tools is None, behavior is unchanged.
         if allowed_tools is not None:
             ctx = kwargs.get("tool_context")
-            custom_tools, allow_set = self._resolve_allowed(allowed_tools, ctx)
+            custom_tools, allow_set, max_risk = self._resolve_allowed(allowed_tools, ctx)
             if custom_tools:
                 tools = (tools or []) + custom_tools
             # Submit tools are always permitted — they're agent-controlled
@@ -562,7 +567,7 @@ class ApiDriver(DriverInterface):
                 from amelia.tools.registry import ToolPolicy, ToolPolicyMiddleware  # noqa: PLC0415
 
                 policy_mw = ToolPolicyMiddleware(
-                    policy=ToolPolicy(allowed=frozenset(allow_set))
+                    policy=ToolPolicy(allowed=frozenset(allow_set), max_risk=max_risk)
                 )
                 middleware = [policy_mw, *(middleware or [])]
 

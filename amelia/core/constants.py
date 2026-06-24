@@ -8,6 +8,7 @@ class ToolName(StrEnum):
     """Standard tool names used across drivers."""
 
     # File operations
+    LS = "ls"
     READ_FILE = "read_file"
     WRITE_FILE = "write_file"
     EDIT_FILE = "edit_file"
@@ -36,6 +37,7 @@ class ToolName(StrEnum):
     ASK_USER_QUESTION = "ask_user_question"
     SKILL = "skill"
     # Task tracking
+    WRITE_TODOS = "write_todos"
     TASK_CREATE = "task_create"
     TASK_GET = "task_get"
     TASK_UPDATE = "task_update"
@@ -90,6 +92,7 @@ for _cli_name, _canonical in TOOL_NAME_ALIASES.items():
 # Preset for agents that should only observe (e.g. Reviewer).
 # Not yet consumed — introduce the reference when agent allowed_tools land.
 READONLY_TOOLS: tuple[ToolName, ...] = (
+    ToolName.LS,
     ToolName.READ_FILE,
     ToolName.GLOB,
     ToolName.GREP,
