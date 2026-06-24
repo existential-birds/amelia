@@ -72,6 +72,7 @@ class EventType(StrEnum):
     # System
     SYSTEM_ERROR = "system_error"
     SYSTEM_WARNING = "system_warning"
+    TOOL_POLICY_DECISION = "tool_policy_decision"
 
     # Streaming (ephemeral, not persisted)
     STREAM = "stream"
@@ -154,6 +155,7 @@ TRACE_TYPES: frozenset[AnyEventType] = frozenset({
     EventType.CLAUDE_THINKING,
     EventType.CLAUDE_TOOL_CALL,
     EventType.CLAUDE_TOOL_RESULT,
+    EventType.TOOL_POLICY_DECISION,
     EventType.AGENT_OUTPUT,
     # Oracle streaming
     EventType.ORACLE_CONSULTATION_THINKING,
