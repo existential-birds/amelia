@@ -28,6 +28,7 @@ from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.external_plan import ExternalPlanImportResult
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.review import create_review_graph
+from amelia.pipelines.utils import DriverOverride
 from amelia.server.database import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
@@ -77,6 +78,7 @@ class GraphRunner:
         checkpointer: BaseCheckpointSaver[Any] | None,
         profile_repo: ProfileRepository | None,
         recorders: "dict[uuid.UUID, WorkflowTrajectoryRecorder] | None" = None,
+        driver_overrides: "dict[uuid.UUID, DriverOverride] | None" = None,
     ) -> None:
         """Initialize the graph runner.
 
@@ -89,6 +91,11 @@ class GraphRunner:
             recorders: Shared per-workflow trajectory recorder registry
                 (owned by the service; the runner threads recorders into
                 graph config and finalizes them at terminal seams).
+            driver_overrides: Shared per-workflow driver-override registry
+                (owned by the service). When present for a workflow, the
+                override is threaded into the runnable config so each agent
+                node swaps its key-built driver for the override before
+                recording wraps it.
         """
         self._repository = repository
         self._events = events
@@ -97,6 +104,9 @@ class GraphRunner:
         self._profile_repo = profile_repo
         self._recorders: dict[uuid.UUID, WorkflowTrajectoryRecorder] = (
             recorders if recorders is not None else {}
+        )
+        self._driver_overrides: dict[uuid.UUID, DriverOverride] = (
+            driver_overrides if driver_overrides is not None else {}
         )
         # Workflows whose finalization is in flight, so a second terminal seam
         # does not double-finalize while the first is still running.
@@ -258,6 +268,7 @@ class GraphRunner:
             "prompts": prompts,
             "sandbox_provider": sandbox_provider,
             "trajectory_recorder": self._recorders.get(workflow_id),
+            "driver_override": self._driver_overrides.get(workflow_id),
             **extra,
         }
         return {

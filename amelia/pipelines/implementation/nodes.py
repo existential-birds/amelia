@@ -28,7 +28,7 @@ from amelia.pipelines.implementation.utils import (
     extract_task_count,
     validate_plan_structure,
 )
-from amelia.pipelines.utils import extract_node_config, wrap_with_recording
+from amelia.pipelines.utils import apply_driver_override, extract_node_config, wrap_with_recording
 from amelia.tools.write_plan import execute_write_plan
 from amelia.tools.write_plan_schema import WritePlanInput
 
@@ -330,6 +330,7 @@ async def call_architect_node(
     agent_config = nc.profile.get_agent_config("architect")
     architect = Architect(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
 
+    apply_driver_override(architect, nc.driver_override, "architect")
     wrap_with_recording(architect, nc.recorder, "architect", agent_config.model)
 
     # Ensure the plan directory exists before the architect runs
