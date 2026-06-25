@@ -142,12 +142,14 @@ async def test_worker_startup_imports_stack_once() -> None:
         # Drain stderr by closing; then assert the readiness line count.
         proc = worker._proc  # noqa: SLF001 - integration check on the real handle
         await worker.close()
-        stderr = b""
-        if proc.stderr is not None:
+        stderr_text = worker.stderr_text
+        if proc.stderr is not None and not stderr_text:
             with __import__("contextlib").suppress(Exception):
-                stderr = await asyncio.wait_for(proc.stderr.read(), timeout=5.0)
-        ready_lines = stderr.decode(errors="replace").count("worker ready")
+                stderr_text = (
+                    await asyncio.wait_for(proc.stderr.read(), timeout=5.0)
+                ).decode(errors="replace")
+        ready_lines = stderr_text.count("worker ready")
         # Exactly one import/readiness across all three commands.
-        assert ready_lines == 1, stderr.decode(errors="replace")
+        assert ready_lines == 1, stderr_text
     finally:
         await provider.teardown()

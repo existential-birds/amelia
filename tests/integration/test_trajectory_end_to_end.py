@@ -6,151 +6,37 @@ mocked at the external boundary only (``ApiDriver.execute_agentic``), matching
 the established integration-test pattern.
 """
 
-import asyncio
 import json
 import uuid
-from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any
 from unittest.mock import patch
 
 import pytest
 from harbor.utils.trajectory_validator import validate_trajectory
-from langgraph.checkpoint.memory import MemorySaver
 
 from amelia.core.types import Profile
 from amelia.drivers.api import ApiDriver
-from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage
+from amelia.drivers.base import AgenticMessage
 from amelia.server.database.connection import Database
-from amelia.server.database.profile_repository import ProfileRepository
-from amelia.server.database.repository import WorkflowRepository
-from amelia.server.events.bus import EventBus
 from amelia.server.orchestrator.service import OrchestratorService
 from tests.integration.conftest import (
+    PLAN_MARKDOWN,
+    _architect_messages,
+    _scripted_execute_agentic,
+    _wait_for_status,
+    api_profile,  # noqa: F401  (re-exported fixture)
     make_agentic_messages,
-    make_profile,
     make_reviewer_agentic_messages,
+    orchestrator,  # noqa: F401  (re-exported fixture)
 )
 
 
 pytestmark = pytest.mark.integration
 
 
-PLAN_MARKDOWN = """# Plan: Add greeting helper
-
-**Goal:** Add a greeting helper function to hello.py that returns a friendly message.
-
-### Task 1: Implement the greeting helper
-
-- Create `hello.py` with a `greet()` function returning the string "hello".
-- Keep the implementation minimal; do not create any other files.
-- This plan drives the integration test through architect, developer, and reviewer.
-"""
-
-
 @pytest.fixture(autouse=True)
 def _api_key(mock_api_key: None) -> None:
     """Allow ApiDriver construction (shared mock_api_key fixture, autouse)."""
-
-
-@pytest.fixture
-async def api_profile(
-    test_profile_repository: ProfileRepository,
-    valid_worktree: str,
-) -> Profile:
-    """Create and activate an api-driver profile so ApiDriver mocking applies."""
-    profile = make_profile(driver="api", repo_root=valid_worktree)
-    await test_profile_repository.create_profile(profile)
-    await test_profile_repository.set_active(profile.name)
-    return profile
-
-
-@pytest.fixture
-def trajectory_dir(tmp_path: Path) -> Path:
-    """Isolated trajectory root for the orchestrator under test."""
-    return tmp_path / "trajectories"
-
-
-@pytest.fixture
-def orchestrator(
-    test_event_bus: EventBus,
-    test_repository: WorkflowRepository,
-    test_profile_repository: ProfileRepository,
-    trajectory_dir: Path,
-) -> OrchestratorService:
-    """Real OrchestratorService with real Postgres repos and a working checkpointer."""
-    return OrchestratorService(
-        event_bus=test_event_bus,
-        repository=test_repository,
-        profile_repo=test_profile_repository,
-        checkpointer=MemorySaver(),
-        trajectory_dir=trajectory_dir,
-    )
-
-
-def _architect_messages() -> list[AgenticMessage]:
-    """Architect stream: RESULT carries the plan (raw-output fallback writes the file)."""
-    return [
-        AgenticMessage(type=AgenticMessageType.THINKING, content="Designing the plan..."),
-        AgenticMessage(
-            type=AgenticMessageType.RESULT,
-            content=PLAN_MARKDOWN,
-            session_id="sess-architect",
-        ),
-    ]
-
-
-def _scripted_execute_agentic(
-    scripts: list[list[AgenticMessage] | Exception],
-) -> Any:
-    """Build an execute_agentic replacement that plays one script per call.
-
-    Calls beyond the script list replay the last script. An ``Exception``
-    entry raises instead of yielding (driver failure at the boundary).
-    """
-    call_count = {"n": 0}
-
-    async def fake_execute_agentic(
-        self: Any, prompt: str, cwd: str, **kwargs: Any
-    ) -> AsyncGenerator[AgenticMessage, None]:
-        idx = min(call_count["n"], len(scripts) - 1)
-        call_count["n"] += 1
-        script = scripts[idx]
-        if isinstance(script, Exception):
-            raise script
-        # Mirror the real ApiDriver, which records per-invocation usage
-        # (including duration_ms) that the recording seam reads via get_usage().
-        self._usage = DriverUsage(
-            input_tokens=100, output_tokens=50, duration_ms=1500, model="claude-x"
-        )
-        for msg in script:
-            yield msg
-
-    return fake_execute_agentic
-
-
-async def _wait_for_status(
-    test_db: Database,
-    workflow_id: uuid.UUID,
-    status: str,
-    timeout: float = 60.0,
-) -> None:
-    """Poll the workflows row until it reaches *status* (or fail loudly)."""
-    loop = asyncio.get_event_loop()
-    deadline = loop.time() + timeout
-    last_seen: str | None = None
-    while loop.time() < deadline:
-        row = await test_db.fetch_one(
-            "SELECT status FROM workflows WHERE id = $1", workflow_id
-        )
-        if row is not None:
-            last_seen = row["status"]
-            if last_seen == status:
-                return
-        await asyncio.sleep(0.05)
-    raise AssertionError(
-        f"workflow {workflow_id} never reached {status!r} (last seen: {last_seen!r})"
-    )
 
 
 class TestTrajectoryEndToEnd:
