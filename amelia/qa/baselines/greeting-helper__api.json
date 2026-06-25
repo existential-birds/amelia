@@ -3,10 +3,10 @@
   "driver": "api",
   "metrics": {
     "status": "completed",
-    "trajectory_path": "/Users/ka/.amelia/trajectories/cc0f3e1b-eec4-48bb-969d-bd93fec63a14/trajectory.json",
-    "total_cost_usd": 0.0,
-    "total_tokens": 450,
-    "total_duration_ms": 4500
+    "trajectory_path": "/Users/ka/.amelia/trajectories/6540aafd-eca1-405e-8105-c33866f2e551/trajectory.json",
+    "total_cost_usd": 0.0677,
+    "total_tokens": 1367312,
+    "total_duration_ms": 833674
   },
   "thresholds": {
     "cost_pct": 0.15,
