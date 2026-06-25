@@ -44,9 +44,10 @@ if TYPE_CHECKING:
 _TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 
 # Default per-cell poll timeout (seconds). Live DeepSeek driver calls can take
-# several minutes end-to-end (architect -> developer -> reviewer), so this is
-# deliberately generous; the scripted-driver integration path finishes in ~1s.
-_DEFAULT_TIMEOUT = 600.0
+# 10+ minutes end-to-end (architect retries -> multi-task developer -> reviewer),
+# so this is deliberately generous; the scripted-driver integration path finishes
+# in ~1s.
+_DEFAULT_TIMEOUT = 1800.0
 
 
 async def _wait_for_status(
