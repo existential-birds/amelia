@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -32,6 +33,11 @@ from amelia.qa.models import (
 )
 from amelia.qa.report import build_report
 
+
+if TYPE_CHECKING:
+    from amelia.server.orchestrator.service import OrchestratorService
+
+
 # Terminal workflow statuses (anything else means the run is still in flight).
 _TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 
@@ -41,7 +47,7 @@ _DEFAULT_TIMEOUT = 120.0
 
 
 async def _wait_for_status(
-    orchestrator: object,
+    orchestrator: OrchestratorService,
     workflow_id: uuid.UUID,
     status: str,
     timeout: float = _DEFAULT_TIMEOUT,
@@ -61,7 +67,7 @@ async def _wait_for_status(
     Raises:
         AssertionError: If *status* is not reached within *timeout*.
     """
-    repo = getattr(orchestrator, "_repository")
+    repo = orchestrator._repository
     loop = asyncio.get_event_loop()
     deadline = loop.time() + timeout
     last_seen: str | None = None
@@ -113,7 +119,7 @@ def _maybe_checkout_ref(scenario: Scenario) -> None:
 
 
 async def _read_metrics(
-    orchestrator: object, workflow_id: uuid.UUID
+    orchestrator: OrchestratorService, workflow_id: uuid.UUID
 ) -> RunMetrics:
     """Read the four index columns + status/trajectory_path into RunMetrics.
 
@@ -124,7 +130,7 @@ async def _read_metrics(
     Returns:
         :class:`RunMetrics` built from the persisted index columns.
     """
-    repo = getattr(orchestrator, "_repository")
+    repo = orchestrator._repository
     row = await repo.get(workflow_id)
     if row is None:
         return RunMetrics(status="failed", trajectory_path=None)
@@ -142,7 +148,7 @@ async def run_scenario(
     driver: str,
     mode: QaMode,
     *,
-    orchestrator: object,
+    orchestrator: OrchestratorService,
     baseline_dir: Path,
     cassette_dir: Path | None = None,
     driver_override: object | None = None,
@@ -170,17 +176,13 @@ async def run_scenario(
     Returns:
         A :class:`ScenarioResult` for the cell.
     """
-    from amelia.server.orchestrator.service import (  # noqa: PLC0415
-        OrchestratorService,
-    )
-
     assert scenario.worktree_path, (
         f"scenario {scenario.id!r} has no worktree_path"
     )
 
     _maybe_checkout_ref(scenario)
 
-    svc: OrchestratorService = orchestrator  # type: ignore[arg-type]
+    svc = orchestrator
     start_kwargs: dict[str, object] = {
         "issue_id": scenario.issue_id or scenario.id,
         "worktree_path": scenario.worktree_path,
@@ -204,7 +206,7 @@ async def run_scenario(
     await svc.approve_workflow(workflow_id)
 
     # Poll to terminal.
-    repo = getattr(svc, "_repository")
+    repo = svc._repository
     loop = asyncio.get_event_loop()
     deadline = loop.time() + _DEFAULT_TIMEOUT
     while loop.time() < deadline:
@@ -232,7 +234,7 @@ async def run_suite(
     drivers: list[str],
     mode: QaMode,
     *,
-    orchestrator: object,
+    orchestrator: OrchestratorService,
     baseline_dir: Path,
     cassette_dir: Path | None = None,
     max_concurrent: int | None = None,
@@ -258,11 +260,7 @@ async def run_suite(
     Returns:
         The assembled :class:`QaReport`.
     """
-    from amelia.server.orchestrator.service import (  # noqa: PLC0415
-        OrchestratorService,
-    )
-
-    svc: OrchestratorService = orchestrator  # type: ignore[arg-type]
+    svc = orchestrator
     limit = max_concurrent if max_concurrent is not None else svc._max_concurrent
     semaphore = asyncio.Semaphore(max(1, limit))
 
@@ -283,7 +281,7 @@ async def run_suite(
                     baseline_dir=baseline_dir,
                     cassette_dir=cassette_dir,
                 )
-            except Exception as exc:
+            except Exception:
                 logger.exception(
                     "QA cell raised; recording as failed",
                     scenario_id=scenario.id,

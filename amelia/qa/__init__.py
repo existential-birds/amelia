@@ -10,12 +10,13 @@ from amelia.qa.models import (
     Baseline,
     ComparisonOutcome,
     QaMode,
+    QaReport,
     RunMetrics,
     Scenario,
     ScenarioResult,
-    QaReport,
     Thresholds,
 )
+
 
 __all__ = [
     "Baseline",

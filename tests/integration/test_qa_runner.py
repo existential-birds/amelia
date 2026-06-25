@@ -16,7 +16,6 @@ from amelia.qa.models import QaMode, RunMetrics, Scenario, Thresholds
 from tests.integration.conftest import (
     _architect_messages,
     _scripted_execute_agentic,
-    _wait_for_status,
     make_agentic_messages,
     make_reviewer_agentic_messages,
 )

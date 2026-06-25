@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from amelia.qa.models import Scenario
 
+
 # Bundled example scenarios live next to this module.
 DEFAULT_SCENARIO_DIR: Path = Path(__file__).parent / "scenarios"
 

@@ -10,7 +10,6 @@ exception); a *malformed* existing baseline propagates ``ValidationError`` /
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 

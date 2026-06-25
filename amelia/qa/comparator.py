@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from amelia.qa.models import Baseline, ComparisonOutcome, RunMetrics, Thresholds
 
+
 # (metric label, run field, baseline field, threshold field) for each band.
 _METRIC_SPECS: list[tuple[str, str, str, str]] = [
     ("cost", "total_cost_usd", "total_cost_usd", "cost_pct"),

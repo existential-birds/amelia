@@ -7,7 +7,6 @@ the established integration-test pattern.
 """
 
 import json
-import uuid
 from pathlib import Path
 from unittest.mock import patch
 
@@ -20,14 +19,11 @@ from amelia.drivers.base import AgenticMessage
 from amelia.server.database.connection import Database
 from amelia.server.orchestrator.service import OrchestratorService
 from tests.integration.conftest import (
-    PLAN_MARKDOWN,
     _architect_messages,
     _scripted_execute_agentic,
     _wait_for_status,
-    api_profile,  # noqa: F401  (re-exported fixture)
     make_agentic_messages,
     make_reviewer_agentic_messages,
-    orchestrator,  # noqa: F401  (re-exported fixture)
 )
 
 
