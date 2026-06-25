@@ -117,6 +117,9 @@ Desktop.ini
 # Planning artifacts
 .planning/
 
+# Hermes Agent
+.hermes/scratch/
+
 # Project specific
 amelia.db
 checkpoints/
