@@ -953,6 +953,10 @@ class OrchestratorService:
         # workflow never recorded or was already finalized).
         await self._runner.finalize_trajectory(workflow_id, status="cancelled")
 
+        # Drop the request-scoped driver override (terminal: no resume). A
+        # queued/pending workflow has no task callback to run this cleanup.
+        self._driver_overrides.pop(workflow_id, None)
+
     async def resume_workflow(self, workflow_id: uuid.UUID) -> ServerExecutionState:
         """Resume a failed workflow from its last checkpoint.
 
@@ -1175,6 +1179,8 @@ class OrchestratorService:
             workflow_id, status="failed", failure_reason=feedback
         )
         self._events.forget(workflow_id)
+        # Drop the request-scoped driver override (terminal: no resume).
+        self._driver_overrides.pop(workflow_id, None)
 
     async def recover_interrupted_workflows(self) -> None:
         """Recover workflows that were running when server restarted.

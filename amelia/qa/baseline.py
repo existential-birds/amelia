@@ -19,6 +19,12 @@ from amelia.qa.models import Baseline, RunMetrics, Thresholds
 
 
 def _baseline_path(baseline_dir: Path, scenario_id: str, driver: str) -> Path:
+    # ``scenario_id`` and ``driver`` are interpolated into the filename, so a
+    # value containing path separators or traversal segments could escape
+    # ``baseline_dir``. Reject anything that is not a bare, single-segment name.
+    for value, field_name in ((scenario_id, "scenario_id"), (driver, "driver")):
+        if value in {"", ".", ".."} or Path(value).name != value:
+            raise ValueError(f"Invalid {field_name}: {value!r}")
     return baseline_dir / f"{scenario_id}__{driver}.json"
 
 

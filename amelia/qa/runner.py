@@ -232,11 +232,24 @@ async def run_scenario(
     repo = svc._repository
     loop = asyncio.get_event_loop()
     deadline = loop.time() + _DEFAULT_TIMEOUT
+    reached_terminal = False
     while loop.time() < deadline:
         row = await repo.get(workflow_id)
         if row is not None and row.workflow_status in _TERMINAL_STATUSES:
+            reached_terminal = True
             break
         await asyncio.sleep(0.05)
+    if not reached_terminal:
+        # Do NOT raise: the cell is still recorded (via _read_metrics below) so
+        # a timeout surfaces as a failed comparison rather than sinking the
+        # whole suite. The warning makes the silent timeout observable.
+        logger.warning(
+            "QA scenario poll timed out before reaching a terminal status",
+            scenario_id=scenario.id,
+            driver=driver,
+            workflow_id=str(workflow_id),
+            timeout=_DEFAULT_TIMEOUT,
+        )
 
     metrics = await _read_metrics(svc, workflow_id)
 

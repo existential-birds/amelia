@@ -72,7 +72,13 @@ def resolve_driver_override(
     # instance is NOT callable, so the callable branch only fires for the
     # factory form.
     if callable(override) and not hasattr(override, "execute_agentic"):
-        return override(agent_name)
+        resolved = override(agent_name)
+        if not hasattr(resolved, "execute_agentic"):
+            raise TypeError(
+                "driver_override callable must return a DriverInterface-like "
+                f"object for agent {agent_name!r}; got {type(resolved).__name__}"
+            )
+        return resolved
     return override  # type: ignore[return-value]
 
 

@@ -33,6 +33,8 @@ class Thresholds(BaseModel):
     is always acceptable).
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     cost_pct: float = 0.15
     tokens_pct: float = 0.15
     duration_pct: float = 0.50

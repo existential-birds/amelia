@@ -76,12 +76,19 @@ def _ensure_default_worktrees(scenarios: list[Scenario]) -> list[Scenario]:
     """
     prepared: list[Scenario] = []
     root = Path.cwd() / ".hermes" / "scratch" / "qa-worktrees"
+    scratch_root = root.resolve()
     for scenario in scenarios:
         if scenario.worktree_path is not None:
             prepared.append(scenario)
             continue
 
-        worktree = root / scenario.id
+        worktree = (scratch_root / scenario.id).resolve()
+        try:
+            worktree.relative_to(scratch_root)
+        except ValueError:
+            raise ValueError(
+                f"scenario id {scenario.id!r} resolves outside QA scratch directory"
+            ) from None
         worktree.mkdir(parents=True, exist_ok=True)
         (worktree / "README.md").write_text("# QA scratch worktree\n", encoding="utf-8")
         (worktree / "settings.amelia.yaml").write_text(
@@ -134,9 +141,17 @@ def _ensure_default_worktrees(scenarios: list[Scenario]) -> list[Scenario]:
                 )
         subprocess.run(["git", "add", "."], cwd=worktree, check=True, capture_output=True)
         subprocess.run(
-            ["git", "commit", "--allow-empty", "-m", "Initialize QA scratch worktree"],
+            [
+                "git",
+                "commit",
+                "--allow-empty",
+                "--no-gpg-sign",
+                "--no-verify",
+                "-m",
+                "Initialize QA scratch worktree",
+            ],
             cwd=worktree,
-            check=False,
+            check=True,
             capture_output=True,
         )
         subprocess.run(["git", "checkout", "--", "."], cwd=worktree, check=True, capture_output=True)
@@ -202,8 +217,22 @@ def _write_json(report: QaReport, path: Path) -> None:
 
 
 def _rebaseline(results: list[ScenarioResult], baseline_dir: Path) -> None:
-    """Write each cell's metrics as the new baseline (A7 explicit action)."""
+    """Write each cell's metrics as the new baseline (A7 explicit action).
+
+    Only ``completed`` cells are rebaselined — persisting a failed/cancelled
+    run as the new gold standard would silently enshrine a regression. Each
+    skipped cell is logged so an operator notices a run that was supposed to
+    refresh baselines but mostly failed.
+    """
     for r in results:
+        if r.metrics.status != "completed":
+            logger.warning(
+                "Skipping rebaseline for non-completed cell",
+                scenario_id=r.scenario_id,
+                driver=r.driver,
+                status=r.metrics.status,
+            )
+            continue
         save_baseline(
             baseline_dir,
             r.scenario_id,
