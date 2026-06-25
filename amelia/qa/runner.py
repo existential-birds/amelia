@@ -25,12 +25,14 @@ from loguru import logger
 from amelia.qa.baseline import load_baseline
 from amelia.qa.comparator import compare
 from amelia.qa.models import (
+    ComparisonOutcome,
     QaMode,
     QaReport,
     RunMetrics,
     Scenario,
     ScenarioResult,
 )
+from amelia.qa.replay import ReplayDriver, cassette_filename, load_cassette
 from amelia.qa.report import build_report
 
 
@@ -182,6 +184,25 @@ async def run_scenario(
 
     _maybe_checkout_ref(scenario)
 
+    effective_driver_override = driver_override
+    if mode == QaMode.REPLAY and effective_driver_override is None:
+        if cassette_dir is None:
+            raise ValueError(
+                f"replay: no cassette directory configured for {scenario.id}/{driver}"
+            )
+        cassette_path = cassette_dir / cassette_filename(scenario.id, driver)
+        try:
+            cassette = load_cassette(cassette_path)
+        except FileNotFoundError as exc:
+            raise ValueError(
+                f"replay: no cassette for {scenario.id}/{driver} at {cassette_path}"
+            ) from exc
+        except ValueError as exc:
+            raise ValueError(
+                f"replay: invalid cassette for {scenario.id}/{driver}: {exc}"
+            ) from exc
+        effective_driver_override = ReplayDriver(cassette)
+
     svc = orchestrator
     start_kwargs: dict[str, object] = {
         "issue_id": scenario.issue_id or scenario.id,
@@ -190,8 +211,8 @@ async def run_scenario(
         "task_description": scenario.task_description,
         "driver": driver,
     }
-    if driver_override is not None:
-        start_kwargs["driver_override"] = driver_override
+    if effective_driver_override is not None:
+        start_kwargs["driver_override"] = effective_driver_override
 
     workflow_id = await svc.start_workflow(**start_kwargs)  # type: ignore[arg-type]
     logger.info(
@@ -281,18 +302,24 @@ async def run_suite(
                     baseline_dir=baseline_dir,
                     cassette_dir=cassette_dir,
                 )
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "QA cell raised; recording as failed",
                     scenario_id=scenario.id,
                     driver=driver,
                 )
+                breach = str(exc) or exc.__class__.__name__
                 return ScenarioResult(
                     scenario_id=scenario.id,
                     driver=driver,
                     mode=mode,
                     metrics=RunMetrics(status="failed", trajectory_path=None),
-                    comparison=None,
+                    comparison=ComparisonOutcome(
+                        passed=False,
+                        smoke_passed=False,
+                        breaches=[breach],
+                        deltas={},
+                    ),
                 )
 
     results = await asyncio.gather(*[_run_cell(s, d) for s, d in cells])

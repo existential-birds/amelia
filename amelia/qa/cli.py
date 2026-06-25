@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -24,7 +26,15 @@ from loguru import logger
 
 from amelia.qa.baseline import save_baseline
 from amelia.qa.loader import DEFAULT_SCENARIO_DIR, load_scenarios
-from amelia.qa.models import QaMode, QaReport, RunMetrics, ScenarioResult, Thresholds
+from amelia.qa.models import (
+    QaMode,
+    QaReport,
+    RunMetrics,
+    Scenario,
+    ScenarioResult,
+    Thresholds,
+)
+from amelia.qa.replay import record_cassette_from_recorder, save_cassette
 from amelia.qa.report import exit_code, render_table
 from amelia.qa.runner import run_suite
 
@@ -54,6 +64,85 @@ def _resolve_drivers(driver: str) -> list[str]:
             f"{', '.join(_KNOWN_DRIVERS)} or 'all'."
         )
     return [driver]
+
+
+def _ensure_default_worktrees(scenarios: list[Scenario]) -> list[Scenario]:
+    """Materialize scratch git worktrees for scenarios that omit one.
+
+    Bundled scenarios intentionally keep ``worktree_path`` null so they are
+    portable across machines. The agent-launchable CLI resolves those nulls
+    to deterministic scratch repositories under the current checkout before
+    handing scenarios to the runner.
+    """
+    prepared: list[Scenario] = []
+    root = Path.cwd() / ".hermes" / "scratch" / "qa-worktrees"
+    for scenario in scenarios:
+        if scenario.worktree_path is not None:
+            prepared.append(scenario)
+            continue
+
+        worktree = root / scenario.id
+        worktree.mkdir(parents=True, exist_ok=True)
+        (worktree / "README.md").write_text("# QA scratch worktree\n", encoding="utf-8")
+        (worktree / "settings.amelia.yaml").write_text(
+            "active_profile: test\n"
+            "profiles:\n"
+            "  test:\n"
+            "    name: test\n"
+            "    driver: api\n"
+            "    model: replay\n"
+            "    validator_model: replay\n"
+            "    tracker: noop\n"
+            "    strategy: single\n",
+            encoding="utf-8",
+        )
+        if not (worktree / ".git").exists():
+            subprocess.run(["git", "init"], cwd=worktree, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "config", "user.email", "qa@example.com"],
+                cwd=worktree,
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "QA Harness"],
+                cwd=worktree,
+                check=True,
+                capture_output=True,
+            )
+        branches = subprocess.run(
+            ["git", "for-each-ref", "--format=%(refname:short)", "refs/heads"],
+            cwd=worktree,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        base_branch = next((b for b in branches if not b.startswith("amelia/")), "main")
+        subprocess.run(
+            ["git", "checkout", "-B", base_branch],
+            cwd=worktree,
+            check=True,
+            capture_output=True,
+        )
+        for branch in branches:
+            if branch.startswith("amelia/"):
+                subprocess.run(
+                    ["git", "branch", "-D", branch],
+                    cwd=worktree,
+                    check=False,
+                    capture_output=True,
+                )
+        subprocess.run(["git", "add", "."], cwd=worktree, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "--allow-empty", "-m", "Initialize QA scratch worktree"],
+            cwd=worktree,
+            check=False,
+            capture_output=True,
+        )
+        subprocess.run(["git", "checkout", "--", "."], cwd=worktree, check=True, capture_output=True)
+        subprocess.run(["git", "clean", "-fd"], cwd=worktree, check=True, capture_output=True)
+        prepared.append(scenario.model_copy(update={"worktree_path": str(worktree)}))
+    return prepared
 
 
 @asynccontextmanager
@@ -136,6 +225,47 @@ def _rebaseline(results: list[ScenarioResult], baseline_dir: Path) -> None:
         )
 
 
+def _write_cassettes(results: list[ScenarioResult], cassette_dir: Path) -> int:
+    """Write replay cassettes from finalized trajectory files.
+
+    Live workflow finalization removes recorders from the orchestrator's active
+    registry, so the record command rebuilds a ``WorkflowTrajectoryRecorder``
+    from each result's finalized ``trajectory.json`` and asks the Task 9
+    cassette converter to serialize the subagent invocations.
+    """
+    from amelia.trajectory.recorder import WorkflowTrajectoryRecorder  # noqa: PLC0415
+
+    written = 0
+    for r in results:
+        if r.metrics.trajectory_path is None:
+            logger.warning(
+                "Skipping cassette for cell with no trajectory",
+                scenario_id=r.scenario_id,
+                driver=r.driver,
+            )
+            continue
+        path = Path(r.metrics.trajectory_path)
+        try:
+            workflow_id = uuid.UUID(path.parent.name)
+        except ValueError:
+            logger.warning(
+                "Skipping cassette for trajectory with non-UUID parent",
+                scenario_id=r.scenario_id,
+                driver=r.driver,
+                trajectory_path=str(path),
+            )
+            continue
+        recorder = WorkflowTrajectoryRecorder(
+            workflow_id=workflow_id,
+            trajectory_dir=path.parent.parent,
+            profile_snapshot={},
+        )
+        cassette = record_cassette_from_recorder(recorder, r.scenario_id, r.driver)
+        save_cassette(cassette_dir, cassette)
+        written += 1
+    return written
+
+
 @qa_app.command("run")
 def run(
     driver: Annotated[
@@ -211,7 +341,7 @@ def run(
 
     drivers = _resolve_drivers(driver)
     only = set(scenario) if scenario else None
-    scenarios = load_scenarios(scenarios_dir, only=only)
+    scenarios = _ensure_default_worktrees(load_scenarios(scenarios_dir, only=only))
     if not scenarios:
         typer.echo("No scenarios matched; nothing to run.", err=True)
         raise typer.Exit(code=1)
@@ -236,3 +366,83 @@ def run(
     if json_out is not None:
         _write_json(report, json_out)
     raise typer.Exit(code=exit_code(report))
+
+
+@qa_app.command("record")
+def record(
+    driver: Annotated[
+        str,
+        typer.Option(
+            "--driver",
+            "-d",
+            help="Driver key (api/claude/codex) or 'all' (default: all).",
+        ),
+    ] = "all",
+    scenario: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--scenario",
+            "-s",
+            help="Scenario id to record (repeatable). Default: all bundled scenarios.",
+        ),
+    ] = None,
+    json_out: Annotated[
+        Path | None,
+        typer.Option("--json-out", help="Path to write the live-run report."),
+    ] = None,
+    baseline_dir: Annotated[
+        Path,
+        typer.Option(
+            "--baseline-dir",
+            help="Directory holding stored baselines for the live run comparison.",
+        ),
+    ] = DEFAULT_SCENARIO_DIR.parent / "baselines",
+    cassette_dir: Annotated[
+        Path,
+        typer.Option(
+            "--cassette-dir",
+            help="Directory to write recorded replay cassettes.",
+        ),
+    ] = DEFAULT_SCENARIO_DIR.parent / "cassettes",
+    scenarios_dir: Annotated[
+        Path,
+        typer.Option(
+            "--scenarios-dir",
+            help="Directory holding scenario YAML files.",
+        ),
+    ] = DEFAULT_SCENARIO_DIR,
+) -> None:
+    """Run the QA suite live once and write replay cassettes.
+
+    This is the production recording path for replay mode. The run is live
+    (real drivers), non-interactive, and writes one cassette per cell that
+    produced a finalized trajectory.
+    """
+    drivers = _resolve_drivers(driver)
+    only = set(scenario) if scenario else None
+    scenarios = _ensure_default_worktrees(load_scenarios(scenarios_dir, only=only))
+    if not scenarios:
+        typer.echo("No scenarios matched; nothing to record.", err=True)
+        raise typer.Exit(code=1)
+
+    async def _run() -> QaReport:
+        async with _build_orchestrator() as svc:
+            return await run_suite(
+                scenarios,
+                drivers=drivers,
+                mode=QaMode.LIVE,
+                orchestrator=svc,
+                baseline_dir=baseline_dir,
+                cassette_dir=cassette_dir,
+            )
+
+    report = asyncio.run(_run())
+    written = _write_cassettes(report.results, cassette_dir)
+
+    typer.echo(render_table(report))
+    typer.echo(f"Wrote {written} cassette(s) to {cassette_dir}")
+    if json_out is not None:
+        _write_json(report, json_out)
+
+    any_failed = any(r.metrics.status != "completed" for r in report.results)
+    raise typer.Exit(code=1 if any_failed or written == 0 else 0)

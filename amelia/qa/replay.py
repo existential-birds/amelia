@@ -40,7 +40,6 @@ from amelia.drivers.base import (
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
 
     from amelia.trajectory.recorder import WorkflowTrajectoryRecorder
 
@@ -251,6 +250,47 @@ def _invocation_to_script(invocation: object) -> InvocationScript:
     return InvocationScript(messages=messages, usage=usage)
 
 
+def _trajectory_to_script(trajectory: object) -> InvocationScript:
+    """Build an invocation script from a finalized subagent trajectory.
+
+    ``WorkflowTrajectoryRecorder`` reloads finalized files into
+    ``_prior_subagents`` rather than live ``AgentInvocationRecorder`` objects.
+    The record CLI uses that reload path after the workflow terminal finalizer
+    has removed the live recorder from the service registry.
+    """
+    steps = getattr(trajectory, "steps", []) or []
+    final_metrics = getattr(trajectory, "final_metrics", None)
+    messages: list[AgenticMessage] = []
+    for step in steps:
+        if getattr(step, "source", None) != "agent":
+            continue
+        messages.extend(_metrics_to_agentic_message(step))
+
+    usage = DriverUsage(
+        input_tokens=(
+            getattr(final_metrics, "total_prompt_tokens", None)
+            if final_metrics is not None
+            else None
+        ),
+        output_tokens=(
+            getattr(final_metrics, "total_completion_tokens", None)
+            if final_metrics is not None
+            else None
+        ),
+        cache_read_tokens=(
+            getattr(final_metrics, "total_cached_tokens", None)
+            if final_metrics is not None
+            else None
+        ),
+        cost_usd=(
+            getattr(final_metrics, "total_cost_usd", None)
+            if final_metrics is not None
+            else None
+        ),
+    )
+    return InvocationScript(messages=messages, usage=usage)
+
+
 def record_cassette_from_recorder(
     recorder: WorkflowTrajectoryRecorder,
     scenario_id: str,
@@ -265,8 +305,9 @@ def record_cassette_from_recorder(
     caller (``amelia qa record``) can surface "nothing recorded" as a
     real error rather than silently writing an empty cassette.
     """
+    prior_subagents = list(getattr(recorder, "_prior_subagents", []))
     invocations = list(getattr(recorder, "_invocations", []))
-    if not invocations:
+    if not prior_subagents and not invocations:
         raise ValueError(
             f"cannot build cassette for {scenario_id}/{driver}: "
             "recorder has no invocations"
@@ -274,7 +315,10 @@ def record_cassette_from_recorder(
     return Cassette(
         scenario_id=scenario_id,
         driver=driver,
-        invocations=[_invocation_to_script(inv) for inv in invocations],
+        invocations=[
+            *[_trajectory_to_script(t) for t in prior_subagents],
+            *[_invocation_to_script(inv) for inv in invocations],
+        ],
     )
 
 
@@ -371,7 +415,9 @@ class ReplayDriver(DriverInterface):
             (m for m in reversed(script["messages"]) if m.type == AgenticMessageType.RESULT),
             None,
         )
-        text = result_msg.content if result_msg is not None else ""
+        # ``content`` is ``str | None``; a RESULT message with no text falls
+        # back to the empty string (the non-schema branch returns it verbatim).
+        text = (result_msg.content if result_msg is not None else "") or ""
         if schema is not None:
             try:
                 return schema.model_validate_json(text), None

@@ -13,6 +13,7 @@ from amelia.drivers.base import (
     AgenticMessageType,
     DriverUsage,
 )
+from amelia.qa.models import QaMode, Scenario
 from amelia.qa.replay import Cassette
 from amelia.server.database.connection import Database
 from amelia.server.orchestrator.service import OrchestratorService
@@ -196,4 +197,34 @@ def test_replay_driver_empty_cassette_raises_on_first_call() -> None:
 
     with pytest.raises(ValueError, match="no invocations"):
         asyncio.run(_drive())
+
+
+async def test_run_scenario_replay_uses_cassette(
+    orchestrator: OrchestratorService,
+    test_db: Database,  # noqa: ARG001 - exercises real DB through orchestrator
+    api_profile: Profile,  # noqa: ARG001 - active api profile required by workflow
+    valid_worktree: str,
+    tmp_path,
+) -> None:
+    """Runner selects ReplayDriver from cassette dir without patch.object."""
+    from amelia.qa.replay import save_cassette
+    from amelia.qa.runner import run_scenario
+
+    save_cassette(tmp_path / "cassettes", _cassette_from_e2e_scripts())
+    scenario = Scenario(
+        id="s1",
+        task_title="t",
+        task_description="d",
+        worktree_path=valid_worktree,
+        drivers=["api"],
+    )
+    result = await run_scenario(
+        scenario,
+        driver="api",
+        mode=QaMode.REPLAY,
+        orchestrator=orchestrator,
+        baseline_dir=tmp_path / "baselines",
+        cassette_dir=tmp_path / "cassettes",
+    )
+    assert result.metrics.status == "completed"
 

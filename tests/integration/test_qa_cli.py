@@ -95,3 +95,53 @@ def test_qa_run_default_driver_is_all(monkeypatch: pytest.MonkeyPatch) -> None:
     drivers = captured["drivers"]
     assert isinstance(drivers, list)
     assert set(drivers) >= {"api", "claude", "codex"}
+
+
+def test_qa_run_replay_mode_passes_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Replay mode flows through the CLI into run_suite."""
+    captured: dict[str, object] = {}
+
+    async def fake_run_suite(
+        *args: object, mode: QaMode | None = None, **kwargs: object
+    ) -> QaReport:  # noqa: ARG001
+        captured["mode"] = mode
+        return _report_all_pass()
+
+    monkeypatch.setattr("amelia.qa.cli.run_suite", fake_run_suite)
+    res = CliRunner().invoke(app, ["qa", "run", "--mode", "replay"])
+    assert res.exit_code == 0, res.output
+    assert captured["mode"] == QaMode.REPLAY
+
+
+def test_qa_run_prepares_default_worktree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """CLI materializes a git worktree for portable scenarios with null path."""
+    scenarios_dir = tmp_path / "scenarios"
+    scenarios_dir.mkdir()
+    (scenarios_dir / "s1.yaml").write_text(
+        "id: s1\n"
+        "task_title: t\n"
+        "task_description: d\n"
+        "drivers: [api]\n"
+        "worktree_path: null\n",
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+
+    async def fake_run_suite(
+        scenarios, *args: object, **kwargs: object
+    ) -> QaReport:  # noqa: ANN001, ARG001
+        captured["worktree_path"] = scenarios[0].worktree_path
+        return _report_all_pass()
+
+    monkeypatch.setattr("amelia.qa.cli.run_suite", fake_run_suite)
+    monkeypatch.chdir(tmp_path)
+    res = CliRunner().invoke(
+        app,
+        ["qa", "run", "--driver", "api", "--scenarios-dir", str(scenarios_dir)],
+    )
+    assert res.exit_code == 0, res.output
+    worktree_path = captured["worktree_path"]
+    assert isinstance(worktree_path, str)
+    assert Path(worktree_path, ".git").exists()
