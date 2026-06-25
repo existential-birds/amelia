@@ -25,19 +25,23 @@ from __future__ import annotations
 import contextlib
 import os
 import tempfile
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from pydantic import BaseModel, ValidationError
 
 from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
+    DriverInterface,
     DriverUsage,
 )
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from amelia.trajectory.recorder import WorkflowTrajectoryRecorder
 
 
@@ -272,3 +276,106 @@ def record_cassette_from_recorder(
         driver=driver,
         invocations=[_invocation_to_script(inv) for inv in invocations],
     )
+
+
+class ReplayDriver(DriverInterface):
+    """Deterministic ``DriverInterface`` fed from a :class:`Cassette`.
+
+    Yields each recorded invocation's ``AgenticMessage`` stream in order and
+    publishes the recorded per-invocation ``DriverUsage`` (tokens + cost +
+    ``duration_ms``) so the workflow-row metrics are byte-identical across
+    runs. No live LLM call, no network.
+
+    Designed to be passed as ``driver_override`` to
+    ``OrchestratorService.start_workflow`` (Task 10 seam) — it is NEVER
+    installed by monkeypatching ``get_driver``.
+
+    Calls to :meth:`execute_agentic` beyond the cassette's invocation list
+    replay the last invocation (matches the e2e helper's contract — the
+    graph can request a 4th invocation and the same final script plays).
+    """
+
+    def __init__(self, cassette: Cassette) -> None:
+        self._cassette = cassette
+        # Shallow copy of the invocation list so multiple ``execute_agentic``
+        # calls walk the same scripts in order. The recorded messages are
+        # treated as immutable — re-yielded, never mutated.
+        self._invocations: list[InvocationScript] = list(cassette.invocations)
+        self._call_count = 0
+        self._usage: DriverUsage | None = None
+
+    def _next_script(self) -> InvocationScript:
+        if not self._invocations:
+            raise ValueError(
+                f"replay cassette {self._cassette.scenario_id!r}/"
+                f"{self._cassette.driver!r} has no invocations"
+            )
+        idx = min(self._call_count, len(self._invocations) - 1)
+        self._call_count += 1
+        return self._invocations[idx]
+
+    async def execute_agentic(
+        self,
+        prompt: str,  # noqa: ARG002  (ignored — replay yields recorded stream)
+        cwd: str,  # noqa: ARG002
+        session_id: str | None = None,  # noqa: ARG002
+        instructions: str | None = None,  # noqa: ARG002
+        schema: type[BaseModel] | None = None,  # noqa: ARG002
+        allowed_tools: list[str] | None = None,  # noqa: ARG002
+        **kwargs: Any,  # noqa: ARG002
+    ) -> AsyncIterator[AgenticMessage]:
+        """Re-yield the next recorded invocation's message stream.
+
+        Sets ``self._usage`` to the recorded per-invocation usage BEFORE the
+        first yield, so callers that read ``get_usage()`` after the stream
+        closes (the recording seam) observe deterministic tokens/cost/duration.
+        """
+        script = self._next_script()
+        # Publish the recorded usage as this driver's accumulated usage; the
+        # recording seam reads it after the stream closes to compute final
+        # metrics. The replay caller sees the same numbers every run.
+        self._usage = script["usage"]
+        for message in script["messages"]:
+            yield message
+
+    def get_usage(self) -> DriverUsage | None:
+        """Return the most recent invocation's recorded usage."""
+        return self._usage
+
+    def get_tool_definitions(self) -> list[dict[str, Any]] | None:
+        """Replay does not surface live tool definitions."""
+        return None
+
+    async def cleanup_session(self, session_id: str) -> bool:  # noqa: ARG002
+        """Replay keeps no real session state; cleanup is always a no-op."""
+        return True
+
+    async def generate(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,  # noqa: ARG002
+        schema: type[BaseModel] | None = None,  # noqa: ARG002
+        **kwargs: Any,  # noqa: ARG002
+    ) -> tuple[Any, str | None]:
+        """Single-turn ``generate`` replays the next invocation as a RESULT.
+
+        The QA harness only drives the agentic path, but ``generate`` is part
+        of the ``DriverInterface`` contract and other callers (e.g. a future
+        evaluator replay) might hit it. We re-yield the next invocation's
+        final RESULT message as the generated output.
+        """
+        script = self._next_script()
+        self._usage = script["usage"]
+        # Find the final RESULT message (agents conventionally end on one).
+        result_msg = next(
+            (m for m in reversed(script["messages"]) if m.type == AgenticMessageType.RESULT),
+            None,
+        )
+        text = result_msg.content if result_msg is not None else ""
+        if schema is not None:
+            try:
+                return schema.model_validate_json(text), None
+            except Exception:
+                # Schema-mismatched replay is a real bug; surface it.
+                raise
+        return text, None
