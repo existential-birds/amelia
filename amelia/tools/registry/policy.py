@@ -2,7 +2,7 @@
 
 ``ToolPolicy`` is the declarative allow-list and risk ceiling.
 ``ToolPolicyMiddleware`` enforces it by intercepting tool execution via
-``awrap_tool_call``: a denied call never reaches the handler, so its side
+``wrap_tool_call`` / ``awrap_tool_call``: a denied call never reaches the handler, so its side
 effects never happen. This is the enforcement spine for #357 (read-only
 agents) and #228 (security guardrails).
 
