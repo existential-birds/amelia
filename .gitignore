@@ -118,7 +118,7 @@ Desktop.ini
 .planning/
 
 # Hermes Agent
-.hermes/scratch/
+.hermes/
 
 # Project specific
 amelia.db
