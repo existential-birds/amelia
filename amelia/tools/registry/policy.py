@@ -2,13 +2,14 @@
 
 ``ToolPolicy`` is the declarative allow-list and risk ceiling.
 ``ToolPolicyMiddleware`` enforces it by intercepting tool execution via
-``awrap_tool_call``: a denied call never reaches the handler, so its side
+``wrap_tool_call`` / ``awrap_tool_call``: a denied call never reaches the handler, so its side
 effects never happen. This is the enforcement spine for #357 (read-only
 agents) and #228 (security guardrails).
 
-The interception hook is ``awrap_tool_call`` (not ``before_tool``) because
-langchain 1.x exposes tool interception exclusively through the wrapping hook.
-amelia is async-only, so no synchronous ``wrap_tool_call`` is provided.
+The interception hook is ``wrap_tool_call`` / ``awrap_tool_call`` (not
+``before_tool``) because langchain 1.x exposes tool interception exclusively
+through the wrapping hook. Both sync and async hooks are implemented so callers
+that use ``invoke()`` or ``ainvoke()`` get identical veto behavior.
 """
 
 from __future__ import annotations
@@ -27,8 +28,9 @@ from amelia.tools.registry.registry import registry
 from amelia.tools.registry.spec import RiskLevel
 
 
-# The handler type awrap_tool_call receives.
+# The handler types wrapping hooks receive.
 type _AsyncToolHandler = Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]]
+type _SyncToolHandler = Callable[[ToolCallRequest], ToolMessage | Command[Any]]
 
 
 class ToolPolicy(BaseModel):
@@ -61,6 +63,50 @@ class ToolPolicyMiddleware(AgentMiddleware):
     def __init__(self, policy: ToolPolicy) -> None:
         self.policy = policy
 
+    def _veto_message(self, request: ToolCallRequest) -> ToolMessage | None:
+        """Return a denial message when ``request`` violates policy, else ``None``."""
+        raw_name = request.tool_call["name"]
+        name = normalize_tool_name(raw_name)
+        tool_call_id = request.tool_call["id"]
+
+        if name not in self.policy.allowed:
+            return ToolMessage(
+                content=f"Denied: tool '{raw_name}' is not permitted by the active policy.",
+                tool_call_id=tool_call_id,
+                status="error",
+            )
+
+        spec = registry.get(name)
+        if spec is None:
+            if name in self.policy.allow_unregistered:
+                return None
+            return ToolMessage(
+                content=f"Denied: tool '{name}' is not registered.",
+                tool_call_id=tool_call_id,
+                status="error",
+            )
+        if spec.risk_level > self.policy.max_risk:
+            return ToolMessage(
+                content=(
+                    f"Denied: tool '{name}' risk level ({spec.risk_level.name}) "
+                    f"exceeds the policy ceiling ({self.policy.max_risk.name})."
+                ),
+                tool_call_id=tool_call_id,
+                status="error",
+            )
+
+        return None
+
+    def wrap_tool_call(
+        self,
+        request: ToolCallRequest,
+        handler: _SyncToolHandler,
+    ) -> ToolMessage | Command[Any]:
+        """Sync interception hook matching ``awrap_tool_call`` semantics."""
+        if veto := self._veto_message(request):
+            return veto
+        return handler(request)
+
     async def awrap_tool_call(
         self,
         request: ToolCallRequest,
@@ -79,34 +125,6 @@ class ToolPolicyMiddleware(AgentMiddleware):
             The handler's ``ToolMessage``/``Command`` on success, or an
             error ``ToolMessage`` describing the denial otherwise.
         """
-        raw_name = request.tool_call["name"]
-        name = normalize_tool_name(raw_name)
-        tool_call_id = request.tool_call["id"]
-
-        if name not in self.policy.allowed:
-            return ToolMessage(
-                content=f"Denied: tool '{raw_name}' is not permitted by the active policy.",
-                tool_call_id=tool_call_id,
-                status="error",
-            )
-
-        spec = registry.get(name)
-        if spec is None:
-            if name in self.policy.allow_unregistered:
-                return await handler(request)
-            return ToolMessage(
-                content=f"Denied: tool '{name}' is not registered.",
-                tool_call_id=tool_call_id,
-                status="error",
-            )
-        if spec.risk_level > self.policy.max_risk:
-            return ToolMessage(
-                content=(
-                    f"Denied: tool '{name}' risk level ({spec.risk_level.name}) "
-                    f"exceeds the policy ceiling ({self.policy.max_risk.name})."
-                ),
-                tool_call_id=tool_call_id,
-                status="error",
-            )
-
+        if veto := self._veto_message(request):
+            return veto
         return await handler(request)

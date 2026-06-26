@@ -30,21 +30,23 @@ from amelia.drivers.api import ApiDriver
 from amelia.server.database.connection import Database
 from amelia.server.orchestrator.service import OrchestratorService
 from tests.integration.conftest import (
-    make_agentic_messages,
-    make_reviewer_agentic_messages,
-)
-from tests.integration.test_trajectory_end_to_end import (  # noqa: F401
-    _api_key,
     _architect_messages,
     _scripted_execute_agentic,
     _wait_for_status,
-    api_profile,
-    orchestrator,
-    trajectory_dir,
+    api_profile,  # noqa: F401  (fixture)
+    make_agentic_messages,
+    make_reviewer_agentic_messages,
+    orchestrator,  # noqa: F401  (fixture)
+    trajectory_dir,  # noqa: F401  (fixture)
 )
 
 
 pytestmark = pytest.mark.integration
+
+
+@pytest.fixture(autouse=True)
+def _api_key(mock_api_key: None) -> None:
+    """Allow ApiDriver construction (shared mock_api_key fixture, autouse)."""
 
 
 EXPORT_ARGS = ("--verbose", "--path")

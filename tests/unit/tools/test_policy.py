@@ -45,6 +45,21 @@ def _make_write_tool() -> StructuredTool:
     )
 
 
+def _make_sync_write_tool() -> StructuredTool:
+    """Build a sync StructuredTool that writes to disk (for sync invoke() tests)."""
+
+    def _write(*, file_path: str, content: str) -> str:
+        Path(file_path).write_text(content, encoding="utf-8")
+        return f"wrote {file_path}"
+
+    return StructuredTool.from_function(
+        func=_write,
+        name="write_file",
+        description="write a file to disk",
+        args_schema=_WriteFileInput,
+    )
+
+
 class _State(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
 
@@ -53,6 +68,17 @@ def _build_app(policy: ToolPolicy) -> Any:
     """Compile a single-node graph: START -> ToolNode(+middleware) -> END."""
     mw = ToolPolicyMiddleware(policy=policy)
     node = ToolNode(tools=[_make_write_tool()], awrap_tool_call=mw.awrap_tool_call)
+    graph = StateGraph(_State)
+    graph.add_node("tools", node)
+    graph.add_edge(START, "tools")
+    graph.add_edge("tools", END)
+    return graph.compile()
+
+
+def _build_sync_app(policy: ToolPolicy) -> Any:
+    """Compile a graph using the sync wrap_tool_call hook, driven via invoke()."""
+    mw = ToolPolicyMiddleware(policy=policy)
+    node = ToolNode(tools=[_make_sync_write_tool()], wrap_tool_call=mw.wrap_tool_call)
     graph = StateGraph(_State)
     graph.add_node("tools", node)
     graph.add_edge(START, "tools")
@@ -204,6 +230,29 @@ async def test_policy_denies_unregistered_tool_in_allowed_set():
     result = await mw.awrap_tool_call(request, handler)
     assert result.status == "error"
     assert "not registered" in result.content.lower()
+
+
+def test_sync_wrap_tool_call_vetoes_without_running_handler(tmp_path):
+    """The sync middleware hook must prevent the guarded side effect.
+
+    Enters through the production graph entrypoint (compiled StateGraph driven
+    via invoke()) with wrap_tool_call wired into ToolNode — the same path a real
+    sync agent uses.  The observable consequence is the assertion: the file was
+    never written to disk.
+    """
+    target = tmp_path / "out_sync.txt"
+    assert not target.exists()
+
+    app = _build_sync_app(ToolPolicy(allowed=frozenset({"read_file"}), max_risk=RiskLevel.READ_ONLY))
+    result = app.invoke({"messages": [AIMessage(content="", tool_calls=[_call("write_file", str(target), "c_sync")])]})
+
+    msg = result["messages"][-1]
+    assert isinstance(msg, ToolMessage)
+    assert msg.status == "error"
+    assert "denied" in msg.content.lower()
+
+    # THE OBSERVABLE CONSEQUENCE: the file was never written.
+    assert not target.exists(), "write_file side effect happened despite sync veto"
 
 
 @pytest.mark.parametrize("scaffold", ["ls", "write_todos", "task"])

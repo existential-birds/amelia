@@ -25,6 +25,7 @@ from amelia.client.cli import (
 )
 from amelia.client.streaming import stream_workflow_events
 from amelia.logging import configure_logging
+from amelia.qa.cli import qa_app
 from amelia.server.cli import server_app
 from amelia.server.dev import dev_app
 from amelia.tools.shell_executor import run_shell_command
@@ -34,6 +35,7 @@ app = typer.Typer(help="Amelia Agentic Orchestrator CLI")
 app.add_typer(config_app, name="config")
 app.add_typer(server_app, name="server")
 app.add_typer(dev_app, name="dev")
+app.add_typer(qa_app, name="qa")
 app.command(name="start", help="Start a workflow for an issue.")(start_command)
 app.command(name="plan", help="Generate a plan for an issue without executing.")(plan_command)
 app.command(name="approve", help="Approve the workflow plan in the current worktree.")(approve_command)
