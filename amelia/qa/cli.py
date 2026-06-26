@@ -66,6 +66,28 @@ def _resolve_drivers(driver: str) -> list[str]:
     return [driver]
 
 
+def _require_matching_cells(scenarios: list[Scenario], drivers: list[str]) -> None:
+    """Fail loudly when no (scenario x driver) cell matches the requested drivers.
+
+    ``run_suite`` silently produces an empty report when a requested driver is
+    not opted into by any scenario (the matrix intersects to zero cells). That
+    surfaces as a confusing empty table with ``OVERALL: FAIL`` and no
+    explanation. This guard turns it into an actionable error that lists which
+    drivers each scenario actually supports.
+    """
+    requested = set(drivers)
+    if any(requested & set(s.drivers) for s in scenarios):
+        return
+    supported = ", ".join(
+        f"{s.id} -> {', '.join(s.drivers)}" for s in scenarios
+    )
+    raise typer.BadParameter(
+        f"No scenario opts into driver(s) {', '.join(drivers)}. "
+        f"Supported (scenario -> drivers): {supported}. "
+        f"Add the driver to a scenario's 'drivers:' list or pick a supported one."
+    )
+
+
 def _ensure_default_worktrees(scenarios: list[Scenario]) -> list[Scenario]:
     """Materialize scratch git worktrees for scenarios that omit one.
 
@@ -374,6 +396,7 @@ def run(
     if not scenarios:
         typer.echo("No scenarios matched; nothing to run.", err=True)
         raise typer.Exit(code=1)
+    _require_matching_cells(scenarios, drivers)
 
     async def _run() -> QaReport:
         async with _build_orchestrator() as svc:
@@ -453,6 +476,7 @@ def record(
     if not scenarios:
         typer.echo("No scenarios matched; nothing to record.", err=True)
         raise typer.Exit(code=1)
+    _require_matching_cells(scenarios, drivers)
 
     async def _run() -> QaReport:
         async with _build_orchestrator() as svc:
