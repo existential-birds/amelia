@@ -17,7 +17,7 @@ from amelia.agents.developer import Developer
 from amelia.agents.reviewer import Reviewer
 from amelia.core.types import ReviewResult
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.pipelines.utils import extract_node_config, wrap_with_recording
+from amelia.pipelines.utils import apply_driver_override, extract_node_config, wrap_with_recording
 from amelia.skills.review import REVIEW_TYPE_SKILLS, detect_stack, load_skills_by_type
 from amelia.tools.git_utils import get_current_commit
 
@@ -139,6 +139,7 @@ async def call_developer_node(
     agent_config = nc.profile.get_agent_config("developer")
     developer = Developer(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
 
+    apply_driver_override(developer, nc.driver_override, "developer")
     wrap_with_recording(developer, nc.recorder, "developer", agent_config.model)
 
     final_state = state
@@ -321,6 +322,7 @@ async def call_reviewer_node(
             review_guidelines=guidelines,
         )
 
+        apply_driver_override(reviewer, nc.driver_override, pass_name)
         wrap_with_recording(reviewer, nc.recorder, pass_name, agent_config.model)
 
         review_result, session_id = await reviewer.agentic_review(

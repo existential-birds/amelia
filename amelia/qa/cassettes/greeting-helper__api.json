@@ -1,0 +1,147 @@
+{
+  "scenario_id": "greeting-helper",
+  "driver": "api",
+  "invocations": [
+    {
+      "messages": [
+        {
+          "type": "thinking",
+          "content": "Designing the plan...",
+          "tool_name": null,
+          "tool_input": null,
+          "tool_output": null,
+          "tool_call_id": null,
+          "session_id": null,
+          "is_error": false,
+          "model": null,
+          "usage": null
+        },
+        {
+          "type": "result",
+          "content": "# Plan: Add greeting helper\n\n**Goal:** Add a greeting helper function to hello.py that returns a friendly message.\n\n### Task 1: Implement the greeting helper\n\n- Create `hello.py` with a `greet()` function returning the string \"hello\".\n- Keep the implementation minimal; do not create any other files.\n- This plan drives the integration test through architect, developer, and reviewer.\n",
+          "tool_name": null,
+          "tool_input": null,
+          "tool_output": null,
+          "tool_call_id": null,
+          "session_id": "sess-architect",
+          "is_error": false,
+          "model": null,
+          "usage": null
+        }
+      ],
+      "usage": {
+        "input_tokens": 100,
+        "output_tokens": 50,
+        "cache_read_tokens": null,
+        "cache_creation_tokens": null,
+        "cost_usd": null,
+        "duration_ms": 1500,
+        "num_turns": null,
+        "model": "replay"
+      }
+    },
+    {
+      "messages": [
+        {
+          "type": "thinking",
+          "content": "Analyzing the task...",
+          "tool_name": null,
+          "tool_input": null,
+          "tool_output": null,
+          "tool_call_id": null,
+          "session_id": null,
+          "is_error": false,
+          "model": null,
+          "usage": null
+        },
+        {
+          "type": "tool_call",
+          "content": null,
+          "tool_name": "write_file",
+          "tool_input": {
+            "path": "test.py",
+            "content": "# test"
+          },
+          "tool_output": null,
+          "tool_call_id": null,
+          "session_id": null,
+          "is_error": false,
+          "model": null,
+          "usage": null
+        },
+        {
+          "type": "tool_result",
+          "content": null,
+          "tool_name": "write_file",
+          "tool_input": null,
+          "tool_output": "File written successfully",
+          "tool_call_id": null,
+          "session_id": null,
+          "is_error": false,
+          "model": null,
+          "usage": null
+        },
+        {
+          "type": "result",
+          "content": "Done!",
+          "tool_name": null,
+          "tool_input": null,
+          "tool_output": null,
+          "tool_call_id": null,
+          "session_id": null,
+          "is_error": false,
+          "model": null,
+          "usage": null
+        }
+      ],
+      "usage": {
+        "input_tokens": 100,
+        "output_tokens": 50,
+        "cache_read_tokens": null,
+        "cache_creation_tokens": null,
+        "cost_usd": null,
+        "duration_ms": 1500,
+        "num_turns": null,
+        "model": "replay"
+      }
+    },
+    {
+      "messages": [
+        {
+          "type": "thinking",
+          "content": "Analyzing the code changes...",
+          "tool_name": null,
+          "tool_input": null,
+          "tool_output": null,
+          "tool_call_id": null,
+          "session_id": null,
+          "is_error": false,
+          "model": null,
+          "usage": null
+        },
+        {
+          "type": "result",
+          "content": "## Review Summary\n\nReview of the code changes.\n\n## Issues\nNo issues found.\n\n## Good Patterns\n\n- Well-structured code\n\n## Verdict\n\n**Ready:** Yes\n**Rationale:** All changes look good.\n",
+          "tool_name": null,
+          "tool_input": null,
+          "tool_output": null,
+          "tool_call_id": null,
+          "session_id": "session-review",
+          "is_error": false,
+          "model": null,
+          "usage": null
+        }
+      ],
+      "usage": {
+        "input_tokens": 100,
+        "output_tokens": 50,
+        "cache_read_tokens": null,
+        "cache_creation_tokens": null,
+        "cost_usd": null,
+        "duration_ms": 1500,
+        "num_turns": null,
+        "model": "replay"
+      }
+    }
+  ]
+}

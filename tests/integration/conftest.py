@@ -23,7 +23,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
 
 from amelia.core.types import AgentConfig, DriverType, Issue, Profile, TrackerType
-from amelia.drivers.base import AgenticMessage, AgenticMessageType
+from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage
 from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.state import ImplementationState, rebuild_implementation_state
 from amelia.server.database.connection import Database
@@ -373,6 +373,87 @@ Review of the code changes.
             session_id="session-review",
         ),
     ]
+
+
+# --- Shared QA / e2e driver-script helpers ---------------------------------
+# Lifted from tests/integration/test_trajectory_end_to_end.py so both the
+# canonical e2e test and the QA runner tests share one copy.
+
+PLAN_MARKDOWN = """# Plan: Add greeting helper
+
+**Goal:** Add a greeting helper function to hello.py that returns a friendly message.
+
+### Task 1: Implement the greeting helper
+
+- Create `hello.py` with a `greet()` function returning the string "hello".
+- Keep the implementation minimal; do not create any other files.
+- This plan drives the integration test through architect, developer, and reviewer.
+"""
+
+
+def _architect_messages() -> list[AgenticMessage]:
+    """Architect stream: RESULT carries the plan (raw-output fallback writes the file)."""
+    return [
+        AgenticMessage(type=AgenticMessageType.THINKING, content="Designing the plan..."),
+        AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content=PLAN_MARKDOWN,
+            session_id="sess-architect",
+        ),
+    ]
+
+
+def _scripted_execute_agentic(
+    scripts: list[list[AgenticMessage] | Exception],
+) -> Any:
+    """Build an execute_agentic replacement that plays one script per call.
+
+    Calls beyond the script list replay the last script. An ``Exception``
+    entry raises instead of yielding (driver failure at the boundary).
+    """
+    call_count = {"n": 0}
+
+    async def fake_execute_agentic(
+        self: Any, prompt: str, cwd: str, **kwargs: Any
+    ) -> AsyncGenerator[AgenticMessage, None]:
+        idx = min(call_count["n"], len(scripts) - 1)
+        call_count["n"] += 1
+        script = scripts[idx]
+        if isinstance(script, Exception):
+            raise script
+        # Mirror the real ApiDriver, which records per-invocation usage
+        # (including duration_ms) that the recording seam reads via get_usage().
+        self._usage = DriverUsage(
+            input_tokens=100, output_tokens=50, duration_ms=1500, model="claude-x"
+        )
+        for msg in script:
+            yield msg
+
+    return fake_execute_agentic
+
+
+async def _wait_for_status(
+    test_db: Database,
+    workflow_id: uuid.UUID,
+    status: str,
+    timeout: float = 60.0,
+) -> None:
+    """Poll the workflows row until it reaches *status* (or fail loudly)."""
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + timeout
+    last_seen: str | None = None
+    while loop.time() < deadline:
+        row = await test_db.fetch_one(
+            "SELECT status FROM workflows WHERE id = $1", workflow_id
+        )
+        if row is not None:
+            last_seen = row["status"]
+            if last_seen == status:
+                return
+        await asyncio.sleep(0.05)
+    raise AssertionError(
+        f"workflow {workflow_id} never reached {status!r} (last seen: {last_seen!r})"
+    )
 
 
 @pytest.fixture
@@ -828,3 +909,45 @@ async def create_test_workflow(
 def mock_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """Set API key env var to allow driver construction."""
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-for-integration-tests")
+
+
+# --- Shared trajectory-recording e2e fixtures -------------------------------
+# Lifted from tests/integration/test_trajectory_end_to_end.py so both the
+# canonical e2e test and the QA runner tests share the same wiring:
+# a real OrchestratorService (real Postgres repos + MemorySaver checkpointer)
+# and an activated api-driver profile.
+
+
+@pytest.fixture
+def trajectory_dir(tmp_path: Path) -> Path:
+    """Isolated trajectory root for the orchestrator under test."""
+    return tmp_path / "trajectories"
+
+
+@pytest.fixture
+async def api_profile(
+    test_profile_repository: ProfileRepository,
+    valid_worktree: str,
+) -> Profile:
+    """Create and activate an api-driver profile so ApiDriver mocking applies."""
+    profile = make_profile(driver="api", repo_root=valid_worktree)
+    await test_profile_repository.create_profile(profile)
+    await test_profile_repository.set_active(profile.name)
+    return profile
+
+
+@pytest.fixture
+def orchestrator(
+    test_event_bus: EventBus,
+    test_repository: WorkflowRepository,
+    test_profile_repository: ProfileRepository,
+    trajectory_dir: Path,
+) -> OrchestratorService:
+    """Real OrchestratorService with real Postgres repos and a working checkpointer."""
+    return OrchestratorService(
+        event_bus=test_event_bus,
+        repository=test_repository,
+        profile_repo=test_profile_repository,
+        checkpointer=MemorySaver(),
+        trajectory_dir=trajectory_dir,
+    )
