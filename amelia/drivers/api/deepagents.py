@@ -839,9 +839,16 @@ class ApiDriver(DriverInterface):
                 if peak_context_tokens > 0
                 else None
             )
-            context_warning_threshold = float(
-                os.environ.get("AMELIA_CONTEXT_WARNING_THRESHOLD", "0.8")
-            )
+            try:
+                context_warning_threshold = float(
+                    os.environ.get("AMELIA_CONTEXT_WARNING_THRESHOLD", "0.8")
+                )
+            except ValueError:
+                logger.warning(
+                    "Invalid AMELIA_CONTEXT_WARNING_THRESHOLD; falling back to 0.8",
+                    raw_value=os.environ.get("AMELIA_CONTEXT_WARNING_THRESHOLD"),
+                )
+                context_warning_threshold = 0.8
             context_window_warning = (
                 context_utilization is not None
                 and context_utilization >= context_warning_threshold

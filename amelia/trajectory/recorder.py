@@ -110,12 +110,24 @@ class AgentInvocationRecorder:
             )
         if usage is not None:
             self._steps[-1].metrics = usage_to_metrics(usage, cost_usd)
+            context = {
+                key: value
+                for key, value in (
+                    ("context_tokens", usage.context_tokens),
+                    ("context_window_tokens", usage.context_window_tokens),
+                    ("context_utilization", usage.context_utilization),
+                    ("context_warning_threshold", usage.context_warning_threshold),
+                    ("context_window_warning", usage.context_window_warning),
+                )
+                if value is not None
+            }
             self._final_metrics = FinalMetrics(
                 total_prompt_tokens=usage.input_tokens,
                 total_completion_tokens=usage.output_tokens,
                 total_cached_tokens=usage.cache_read_tokens,
                 total_cost_usd=cost_usd if cost_usd is not None else usage.cost_usd,
                 total_steps=len(self._steps),
+                extra={"context": context} if context else None,
             )
             self._duration_ms = usage.duration_ms
         else:
