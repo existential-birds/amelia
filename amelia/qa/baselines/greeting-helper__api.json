@@ -1,0 +1,16 @@
+{
+  "scenario_id": "greeting-helper",
+  "driver": "api",
+  "metrics": {
+    "status": "completed",
+    "trajectory_path": null,
+    "total_cost_usd": 0.0677,
+    "total_tokens": 1367312,
+    "total_duration_ms": 833674
+  },
+  "thresholds": {
+    "cost_pct": 0.15,
+    "tokens_pct": 0.15,
+    "duration_pct": 0.5
+  }
+}

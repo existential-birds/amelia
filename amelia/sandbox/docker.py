@@ -10,6 +10,7 @@ import asyncio
 import contextlib
 import secrets
 import time
+from collections import deque
 from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 
@@ -29,14 +30,23 @@ class DockerWorkerProcess(WorkerProcess):
 
     def __init__(self, proc: asyncio.subprocess.Process) -> None:
         self._proc = proc
+        # Bounded deque so a chatty worker can't grow the buffer unboundedly
+        # while the drain protects the OS pipe from filling. The most recent
+        # ``maxlen`` chunks are retained for diagnostics.
+        self._stderr_chunks: deque[bytes] = deque(maxlen=1024)
         # Continuously drain stderr so the OS pipe buffer never fills and
         # deadlocks the worker (same pattern as exec_stream's _drain_stderr).
         self._stderr_task: asyncio.Task[None] = asyncio.create_task(self._drain_stderr())
 
     async def _drain_stderr(self) -> None:
         if self._proc.stderr:
-            async for _ in self._proc.stderr:
-                pass  # discard; we only need the buffer drained
+            async for chunk in self._proc.stderr:
+                self._stderr_chunks.append(chunk)
+
+    @property
+    def stderr_text(self) -> str:
+        """Return stderr captured while the background drain protected the pipe."""
+        return b"".join(self._stderr_chunks).decode(errors="replace")
 
     @property
     def alive(self) -> bool:

@@ -1,0 +1,15 @@
+# Amelia Automated QA scenario: greeting helper.
+#
+# Mirrors the canonical integration-test task shape: a minimal "add a greet()
+# helper to hello.py" goal that drives the full architect -> developer ->
+# reviewer lifecycle. This is the single bundled example scenario (A4 in the
+# plan). Expanding the real corpus is follow-up F1.
+
+id: greeting-helper
+task_title: Add greeting helper
+task_description: >
+  Add a greet() helper to hello.py that returns a friendly greeting string.
+  Keep the implementation minimal and do not create any other files.
+drivers: ["api"]
+worktree_path: null
+repo_ref: null

@@ -19,6 +19,7 @@ from amelia.core.types import (
     Profile,
     SandboxMode,
 )
+from amelia.drivers.base import DriverInterface
 from amelia.pipelines.implementation.external_plan import import_external_plan
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.config import ServerConfig
@@ -86,6 +87,11 @@ class OrchestratorService:
         # workflow_id -> trajectory recorder; shared with the runner, which
         # threads recorders into graph config and finalizes at terminal seams.
         self._recorders: dict[uuid.UUID, WorkflowTrajectoryRecorder] = {}
+        # workflow_id -> request-scoped driver override (instance or callable).
+        # Populated by ``start_workflow(driver_override=...)`` and threaded
+        # through ``build_runnable_config`` so the QA replay harness can
+        # inject a deterministic driver without monkeypatching ``get_driver``.
+        self._driver_overrides: dict[uuid.UUID, DriverInterface | Callable[[str], DriverInterface]] = {}
         # Strong refs to in-flight recorder drain tasks (cleanup callback).
         self._drain_tasks: set[asyncio.Task[None]] = set()
         # Owns event emission + per-workflow sequencing.
@@ -98,6 +104,7 @@ class OrchestratorService:
             checkpointer=checkpointer,
             profile_repo=profile_repo,
             recorders=self._recorders,
+            driver_overrides=self._driver_overrides,
         )
         # worktree_path -> (workflow_id, task)
         self._active_tasks: dict[str, tuple[uuid.UUID, asyncio.Task[None]]] = {}
@@ -231,6 +238,8 @@ class OrchestratorService:
             await self._runner.finalize_trajectory(
                 workflow_id, status=terminal_status, failure_reason=failure_reason
             )
+            # Drop the request-scoped driver override (terminal: no resume).
+            self._driver_overrides.pop(workflow_id, None)
         except Exception:
             logger.exception(
                 "Failed to finalize trajectory after task exit",
@@ -572,6 +581,7 @@ class OrchestratorService:
         task_title: str | None = None,
         task_description: str | None = None,
         branch: str | None = None,
+        driver_override: DriverInterface | Callable[[str], DriverInterface] | None = None,
     ) -> uuid.UUID:
         """Start a new workflow.
 
@@ -579,11 +589,17 @@ class OrchestratorService:
             issue_id: The issue ID to work on.
             worktree_path: Absolute path to the worktree.
             profile: Optional profile name.
-            driver: Optional driver override.
+            driver: Optional driver override key (e.g. ``"api"``).
             task_title: Optional task title (skips tracker fetch when provided).
             task_description: Optional task description (defaults to task_title if not provided).
             branch: Branch override. None=auto-create amelia/<issue-id>.
                 Empty string=use current branch as-is.
+            driver_override: Optional request-scoped driver instance (or
+                ``agent_name -> driver`` callable) injected at every
+                agent-construction seam in place of the key-built driver.
+                Used by the QA replay harness; no-op for normal runs. A
+                non-DriverInterface / non-callable value raises
+                :class:`TypeError` (fail-fast: never silently fall back).
 
         Returns:
             The workflow ID (UUID).
@@ -593,7 +609,24 @@ class OrchestratorService:
             WorkflowConflictError: If worktree already has active workflow.
             ConcurrencyLimitError: If at max concurrent workflows.
             ValueError: If profile not found.
+            TypeError: If ``driver_override`` is neither a ``DriverInterface``
+                nor a callable returning one.
         """
+        # Validate override shape up front: a bad override must fail here,
+        # not after the workflow row is persisted. Accept either a
+        # DriverInterface-like instance (duck-typed via ``execute_agentic``;
+        # ``DriverInterface`` is a Protocol without ``@runtime_checkable`` so
+        # isinstance() can't be used) or any callable (the
+        # ``agent_name -> driver`` form). A bare instance is NOT callable,
+        # so the attribute check covers it.
+        if driver_override is not None and not callable(driver_override) and not hasattr(
+            driver_override, "execute_agentic"
+        ):
+            raise TypeError(
+                "driver_override must be a DriverInterface or a callable "
+                f"returning one; got {type(driver_override).__name__}"
+            )
+
         # Validate and resolve worktree before acquiring lock (fast-fail)
         worktree = self._validate_worktree_path(worktree_path)
         resolved_path = str(worktree)
@@ -635,6 +668,8 @@ class OrchestratorService:
                 raise
 
             self._ensure_recorder(workflow_id, issue_id, loaded_profile)
+            if driver_override is not None:
+                self._driver_overrides[workflow_id] = driver_override
 
             task = asyncio.create_task(self._runner.run_workflow_with_retry(workflow_id, state))
             self._active_tasks[resolved_path] = (workflow_id, task)
@@ -918,6 +953,10 @@ class OrchestratorService:
         # workflow never recorded or was already finalized).
         await self._runner.finalize_trajectory(workflow_id, status="cancelled")
 
+        # Drop the request-scoped driver override (terminal: no resume). A
+        # queued/pending workflow has no task callback to run this cleanup.
+        self._driver_overrides.pop(workflow_id, None)
+
     async def resume_workflow(self, workflow_id: uuid.UUID) -> ServerExecutionState:
         """Resume a failed workflow from its last checkpoint.
 
@@ -1140,6 +1179,8 @@ class OrchestratorService:
             workflow_id, status="failed", failure_reason=feedback
         )
         self._events.forget(workflow_id)
+        # Drop the request-scoped driver override (terminal: no resume).
+        self._driver_overrides.pop(workflow_id, None)
 
     async def recover_interrupted_workflows(self) -> None:
         """Recover workflows that were running when server restarted.
