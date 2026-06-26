@@ -116,6 +116,7 @@ Desktop.ini
 
 # Planning artifacts
 .planning/
+docs/plans/
 
 # Hermes Agent
 .hermes/
