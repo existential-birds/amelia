@@ -106,6 +106,45 @@ class TestApiDriverUsageAccumulation:
         assert usage is not None
         assert usage.cost_usd == 0.0025
 
+    async def test_handles_null_token_usage_in_metadata(
+        self, mock_deepagents_local_sandbox: MagicMock
+    ) -> None:
+        """response_metadata with token_usage=None should not crash.
+
+        Some providers (e.g. OpenRouter) return ``{"token_usage": null}``.
+        ``dict.get("token_usage", {})`` returns None (not the default) when the
+        key is present with a null value, so cost extraction must coalesce it.
+        """
+        from amelia.drivers.api.deepagents import ApiDriver
+
+        msg = AIMessage(content="Response")
+        msg.usage_metadata = UsageMetadata(
+            input_tokens=100, output_tokens=50, total_tokens=150
+        )
+        msg.response_metadata = {"token_usage": None}
+
+        stream_chunks = [{"messages": [msg]}]
+
+        async def mock_astream(*args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
+            for chunk in stream_chunks:
+                yield chunk
+
+        mock_agent = MagicMock()
+        mock_agent.astream = mock_astream
+        mock_deepagents_local_sandbox.create_deep_agent.return_value = mock_agent
+
+        driver = ApiDriver(model="test/model", provider="openrouter")
+
+        async for _ in driver.execute_agentic("test", "/tmp"):
+            pass
+
+        # Reaching here at all proves the null token_usage didn't crash
+        # extraction; with no cost reported, cost_usd stays None.
+        usage = driver.get_usage()
+        assert usage is not None
+        assert usage.cost_usd is None
+        assert usage.input_tokens == 100
+
     async def test_accumulates_cost_from_multiple_messages(
         self, mock_deepagents_local_sandbox: MagicMock
     ) -> None:

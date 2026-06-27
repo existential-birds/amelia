@@ -687,7 +687,7 @@ class ApiDriver(DriverInterface):
                             # OpenRouter returns cost in token_usage object
                             resp_meta = getattr(message, "response_metadata", None)
                             if resp_meta:
-                                token_usage = resp_meta.get("token_usage", {})
+                                token_usage = resp_meta.get("token_usage") or {}
                                 total_cost += token_usage.get("cost", 0.0)
 
                         # Text blocks in list content -> THINKING (intermediate text during tool use)
