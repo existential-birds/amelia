@@ -43,23 +43,55 @@ def _marker_id(existing_calls: Sequence[ToolCall]) -> str:
     return f"{COMPACTION_MARKER_CALL_ID_PREFIX}-{sum(1 for c in existing_calls if c.tool_name == COMPACTION_MARKER_TOOL_NAME) + 1}"
 
 
+def _aggregate_prior_markers(
+    omitted_calls: Sequence[ToolCall],
+) -> tuple[int, str | None, str | None]:
+    """Sum omitted_turns from prior compaction markers in ``omitted_calls``.
+
+    Returns ``(total_omitted_turns, first_real_call_id, last_real_call_id)``.
+    Real call IDs skip marker calls; ``None`` is returned when no real calls
+    exist in the range.
+    """
+    total = 0
+    first_real: str | None = None
+    last_real: str | None = None
+    for call in omitted_calls:
+        if call.tool_name == COMPACTION_MARKER_TOOL_NAME:
+            prior = call.tool_input.get("omitted_turns")
+            if isinstance(prior, int):
+                total += prior
+            prior_first = call.tool_input.get("first_omitted_call_id")
+            if isinstance(prior_first, str) and first_real is None:
+                first_real = prior_first
+            prior_last = call.tool_input.get("last_omitted_call_id")
+            if isinstance(prior_last, str):
+                last_real = prior_last
+        else:
+            if first_real is None:
+                first_real = call.id
+            last_real = call.id
+            total += 1
+    return total, first_real, last_real
+
+
 def _build_marker_output(
     omitted_calls: Sequence[ToolCall],
     omitted_results: Sequence[ToolResult],
     *,
     reason: str | None,
+    total_omitted_turns: int,
+    first_call_id: str,
+    last_call_id: str,
 ) -> str:
-    first = omitted_calls[0].id if omitted_calls else "unknown"
-    last = omitted_calls[-1].id if omitted_calls else "unknown"
     names = ", ".join(dict.fromkeys(call.tool_name for call in omitted_calls[:10]))
     result_tokens = sum(len(result.output.split()) for result in omitted_results)
     reason_text = f" Reason: {reason}." if reason else ""
     return (
         "[CONTEXT COMPACTED] "
-        f"Omitted {len(omitted_calls)} middle tool turn(s) to keep the workflow within "
+        f"Omitted {total_omitted_turns} middle tool turn(s) to keep the workflow within "
         f"the model context window.{reason_text} "
         f"Protected first turn and the most recent turns are preserved. "
-        f"Omitted range: {first}..{last}. "
+        f"Omitted range: {first_call_id}..{last_call_id}. "
         f"Tool names seen: {names or 'unknown'}. "
         f"Approx omitted result words: {result_tokens}."
     )
@@ -119,20 +151,33 @@ def compact_implementation_context(
     if not omitted_calls:
         return state, None
 
+    total_omitted, first_call_id, last_call_id = _aggregate_prior_markers(omitted_calls)
+    if first_call_id is None:
+        first_call_id = "unknown"
+    if last_call_id is None:
+        last_call_id = "unknown"
+
     marker_id = _marker_id(calls)
     marker_call = ToolCall(
         id=marker_id,
         tool_name=COMPACTION_MARKER_TOOL_NAME,
         tool_input={
-            "omitted_turns": len(omitted_calls),
-            "first_omitted_call_id": omitted_calls[0].id,
-            "last_omitted_call_id": omitted_calls[-1].id,
+            "omitted_turns": total_omitted,
+            "first_omitted_call_id": first_call_id,
+            "last_omitted_call_id": last_call_id,
         },
     )
     marker_result = ToolResult(
         call_id=marker_id,
         tool_name=COMPACTION_MARKER_TOOL_NAME,
-        output=_build_marker_output(omitted_calls, omitted_results, reason=reason),
+        output=_build_marker_output(
+            omitted_calls,
+            omitted_results,
+            reason=reason,
+            total_omitted_turns=total_omitted,
+            first_call_id=first_call_id,
+            last_call_id=last_call_id,
+        ),
         success=True,
     )
 
@@ -152,15 +197,15 @@ def compact_implementation_context(
         event_type=EventType.CONTEXT_COMPACTED,
         level=EventLevel.INFO,
         message=(
-            f"Compacted workflow context: omitted {len(omitted_calls)} middle tool turn(s), "
+            f"Compacted workflow context: omitted {total_omitted} middle tool turn(s), "
             f"kept first turn and last {len(tail_calls)} turn(s)."
         ),
         data={
-            "omitted_turns": len(omitted_calls),
+            "omitted_turns": total_omitted,
             "kept_first_turns": len(protected_calls),
             "kept_recent_turns": len(tail_calls),
-            "first_omitted_call_id": omitted_calls[0].id,
-            "last_omitted_call_id": omitted_calls[-1].id,
+            "first_omitted_call_id": first_call_id,
+            "last_omitted_call_id": last_call_id,
             "reason": reason,
         },
     )

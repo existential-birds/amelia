@@ -12,6 +12,7 @@ from amelia.drivers.api.deepagents import (
     ApiDriver,
     LocalSandbox,
     _create_chat_model,
+    _parse_max_output_tokens,
     truncate_text_to_token_budget,
 )
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
@@ -343,7 +344,7 @@ class TestLocalSandbox:
         sandbox = LocalSandbox(
             root_dir=str(tmp_path),
             virtual_mode=False,
-            max_output_tokens=8,
+            max_output_tokens=50,
         )
 
         result = sandbox.execute(
@@ -351,8 +352,8 @@ class TestLocalSandbox:
         )
 
         assert result.truncated is True
-        assert "[tool output truncated to 8 tokens" in result.output
-        assert len(sandbox.tokenizer.encode(result.output)) < 40
+        assert "[tool output truncated to 50 tokens" in result.output
+        assert len(sandbox.tokenizer.encode(result.output)) < 200
 
 
 class TestTokenAwareTruncation:
@@ -363,16 +364,17 @@ class TestTokenAwareTruncation:
     def test_truncate_text_to_token_budget_uses_tokenizer_not_bytes(self) -> None:
         text = "antidisestablishmentarianism " * 20
 
+        max_tokens = 50
         truncated, was_truncated, original_tokens = truncate_text_to_token_budget(
             text,
-            max_tokens=10,
+            max_tokens=max_tokens,
         )
 
         assert was_truncated is True
-        assert original_tokens > 10
-        assert len(ApiDriver.tokenizer.encode(truncated)) <= 18
+        assert original_tokens > max_tokens
+        assert len(ApiDriver.tokenizer.encode(truncated)) <= max_tokens
         assert len(truncated.encode()) > 10
-        assert "[tool output truncated to 10 tokens" in truncated
+        assert "[tool output truncated to 50 tokens" in truncated
 
     def test_execute_returns_timeout_error_on_slow_command(
         self, tmp_path: Path
@@ -457,6 +459,66 @@ class TestTokenAwareTruncation:
         assert result.error is None
         assert result.file_data is not None
         assert "content here" in result.file_data["content"]
+
+
+class TestParseMaxOutputTokens:
+    """Tests for _parse_max_output_tokens import-time validation."""
+
+    def test_parses_valid_integer(self) -> None:
+        assert _parse_max_output_tokens("12000") == 12000
+        assert _parse_max_output_tokens("0") == 0
+
+    def test_rejects_non_numeric_with_clear_value_error(self) -> None:
+        with pytest.raises(ValueError, match="non-negative integer"):
+            _parse_max_output_tokens("abc")
+
+    def test_rejects_negative_with_clear_value_error(self) -> None:
+        with pytest.raises(ValueError, match="non-negative"):
+            _parse_max_output_tokens("-5")
+
+
+class TestLocalSandboxMaxOutputTokensValidation:
+    """Tests for LocalSandbox max_output_tokens None-vs-invalid handling."""
+
+    def test_none_uses_default(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(root_dir=str(tmp_path), virtual_mode=False)
+        assert sandbox.max_output_tokens > 0
+
+    def test_zero_raises_value_error(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="positive integer"):
+            LocalSandbox(root_dir=str(tmp_path), virtual_mode=False, max_output_tokens=0)
+
+    def test_negative_raises_value_error(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="positive integer"):
+            LocalSandbox(root_dir=str(tmp_path), virtual_mode=False, max_output_tokens=-10)
+
+    def test_explicit_positive_value_is_used(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(
+            root_dir=str(tmp_path), virtual_mode=False, max_output_tokens=42
+        )
+        assert sandbox.max_output_tokens == 42
+
+
+class TestTruncateMarkerFitsBudget:
+    """truncate_text_to_token_budget must never exceed max_tokens."""
+
+    def test_marker_longer_than_budget_returns_truncated_within_budget(self) -> None:
+        from amelia.drivers.api.deepagents import ApiDriver
+
+        text = "antidisestablishmentarianism " * 100
+        max_tokens = 2
+        truncated, was_truncated, original = truncate_text_to_token_budget(
+            text, max_tokens=max_tokens
+        )
+        assert was_truncated is True
+        assert original > max_tokens
+        encoded = len(ApiDriver.tokenizer.encode(truncated))
+        assert encoded <= max_tokens
+
+    def test_zero_budget_returns_empty_string(self) -> None:
+        truncated, was_truncated, _ = truncate_text_to_token_budget("hello world", max_tokens=0)
+        assert was_truncated is True
+        assert truncated == ""
 
 
 class TestExecuteAgenticYieldsAgenticMessage:

@@ -33,6 +33,67 @@ if TYPE_CHECKING:
     from amelia.sandbox.provider import SandboxProvider
 
 
+def _parse_compaction_threshold() -> float:
+    """Parse and validate the context compaction threshold from env config.
+
+    Reads ``AMELIA_CONTEXT_COMPACTION_THRESHOLD`` (default
+    :data:`DEFAULT_COMPACTION_THRESHOLD`). The value must be a float in the
+    interval ``(0, 1]`` — values outside that range produce nonsensical
+    compaction behavior.
+
+    Raises:
+        ValueError: If the env value is non-numeric or out of range.
+
+    Returns:
+        Validated compaction threshold.
+    """
+    raw = os.environ.get(
+        "AMELIA_CONTEXT_COMPACTION_THRESHOLD",
+        str(DEFAULT_COMPACTION_THRESHOLD),
+    )
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"AMELIA_CONTEXT_COMPACTION_THRESHOLD must be a number in (0, 1], "
+            f"got {raw!r}"
+        ) from exc
+    if not 0 < value <= 1:
+        raise ValueError(
+            f"AMELIA_CONTEXT_COMPACTION_THRESHOLD must be in (0, 1], got {value}"
+        )
+    return value
+
+
+def _parse_keep_last_turns() -> int:
+    """Parse and validate the keep-last-turns config from env.
+
+    Reads ``AMELIA_CONTEXT_KEEP_LAST_TURNS`` (default
+    :data:`DEFAULT_KEEP_LAST_N_TURNS`). Must be an integer >= 1.
+
+    Raises:
+        ValueError: If the env value is non-numeric or < 1.
+
+    Returns:
+        Validated keep-last-turns count.
+    """
+    raw = os.environ.get(
+        "AMELIA_CONTEXT_KEEP_LAST_TURNS",
+        str(DEFAULT_KEEP_LAST_N_TURNS),
+    )
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"AMELIA_CONTEXT_KEEP_LAST_TURNS must be an integer >= 1, got {raw!r}"
+        ) from exc
+    if value < 1:
+        raise ValueError(
+            f"AMELIA_CONTEXT_KEEP_LAST_TURNS must be >= 1, got {value}"
+        )
+    return value
+
+
 class Developer:
     """Developer agent that executes code changes agentically.
 
@@ -119,6 +180,9 @@ class Developer:
         if not state.goal:
             raise ValueError("ImplementationState must have a goal set")
 
+        compaction_threshold = _parse_compaction_threshold()
+        keep_last_turns = _parse_keep_last_turns()
+
         cwd = profile.repo_root
         prompt = (
             prompt_builder(state) if prompt_builder is not None else self._build_prompt(state)
@@ -197,26 +261,14 @@ class Developer:
                 yield current_state, event
 
                 usage = self.driver.get_usage()
-                threshold = float(
-                    os.environ.get(
-                        "AMELIA_CONTEXT_COMPACTION_THRESHOLD",
-                        str(DEFAULT_COMPACTION_THRESHOLD),
-                    )
-                )
-                keep_last = int(
-                    os.environ.get(
-                        "AMELIA_CONTEXT_KEEP_LAST_TURNS",
-                        str(DEFAULT_KEEP_LAST_N_TURNS),
-                    )
-                )
                 if should_compact_context(
                     state.model_copy(update={
                         "tool_calls": [*state.tool_calls, *tool_calls],
                         "tool_results": [*state.tool_results, *tool_results],
                     }),
                     context_utilization=usage.context_utilization if usage else None,
-                    threshold=threshold,
-                    keep_last_n_turns=keep_last,
+                    threshold=compaction_threshold,
+                    keep_last_n_turns=keep_last_turns,
                 ):
                     current_state, compaction_event = compact_implementation_context(
                         state.model_copy(update={
@@ -227,10 +279,10 @@ class Developer:
                             "final_response": message.content if is_complete else None,
                             "error": message.content if message.is_error else None,
                         }),
-                        keep_last_n_turns=keep_last,
+                        keep_last_n_turns=keep_last_turns,
                         reason=(
                             f"context utilization {usage.context_utilization:.1%} "
-                            f"crossed threshold {threshold:.1%}"
+                            f"crossed threshold {compaction_threshold:.1%}"
                             if usage and usage.context_utilization is not None
                             else "context threshold crossed"
                         ),

@@ -47,10 +47,35 @@ from amelia.logging import log_claude_result, log_todos
 
 __all__ = ["ApiDriver", "LocalSandbox", "truncate_text_to_token_budget"]
 
+
+def _parse_max_output_tokens(raw: str) -> int:
+    """Parse a non-negative integer from an env-var string with a clear error.
+
+    Raises:
+        ValueError: If the value is non-numeric or negative.
+
+    Returns:
+        The parsed non-negative token count.
+    """
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"AMELIA_MAX_TOOL_OUTPUT_TOKENS must be a non-negative integer, got {raw!r}"
+        ) from exc
+    if value < 0:
+        raise ValueError(
+            f"AMELIA_MAX_TOOL_OUTPUT_TOKENS must be non-negative, got {value}"
+        )
+    return value
+
+
 # Maximum output size before truncation (100KB)
 _MAX_OUTPUT_SIZE = 100_000
 # Default token budget for shell/tool output returned to the model.
-_MAX_OUTPUT_TOKENS = int(os.environ.get("AMELIA_MAX_TOOL_OUTPUT_TOKENS", "12000"))
+_MAX_OUTPUT_TOKENS = _parse_max_output_tokens(
+    os.environ.get("AMELIA_MAX_TOOL_OUTPUT_TOKENS", "12000")
+)
 # Default command timeout in seconds
 _DEFAULT_TIMEOUT = 300
 
@@ -66,7 +91,11 @@ def truncate_text_to_token_budget(
     max_tokens: int,
     tokenizer: tiktoken.Encoding | None = None,
 ) -> tuple[str, bool, int]:
-    """Truncate text by token count and include an explicit marker."""
+    """Truncate text by token count and include an explicit marker.
+
+    The returned string never exceeds ``max_tokens`` when encoded — even when
+    the marker itself is longer than ``max_tokens``.
+    """
     enc = tokenizer or _default_tokenizer()
     tokens = enc.encode(text)
     original_tokens = len(tokens)
@@ -75,7 +104,10 @@ def truncate_text_to_token_budget(
 
     marker = f"\n... [tool output truncated to {max_tokens} tokens from {original_tokens}]"
     marker_tokens = enc.encode(marker)
-    content_budget = max(0, max_tokens - len(marker_tokens))
+    if len(marker_tokens) >= max_tokens:
+        truncated = enc.decode(tokens[:max_tokens])
+        return truncated, True, original_tokens
+    content_budget = max_tokens - len(marker_tokens)
     truncated = enc.decode(tokens[:content_budget]) + marker
     return truncated, True, original_tokens
 
@@ -104,7 +136,14 @@ class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.max_output_tokens = max_output_tokens or _MAX_OUTPUT_TOKENS
+        if max_output_tokens is None:
+            self.max_output_tokens = _MAX_OUTPUT_TOKENS
+        elif max_output_tokens <= 0:
+            raise ValueError(
+                f"max_output_tokens must be a positive integer, got {max_output_tokens}"
+            )
+        else:
+            self.max_output_tokens = max_output_tokens
         self.tokenizer = tokenizer or _default_tokenizer()
 
     @property

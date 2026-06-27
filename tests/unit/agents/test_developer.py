@@ -310,3 +310,54 @@ async def test_developer_omits_allowed_tools_without_tool_context(
             pass
 
     assert "allowed_tools" not in captured or captured.get("allowed_tools") is None
+
+
+class TestDeveloperCompactionConfigValidation:
+    """Developer.run() parses compaction env config eagerly with validation."""
+
+    def test_invalid_threshold_raises_value_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from amelia.agents.developer import _parse_compaction_threshold
+
+        monkeypatch.setenv("AMELIA_CONTEXT_COMPACTION_THRESHOLD", "not-a-number")
+        with pytest.raises(ValueError, match="AMELIA_CONTEXT_COMPACTION_THRESHOLD"):
+            _parse_compaction_threshold()
+
+        monkeypatch.setenv("AMELIA_CONTEXT_COMPACTION_THRESHOLD", "1.5")
+        with pytest.raises(ValueError, match=r"\(0, 1\]"):
+            _parse_compaction_threshold()
+
+        monkeypatch.setenv("AMELIA_CONTEXT_COMPACTION_THRESHOLD", "0")
+        with pytest.raises(ValueError, match=r"\(0, 1\]"):
+            _parse_compaction_threshold()
+
+    def test_invalid_keep_last_raises_value_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from amelia.agents.developer import _parse_keep_last_turns
+
+        monkeypatch.setenv("AMELIA_CONTEXT_KEEP_LAST_TURNS", "not-an-int")
+        with pytest.raises(ValueError, match="AMELIA_CONTEXT_KEEP_LAST_TURNS"):
+            _parse_keep_last_turns()
+
+        monkeypatch.setenv("AMELIA_CONTEXT_KEEP_LAST_TURNS", "0")
+        with pytest.raises(ValueError, match=">= 1"):
+            _parse_keep_last_turns()
+
+        monkeypatch.setenv("AMELIA_CONTEXT_KEEP_LAST_TURNS", "-3")
+        with pytest.raises(ValueError, match=">= 1"):
+            _parse_keep_last_turns()
+
+    def test_valid_config_parses(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from amelia.agents.developer import _parse_compaction_threshold, _parse_keep_last_turns
+
+        monkeypatch.setenv("AMELIA_CONTEXT_COMPACTION_THRESHOLD", "0.9")
+        monkeypatch.setenv("AMELIA_CONTEXT_KEEP_LAST_TURNS", "4")
+        assert _parse_compaction_threshold() == 0.9
+        assert _parse_keep_last_turns() == 4
