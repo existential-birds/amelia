@@ -317,6 +317,31 @@ async def test_policy_required_permission_mismatch_denies_with_useful_message():
     assert "fs.write" in result.content
 
 
+async def test_policy_audit_redacts_sensitive_args():
+    """Audit events must not expose raw values of sensitive argument keys."""
+    bus, events = _collecting_bus()
+    policy = ToolPolicy(
+        allowed=frozenset({"write_file"}),
+        max_risk=RiskLevel.WRITE,
+        permissions=frozenset({Permission.FS_WRITE}),
+    )
+    mw = ToolPolicyMiddleware(policy=policy, event_bus=bus)
+
+    async def handler(_req: Any) -> ToolMessage:
+        return ToolMessage(content="ok", tool_call_id="redact")
+
+    await mw.awrap_tool_call(
+        _direct_request("write_file", {"file_path": "x.txt", "content": "SECRET"}, "redact"),
+        handler,
+    )
+
+    assert len(events) >= 1
+    for event in events:
+        assert event.data["args"]["content"] == "***"
+        assert event.data["args"]["file_path"] == "x.txt"
+        assert event.tool_input["content"] == "***"
+
+
 async def test_policy_normalizes_cli_tool_name_aliases(tmp_path):
     """A tool call using a CLI alias (e.g. 'Write') is normalized before the check.
 

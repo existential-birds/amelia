@@ -8,6 +8,7 @@ agent construction. ``ToolContext`` is the single carrier for those deps so
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -30,9 +31,11 @@ class ToolContext:
         embedding_client: Embedding client for semantic-search tools.
         knowledge_repo: Knowledge repository for documentation tools.
         event_bus: Optional event bus for tool-emitted events.
+        workflow_id: Optional workflow UUID for correlating audit events.
     """
 
     cwd: str | None = None
     embedding_client: EmbeddingClient | None = None
     knowledge_repo: KnowledgeRepository | None = None
     event_bus: EventBus | None = None
+    workflow_id: uuid.UUID | None = None

@@ -573,6 +573,7 @@ class ApiDriver(DriverInterface):
                     allow_unregistered=submit_tool_names,
                 ),
                 event_bus=getattr(ctx, "event_bus", None),
+                workflow_id=getattr(ctx, "workflow_id", None),
             )
             middleware = [policy_mw, *(middleware or [])]
 

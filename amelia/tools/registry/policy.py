@@ -165,6 +165,29 @@ class ToolPolicyMiddleware(AgentMiddleware):
             status="error",
         )
 
+    # Argument keys whose values are redacted in audit payloads to prevent
+    # leaking secrets or user content to logs and event subscribers.
+    _REDACTED_ARG_KEYS: frozenset[str] = frozenset({
+        "content", "cmd", "command", "password", "token", "api_key",
+        "secret", "body", "data", "text", "input", "query", "url",
+    })
+
+    @classmethod
+    def _redact_args(cls, args: dict[str, Any]) -> dict[str, Any]:
+        """Return a copy of *args* with sensitive values replaced by '***'.
+
+        Only top-level string keys in ``_REDACTED_ARG_KEYS`` are redacted;
+        nested structures are left intact so the audit record stays readable
+        without deep traversal.
+        """
+        redacted: dict[str, Any] = {}
+        for key, value in args.items():
+            if key.lower() in cls._REDACTED_ARG_KEYS:
+                redacted[key] = "***"
+            else:
+                redacted[key] = value
+        return redacted
+
     def _audit(
         self,
         *,
@@ -176,7 +199,8 @@ class ToolPolicyMiddleware(AgentMiddleware):
         result: ToolMessage | Command[Any] | None = None,
         message: str | None = None,
     ) -> None:
-        args = dict(request.tool_call.get("args") or {})
+        raw_args = dict(request.tool_call.get("args") or {})
+        args = self._redact_args(raw_args)
         risk_level = spec.risk_level.name if spec else None
         required_permissions = sorted(str(permission) for permission in (spec.required_permissions if spec else ()))
         data: dict[str, Any] = {

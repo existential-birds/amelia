@@ -155,7 +155,6 @@ TRACE_TYPES: frozenset[AnyEventType] = frozenset({
     EventType.CLAUDE_THINKING,
     EventType.CLAUDE_TOOL_CALL,
     EventType.CLAUDE_TOOL_RESULT,
-    EventType.TOOL_POLICY_DECISION,
     EventType.AGENT_OUTPUT,
     # Oracle streaming
     EventType.ORACLE_CONSULTATION_THINKING,
