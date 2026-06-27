@@ -21,8 +21,16 @@ from langgraph.prebuilt.tool_node import ToolNode
 from pydantic import BaseModel
 from typing_extensions import TypedDict
 
-from amelia.tools.registry.policy import ToolPolicy, ToolPolicyMiddleware
-from amelia.tools.registry.spec import RiskLevel
+from amelia.server.events.bus import EventBus
+from amelia.server.models.events import EventType
+from amelia.tools.registry.policy import (
+    HighRiskDecision,
+    ToolPolicy,
+    ToolPolicyAuditDecision,
+    ToolPolicyMiddleware,
+    ToolValidationResult,
+)
+from amelia.tools.registry.spec import Permission, RiskLevel
 
 
 class _WriteFileInput(BaseModel):
@@ -109,6 +117,24 @@ class TestToolPolicy:
             policy.allowed = frozenset({"write_file"})  # type: ignore[misc]
 
 
+def _direct_request(name: str, args: dict[str, object] | None = None, call_id: str = "c"):
+    from langgraph.prebuilt.tool_node import ToolCallRequest
+
+    return ToolCallRequest(
+        tool_call={"name": name, "args": args or {}, "id": call_id, "type": "tool_call"},
+        tool=None,
+        state={},
+        runtime=None,  # type: ignore[arg-type]
+    )
+
+
+def _collecting_bus() -> tuple[EventBus, list[Any]]:
+    bus = EventBus()
+    events: list[Any] = []
+    bus.subscribe(events.append)
+    return bus, events
+
+
 async def test_policy_vetoes_write_file_and_prevents_disk_write(tmp_path):
     """A denied write_file call must return an error ToolMessage AND write nothing.
 
@@ -146,6 +172,37 @@ async def test_policy_risk_ceiling_vetoes_high_risk(tmp_path):
     assert not target.exists()
 
 
+async def test_policy_denies_destructive_tool_and_emits_audit_event():
+    """High-risk decisions are deterministic and auditable."""
+    bus, events = _collecting_bus()
+    policy = ToolPolicy(
+        allowed=frozenset({"execute"}),
+        max_risk=RiskLevel.DESTRUCTIVE,
+        high_risk_decision=HighRiskDecision.CONFIRM,
+        permissions=frozenset({Permission.SHELL_EXEC}),
+    )
+    mw = ToolPolicyMiddleware(policy=policy, event_bus=bus)
+    invoked: list[str] = []
+
+    async def handler(_req: Any) -> ToolMessage:
+        invoked.append("yes")
+        return ToolMessage(content="should-not-run", tool_call_id="destructive")
+
+    result = await mw.awrap_tool_call(
+        _direct_request("execute", {"cmd": "rm -rf ."}, "destructive"), handler
+    )
+
+    assert isinstance(result, ToolMessage)
+    assert result.status == "error"
+    assert "confirmation" in result.content.lower()
+    assert invoked == []
+    assert events
+    event = events[-1]
+    assert event.event_type == EventType.TOOL_POLICY_DECISION
+    assert event.data["decision"] == ToolPolicyAuditDecision.DENIED
+    assert event.data["reason"] == "confirmation_required"
+
+
 async def test_policy_allows_permitted_tool_runs_handler(tmp_path):
     """A permitted, in-budget tool call must run and produce its real effect."""
     target = tmp_path / "ok.txt"
@@ -156,6 +213,133 @@ async def test_policy_allows_permitted_tool_runs_handler(tmp_path):
     # THE OBSERVABLE CONSEQUENCE: the file WAS written (handler executed).
     assert target.exists()
     assert target.read_text() == "secret"
+
+
+async def test_policy_allows_low_risk_tool_and_emits_allow_and_result_audit_events():
+    bus, events = _collecting_bus()
+    policy = ToolPolicy(
+        allowed=frozenset({"read_file"}),
+        max_risk=RiskLevel.READ_ONLY,
+        permissions=frozenset({Permission.FS_READ}),
+    )
+    mw = ToolPolicyMiddleware(policy=policy, event_bus=bus)
+
+    async def handler(_req: Any) -> ToolMessage:
+        return ToolMessage(content="ok", tool_call_id="read")
+
+    result = await mw.awrap_tool_call(
+        _direct_request("read_file", {"file_path": "README.md"}, "read"), handler
+    )
+
+    assert isinstance(result, ToolMessage)
+    assert result.content == "ok"
+    assert [event.data["decision"] for event in events] == [
+        ToolPolicyAuditDecision.ALLOWED,
+        ToolPolicyAuditDecision.RESULT,
+    ]
+    assert all(event.event_type == EventType.TOOL_POLICY_DECISION for event in events)
+
+
+async def test_policy_pre_validator_blocks_parameters_without_handler_execution():
+    bus, events = _collecting_bus()
+    invoked: list[str] = []
+
+    def block_absolute_path(ctx: Any) -> ToolValidationResult:
+        if str(ctx.args.get("file_path", "")).startswith("/"):
+            return ToolValidationResult.deny("absolute paths are not allowed")
+        return ToolValidationResult.allow()
+
+    policy = ToolPolicy(
+        allowed=frozenset({"write_file"}),
+        max_risk=RiskLevel.WRITE,
+        permissions=frozenset({Permission.FS_WRITE}),
+        pre_exec_validators=(block_absolute_path,),
+    )
+    mw = ToolPolicyMiddleware(policy=policy, event_bus=bus)
+
+    async def handler(_req: Any) -> ToolMessage:
+        invoked.append("yes")
+        return ToolMessage(content="should-not-run", tool_call_id="pre")
+
+    result = await mw.awrap_tool_call(
+        _direct_request("write_file", {"file_path": "/tmp/x"}, "pre"), handler
+    )
+
+    assert isinstance(result, ToolMessage)
+    assert result.status == "error"
+    assert "absolute paths" in result.content
+    assert invoked == []
+    assert events[-1].data["reason"] == "pre_validator"
+
+
+async def test_policy_post_validator_can_transform_tool_message_result():
+    def redact_result(ctx: Any) -> ToolValidationResult:
+        assert isinstance(ctx.result, ToolMessage)
+        return ToolValidationResult.replace(
+            ToolMessage(content="redacted", tool_call_id=ctx.result.tool_call_id)
+        )
+
+    policy = ToolPolicy(
+        allowed=frozenset({"read_file"}),
+        max_risk=RiskLevel.READ_ONLY,
+        permissions=frozenset({Permission.FS_READ}),
+        post_exec_validators=(redact_result,),
+    )
+    mw = ToolPolicyMiddleware(policy=policy)
+
+    async def handler(_req: Any) -> ToolMessage:
+        return ToolMessage(content="secret", tool_call_id="post")
+
+    result = await mw.awrap_tool_call(
+        _direct_request("read_file", {"file_path": "x"}, "post"), handler
+    )
+
+    assert isinstance(result, ToolMessage)
+    assert result.content == "redacted"
+
+
+async def test_policy_required_permission_mismatch_denies_with_useful_message():
+    policy = ToolPolicy(
+        allowed=frozenset({"write_file"}),
+        max_risk=RiskLevel.WRITE,
+        permissions=frozenset({Permission.FS_READ}),
+    )
+    mw = ToolPolicyMiddleware(policy=policy)
+
+    async def handler(_req: Any) -> ToolMessage:
+        return ToolMessage(content="should-not-run", tool_call_id="perm")
+
+    result = await mw.awrap_tool_call(_direct_request("write_file", {}, "perm"), handler)
+
+    assert isinstance(result, ToolMessage)
+    assert result.status == "error"
+    assert "missing required permission" in result.content.lower()
+    assert "fs.write" in result.content
+
+
+async def test_policy_audit_redacts_sensitive_args():
+    """Audit events must not expose raw values of sensitive argument keys."""
+    bus, events = _collecting_bus()
+    policy = ToolPolicy(
+        allowed=frozenset({"write_file"}),
+        max_risk=RiskLevel.WRITE,
+        permissions=frozenset({Permission.FS_WRITE}),
+    )
+    mw = ToolPolicyMiddleware(policy=policy, event_bus=bus)
+
+    async def handler(_req: Any) -> ToolMessage:
+        return ToolMessage(content="ok", tool_call_id="redact")
+
+    await mw.awrap_tool_call(
+        _direct_request("write_file", {"file_path": "x.txt", "content": "SECRET"}, "redact"),
+        handler,
+    )
+
+    assert len(events) >= 1
+    for event in events:
+        assert event.data["args"]["content"] == "***"
+        assert event.data["args"]["file_path"] == "x.txt"
+        assert event.tool_input["content"] == "***"
 
 
 async def test_policy_normalizes_cli_tool_name_aliases(tmp_path):

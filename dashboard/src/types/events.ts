@@ -61,6 +61,7 @@ export type EventType =
   // System
   | 'system_error'
   | 'system_warning'
+  | 'tool_policy_decision'
   // Streaming (ephemeral, not persisted)
   | 'stream'
   // Trace (stream events)

@@ -72,6 +72,7 @@ class EventType(StrEnum):
     # System
     SYSTEM_ERROR = "system_error"
     SYSTEM_WARNING = "system_warning"
+    TOOL_POLICY_DECISION = "tool_policy_decision"
 
     # Streaming (ephemeral, not persisted)
     STREAM = "stream"
