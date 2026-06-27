@@ -696,7 +696,15 @@ class TestContextCompaction:
     async def test_no_middleware_excludes_summarization(
         self, mock_deepagents_local_sandbox: MagicMock
     ) -> None:
-        """No custom middleware should exclude DeepAgents' default summarization."""
+        """No custom middleware is passed, so DeepAgents' built-in defaults are unaltered.
+
+        This guards against accidentally passing a middleware that would override or
+        veto the built-in FilesystemMiddleware/SummarizationMiddleware stack that
+        ``create_deep_agent`` prepends regardless of the user-supplied ``middleware``
+        arg. It does not (and cannot, against this mock) directly assert that
+        summarization remains registered — that is documented at the call site in
+        ``execute_agentic``.
+        """
         driver = ApiDriver(model="test/model", cwd="/test/path")
         mock_deepagents_local_sandbox.stream_chunks = [
             {"messages": [AIMessage(content="done")]},
@@ -707,16 +715,46 @@ class TestContextCompaction:
         call_kwargs = mock_deepagents_local_sandbox.create_deep_agent.call_args.kwargs
         assert call_kwargs["middleware"] in ((), [])
 
-    def test_token_aware_truncation_preserved(self) -> None:
-        """Sandbox output truncation should remain separate from context compaction."""
+    async def test_policy_middleware_coexists_with_default_compression(
+        self, mock_deepagents_local_sandbox: MagicMock
+    ) -> None:
+        """allowed_tools path forwards ToolPolicyMiddleware without overriding defaults.
+
+        Mirrors ``test_no_middleware_excludes_summarization`` for the non-empty
+        ``middleware=[policy_mw]`` path. DeepAgents' built-in
+        ``FilesystemMiddleware`` + ``SummarizationMiddleware`` are prepended to
+        the stack inside ``create_deep_agent`` regardless of the user-supplied
+        ``middleware`` kwarg, which is *appended* — never replaces. This test
+        cannot (against this mock) directly assert summarization stays
+        registered; that contract is documented at the call site in
+        ``execute_agentic``. It pins that the policy middleware is forwarded
+        as the sole entry, so a future change that drops built-in compression
+        or substitutes a veto middleware would surface here rather than
+        silently disabling it.
+        """
+        from amelia.tools.registry import ToolPolicyMiddleware
+
+        driver = ApiDriver(model="test/model", cwd="/test/path")
+        mock_deepagents_local_sandbox.stream_chunks = [
+            {"messages": [AIMessage(content="done")]},
+        ]
+
+        _ = [
+            msg
+            async for msg in driver.execute_agentic(
+                "test prompt", cwd="/test/path", allowed_tools=["read_file"]
+            )
+        ]
+
+        call_kwargs = mock_deepagents_local_sandbox.create_deep_agent.call_args.kwargs
+        middleware = call_kwargs["middleware"]
+        assert isinstance(middleware, list)
+        assert len(middleware) == 1
+        assert isinstance(middleware[0], ToolPolicyMiddleware)
+
+    def test_output_size_limit_preserved(self) -> None:
+        """Sandbox output byte-size truncation should remain separate from context compaction."""
         import amelia.drivers.api.deepagents as deepagents_module
 
         assert hasattr(deepagents_module, "_MAX_OUTPUT_SIZE")
         assert deepagents_module._MAX_OUTPUT_SIZE == 100_000
-        truncate_text_to_token_budget = getattr(
-            deepagents_module,
-            "truncate_text_to_token_budget",
-            None,
-        )
-        if truncate_text_to_token_budget is not None:
-            assert callable(truncate_text_to_token_budget)
