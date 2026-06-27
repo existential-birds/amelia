@@ -728,8 +728,10 @@ class TestContextCompaction:
         cannot (against this mock) directly assert summarization stays
         registered; that contract is documented at the call site in
         ``execute_agentic``. It pins that the policy middleware is forwarded
-        as the sole entry, so a future change that drops built-in compression
-        or substitutes a veto middleware would surface here rather than
+        ahead of any caller-supplied middleware (the merge path at
+        ``deepagents.py`` ``middleware = [policy_mw, *(middleware or [])]``),
+        so a future change that drops built-in compression, substitutes a veto
+        middleware, or reorders the merge would surface here rather than
         silently disabling it.
         """
         from amelia.tools.registry import ToolPolicyMiddleware
@@ -739,18 +741,23 @@ class TestContextCompaction:
             {"messages": [AIMessage(content="done")]},
         ]
 
+        existing_middleware = [MagicMock(name="caller_middleware")]
         _ = [
             msg
             async for msg in driver.execute_agentic(
-                "test prompt", cwd="/test/path", allowed_tools=["read_file"]
+                "test prompt",
+                cwd="/test/path",
+                allowed_tools=["read_file"],
+                middleware=existing_middleware,
             )
         ]
 
         call_kwargs = mock_deepagents_local_sandbox.create_deep_agent.call_args.kwargs
         middleware = call_kwargs["middleware"]
         assert isinstance(middleware, list)
-        assert len(middleware) == 1
+        assert len(middleware) == 2
         assert isinstance(middleware[0], ToolPolicyMiddleware)
+        assert middleware[1] is existing_middleware[0]
 
     def test_output_size_limit_preserved(self) -> None:
         """Sandbox output byte-size truncation should remain separate from context compaction."""
