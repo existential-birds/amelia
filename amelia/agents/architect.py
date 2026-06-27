@@ -159,7 +159,7 @@ Before planning, discover:
         # CLI drivers keep their existing write_file path; their SDK-level
         # allowed_tools are separate from the DeepAgents middleware issue fixed here.
         if self._driver_type == DriverType.API:
-            tool_context = ToolContext(cwd=cwd)
+            tool_context = ToolContext(cwd=cwd, workflow_id=workflow_id)
             # Cache the tool per root_dir to avoid re-instantiating on every plan() call.
             # ApiDriver de-duplicates registry-rendered tools by name, so the
             # explicit tool instance remains the implementation while the

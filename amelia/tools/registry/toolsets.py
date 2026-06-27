@@ -45,10 +45,18 @@ def readonly_tool_policy(
 
     Args:
         extra_allowed: Optional per-agent exceptions, such as ``write_plan`` for
-            Architect. Exceptions are still constrained by ``max_risk``.
+            Architect.  When an extra tool's risk level exceeds ``max_risk``,
+            the ceiling is automatically raised to cover it so the exception is
+            actually usable through ``ToolPolicyMiddleware``.
         max_risk: Risk ceiling for the policy. Defaults to strict read-only.
     """
+    effective_risk = max_risk
+    for name in extra_allowed:
+        spec = registry.get(name)
+        if spec is not None and spec.risk_level > effective_risk:
+            effective_risk = spec.risk_level
+
     return ToolPolicy(
         allowed=readonly_tool_names() | extra_allowed,
-        max_risk=max_risk,
+        max_risk=effective_risk,
     )
