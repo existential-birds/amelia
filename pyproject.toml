@@ -5,9 +5,10 @@ description = "A local agentic coding system with configurable profiles."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "langgraph>=1.0.8",
+    "langchain>=1.3.11",
+    "langgraph>=1.2.6",
     "claude-agent-sdk>=0.1.50",
-    "deepagents>=0.5.5",
+    "deepagents>=0.6.12",
     "langchain-openai>=1.1.14",
     "pydantic>=2.12.4",
     "rich>=14.1.0",
