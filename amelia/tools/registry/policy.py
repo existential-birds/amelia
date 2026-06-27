@@ -161,6 +161,7 @@ class ToolPolicyMiddleware(AgentMiddleware):
     def _veto_tool_message(self, request: ToolCallRequest, message: str) -> ToolMessage:
         return ToolMessage(
             content=message,
+            name=request.tool_call["name"],
             tool_call_id=request.tool_call["id"],
             status="error",
         )

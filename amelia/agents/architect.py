@@ -13,11 +13,13 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from amelia.agents._driver_init import init_agent_driver
+from amelia.agents.tool_profiles import resolve_agent_tools
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.constants import ToolName, resolve_plan_path
 from amelia.core.types import AgentConfig, DriverType, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.server.models.events import WorkflowEvent
+from amelia.tools.registry import ToolContext
 from amelia.tools.write_plan import create_write_plan_tool
 
 
@@ -151,13 +153,24 @@ Before planning, discover:
             "required_file_path": plan_path,
         }
 
-        # For API driver: inject write_plan as a custom tool with structured schema
-        # CLI drivers don't support custom tool injection — they use write_file
+        # API driver uses the registry profile so ToolPolicyMiddleware vetoes
+        # injected write_file/edit_file/execute calls. The profile includes the
+        # write_plan exception needed to persist the generated plan.
+        # CLI drivers keep their existing write_file path; their SDK-level
+        # allowed_tools are separate from the DeepAgents middleware issue fixed here.
         if self._driver_type == DriverType.API:
-            # Cache the tool per root_dir to avoid re-instantiating on every plan() call
+            tool_context = ToolContext(cwd=cwd, workflow_id=workflow_id)
+            # Cache the tool per root_dir to avoid re-instantiating on every plan() call.
+            # ApiDriver de-duplicates registry-rendered tools by name, so the
+            # explicit tool instance remains the implementation while the
+            # policy allow-set still permits write_plan.
             if cwd not in self._write_plan_tool_cache:
                 self._write_plan_tool_cache[cwd] = create_write_plan_tool(root_dir=cwd)
             driver_kwargs["tools"] = [self._write_plan_tool_cache[cwd]]
+            driver_kwargs["allowed_tools"] = [
+                t.name for t in resolve_agent_tools("architect", tool_context)
+            ]
+            driver_kwargs["tool_context"] = tool_context
             driver_kwargs["required_tool"] = "write_plan"
         else:
             driver_kwargs["required_tool"] = "write_file"
