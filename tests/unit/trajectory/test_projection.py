@@ -316,6 +316,151 @@ def test_aggregate_usage_empty_input_returns_zero_summary():
     assert response.by_model == []
 
 
+def make_context_subagent(
+    name: str,
+    trajectory_id: str,
+    *,
+    model: str,
+    prompt: int,
+    completion: int,
+    cost: float,
+    context_tokens: int,
+    context_window_tokens: int,
+    context_utilization: float,
+    context_warning_threshold: float = 0.8,
+) -> Trajectory:
+    """A subagent whose final metrics carry recorded peak context stats."""
+    sub = make_subagent(
+        name,
+        trajectory_id,
+        model=model,
+        final_metrics=FinalMetrics(
+            total_prompt_tokens=prompt,
+            total_completion_tokens=completion,
+            total_cost_usd=cost,
+            total_steps=5,
+            extra={
+                "context": {
+                    "context_tokens": context_tokens,
+                    "context_window_tokens": context_window_tokens,
+                    "context_utilization": context_utilization,
+                    "context_warning_threshold": context_warning_threshold,
+                    "context_window_warning": context_utilization
+                    >= context_warning_threshold,
+                }
+            },
+        ),
+    )
+    return sub
+
+
+def make_context_trajectory(subs: list[Trajectory], status: str) -> Trajectory:
+    """A finalized workflow trajectory wrapping pre-built subagents."""
+    return Trajectory(
+        session_id=str(uuid.uuid4()),
+        agent=Agent(name="amelia", version=amelia.__version__, model_name="orchestrator"),
+        steps=[
+            make_parent_step(i, sub.agent.name, sub.trajectory_id)
+            for i, sub in enumerate(subs, start=1)
+        ],
+        final_metrics=FinalMetrics(total_steps=len(subs)),
+        extra={"outcome": {"status": status}},
+        subagent_trajectories=subs,
+    )
+
+
+def test_aggregate_usage_reports_peak_context_not_cumulative_sum():
+    # Two subagents of the same model: cumulative prompt+completion would be
+    # 220_000 (over the 200k window), but neither request peaked above 60%.
+    subs = [
+        make_context_subagent(
+            "developer",
+            "developer-inv-1",
+            model="claude-sonnet-4-5-20251101",
+            prompt=80_000,
+            completion=30_000,
+            cost=1.0,
+            context_tokens=110_000,
+            context_window_tokens=200_000,
+            context_utilization=0.55,
+        ),
+        make_context_subagent(
+            "developer",
+            "developer-inv-2",
+            model="claude-sonnet-4-5-20251101",
+            prompt=80_000,
+            completion=30_000,
+            cost=1.0,
+            context_tokens=120_000,
+            context_window_tokens=200_000,
+            context_utilization=0.60,
+        ),
+    ]
+    traj = make_context_trajectory(subs, status="completed")
+
+    response = aggregate_usage(
+        [(traj, date(2026, 6, 1), 1000)],
+        start=date(2026, 6, 1),
+        end=date(2026, 6, 1),
+    )
+
+    (model,) = response.by_model
+    # tokens stays the cumulative period total...
+    assert model.tokens == 220_000
+    # ...but context fields reflect the per-request peak, not the sum.
+    assert model.context_tokens == 120_000
+    assert model.context_window_tokens == 200_000
+    assert model.context_utilization == 0.60
+    assert model.context_window_warning is False
+
+
+def test_aggregate_usage_context_warning_uses_recorded_threshold():
+    subs = [
+        make_context_subagent(
+            "developer",
+            "developer-inv-1",
+            model="claude-sonnet-4-5-20251101",
+            prompt=10,
+            completion=5,
+            cost=1.0,
+            context_tokens=170_000,
+            context_window_tokens=200_000,
+            context_utilization=0.85,
+        )
+    ]
+    traj = make_context_trajectory(subs, status="completed")
+
+    response = aggregate_usage(
+        [(traj, date(2026, 6, 1), 1000)],
+        start=date(2026, 6, 1),
+        end=date(2026, 6, 1),
+    )
+
+    (model,) = response.by_model
+    assert model.context_utilization == 0.85
+    assert model.context_window_warning is True
+
+
+def test_aggregate_usage_omits_context_when_unrecorded():
+    traj = make_usage_trajectory(
+        [("developer", "claude-sonnet-4-5-20251101", 100, 50, 1.0)],
+        status="completed",
+    )
+
+    response = aggregate_usage(
+        [(traj, date(2026, 6, 1), 1000)],
+        start=date(2026, 6, 1),
+        end=date(2026, 6, 1),
+    )
+
+    (model,) = response.by_model
+    assert model.context_tokens is None
+    assert model.context_utilization is None
+    assert model.context_window_warning is False
+    # Window size still resolves from the static table for the gauge axis.
+    assert model.context_window_tokens == 200_000
+
+
 def test_token_summary_skips_subagents_without_metrics_and_handles_empty():
     dev = make_subagent("developer", "developer-inv-1", final_metrics=None)
     traj = Trajectory(

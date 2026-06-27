@@ -121,6 +121,37 @@ function calculateDelta(current: number, previous: number | null | undefined): n
   return ((current - previous) / previous) * 100;
 }
 
+function formatContextPercent(value: number | null | undefined): string {
+  if (value == null) return '—';
+  return `${Math.round(value * 100)}%`;
+}
+
+function ContextGauge({ model }: { model: UsageByModel }) {
+  if (model.context_utilization == null) {
+    return <div className="text-right text-muted-foreground">—</div>;
+  }
+
+  const percent = Math.min(Math.max(model.context_utilization * 100, 0), 100);
+  return (
+    <div className="flex flex-col items-end gap-1" aria-label={`${model.model} context window`}>
+      <span
+        className={cn(
+          'text-xs tabular-nums',
+          model.context_window_warning ? 'text-amber-400 font-semibold' : 'text-muted-foreground'
+        )}
+      >
+        {formatContextPercent(model.context_utilization)}
+      </span>
+      <div className="h-2 w-20 rounded-full bg-muted overflow-hidden">
+        <div
+          className={cn('h-full rounded-full', model.context_window_warning ? 'bg-amber-400' : 'bg-primary')}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 /**
  * Costs page displaying usage metrics, trends, and model breakdown.
  */
@@ -155,6 +186,11 @@ export default function CostsPage() {
     });
     return map;
   }, [sortedModels]);
+
+  const contextWarnings = useMemo(
+    () => usage.by_model.filter((model) => model.context_window_warning),
+    [usage.by_model]
+  );
 
   const columns: ColumnDef<UsageByModel>[] = useMemo(
     () => [
@@ -209,6 +245,11 @@ export default function CostsPage() {
             {formatTokens(row.getValue('tokens'))}
           </div>
         ),
+      },
+      {
+        id: 'context',
+        header: () => <div className="text-right">Context</div>,
+        cell: ({ row }) => <ContextGauge model={row.original} />,
       },
       {
         accessorKey: 'cost_usd',
@@ -417,6 +458,26 @@ export default function CostsPage() {
           )}
         </div>
 
+        {contextWarnings.length > 0 && (
+          <div className="space-y-2">
+            {contextWarnings.map((model) => (
+              <div
+                key={model.model}
+                role="alert"
+                className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-200"
+              >
+                {model.model} context window is {formatContextPercent(model.context_utilization)} full
+                {model.context_warning_threshold != null && (
+                  <span className="text-amber-200/80">
+                    {' '}
+                    (threshold {formatContextPercent(model.context_warning_threshold)})
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Trend chart */}
         <div className="border border-border rounded-lg p-4 bg-card/50">
           <h3 className="font-heading text-xs font-semibold tracking-widest text-muted-foreground mb-4">
@@ -484,6 +545,9 @@ export default function CostsPage() {
                     </div>
                     <div className="text-muted-foreground">
                       Tokens: <span className="text-foreground">{formatTokens(model.tokens)}</span>
+                    </div>
+                    <div className="text-muted-foreground">
+                      Context: <span className="text-foreground">{formatContextPercent(model.context_utilization)}</span>
                     </div>
                     <div className="text-muted-foreground">
                       Cost: <span className="text-cost-value">{formatCost(model.cost_usd)}</span>

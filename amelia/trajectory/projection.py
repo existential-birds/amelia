@@ -15,7 +15,7 @@ from uuid import uuid4
 from harbor.models.trajectories import ContentPart, FinalMetrics, Step, Trajectory
 
 from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
-from amelia.server.models.tokens import TokenSummary, TokenUsage
+from amelia.server.models.tokens import STATIC_CONTEXT_WINDOWS, TokenSummary, TokenUsage
 from amelia.server.models.usage import (
     UsageByModel,
     UsageResponse,
@@ -242,6 +242,42 @@ def _metrics_tokens(metrics: FinalMetrics | None) -> int:
     return (metrics.total_prompt_tokens or 0) + (metrics.total_completion_tokens or 0)
 
 
+def _metrics_context(metrics: FinalMetrics | None) -> dict[str, Any] | None:
+    """Peak context-window stats recorded for a subagent, if any."""
+    if metrics is None or metrics.extra is None:
+        return None
+    context = metrics.extra.get("context")
+    return context if isinstance(context, dict) else None
+
+
+def _context_fields(model: str, peak: dict[str, Any] | None) -> dict[str, Any]:
+    """Peak context-window fields for a model's ``UsageByModel`` entry.
+
+    ``peak`` is the recorded context block of the subagent with the highest
+    utilization for this model, or ``None`` when no subagent recorded one.
+    Window size falls back to the static table; warning reflects peak
+    utilization against the recorded threshold (0.8 when absent).
+    """
+    if peak is None:
+        return {
+            "context_tokens": None,
+            "context_window_tokens": STATIC_CONTEXT_WINDOWS.get(model),
+            "context_utilization": None,
+            "context_window_warning": False,
+        }
+    utilization = peak.get("context_utilization")
+    threshold = peak.get("context_warning_threshold")
+    if threshold is None:
+        threshold = 0.8
+    return {
+        "context_tokens": peak.get("context_tokens"),
+        "context_window_tokens": peak.get("context_window_tokens")
+        or STATIC_CONTEXT_WINDOWS.get(model),
+        "context_utilization": utilization,
+        "context_window_warning": utilization is not None and utilization >= threshold,
+    }
+
+
 def _outcome_status(traj: Trajectory) -> str | None:
     """Workflow outcome status stamped by the recorder at finalize."""
     outcome = (traj.extra or {}).get("outcome")
@@ -314,6 +350,7 @@ def aggregate_usage(
     model_daily: defaultdict[str, defaultdict[date, float]] = defaultdict(
         lambda: defaultdict(float)
     )
+    model_peak_context: dict[str, dict[str, Any]] = {}
 
     for idx, (traj, day, _) in enumerate(in_range):
         daily_cost[day] += _trajectory_cost(traj)
@@ -332,6 +369,15 @@ def aggregate_usage(
             model_daily[model][day] += cost
             day_models = daily_by_model[day]
             day_models[model] = day_models.get(model, 0.0) + cost
+            context = _metrics_context(sub.final_metrics)
+            if context is not None:
+                utilization = context.get("context_utilization")
+                peak = model_peak_context.get(model)
+                if utilization is not None and (
+                    peak is None
+                    or utilization > (peak.get("context_utilization") or 0.0)
+                ):
+                    model_peak_context[model] = context
 
     trend = [
         UsageTrendPoint(
@@ -357,6 +403,7 @@ def aggregate_usage(
             )
             if model_workflows[model]
             else 0.0,
+            **_context_fields(model, model_peak_context.get(model)),
         )
         for model in sorted(model_cost, key=lambda m: model_cost[m], reverse=True)
     ]

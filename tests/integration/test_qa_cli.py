@@ -113,6 +113,45 @@ def test_qa_run_replay_mode_passes_mode(monkeypatch: pytest.MonkeyPatch) -> None
     assert captured["mode"] == QaMode.REPLAY
 
 
+def test_qa_run_unmatched_driver_errors_before_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A driver no scenario opts into fails loudly without invoking run_suite.
+
+    Without the guard this silently produced an empty report rendered as
+    ``OVERALL: FAIL`` with no diagnostic; the guard turns it into an
+    actionable BadParameter naming the supported drivers.
+    """
+    scenarios_dir = tmp_path / "scenarios"
+    scenarios_dir.mkdir()
+    (scenarios_dir / "s1.yaml").write_text(
+        "id: s1\n"
+        "task_title: t\n"
+        "task_description: d\n"
+        "drivers: [api]\n"
+        "worktree_path: null\n",
+        encoding="utf-8",
+    )
+
+    called = False
+
+    async def fake_run_suite(*args: object, **kwargs: object) -> QaReport:  # noqa: ARG001
+        nonlocal called
+        called = True
+        return _report_all_pass()
+
+    monkeypatch.setattr("amelia.qa.cli.run_suite", fake_run_suite)
+    monkeypatch.chdir(tmp_path)
+    res = CliRunner().invoke(
+        app,
+        ["qa", "run", "--driver", "codex", "--scenarios-dir", str(scenarios_dir)],
+    )
+    assert res.exit_code != 0, res.output
+    assert "No scenario opts into driver" in res.output
+    assert "s1 -> api" in res.output
+    assert called is False
+
+
 def test_qa_run_prepares_default_worktree(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

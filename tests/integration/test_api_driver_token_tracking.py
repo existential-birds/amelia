@@ -111,6 +111,43 @@ class TestApiDriverTokenTrackingIntegration:
         assert usage is not None
         assert usage.model == "minimax/minimax-m2"
 
+    async def test_usage_reports_realtime_context_utilization(
+        self, mock_http_boundary: dict[str, MagicMock]
+    ) -> None:
+        """Usage should report max per-turn context fill against the model window."""
+        first = AIMessage(content="Thinking")
+        first.usage_metadata = UsageMetadata(
+            input_tokens=40_000, output_tokens=1_000, total_tokens=41_000
+        )
+        first.tool_calls = []
+
+        second = AIMessage(content="Done")
+        second.usage_metadata = UsageMetadata(
+            input_tokens=160_000, output_tokens=2_000, total_tokens=162_000
+        )
+        second.tool_calls = []
+
+        async def mock_astream(*args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
+            yield {"messages": [first]}
+            yield {"messages": [first, second]}
+
+        mock_agent = MagicMock()
+        mock_agent.astream = mock_astream
+        mock_http_boundary["create_deep_agent"].return_value = mock_agent
+
+        driver = ApiDriver(model="claude-sonnet-4-5-20251101", provider="openrouter")
+
+        async for _ in driver.execute_agentic("test", "/tmp"):
+            pass
+
+        usage = driver.get_usage()
+        assert usage is not None
+        assert usage.context_tokens == 160_000
+        assert usage.context_window_tokens == 200_000
+        assert usage.context_utilization == 0.8
+        assert usage.context_warning_threshold == 0.8
+        assert usage.context_window_warning is True
+
     async def test_generate_does_not_track_usage(
         self, mock_http_boundary: dict[str, MagicMock]
     ) -> None:

@@ -580,6 +580,7 @@ class ApiDriver(DriverInterface):
         total_output = 0
         total_cost = 0.0
         num_turns = 0
+        peak_context_tokens = 0
         seen_message_ids: set[int] = set()
 
         try:
@@ -677,14 +678,16 @@ class ApiDriver(DriverInterface):
 
                             usage_meta = getattr(message, "usage_metadata", None)
                             if usage_meta:
-                                total_input += usage_meta.get("input_tokens", 0)
+                                input_tokens = usage_meta.get("input_tokens", 0)
+                                total_input += input_tokens
                                 total_output += usage_meta.get("output_tokens", 0)
+                                peak_context_tokens = max(peak_context_tokens, input_tokens)
 
                             # Extract cost from OpenRouter response_metadata
                             # OpenRouter returns cost in token_usage object
                             resp_meta = getattr(message, "response_metadata", None)
                             if resp_meta:
-                                token_usage = resp_meta.get("token_usage", {})
+                                token_usage = resp_meta.get("token_usage") or {}
                                 total_cost += token_usage.get("cost", 0.0)
 
                         # Text blocks in list content -> THINKING (intermediate text during tool use)
@@ -825,6 +828,40 @@ class ApiDriver(DriverInterface):
                     break  # Done - required tool was called and file exists
 
             duration_ms = int((time.perf_counter() - start_time) * 1000)
+            from amelia.server.models.tokens import (  # noqa: PLC0415
+                calculate_context_utilization,
+                get_context_window_tokens,
+            )
+
+            context_window_tokens = await get_context_window_tokens(self.model)
+            context_utilization = (
+                await calculate_context_utilization(self.model, peak_context_tokens)
+                if peak_context_tokens > 0
+                else None
+            )
+            try:
+                context_warning_threshold = float(
+                    os.environ.get("AMELIA_CONTEXT_WARNING_THRESHOLD", "0.8")
+                )
+            except ValueError:
+                logger.warning(
+                    "Invalid AMELIA_CONTEXT_WARNING_THRESHOLD; falling back to 0.8",
+                    raw_value=os.environ.get("AMELIA_CONTEXT_WARNING_THRESHOLD"),
+                )
+                context_warning_threshold = 0.8
+            context_window_warning = (
+                context_utilization is not None
+                and context_utilization >= context_warning_threshold
+            )
+            if context_window_warning:
+                logger.warning(
+                    "Model context window utilization crossed warning threshold",
+                    model=self.model,
+                    context_tokens=peak_context_tokens,
+                    context_window_tokens=context_window_tokens,
+                    context_utilization=context_utilization,
+                    threshold=context_warning_threshold,
+                )
             self._usage = DriverUsage(
                 input_tokens=total_input if total_input > 0 else None,
                 output_tokens=total_output if total_output > 0 else None,
@@ -832,6 +869,11 @@ class ApiDriver(DriverInterface):
                 duration_ms=duration_ms,
                 num_turns=num_turns if num_turns > 0 else None,
                 model=self.model,
+                context_tokens=peak_context_tokens if peak_context_tokens > 0 else None,
+                context_window_tokens=context_window_tokens,
+                context_utilization=context_utilization,
+                context_warning_threshold=context_warning_threshold,
+                context_window_warning=context_window_warning,
             )
 
             incomplete_tasks: list[str] = []

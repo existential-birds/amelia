@@ -10,6 +10,6 @@ task_title: Add greeting helper
 task_description: >
   Add a greet() helper to hello.py that returns a friendly greeting string.
   Keep the implementation minimal and do not create any other files.
-drivers: ["api"]
+drivers: ["api", "claude", "codex"]
 worktree_path: null
 repo_ref: null
