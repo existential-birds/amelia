@@ -636,6 +636,18 @@ class ApiDriver(DriverInterface):
             # LLM APIs are stateless - always pass system prompt with every request
             effective_system_prompt = instructions or ""
 
+            # DeepAgents' built-in context compression is active by default:
+            # 1. FilesystemMiddleware offloads tool results >20K tokens to
+            #    /large_tool_results/<tool_call_id> on the backend (head+tail preview
+            #    replaces the inline content; agent can read_file the full result).
+            # 2. SummarizationMiddleware triggers at 85% context utilization, keeping
+            #    10% of recent context. Large tool-call args in older messages are
+            #    clipped first (truncate_args_settings). Evicted history is offloaded
+            #    to /conversation_history/{thread_id}.md. On ContextOverflowError,
+            #    the middleware summarizes and retries instead of bubbling the error.
+            # 3. LocalSandbox (extends FilesystemBackend) provides the backend write()
+            #    path needed for both offload mechanisms.
+            # No custom compaction middleware is needed — see issue #229.
             agent = create_deep_agent(
                 model=chat_model,
                 system_prompt=effective_system_prompt,

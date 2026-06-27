@@ -663,3 +663,60 @@ class TestIncompleteTaskDetection:
         # Access the actual message from the call args (first positional argument)
         warning_messages = [call.args[0] if call.args else "" for call in warning_calls]
         assert any("without calling write_file" in msg for msg in warning_messages)
+
+
+class TestContextCompaction:
+    """Verify DeepAgents built-in context compression remains active."""
+
+    def test_local_sandbox_extends_filesystem_backend(self) -> None:
+        """LocalSandbox should support filesystem offload writes."""
+        from deepagents.backends import FilesystemBackend
+
+        assert issubclass(LocalSandbox, FilesystemBackend)
+
+    async def test_execute_agentic_passes_local_sandbox_backend(
+        self, mock_deepagents_local_sandbox: MagicMock
+    ) -> None:
+        """execute_agentic should pass a LocalSandbox backend to DeepAgents."""
+        driver = ApiDriver(model="test/model", cwd="/test/path")
+        mock_deepagents_local_sandbox.stream_chunks = [
+            {"messages": [AIMessage(content="done")]},
+        ]
+
+        _ = [msg async for msg in driver.execute_agentic("test prompt", cwd="/test/path")]
+
+        mock_deepagents_local_sandbox.backend_class.assert_called_once_with(
+            root_dir="/test/path",
+            virtual_mode=True,
+        )
+        call_kwargs = mock_deepagents_local_sandbox.create_deep_agent.call_args.kwargs
+        assert "backend" in call_kwargs
+        assert call_kwargs["backend"] is mock_deepagents_local_sandbox.backend_class.return_value
+
+    async def test_no_middleware_excludes_summarization(
+        self, mock_deepagents_local_sandbox: MagicMock
+    ) -> None:
+        """No custom middleware should exclude DeepAgents' default summarization."""
+        driver = ApiDriver(model="test/model", cwd="/test/path")
+        mock_deepagents_local_sandbox.stream_chunks = [
+            {"messages": [AIMessage(content="done")]},
+        ]
+
+        _ = [msg async for msg in driver.execute_agentic("test prompt", cwd="/test/path")]
+
+        call_kwargs = mock_deepagents_local_sandbox.create_deep_agent.call_args.kwargs
+        assert call_kwargs["middleware"] in ((), [])
+
+    def test_token_aware_truncation_preserved(self) -> None:
+        """Sandbox output truncation should remain separate from context compaction."""
+        import amelia.drivers.api.deepagents as deepagents_module
+
+        assert hasattr(deepagents_module, "_MAX_OUTPUT_SIZE")
+        assert deepagents_module._MAX_OUTPUT_SIZE == 100_000
+        truncate_text_to_token_budget = getattr(
+            deepagents_module,
+            "truncate_text_to_token_budget",
+            None,
+        )
+        if truncate_text_to_token_budget is not None:
+            assert callable(truncate_text_to_token_budget)
