@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 from amelia.agents.architect import Architect
 from amelia.core.constants import ToolName, resolve_plan_path
+from amelia.core.types import MoAConfig
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.implementation.utils import (
     _extract_goal_from_plan,
@@ -412,6 +413,127 @@ async def call_architect_node(
         "tool_calls": list(final_state.tool_calls),
         "tool_results": list(final_state.tool_results),
     }
+
+
+def _indexed_plan_pattern(base_pattern: str, index: int) -> str:
+    """Bake a literal proposer index into a plan-path pattern.
+
+    Inserts ``-proposer{index}`` before the extension so each proposer resolves
+    to a distinct file while leaving only ``{date}``/``{issue_key}`` as format
+    placeholders. A ``{proposer}`` placeholder is deliberately NOT used because
+    ``resolve_plan_path`` only substitutes ``{date}``/``{issue_key}`` and would
+    raise ``KeyError`` (Task 0 finding).
+    """
+    p = Path(base_pattern)
+    return str(p.with_name(f"{p.stem}-proposer{index}{p.suffix}"))
+
+
+async def moa_proposers_node(
+    state: ImplementationState,
+    config: RunnableConfig | None = None,
+) -> dict[str, Any]:
+    """Best-effort fan-out of N Architect proposers (advisory MoA mode).
+
+    Each proposer plans the same issue concurrently, writing to its own distinct
+    plan file (derived by baking ``-proposer{i}`` into ``profile.plan_path_pattern``)
+    using its resolved per-proposer model. Mirrors the ``call_reviewer_node``
+    ``create_task`` + cancel/drain shape, but gathers with ``return_exceptions=True``
+    because MoA is best-effort: the run proceeds as long as at least one proposer
+    survives. Only a total wipe-out (zero survivors) raises.
+
+    Args:
+        state: Current execution state containing the issue and profile.
+        config: Optional RunnableConfig with the node context in ``configurable``.
+
+    Returns:
+        Partial state dict ``{"moa_proposer_plans": [...]}`` listing the resolved
+        (repo-root-relative) plan paths of the surviving proposers.
+
+    Raises:
+        ValueError: If no issue is provided in the state.
+        RuntimeError: If every proposer failed (no survivors).
+    """
+    if state.issue is None:
+        raise ValueError("Cannot run MoA proposers: no issue provided in state.")
+
+    nc = extract_node_config(config)
+
+    agent_config = nc.profile.get_agent_config("architect")
+    moa = MoAConfig.from_options(agent_config.options)
+    models = moa.resolve_models(agent_config.model)
+    patterns = [_indexed_plan_pattern(nc.profile.plan_path_pattern, i) for i in range(moa.proposer_count)]
+    working_dir = Path(nc.profile.repo_root)
+    issue_id = state.issue.id
+
+    logger.info(
+        "Orchestrator: Calling MoA proposers",
+        issue_id=issue_id,
+        proposer_count=moa.proposer_count,
+    )
+
+    async def _run_proposer(index: int) -> str:
+        pattern = patterns[index]
+        proposer_name = f"architect:proposer{index}"
+        proposer_config = agent_config.model_copy(update={"model": models[index]})
+        proposer_profile = nc.profile.model_copy(update={"plan_path_pattern": pattern})
+
+        architect = Architect(
+            proposer_config,
+            prompts=nc.prompts,
+            sandbox_provider=nc.sandbox_provider,
+        )
+        apply_driver_override(architect, nc.driver_override, proposer_name)
+        wrap_with_recording(architect, nc.recorder, proposer_name, proposer_config.model)
+
+        plan_rel_path = resolve_plan_path(pattern, issue_id)
+        plan_path = working_dir / plan_rel_path
+        await asyncio.to_thread(plan_path.parent.mkdir, parents=True, exist_ok=True)
+
+        async for _new_state, event in architect.plan(
+            state=state,
+            profile=proposer_profile,
+            workflow_id=nc.workflow_id,
+        ):
+            if nc.event_bus:
+                nc.event_bus.emit(event)
+
+        # Re-resolve so the node reports the exact path the proposer wrote.
+        return resolve_plan_path(pattern, issue_id)
+
+    tasks = [asyncio.create_task(_run_proposer(i)) for i in range(moa.proposer_count)]
+    try:
+        # Deliberate departure from call_reviewer_node's plain gather: MoA is
+        # best-effort, so individual proposer failures are captured, not raised.
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+    except BaseException:
+        # BaseException (incl. CancelledError) drains in-flight siblings before
+        # propagating, mirroring call_reviewer_node's cancel/drain.
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
+
+    survivors: list[str] = []
+    failures: list[BaseException] = []
+    for index, result in enumerate(results):
+        if isinstance(result, BaseException):
+            failures.append(result)
+            logger.warning("moa proposer failed", proposer=index, error=str(result))
+        else:
+            survivors.append(result)
+
+    if not survivors:
+        raise RuntimeError(
+            f"All {moa.proposer_count} MoA proposers failed; no candidate plans produced."
+        ) from (failures[0] if failures else None)
+
+    logger.info(
+        "MoA proposers completed",
+        issue_id=issue_id,
+        survivors=len(survivors),
+        failed=len(failures),
+    )
+    return {"moa_proposer_plans": survivors}
 
 
 async def human_approval_node(
