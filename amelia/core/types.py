@@ -130,6 +130,59 @@ class AgentConfig(BaseModel):
     profile_name: str = "default"
 
 
+class MoAConfig(BaseModel):
+    """Advisory Mixture-of-Agents planning configuration.
+
+    Parsed from ``AgentConfig.options['moa']`` so MoA can be toggled per profile
+    without adding fields to the shared ``AgentConfig`` model or a DB migration.
+
+    Attributes:
+        enabled: Whether advisory MoA planning is active for this agent.
+        proposer_count: Number of Architect proposers to fan out (>= 1).
+        proposer_models: Per-proposer model ids, applied positionally; slots
+            beyond this list fall back to the agent's base model.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = False
+    proposer_count: int = Field(default=2, ge=1)
+    proposer_models: list[str] = Field(default_factory=list)
+
+    @classmethod
+    def from_options(cls, options: dict[str, Any]) -> "MoAConfig":
+        """Build a MoAConfig from an agent's ``options`` dict.
+
+        Reads the ``moa`` sub-dict; an absent or empty key yields defaults
+        (disabled).
+
+        Args:
+            options: The ``AgentConfig.options`` dict.
+
+        Returns:
+            A validated, frozen MoAConfig.
+        """
+        return cls(**options.get("moa", {}))
+
+    def resolve_models(self, base_model: str) -> list[str]:
+        """Resolve exactly ``proposer_count`` model ids for the proposers.
+
+        Uses ``proposer_models`` positionally where present, falling back to
+        ``base_model`` for any remaining slots. Extra entries beyond
+        ``proposer_count`` are truncated.
+
+        Args:
+            base_model: The agent's base model id, used for unfilled slots.
+
+        Returns:
+            A list of exactly ``proposer_count`` model ids.
+        """
+        return [
+            self.proposer_models[i] if i < len(self.proposer_models) else base_model
+            for i in range(self.proposer_count)
+        ]
+
+
 REQUIRED_AGENTS: frozenset[str] = frozenset({
     "architect", "developer", "reviewer", "task_reviewer",
     "evaluator", "brainstormer", "plan_validator",
