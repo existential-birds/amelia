@@ -163,12 +163,19 @@ def _build_default_agents(
             empty options dict, preserving prior behavior.
 
     Returns:
-        Dict mapping agent names to AgentConfig.
+        Dict mapping agent names to AgentConfig. Includes an optional
+        ``"aggregator"`` agent (same driver/model defaults as the others) so
+        advisory MoA planning works out-of-the-box; ``"aggregator"`` is
+        deliberately NOT part of ``REQUIRED_AGENTS`` (enforced at
+        ``server/routes/settings.py``), so legacy profiles without it stay valid.
     """
     driver_type = DriverType(driver)
+    # REQUIRED_AGENTS plus the optional aggregator; aggregator_node still falls
+    # back to the architect config for profiles that predate this seed.
+    agent_names = REQUIRED_AGENTS | {"aggregator"}
     return {
         name: AgentConfig(driver=driver_type, model=model, options=options or {})
-        for name in REQUIRED_AGENTS
+        for name in agent_names
     }
 
 

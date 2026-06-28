@@ -584,3 +584,100 @@ class TestFinalizeTrajectoryRetention:
         assert verdict_calls == 1
         mock_repository.set_trajectory_index.assert_awaited_once()
         assert wf_id not in runner._recorders
+
+
+class TestServerGraphThreadsProfile:
+    """create_server_graph must thread the resolved profile into graph
+    construction so advisory MoA can activate end-to-end in production.
+
+    Before this fix the server always built the MoA-disabled graph (no profile
+    passed), so MoA could never reach the runtime regardless of config.
+    """
+
+    def _moa_profile(self) -> Profile:
+        return Profile(
+            name="moa",
+            tracker=TrackerType.NOOP,
+            repo_root="/tmp/moa",
+            agents={
+                "architect": AgentConfig(
+                    driver=DriverType.CLAUDE,
+                    model="sonnet",
+                    options={"moa": {"enabled": True, "proposer_count": 2}},
+                ),
+                "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+            },
+        )
+
+    def _plain_profile(self) -> Profile:
+        return Profile(
+            name="plain",
+            tracker=TrackerType.NOOP,
+            repo_root="/tmp/plain",
+            agents={
+                "architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+            },
+        )
+
+    def test_moa_profile_yields_moa_graph(self, runner: GraphRunner) -> None:
+        """A MoA-enabled profile produces the proposers/aggregator graph."""
+        graph = runner.create_server_graph(profile=self._moa_profile())
+        nodes = set(graph.nodes.keys())
+        assert "moa_proposers_node" in nodes
+        assert "aggregator_node" in nodes
+        assert "architect_node" not in nodes
+
+    def test_plain_profile_yields_single_architect_graph(
+        self, runner: GraphRunner
+    ) -> None:
+        """A MoA-disabled profile keeps the single-architect graph."""
+        graph = runner.create_server_graph(profile=self._plain_profile())
+        nodes = set(graph.nodes.keys())
+        assert "architect_node" in nodes
+        assert "moa_proposers_node" not in nodes
+        assert "aggregator_node" not in nodes
+
+    def test_no_profile_is_byte_for_byte_default(self, runner: GraphRunner) -> None:
+        """Omitting the profile keeps the legacy single-architect default."""
+        graph = runner.create_server_graph()
+        nodes = set(graph.nodes.keys())
+        assert "architect_node" in nodes
+        assert "moa_proposers_node" not in nodes
+
+    async def test_run_workflow_threads_resolved_profile_into_graph(
+        self, runner: GraphRunner
+    ) -> None:
+        """run_workflow passes the profile resolved from the DB into
+        create_server_graph, so production planning reaches the MoA branch."""
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=None)
+
+        async def empty_stream() -> AsyncIterator[dict[str, Any]]:
+            return
+            yield
+
+        mock_graph.astream = MagicMock(return_value=empty_stream())
+        resolved = self._moa_profile()
+        spy = MagicMock(return_value=mock_graph)
+
+        state = ServerExecutionState(
+            id=uuid4(),
+            issue_id="ISSUE-1",
+            worktree_path="/tmp/wt",
+            workflow_status=WorkflowStatus.IN_PROGRESS,
+            started_at=datetime.now(UTC),
+            profile_id="moa",
+        )
+
+        with (
+            patch.object(runner, "create_server_graph", spy),
+            patch.object(runner, "get_profile_or_fail", return_value=resolved),
+            patch.object(runner._events, "emit", new=AsyncMock()),
+        ):
+            await runner.run_workflow(uuid4(), state)
+
+        # The resolved profile reached graph construction (keyword threading).
+        assert spy.call_args.kwargs.get("profile") is resolved

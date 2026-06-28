@@ -115,11 +115,18 @@ class GraphRunner:
     def create_server_graph(
         self,
         checkpointer: BaseCheckpointSaver[Any] | None = None,
+        *,
+        profile: Profile | None = None,
     ) -> CompiledStateGraph[Any]:
         """Create graph with server-mode interrupt configuration.
 
         Args:
             checkpointer: Checkpoint saver for persistence.
+            profile: Resolved profile the graph is built for. Its architect
+                agent config decides whether advisory MoA wiring is used; when
+                ``None`` (or MoA disabled) the single-architect graph is built,
+                identical to prior behavior. Threading this through is what lets
+                advisory MoA activate end-to-end in production.
 
         Returns:
             Compiled LangGraph with interrupts before all human-input nodes.
@@ -129,6 +136,7 @@ class GraphRunner:
             interrupt_before=[
                 "human_approval_node",
             ],
+            profile=profile,
         )
 
     async def resolve_prompts(self, workflow_id: uuid.UUID) -> dict[str, str]:
@@ -596,8 +604,9 @@ class GraphRunner:
 
         prompts = await self.resolve_prompts(workflow_id)
 
-        # CRITICAL: Pass interrupt_before to enable server-mode approval
-        graph = self.create_server_graph(self._checkpointer)
+        # CRITICAL: Pass interrupt_before to enable server-mode approval, and the
+        # resolved profile so advisory MoA wiring activates when configured.
+        graph = self.create_server_graph(self._checkpointer, profile=profile)
 
         config = self.build_runnable_config(workflow_id, profile, prompts, sandbox_provider)
 
@@ -863,7 +872,7 @@ class GraphRunner:
                         raise _SandboxBootstrapHandled from e
 
                 prompts = await self.resolve_prompts(workflow_id)
-                graph = self.create_server_graph(self._checkpointer)
+                graph = self.create_server_graph(self._checkpointer, profile=profile)
                 config = self.build_runnable_config(workflow_id, profile, prompts, sandbox_provider)
 
                 # Inject the approval decision into the checkpoint before resuming.
@@ -1169,7 +1178,7 @@ class GraphRunner:
         profile = await self.get_profile_or_fail(workflow_id, profile_id, worktree_path)
         if profile is None:
             return
-        graph = self.create_server_graph(self._checkpointer)
+        graph = self.create_server_graph(self._checkpointer, profile=profile)
         config = self.build_runnable_config(workflow_id, profile, prompts={})
         await graph.aupdate_state(config, {"human_approved": False})
 
@@ -1199,7 +1208,7 @@ class GraphRunner:
         # Resolve prompts for architect
         prompts = await self.resolve_prompts(workflow_id)
 
-        graph = self.create_server_graph(self._checkpointer)
+        graph = self.create_server_graph(self._checkpointer, profile=profile)
 
         sandbox_provider: SandboxProvider | None = None
         try:
