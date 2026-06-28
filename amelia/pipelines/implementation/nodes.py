@@ -490,13 +490,31 @@ async def moa_proposers_node(
         plan_path = working_dir / plan_rel_path
         await asyncio.to_thread(plan_path.parent.mkdir, parents=True, exist_ok=True)
 
-        async for _new_state, event in architect.plan(
+        final_state = state
+        async for new_state, event in architect.plan(
             state=state,
             profile=proposer_profile,
             workflow_id=nc.workflow_id,
         ):
+            final_state = new_state
             if nc.event_bus:
                 nc.event_bus.emit(event)
+
+        # Persist the plan from the proposer's tool calls if the driver did not
+        # already land it on disk, mirroring call_architect_node's contract so
+        # the aggregator can read every survivor's file. A proposer that produced
+        # no usable plan is treated as a failure (raises) so it is filtered out.
+        if not plan_path.exists():
+            written = await _resolve_plan_from_tool_calls(
+                tool_calls=final_state.tool_calls,
+                plan_path=plan_path,
+                working_dir=working_dir,
+                raw_output=final_state.architect_raw_output,
+            )
+            if not written:
+                raise RuntimeError(
+                    f"proposer {index} produced no plan file at {plan_rel_path}"
+                )
 
         # Re-resolve so the node reports the exact path the proposer wrote.
         return resolve_plan_path(pattern, issue_id)
@@ -637,6 +655,21 @@ async def aggregator_node(
         final_state = new_state
         if nc.event_bus:
             nc.event_bus.emit(event)
+
+    # Persist the synthesized plan from the aggregator's tool calls if the driver
+    # did not already land it on disk, mirroring call_architect_node so
+    # plan_validator_node finds the canonical file regardless of driver.
+    if not canonical_path.exists():
+        written = await _resolve_plan_from_tool_calls(
+            tool_calls=final_state.tool_calls,
+            plan_path=canonical_path,
+            working_dir=working_dir,
+            raw_output=final_state.architect_raw_output,
+        )
+        if not written:
+            raise RuntimeError(
+                f"aggregator produced no canonical plan at {canonical_rel}"
+            )
 
     return {
         "plan_path": canonical_rel,
