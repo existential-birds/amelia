@@ -28,7 +28,7 @@ async def test_readonly_agent_cannot_write_file(tmp_path: Path) -> None:
     from amelia.drivers.api import ApiDriver
 
     driver = ApiDriver(
-        model=os.environ.get("AMELIA_TEST_MODEL", "anthropic/claude-3.5-sonnet"),
+        model=os.environ.get("AMELIA_TEST_MODEL", "anthropic/claude-sonnet-4"),
         cwd=str(tmp_path),
     )
 
