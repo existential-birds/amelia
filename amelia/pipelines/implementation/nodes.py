@@ -17,6 +17,7 @@ from langchain_core.runnables.config import RunnableConfig
 from loguru import logger
 from pydantic import ValidationError
 
+from amelia.agents.aggregator import Aggregator
 from amelia.agents.architect import Architect
 from amelia.core.constants import ToolName, resolve_plan_path
 from amelia.core.types import MoAConfig
@@ -534,6 +535,116 @@ async def moa_proposers_node(
         failed=len(failures),
     )
     return {"moa_proposer_plans": survivors}
+
+
+async def aggregator_node(
+    state: ImplementationState,
+    config: RunnableConfig | None = None,
+) -> dict[str, Any]:
+    """Synthesize the canonical plan from MoA proposer candidates (advisory MoA mode).
+
+    Reads ``state.moa_proposer_plans`` (repo-root-relative paths written by
+    ``moa_proposers_node``) and produces the single canonical plan file that
+    ``plan_validator_node`` reads:
+
+    - Exactly 1 survivor -> PROMOTE it: copy its content to the canonical plan
+      path. The ``Aggregator`` is bypassed (no synthesis needed for one plan).
+    - 2+ survivors -> read each candidate's file CONTENTS and run the
+      ``Aggregator`` (config via ``get_agent_config("aggregator")`` with a
+      ``try/except ValueError`` fallback to ``"architect"``), which writes the
+      canonical plan via the ``write_plan`` tool, mirroring ``call_architect_node``.
+
+    Args:
+        state: Current execution state with ``moa_proposer_plans`` populated.
+        config: Optional RunnableConfig with the node context in ``configurable``.
+
+    Returns:
+        Partial state dict mirroring ``call_architect_node``: ``plan_path`` (the
+        canonical relative path the validator re-resolves), ``architect_raw_output``,
+        ``architect_error``, ``tool_calls``, ``tool_results``.
+
+    Raises:
+        ValueError: If no issue is in state or ``moa_proposer_plans`` is empty.
+    """
+    if state.issue is None:
+        raise ValueError("Cannot aggregate plans: no issue provided in state.")
+
+    nc = extract_node_config(config)
+
+    candidate_rel_paths = list(state.moa_proposer_plans)
+    if not candidate_rel_paths:
+        # moa_proposers_node already raises on zero survivors; guard defensively.
+        raise ValueError("Cannot aggregate plans: no proposer plans in state.")
+
+    working_dir = Path(nc.profile.repo_root)
+    canonical_rel = resolve_plan_path(nc.profile.plan_path_pattern, state.issue.id)
+    canonical_path = working_dir / canonical_rel
+    await asyncio.to_thread(canonical_path.parent.mkdir, parents=True, exist_ok=True)
+
+    # Single survivor: promote directly, no synthesis.
+    if len(candidate_rel_paths) == 1:
+        survivor_path = working_dir / candidate_rel_paths[0]
+        content = await asyncio.to_thread(survivor_path.read_text, encoding="utf-8")
+        await asyncio.to_thread(canonical_path.write_text, content, encoding="utf-8")
+        logger.info(
+            "MoA: single survivor promoted to canonical plan",
+            survivor=candidate_rel_paths[0],
+            plan_path=canonical_rel,
+            workflow_id=nc.workflow_id,
+        )
+        return {
+            "plan_path": canonical_rel,
+            "architect_raw_output": f"Promoted single MoA proposer survivor to {canonical_rel}",
+            "architect_error": None,
+            "tool_calls": [],
+            "tool_results": [],
+        }
+
+    # 2+ survivors: read candidate CONTENTS and synthesize via the Aggregator.
+    candidate_contents: list[str] = []
+    for rel in candidate_rel_paths:
+        candidate_path = working_dir / rel
+        candidate_contents.append(
+            await asyncio.to_thread(candidate_path.read_text, encoding="utf-8")
+        )
+
+    # Aggregator is optional; fall back to the architect config (mirrors the
+    # task_reviewer -> reviewer fallback at pipelines/nodes.py:206-208).
+    try:
+        agent_config = nc.profile.get_agent_config("aggregator")
+    except ValueError:
+        agent_config = nc.profile.get_agent_config("architect")
+
+    aggregator = Aggregator(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
+    apply_driver_override(aggregator, nc.driver_override, "aggregator")
+    wrap_with_recording(aggregator, nc.recorder, "aggregator", agent_config.model)
+
+    logger.info(
+        "Orchestrator: Calling Aggregator",
+        issue_id=state.issue.id,
+        candidates=len(candidate_contents),
+        plan_path=canonical_rel,
+        workflow_id=nc.workflow_id,
+    )
+
+    final_state = state
+    async for new_state, event in aggregator.aggregate(
+        candidate_plans=candidate_contents,
+        state=state,
+        profile=nc.profile,
+        workflow_id=nc.workflow_id,
+    ):
+        final_state = new_state
+        if nc.event_bus:
+            nc.event_bus.emit(event)
+
+    return {
+        "plan_path": canonical_rel,
+        "architect_raw_output": final_state.architect_raw_output,
+        "architect_error": final_state.architect_error,
+        "tool_calls": list(final_state.tool_calls),
+        "tool_results": list(final_state.tool_results),
+    }
 
 
 async def human_approval_node(
