@@ -48,6 +48,11 @@ AGENT_TOOL_PROFILES: dict[str, AgentToolProfile] = {
         extra_tools=frozenset({"write_plan"}),
         max_risk=RiskLevel.WRITE,
     ),
+    "aggregator": AgentToolProfile(
+        toolsets=frozenset({"readonly", "knowledge", "agent_state"}),
+        extra_tools=frozenset({"write_plan"}),
+        max_risk=RiskLevel.WRITE,
+    ),
     "oracle": AgentToolProfile(
         toolsets=frozenset({"readonly", "knowledge", "agent_state"}),
         max_risk=RiskLevel.READ_ONLY,
