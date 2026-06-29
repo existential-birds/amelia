@@ -8,7 +8,7 @@ from typing import Literal
 
 from loguru import logger
 
-from amelia.core.types import Profile
+from amelia.core.types import MoAConfig, MoAMode, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 
 
@@ -38,6 +38,47 @@ def route_approval(state: ImplementationState) -> Literal["approve", "reject"]:
         'reject' if not approved.
     """
     return "approve" if state.human_approved else "reject"
+
+
+def resolve_moa_config(profile: Profile) -> MoAConfig:
+    """Resolve the MoA config from a profile's Developer agent options.
+
+    Returns a disabled default when the developer agent is not configured or
+    has no ``moa`` option, so non-MoA profiles route through the normal path.
+
+    Args:
+        profile: Active execution profile.
+
+    Returns:
+        The resolved MoAConfig (disabled by default).
+    """
+    dev = profile.agents.get("developer")
+    if dev is None:
+        return MoAConfig()
+    return MoAConfig.from_options(dev.options)
+
+
+def route_approval_with_moa(
+    state: ImplementationState,
+    profile: Profile,
+) -> Literal["developer", "moa", "reject"]:
+    """Route after human approval, accounting for generative MoA.
+
+    Args:
+        state: Current state with the human_approved flag.
+        profile: Active profile used to resolve the MoA config.
+
+    Returns:
+        "reject" if not approved.
+        "moa" if approved and generative MoA is enabled.
+        "developer" if approved and MoA is disabled or advisory.
+    """
+    if not state.human_approved:
+        return "reject"
+    moa = resolve_moa_config(profile)
+    if moa.enabled and moa.mode == MoAMode.GENERATIVE:
+        return "moa"
+    return "developer"
 
 
 def route_after_task_review(

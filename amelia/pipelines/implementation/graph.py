@@ -10,6 +10,10 @@ from langchain_core.runnables.config import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from amelia.pipelines.implementation.moa import (
+    generative_moa_aggregator_node,
+    generative_moa_proposers_node,
+)
 from amelia.pipelines.implementation.nodes import (
     call_architect_node,
     human_approval_node,
@@ -20,7 +24,7 @@ from amelia.pipelines.implementation.routing import (
     route_after_plan_validation,
     route_after_start,
     route_after_task_review,
-    route_approval,
+    route_approval_with_moa,
 )
 from amelia.pipelines.implementation.state import ImplementationState, rebuild_implementation_state
 from amelia.pipelines.nodes import call_developer_node, call_reviewer_node
@@ -50,6 +54,22 @@ def _route_after_plan_validation(
     """
     _, _, profile = extract_config_params(config)
     return route_after_plan_validation(state, profile)
+
+
+def _route_approval(
+    state: ImplementationState, config: RunnableConfig
+) -> Literal["developer", "moa", "reject"]:
+    """Route after human approval to developer, generative MoA, or reject.
+
+    Args:
+        state: Current execution state with human_approved flag.
+        config: Runnable config with profile (resolves MoA config).
+
+    Returns:
+        Routing target.
+    """
+    _, _, profile = extract_config_params(config)
+    return route_approval_with_moa(state, profile)
 
 
 def _route_after_review_or_task(
@@ -96,6 +116,8 @@ def create_implementation_graph(
     workflow.add_node("plan_validator_node", plan_validator_node)
     workflow.add_node("human_approval_node", human_approval_node)
     workflow.add_node("developer_node", call_developer_node)
+    workflow.add_node("generative_moa_proposers_node", generative_moa_proposers_node)
+    workflow.add_node("generative_moa_aggregator_node", generative_moa_aggregator_node)
     workflow.add_node("reviewer_node", call_reviewer_node)
     workflow.add_node("next_task_node", next_task_node)
 
@@ -120,14 +142,22 @@ def create_implementation_graph(
         }
     )
 
+    # After approval, route to generative MoA proposers when enabled, otherwise
+    # to the normal developer node. Disabled MoA preserves the original flow.
     workflow.add_conditional_edges(
         "human_approval_node",
-        route_approval,
+        _route_approval,
         {
-            "approve": "developer_node",
-            "reject": END
+            "developer": "developer_node",
+            "moa": "generative_moa_proposers_node",
+            "reject": END,
         }
     )
+
+    # Generative MoA path: proposers -> aggregator -> reviewer. Review retries
+    # and subsequent tasks fall back to the normal developer node.
+    workflow.add_edge("generative_moa_proposers_node", "generative_moa_aggregator_node")
+    workflow.add_edge("generative_moa_aggregator_node", "reviewer_node")
 
     workflow.add_edge("developer_node", "reviewer_node")
 

@@ -24,7 +24,7 @@ import operator
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from amelia.core.agentic_state import AgenticStatus, ToolCall, ToolResult
 from amelia.core.types import Design, Issue, PlanValidationResult, ReviewResult
@@ -34,6 +34,24 @@ from amelia.tools.write_plan_schema import WritePlanInput
 
 if TYPE_CHECKING:
     from amelia.agents.schemas.evaluator import EvaluationResult
+
+
+class GenerativeMoACandidate(BaseModel):
+    """A single generative Mixture-of-Agents proposer result.
+
+    Captures the outcome of one Developer proposer running in an isolated
+    worktree, including its diff (when successful) or error (when failed).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    proposer_id: int
+    status: Literal["succeeded", "failed"]
+    model: str
+    worktree_path: str | None = None
+    diff: str | None = None
+    summary: str | None = None
+    error: str | None = None
 
 
 class ImplementationState(BasePipelineState):
@@ -91,6 +109,11 @@ class ImplementationState(BasePipelineState):
 
     external_plan: bool = False
     """True if plan was imported externally (bypasses Architect)."""
+
+    # Generative Mixture-of-Agents. No operator.add reducer: each proposer run
+    # replaces the candidate list rather than concatenating across graph cycles.
+    generative_moa_candidates: list[GenerativeMoACandidate] = Field(default_factory=list)
+    generative_moa_selected: GenerativeMoACandidate | None = None
 
 
 def rebuild_implementation_state() -> None:
