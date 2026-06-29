@@ -310,6 +310,94 @@ class PRAutoFixConfig(BaseModel):
         return v.name.lower()
 
 
+class MoAMode(StrEnum):
+    """Mixture-of-Agents execution mode.
+
+    - ADVISORY: proposers produce advice/suggestions only (no diff applied).
+    - GENERATIVE: proposers each implement the task in isolation; an aggregator
+      selects (or merges) one candidate and applies it to the primary worktree.
+    """
+
+    ADVISORY = "advisory"
+    GENERATIVE = "generative"
+
+
+class MoAIsolation(StrEnum):
+    """Isolation provider for generative MoA proposers.
+
+    Only ``worktree`` is supported in this slice. ``container`` is reserved for
+    a future provider and must not be required here.
+    """
+
+    WORKTREE = "worktree"
+
+
+class MoAConfig(BaseModel):
+    """Mixture-of-Agents configuration.
+
+    Disabled by default so existing pipelines behave unchanged. When enabled
+    with ``mode=GENERATIVE``, the implementation pipeline runs ``proposer_count``
+    Developer proposers concurrently in isolated worktrees and an aggregator
+    selects the best successful candidate.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = False
+    mode: MoAMode = MoAMode.GENERATIVE
+    proposer_count: int = Field(default=1, ge=1, description="Number of concurrent proposers")
+    proposer_models: tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Explicit per-proposer models; falls back to the base Developer model",
+    )
+    isolation: MoAIsolation = MoAIsolation.WORKTREE
+
+    @classmethod
+    def from_options(cls, options: dict[str, Any] | None) -> "MoAConfig":
+        """Build a :class:`MoAConfig` from an agent ``options`` dict.
+
+        Reads the ``moa`` key. Returns a disabled default config when absent.
+
+        Args:
+            options: Agent options dict (e.g. ``AgentConfig.options``).
+
+        Returns:
+            Parsed MoAConfig, or a disabled default if no ``moa`` key is present.
+
+        Raises:
+            ValueError: If the ``moa`` value is not a dict or MoAConfig.
+        """
+        raw = options.get("moa") if options else None
+        if raw is None:
+            return cls()
+        if isinstance(raw, MoAConfig):
+            return raw
+        if isinstance(raw, dict):
+            return cls.model_validate(raw)
+        raise ValueError(f"Invalid 'moa' option type: {type(raw).__name__}; expected dict or MoAConfig")
+
+    def resolve_models(self, base_model: str) -> list[str]:
+        """Resolve exactly ``proposer_count`` proposer models.
+
+        Uses ``proposer_models`` when provided (truncating extras), padding any
+        shortfall with ``base_model``. Falls back entirely to ``base_model`` when
+        no explicit models are configured.
+
+        Args:
+            base_model: Default Developer model used to pad/fill.
+
+        Returns:
+            A list of exactly ``proposer_count`` model identifiers.
+        """
+        if not self.proposer_models:
+            return [base_model] * self.proposer_count
+        models = list(self.proposer_models)
+        if len(models) >= self.proposer_count:
+            return models[: self.proposer_count]
+        models.extend([base_model] * (self.proposer_count - len(models)))
+        return models
+
+
 class Profile(BaseModel):
     """Configuration profile for Amelia execution.
 
