@@ -22,10 +22,7 @@ from amelia.pipelines.implementation.state import (
     GenerativeMoASucceededCandidate,
     ImplementationState,
 )
-
-
-def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+from tests.unit.pipelines.conftest import _git
 
 
 def _git_out(repo: Path, *args: str) -> str:
@@ -35,20 +32,6 @@ def _git_out(repo: Path, *args: str) -> str:
         capture_output=True,
         text=True,
     ).stdout
-
-
-@pytest.fixture
-def git_repo(tmp_path: Path) -> Path:
-    """Create an initialized git repo with one tracked file."""
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    _git(repo, "init")
-    _git(repo, "config", "user.email", "test@example.com")
-    _git(repo, "config", "user.name", "Test")
-    (repo / "code.txt").write_text("line1\n")
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-m", "initial")
-    return repo
 
 
 def _modify_patch(path: str, old: str, new: str) -> str:

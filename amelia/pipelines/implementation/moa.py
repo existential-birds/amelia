@@ -5,7 +5,7 @@ These nodes are only reached when generative MoA is enabled (see
 
 1. Run ``proposer_count`` Developer proposers concurrently, each in its own
    isolated git worktree, and collect each one's diff as a candidate.
-2. Select the best successful candidate and apply its diff to the primary
+2. Select the first successful candidate and apply its diff to the primary
    worktree, falling back to the next candidate if application fails.
 
 Individual proposer failures degrade gracefully; only an all-proposers-failed
@@ -42,6 +42,7 @@ async def _run_git(
     cwd: Path,
     *args: str,
     check: bool = True,
+    timeout: float = 60.0,
 ) -> tuple[int, str, str]:
     """Run a git command in ``cwd`` and return (returncode, stdout, stderr)."""
     proc = await asyncio.create_subprocess_exec(
@@ -52,7 +53,17 @@ async def _run_git(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except TimeoutError as exc:
+        try:
+            proc.kill()
+            await proc.wait()
+        except ProcessLookupError:
+            pass
+        raise ValueError(
+            f"git {' '.join(args)} timed out after {timeout}s in {cwd}"
+        ) from exc
     rc = proc.returncode or 0
     out, err = stdout.decode(), stderr.decode()
     if check and rc != 0:
@@ -92,7 +103,7 @@ async def _collect_worktree_diff(worktree: Path) -> str:
     return out
 
 
-async def _git_apply(cwd: Path, diff: str, extra: list[str]) -> tuple[bool, str]:
+async def _git_apply(cwd: Path, diff: str, extra: list[str], timeout: float = 60.0) -> tuple[bool, str]:
     """Run ``git apply`` in ``cwd`` and return success plus stderr."""
     proc = await asyncio.create_subprocess_exec(
         "git",
@@ -104,7 +115,15 @@ async def _git_apply(cwd: Path, diff: str, extra: list[str]) -> tuple[bool, str]
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr = await proc.communicate(diff.encode())
+    try:
+        _, stderr = await asyncio.wait_for(proc.communicate(diff.encode()), timeout=timeout)
+    except TimeoutError:
+        try:
+            proc.kill()
+            await proc.wait()
+        except ProcessLookupError:
+            pass
+        return False, f"git apply timed out after {timeout}s"
     return (proc.returncode or 0) == 0, stderr.decode()
 
 
@@ -257,7 +276,6 @@ async def _run_proposer(
     dev_config = nc.profile.get_agent_config("developer").model_copy(
         update={"model": model}
     )
-    _ensure_worktree_moa_can_own_workspace(nc, dev_config)
 
     repo_root = Path(nc.profile.repo_root)
     worktree = _proposer_worktree_path(repo_root, nc.workflow_id, proposer_id)
@@ -273,9 +291,13 @@ async def _run_proposer(
         apply_driver_override(developer, nc.driver_override, "developer")
         wrap_with_recording(developer, nc.recorder, "developer", dev_config.model)
 
-        final_state = state
+        # Mirror call_developer_node: reset driver_session_id so each proposer
+        # starts a fresh session rather than attempting to resume a prior one.
+        proposer_state = state.model_copy(update={"driver_session_id": None})
+
+        final_state = proposer_state
         async for new_state, event in developer.run(
-            state, proposer_profile, workflow_id=nc.workflow_id
+            proposer_state, proposer_profile, workflow_id=nc.workflow_id
         ):
             final_state = new_state
             if nc.event_bus and event is not None:
@@ -292,7 +314,6 @@ async def _run_proposer(
             proposer_id=proposer_id,
             status="succeeded",
             model=model,
-            worktree_path=str(worktree),
             diff=diff,
             summary=final_state.final_response,
         )
@@ -327,6 +348,12 @@ async def generative_moa_proposers_node(
     moa = resolve_moa_config(nc.profile)
     base_model = nc.profile.get_agent_config("developer").model
     models = moa.resolve_models(base_model)
+
+    # Guard sandbox+worktree incompatibility at startup, before spawning any
+    # proposer tasks.  Firing inside asyncio.gather would produce N concurrent
+    # errors and a confusing all-failed message instead of a clear config error.
+    dev_config = nc.profile.get_agent_config("developer")
+    _ensure_worktree_moa_can_own_workspace(nc, dev_config)
 
     logger.info(
         "Generative MoA: launching proposers",
@@ -379,7 +406,20 @@ async def generative_moa_proposers_node(
         total=len(candidates),
         workflow_id=str(nc.workflow_id),
     )
-    return {"generative_moa_candidates": candidates}
+
+    # Capture the primary-worktree HEAD *before* any proposer ran (proposers
+    # run in isolated worktrees and never advance the primary HEAD, so this is
+    # always the pre-implementation commit).  Storing it now mirrors what
+    # call_developer_node does with pre_dev_commit: the reviewer later computes
+    # ``git diff base_commit HEAD`` and needs this value to produce a non-empty
+    # diff after the aggregator's ff-merge.
+    repo_root = Path(nc.profile.repo_root)
+    pre_moa_commit = await _current_head(repo_root)
+
+    return {
+        "generative_moa_candidates": candidates,
+        "base_commit": pre_moa_commit or state.base_commit,
+    }
 
 
 async def generative_moa_aggregator_node(
@@ -411,15 +451,10 @@ async def generative_moa_aggregator_node(
             "Generative MoA aggregator: no successful candidates with diffs to apply"
         )
 
-    selected = succeeded[0]
-    rationale = (
-        f"Selected first successful proposer {selected.proposer_id} "
-        f"(model={selected.model})"
-    )
-
-    # Apply the selected candidate first, then the remaining ones as fallbacks.
-    ordered = [c for c in succeeded if c.proposer_id == selected.proposer_id]
-    ordered += [c for c in succeeded if c.proposer_id != selected.proposer_id]
+    # succeeded is already ordered by proposer_id (proposers node preserves
+    # input order via asyncio.gather).  The first entry is the preferred
+    # candidate; the rest are tried in order if its diff fails to apply.
+    ordered = succeeded
 
     repo_root = Path(nc.profile.repo_root)
     base_commit = await _current_head(repo_root)
@@ -441,6 +476,19 @@ async def generative_moa_aggregator_node(
             "primary worktree"
         )
 
+    preferred = ordered[0]
+    if applied.proposer_id == preferred.proposer_id:
+        rationale = (
+            f"Applied first successful proposer {applied.proposer_id} "
+            f"(model={applied.model})"
+        )
+    else:
+        rationale = (
+            f"Applied fallback proposer {applied.proposer_id} "
+            f"(model={applied.model}); preferred proposer "
+            f"{preferred.proposer_id} diff failed to apply"
+        )
+
     logger.info(
         "Generative MoA: applied candidate",
         proposer_id=applied.proposer_id,
@@ -448,7 +496,16 @@ async def generative_moa_aggregator_node(
         rationale=rationale,
         workflow_id=str(nc.workflow_id),
     )
+    # Strip per-candidate diffs from the candidates list before checkpointing.
+    # The selected diff is already preserved in code_changes_for_review; keeping
+    # all binary patches (including non-selected ones) in every post-aggregation
+    # checkpoint wastes checkpoint storage proportional to proposer_count.
+    stripped_candidates = [
+        c.model_copy(update={"diff": ""}) if c.status == "succeeded" else c
+        for c in state.generative_moa_candidates
+    ]
     return {
+        "generative_moa_candidates": stripped_candidates,
         "generative_moa_selected": applied,
         "base_commit": base_commit or state.base_commit,
         "code_changes_for_review": applied.diff,

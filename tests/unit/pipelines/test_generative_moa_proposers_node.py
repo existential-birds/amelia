@@ -26,10 +26,6 @@ from amelia.pipelines.implementation.moa import (
 from amelia.pipelines.implementation.state import ImplementationState
 
 
-def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
-
-
 def _config_with(
     profile: Profile,
     state: ImplementationState,
@@ -45,20 +41,6 @@ def _config_with(
             }
         },
     )
-
-
-@pytest.fixture
-def git_repo(tmp_path: Path) -> Path:
-    """Create an initialized git repo with one committed file."""
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    _git(repo, "init")
-    _git(repo, "config", "user.email", "test@example.com")
-    _git(repo, "config", "user.name", "Test")
-    (repo / "README.md").write_text("base\n")
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-m", "initial")
-    return repo
 
 
 def _make_profile(repo: Path, moa_options: dict[str, Any]) -> Profile:
@@ -141,9 +123,8 @@ async def test_proposers_produce_distinct_worktrees_and_diffs(git_repo: Path) ->
     assert "out_m1.txt" in (by_model["m1"].diff or "")
     assert "out_m1.txt" not in (by_model["m0"].diff or "")
 
-    # Worktrees are distinct paths.
-    paths = {c.worktree_path for c in candidates}
-    assert len(paths) == 2
+    # Isolation confirmed by diff contents: each proposer's diff contains only
+    # its own output file, not the other proposer's (asserted above).
 
 
 @pytest.mark.asyncio

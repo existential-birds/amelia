@@ -27,19 +27,6 @@ def route_after_start(state: ImplementationState) -> Literal["architect", "plan_
     return "architect"
 
 
-def route_approval(state: ImplementationState) -> Literal["approve", "reject"]:
-    """Route based on human approval status.
-
-    Args:
-        state: Current execution state containing human_approved flag.
-
-    Returns:
-        'approve' if approved (continue to developer).
-        'reject' if not approved.
-    """
-    return "approve" if state.human_approved else "reject"
-
-
 def resolve_moa_config(profile: Profile) -> MoAConfig:
     """Resolve the MoA config from a profile's Developer agent options.
 
@@ -71,13 +58,20 @@ def route_approval_with_moa(
     Returns:
         "reject" if not approved.
         "moa" if approved and generative MoA is enabled.
-        "developer" if approved and MoA is disabled or advisory.
+        "developer" if approved and MoA is disabled or advisory (advisory
+        logs a warning because it has no graph implementation yet).
     """
     if not state.human_approved:
         return "reject"
     moa = resolve_moa_config(profile)
     if moa.enabled and moa.mode == MoAMode.GENERATIVE:
         return "moa"
+    if moa.enabled and moa.mode == MoAMode.ADVISORY:
+        logger.warning(
+            "MoA mode 'advisory' is not yet implemented; falling back to the "
+            "standard developer path. Set mode='generative' to use MoA.",
+            moa_mode=moa.mode,
+        )
     return "developer"
 
 

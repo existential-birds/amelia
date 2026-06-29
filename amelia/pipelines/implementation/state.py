@@ -49,7 +49,6 @@ class GenerativeMoASucceededCandidate(_GenerativeMoACandidateBase):
     """A successful Developer proposer result with its collected diff."""
 
     status: Literal["succeeded"] = "succeeded"
-    worktree_path: str | None = None
     diff: str
     summary: str | None = None
 
@@ -126,7 +125,7 @@ class ImplementationState(BasePipelineState):
     # Generative Mixture-of-Agents. No operator.add reducer: each proposer run
     # replaces the candidate list rather than concatenating across graph cycles.
     generative_moa_candidates: list[GenerativeMoACandidate] = Field(default_factory=list)
-    generative_moa_selected: GenerativeMoACandidate | None = None
+    generative_moa_selected: GenerativeMoASucceededCandidate | None = None
 
 
 def rebuild_implementation_state() -> None:

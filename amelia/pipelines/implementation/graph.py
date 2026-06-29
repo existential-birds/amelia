@@ -98,7 +98,11 @@ def create_implementation_graph(
     START -> [conditional: external_plan?]
           -> (external_plan=True) plan_validator_node -> human_approval_node
           -> (external_plan=False) architect_node -> plan_validator_node -> human_approval_node
-          -> developer_node -> reviewer_node -> next_task_node -> developer_node
+          -> [conditional: MoA enabled?]
+               -> (moa=True)  generative_moa_proposers_node
+                              -> generative_moa_aggregator_node -> reviewer_node
+               -> (moa=False) developer_node -> reviewer_node
+          -> next_task_node -> developer_node
           (loops for each task until all complete or max iterations reached)
 
     Args:
