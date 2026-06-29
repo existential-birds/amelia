@@ -36,22 +36,35 @@ if TYPE_CHECKING:
     from amelia.agents.schemas.evaluator import EvaluationResult
 
 
-class GenerativeMoACandidate(BaseModel):
-    """A single generative Mixture-of-Agents proposer result.
-
-    Captures the outcome of one Developer proposer running in an isolated
-    worktree, including its diff (when successful) or error (when failed).
-    """
+class _GenerativeMoACandidateBase(BaseModel):
+    """Common fields for a generative Mixture-of-Agents proposer result."""
 
     model_config = ConfigDict(frozen=True)
 
     proposer_id: int
-    status: Literal["succeeded", "failed"]
     model: str
+
+
+class GenerativeMoASucceededCandidate(_GenerativeMoACandidateBase):
+    """A successful Developer proposer result with its collected diff."""
+
+    status: Literal["succeeded"] = "succeeded"
     worktree_path: str | None = None
-    diff: str | None = None
+    diff: str
     summary: str | None = None
-    error: str | None = None
+
+
+class GenerativeMoAFailedCandidate(_GenerativeMoACandidateBase):
+    """A failed Developer proposer result with the failure reason."""
+
+    status: Literal["failed"] = "failed"
+    error: str
+
+
+type GenerativeMoACandidate = Annotated[
+    GenerativeMoASucceededCandidate | GenerativeMoAFailedCandidate,
+    Field(discriminator="status"),
+]
 
 
 class ImplementationState(BasePipelineState):

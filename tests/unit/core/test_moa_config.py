@@ -18,7 +18,7 @@ class TestMoAConfigDefaults:
     def test_frozen(self) -> None:
         cfg = MoAConfig()
         with pytest.raises(ValidationError):
-            cfg.enabled = True  # type: ignore[misc]
+            cfg.enabled = True
 
 
 class TestMoAConfigValidation:

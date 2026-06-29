@@ -5,6 +5,7 @@ exercise production code paths. Only the Developer agent is stubbed (no live
 LLM): each stub writes a distinct file into its isolated worktree.
 """
 
+import asyncio
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,13 +16,35 @@ from uuid import uuid4
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.core.types import AgentConfig, DriverType, Profile
-from amelia.pipelines.implementation.moa import generative_moa_proposers_node
+from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
+from amelia.pipelines.implementation.moa import (
+    _collect_worktree_diff,
+    _create_worktree,
+    _remove_worktree,
+    generative_moa_proposers_node,
+)
 from amelia.pipelines.implementation.state import ImplementationState
 
 
 def _git(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+
+def _config_with(
+    profile: Profile,
+    state: ImplementationState,
+    **configurable: Any,
+) -> RunnableConfig:
+    return cast(
+        RunnableConfig,
+        {
+            "configurable": {
+                "profile": profile,
+                "thread_id": str(state.workflow_id),
+                **configurable,
+            }
+        },
+    )
 
 
 @pytest.fixture
@@ -46,7 +69,7 @@ def _make_profile(repo: Path, moa_options: dict[str, Any]) -> Profile:
         ),
         "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
     }
-    return Profile(name="test", tracker="noop", repo_root=str(repo), agents=agents)
+    return Profile(name="test", tracker=TrackerType.NOOP, repo_root=str(repo), agents=agents)
 
 
 def _make_state(profile: Profile) -> ImplementationState:
@@ -93,10 +116,7 @@ def _failing_developer_for(*models: str) -> type:
 
 
 def _config(profile: Profile, state: ImplementationState) -> RunnableConfig:
-    return cast(
-        RunnableConfig,
-        {"configurable": {"profile": profile, "thread_id": str(state.workflow_id)}},
-    )
+    return _config_with(profile, state)
 
 
 @pytest.mark.asyncio
@@ -146,6 +166,51 @@ async def test_primary_worktree_not_mutated(git_repo: Path) -> None:
         text=True,
     ).stdout
     assert status.strip() == ""
+
+
+@pytest.mark.asyncio
+async def test_collect_worktree_diff_includes_binary_patch(git_repo: Path) -> None:
+    (git_repo / "asset.bin").write_bytes(bytes(range(256)) * 4)
+
+    diff = await _collect_worktree_diff(git_repo)
+
+    assert "GIT binary patch" in diff
+
+
+@pytest.mark.asyncio
+async def test_worktree_setup_and_cleanup_filesystem_calls_run_off_loop(
+    git_repo: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    async def record_to_thread(func: Any, /, *args: Any, **kwargs: Any) -> Any:
+        calls.append(getattr(func, "__name__", repr(func)))
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "to_thread", record_to_thread)
+    worktree = tmp_path / "moa-worktree"
+
+    await _create_worktree(git_repo, worktree)
+    await _remove_worktree(git_repo, worktree)
+
+    assert "exists" in calls
+    assert "mkdir" in calls
+
+
+@pytest.mark.asyncio
+async def test_sandboxed_developer_execution_rejected_for_worktree_moa(
+    git_repo: Path,
+) -> None:
+    profile = _make_profile(git_repo, {"enabled": True, "proposer_count": 1})
+    state = _make_state(profile)
+
+    with pytest.raises(ValueError, match="does not support sandboxed Developer"):
+        await generative_moa_proposers_node(
+            state,
+            _config_with(profile, state, sandbox_provider=object()),
+        )
 
 
 @pytest.mark.asyncio
