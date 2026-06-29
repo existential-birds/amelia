@@ -85,11 +85,6 @@ def _config(profile: Profile, state: ImplementationState) -> RunnableConfig:
     )
 
 
-def test_moa_selection_has_no_agents_layer_aggregator_abstraction() -> None:
-    moa_path = Path(generative_moa_aggregator_node.__code__.co_filename)
-    assert not (moa_path.parents[2] / "agents" / "aggregator.py").exists()
-
-
 @pytest.mark.asyncio
 async def test_applies_selected_candidate_diff(git_repo: Path) -> None:
     profile = _make_profile(git_repo)

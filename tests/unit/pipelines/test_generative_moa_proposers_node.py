@@ -123,9 +123,6 @@ async def test_proposers_produce_distinct_worktrees_and_diffs(git_repo: Path) ->
     assert "out_m1.txt" in (by_model["m1"].diff or "")
     assert "out_m1.txt" not in (by_model["m0"].diff or "")
 
-    # Isolation confirmed by diff contents: each proposer's diff contains only
-    # its own output file, not the other proposer's (asserted above).
-
 
 @pytest.mark.asyncio
 async def test_primary_worktree_not_mutated(git_repo: Path) -> None:

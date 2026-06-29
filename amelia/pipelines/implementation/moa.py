@@ -350,7 +350,7 @@ async def generative_moa_proposers_node(
     models = moa.resolve_models(base_model)
 
     # Guard sandbox+worktree incompatibility at startup, before spawning any
-    # proposer tasks.  Firing inside asyncio.gather would produce N concurrent
+    # proposer tasks. Firing inside asyncio.gather would produce N concurrent
     # errors and a confusing all-failed message instead of a clear config error.
     dev_config = nc.profile.get_agent_config("developer")
     _ensure_worktree_moa_can_own_workspace(nc, dev_config)
@@ -409,7 +409,7 @@ async def generative_moa_proposers_node(
 
     # Capture the primary-worktree HEAD *before* any proposer ran (proposers
     # run in isolated worktrees and never advance the primary HEAD, so this is
-    # always the pre-implementation commit).  Storing it now mirrors what
+    # always the pre-implementation commit). Storing it now mirrors what
     # call_developer_node does with pre_dev_commit: the reviewer later computes
     # ``git diff base_commit HEAD`` and needs this value to produce a non-empty
     # diff after the aggregator's ff-merge.
@@ -452,7 +452,7 @@ async def generative_moa_aggregator_node(
         )
 
     # succeeded is already ordered by proposer_id (proposers node preserves
-    # input order via asyncio.gather).  The first entry is the preferred
+    # input order via asyncio.gather). The first entry is the preferred
     # candidate; the rest are tried in order if its diff fails to apply.
     ordered = succeeded
 
