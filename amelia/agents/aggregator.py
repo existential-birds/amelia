@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -30,8 +31,29 @@ from amelia.tools.write_plan import create_write_plan_tool
 
 
 if TYPE_CHECKING:
-    from amelia.pipelines.implementation.state import ImplementationState
     from amelia.sandbox.provider import SandboxProvider
+
+
+@dataclass
+class AggregatorResult:
+    """Agentic outputs from a single ``Aggregator.aggregate()`` run.
+
+    Carries the raw agentic outputs so the calling node can construct its own
+    state update without the agent depending on pipeline-level state types.
+
+    Attributes:
+        tool_calls: Tool calls the model made during synthesis.
+        tool_results: Corresponding tool results.
+        raw_output: Final text content from the model.
+        plan_path: Path written by the ``write_plan`` tool, if any.
+        error: Error string if synthesis failed, otherwise ``None``.
+    """
+
+    tool_calls: list[ToolCall] = field(default_factory=list)
+    tool_results: list[ToolResult] = field(default_factory=list)
+    raw_output: str = ""
+    plan_path: Path | None = None
+    error: str | None = None
 
 
 class Aggregator:
@@ -134,45 +156,46 @@ complete until it has been written via `write_plan`."""
     async def aggregate(
         self,
         candidate_plans: list[str],
-        state: ImplementationState,
         profile: Profile,
+        issue_id: str,
         *,
         workflow_id: uuid.UUID,
-    ) -> AsyncIterator[tuple[ImplementationState, WorkflowEvent]]:
+    ) -> AsyncIterator[tuple[AggregatorResult, WorkflowEvent]]:
         """Synthesize one canonical plan from N candidate plans via agentic execution.
 
         Drives the model with the ``write_plan`` tool to write the canonical plan
-        file (the same path the Architect would have produced). Yields state/event
-        tuples as execution progresses.
+        file (the same path the Architect would have produced). Yields
+        ``(AggregatorResult, WorkflowEvent)`` tuples as execution progresses so
+        the caller can emit events while accumulating agentic outputs without
+        depending on a pipeline-level state type.
 
         Args:
             candidate_plans: Candidate plan markdown strings to synthesize.
-            state: The execution state containing the issue.
             profile: The profile containing working directory and plan path settings.
+            issue_id: Issue identifier used to resolve the canonical plan path.
             workflow_id: Workflow ID for stream events (required).
 
         Yields:
-            Tuples of (updated ImplementationState, WorkflowEvent) as synthesis progresses.
+            Tuples of (AggregatorResult, WorkflowEvent) as synthesis progresses.
+            The ``AggregatorResult`` in each tuple reflects accumulated outputs up
+            to that point; the final tuple carries the complete result.
 
         Raises:
-            ValueError: If no issue is present, no candidates are supplied, or the
-                model never calls ``write_plan`` (no plan produced).
+            ValueError: If no candidates are supplied, or the model never calls
+                ``write_plan`` (no plan produced).
 
         """
-        if not state.issue:
-            raise ValueError("Cannot aggregate plans: no issue in ImplementationState")
         if not candidate_plans:
             raise ValueError("Cannot aggregate plans: no candidate plans provided")
 
         user_prompt = self._build_prompt(candidate_plans)
 
         cwd = profile.repo_root
-        plan_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
+        plan_path = resolve_plan_path(profile.plan_path_pattern, issue_id)
         tool_calls: list[ToolCall] = []
         tool_results: list[ToolResult] = []
         raw_output = ""
         wrote_plan_path: Path | None = None
-        current_state = state
 
         logger.info(
             "Aggregator starting agentic execution",
@@ -245,21 +268,19 @@ complete until it has been written via `write_plan`."""
                         plan_path=str(wrote_plan_path) if wrote_plan_path else None,
                     )
 
-                    current_state = state.model_copy(update={
-                        "tool_calls": tool_calls,
-                        "tool_results": tool_results,
-                        "architect_raw_output": raw_output,
-                        "plan_path": wrote_plan_path,
-                    })
-                    yield current_state, event
+                    yield AggregatorResult(
+                        tool_calls=tool_calls,
+                        tool_results=tool_results,
+                        raw_output=raw_output,
+                        plan_path=wrote_plan_path,
+                    ), event
                     continue
 
                 if event is not None:
-                    current_state = state.model_copy(update={
-                        "tool_calls": tool_calls,
-                        "tool_results": tool_results,
-                    })
-                    yield current_state, event
+                    yield AggregatorResult(
+                        tool_calls=tool_calls,
+                        tool_results=tool_results,
+                    ), event
         except (RuntimeError, ValueError) as exc:
             logger.exception("Aggregator agent failed")
             error_event = AgenticMessage(
@@ -267,12 +288,11 @@ complete until it has been written via `write_plan`."""
                 content=str(exc),
                 is_error=True,
             ).to_workflow_event(workflow_id=workflow_id, agent="aggregator")
-            current_state = state.model_copy(update={
-                "tool_calls": tool_calls,
-                "tool_results": tool_results,
-                "architect_error": str(exc),
-            })
-            yield current_state, error_event
+            yield AggregatorResult(
+                tool_calls=tool_calls,
+                tool_results=tool_results,
+                error=str(exc),
+            ), error_event
             return
 
         # Failure propagation: synthesis only "succeeds" if a plan was written.

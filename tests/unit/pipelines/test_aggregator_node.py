@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
+from amelia.agents.aggregator import AggregatorResult
 from amelia.core.constants import resolve_plan_path
 from amelia.core.types import AgentConfig, Issue
 from amelia.pipelines.implementation.nodes import aggregator_node
@@ -28,7 +29,7 @@ SYNTHESIZED = "# Synthesized Plan\n\n### Task 1: do the thing\n"
 def _make_stub_aggregator(captured: dict[str, Any]) -> type:
     """Build a stub Aggregator that records its constructor + aggregate args.
 
-    On ``aggregate`` it resolves the canonical plan path from the profile/issue
+    On ``aggregate`` it resolves the canonical plan path from the profile/issue_id
     (exactly as the real Aggregator does) and writes ``SYNTHESIZED`` there, so the
     node's observable consequence — the canonical file on disk — is exercised.
     Construction is counted so the 1-survivor promotion path can assert the
@@ -49,20 +50,23 @@ def _make_stub_aggregator(captured: dict[str, Any]) -> type:
         async def aggregate(
             self,
             candidate_plans: list[str],
-            state: ImplementationState,
             profile: Any,
+            issue_id: str,
             *,
             workflow_id: Any,
         ) -> Any:
             captured["candidate_plans"] = list(candidate_plans)
-            rel = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
+            rel = resolve_plan_path(profile.plan_path_pattern, issue_id)
             path = Path(profile.repo_root) / rel
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(SYNTHESIZED)
-            new_state = state.model_copy(
-                update={"architect_raw_output": "synthesized", "plan_path": path}
+            yield (
+                AggregatorResult(
+                    raw_output="synthesized",
+                    plan_path=path,
+                ),
+                MagicMock(),
             )
-            yield (new_state, MagicMock())
 
     return _StubAggregator
 

@@ -645,26 +645,30 @@ async def aggregator_node(
         workflow_id=nc.workflow_id,
     )
 
-    final_state = state
-    async for new_state, event in aggregator.aggregate(
+    final_result = None
+    async for agg_result, event in aggregator.aggregate(
         candidate_plans=candidate_contents,
-        state=state,
         profile=nc.profile,
+        issue_id=state.issue.id,
         workflow_id=nc.workflow_id,
     ):
-        final_state = new_state
+        final_result = agg_result
         if nc.event_bus:
             nc.event_bus.emit(event)
 
     # Persist the synthesized plan from the aggregator's tool calls if the driver
     # did not already land it on disk, mirroring call_architect_node so
     # plan_validator_node finds the canonical file regardless of driver.
+    tool_calls = final_result.tool_calls if final_result is not None else []
+    raw_output = final_result.raw_output if final_result is not None else ""
+    architect_error = final_result.error if final_result is not None else None
+    tool_results = final_result.tool_results if final_result is not None else []
     if not canonical_path.exists():
         written = await _resolve_plan_from_tool_calls(
-            tool_calls=final_state.tool_calls,
+            tool_calls=tool_calls,
             plan_path=canonical_path,
             working_dir=working_dir,
-            raw_output=final_state.architect_raw_output,
+            raw_output=raw_output,
         )
         if not written:
             raise RuntimeError(
@@ -673,10 +677,10 @@ async def aggregator_node(
 
     return {
         "plan_path": canonical_rel,
-        "architect_raw_output": final_state.architect_raw_output,
-        "architect_error": final_state.architect_error,
-        "tool_calls": list(final_state.tool_calls),
-        "tool_results": list(final_state.tool_results),
+        "architect_raw_output": raw_output,
+        "architect_error": architect_error,
+        "tool_calls": list(tool_calls),
+        "tool_results": list(tool_results),
     }
 
 
