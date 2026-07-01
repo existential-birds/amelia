@@ -228,12 +228,24 @@ cd dashboard && npm version X.Y.Z --no-git-tag-version && cd ..
 # Or manually edit: "version": "X.Y.Z"
 ```
 
+### 6d. Lockfile (uv.lock)
+
+Bumping `pyproject.toml` invalidates `uv.lock`'s own `amelia` entry
+(`source = { editable = "." }`), whose `version` still points at the previous
+release. Regenerate it so the lock tracks the new version — `uv lock --check`
+(first step of `make check` / pre-push / CI) fails the gate on a stale lock:
+
+```bash
+uv lock
+```
+
 **Verify all versions match** after updating:
 
 ```bash
 echo "pyproject.toml: $(grep '^version = ' pyproject.toml)"
 echo "amelia/__init__.py: $(grep '__version__' amelia/__init__.py)"
 echo "dashboard/package.json: $(grep '\"version\"' dashboard/package.json)"
+echo "uv.lock: $(uv lock --check 2>&1 | tail -1)"
 ```
 
 ## Step 7: Output Summary
