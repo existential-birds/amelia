@@ -3,16 +3,15 @@
 import pytest
 from pydantic import ValidationError
 
-from amelia.core.types import MoAConfig, MoAIsolation, MoAMode
+from amelia.core.types import MoAConfig, MoAIsolation
 
 
 class TestMoAConfigDefaults:
     def test_disabled_by_default(self) -> None:
         cfg = MoAConfig()
         assert cfg.enabled is False
-        assert cfg.proposer_count == 1
+        assert cfg.proposer_count == 2
         assert cfg.proposer_models == ()
-        assert cfg.mode == MoAMode.GENERATIVE
         assert cfg.isolation == MoAIsolation.WORKTREE
 
     def test_frozen(self) -> None:
@@ -30,17 +29,13 @@ class TestMoAConfigValidation:
         with pytest.raises(ValidationError):
             MoAConfig(proposer_count=-3)
 
-    def test_mode_parsed_from_string(self) -> None:
-        cfg = MoAConfig.model_validate({"mode": "advisory"})
-        assert cfg.mode == MoAMode.ADVISORY
-
     def test_isolation_parsed_from_string(self) -> None:
         cfg = MoAConfig.model_validate({"isolation": "worktree"})
         assert cfg.isolation == MoAIsolation.WORKTREE
 
-    def test_invalid_mode_rejected(self) -> None:
+    def test_unknown_isolation_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            MoAConfig.model_validate({"mode": "nonsense"})
+            MoAConfig.model_validate({"isolation": "container"})
 
 
 class TestResolveModels:
@@ -80,14 +75,12 @@ class TestFromOptions:
             {
                 "moa": {
                     "enabled": True,
-                    "mode": "generative",
                     "proposer_count": 3,
                     "proposer_models": ["a", "b"],
                 }
             }
         )
         assert cfg.enabled is True
-        assert cfg.mode == MoAMode.GENERATIVE
         assert cfg.proposer_count == 3
         assert cfg.proposer_models == ("a", "b")
 

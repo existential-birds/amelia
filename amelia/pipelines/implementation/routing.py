@@ -8,7 +8,7 @@ from typing import Literal
 
 from loguru import logger
 
-from amelia.core.types import MoAConfig, MoAMode, Profile
+from amelia.core.types import MoAConfig, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 
 
@@ -28,10 +28,12 @@ def route_after_start(state: ImplementationState) -> Literal["architect", "plan_
 
 
 def resolve_moa_config(profile: Profile) -> MoAConfig:
-    """Resolve the MoA config from a profile's Developer agent options.
+    """Resolve the generative MoA config from a profile's Developer agent options.
 
-    Returns a disabled default when the developer agent is not configured or
-    has no ``moa`` option, so non-MoA profiles route through the normal path.
+    Generative MoA is configured on the developer agent (advisory MoA lives on
+    the architect agent and is resolved at graph-build time). Returns a
+    disabled default when the developer agent is not configured or has no
+    ``moa`` option, so non-MoA profiles route through the normal path.
 
     Args:
         profile: Active execution profile.
@@ -57,21 +59,13 @@ def route_approval_with_moa(
 
     Returns:
         "reject" if not approved.
-        "moa" if approved and generative MoA is enabled.
-        "developer" if approved and MoA is disabled or advisory (advisory
-        logs a warning because it has no graph implementation yet).
+        "moa" if approved and generative MoA is enabled on the developer agent.
+        "developer" otherwise.
     """
     if not state.human_approved:
         return "reject"
-    moa = resolve_moa_config(profile)
-    if moa.enabled and moa.mode == MoAMode.GENERATIVE:
+    if resolve_moa_config(profile).enabled:
         return "moa"
-    if moa.enabled and moa.mode == MoAMode.ADVISORY:
-        logger.warning(
-            "MoA mode 'advisory' is not yet implemented; falling back to the "
-            "standard developer path. Set mode='generative' to use MoA.",
-            moa_mode=moa.mode,
-        )
     return "developer"
 
 

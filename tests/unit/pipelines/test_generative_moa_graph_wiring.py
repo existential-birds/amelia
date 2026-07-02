@@ -62,7 +62,7 @@ class TestGraphContainsMoANodes:
 
 class TestApprovalRouting:
     def test_not_approved_rejects(self) -> None:
-        profile = _profile({"enabled": True, "mode": "generative"})
+        profile = _profile({"enabled": True})
         assert route_approval_with_moa(_state(approved=False), profile) == "reject"
 
     def test_approved_moa_disabled_routes_to_developer(self) -> None:
@@ -70,15 +70,11 @@ class TestApprovalRouting:
         assert route_approval_with_moa(_state(approved=True), profile) == "developer"
 
     def test_approved_generative_routes_to_moa(self) -> None:
-        profile = _profile({"enabled": True, "mode": "generative"})
+        profile = _profile({"enabled": True})
         assert route_approval_with_moa(_state(approved=True), profile) == "moa"
 
-    def test_approved_advisory_routes_to_developer(self) -> None:
-        profile = _profile({"enabled": True, "mode": "advisory"})
-        assert route_approval_with_moa(_state(approved=True), profile) == "developer"
-
     def test_enabled_false_routes_to_developer(self) -> None:
-        profile = _profile({"enabled": False, "mode": "generative"})
+        profile = _profile({"enabled": False})
         assert route_approval_with_moa(_state(approved=True), profile) == "developer"
 
 

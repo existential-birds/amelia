@@ -310,18 +310,6 @@ class PRAutoFixConfig(BaseModel):
         return v.name.lower()
 
 
-class MoAMode(StrEnum):
-    """Mixture-of-Agents execution mode.
-
-    - ADVISORY: proposers produce advice/suggestions only (no diff applied).
-    - GENERATIVE: proposers each implement the task in isolation; an aggregator
-      selects (or merges) one candidate and applies it to the primary worktree.
-    """
-
-    ADVISORY = "advisory"
-    GENERATIVE = "generative"
-
-
 class MoAIsolation(StrEnum):
     """Isolation provider for generative MoA proposers.
 
@@ -335,20 +323,28 @@ class MoAIsolation(StrEnum):
 class MoAConfig(BaseModel):
     """Mixture-of-Agents configuration.
 
-    Disabled by default so existing pipelines behave unchanged. When enabled
-    with ``mode=GENERATIVE``, the implementation pipeline runs ``proposer_count``
-    Developer proposers concurrently in isolated worktrees and an aggregator
-    selects the best successful candidate.
+    Parsed from ``AgentConfig.options['moa']``; disabled by default so existing
+    pipelines behave unchanged. Which MoA stage runs is selected by the agent
+    the config is placed on:
+
+    - On the **architect** agent: advisory planning MoA — ``proposer_count``
+      Architect proposers plan concurrently and an Aggregator agent synthesizes
+      one canonical plan (no repo mutation, no isolation needed).
+    - On the **developer** agent: generative MoA — ``proposer_count`` Developer
+      proposers implement the task concurrently in isolated worktrees and an
+      aggregator applies the best successful candidate's diff.
+
+    ``isolation`` only applies to generative MoA; advisory proposers write
+    distinct plan files and need no workspace isolation.
     """
 
     model_config = ConfigDict(frozen=True)
 
     enabled: bool = False
-    mode: MoAMode = MoAMode.GENERATIVE
-    proposer_count: int = Field(default=1, ge=1, description="Number of concurrent proposers")
+    proposer_count: int = Field(default=2, ge=1, description="Number of concurrent proposers")
     proposer_models: tuple[str, ...] = Field(
         default_factory=tuple,
-        description="Explicit per-proposer models; falls back to the base Developer model",
+        description="Explicit per-proposer models; falls back to the agent's base model",
     )
     isolation: MoAIsolation = MoAIsolation.WORKTREE
 
