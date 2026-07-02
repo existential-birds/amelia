@@ -3,8 +3,8 @@
 Enters through the production server entrypoint: ``OrchestratorService`` with
 real Postgres fixtures and a real LangGraph run built by
 ``GraphRunner.create_server_graph(profile=...)``. With advisory MoA enabled on
-the architect agent config, that builds the ``moa_proposers_node`` ->
-``aggregator_node`` -> ``plan_validator_node`` graph, exercising the REAL
+the architect agent config, that builds the ``advisory_moa_proposers_node`` ->
+``advisory_moa_aggregator_node`` -> ``plan_validator_node`` graph, exercising the REAL
 ``Architect``/``Aggregator`` agents and nodes.
 
 The ONLY thing mocked is the external LLM boundary (``ApiDriver.execute_agentic``).

@@ -1,4 +1,4 @@
-"""Tests for the MoA aggregator node (advisory MoA mode, Task 6)."""
+"""Tests for the advisory MoA aggregator node."""
 
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,7 +12,7 @@ from langchain_core.runnables.config import RunnableConfig
 from amelia.agents.aggregator import AggregatorResult
 from amelia.core.constants import resolve_plan_path
 from amelia.core.types import AgentConfig, Issue
-from amelia.pipelines.implementation.nodes import aggregator_node
+from amelia.pipelines.implementation.nodes import advisory_moa_aggregator_node
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
@@ -94,7 +94,7 @@ def _make_state(profile: Any, plans: list[str]) -> ImplementationState:
         created_at=datetime.now(tz=UTC),
         status="pending",
         issue=Issue(id="TEST-1", title="Test", description="Test issue"),
-        moa_proposer_plans=plans,
+        advisory_moa_proposer_plans=plans,
     )
 
 
@@ -129,7 +129,7 @@ class TestAggregatorNode:
             "amelia.pipelines.implementation.nodes.Aggregator",
             _make_stub_aggregator(captured),
         ):
-            result = await aggregator_node(state, cast(RunnableConfig, _config(profile)))
+            result = await advisory_moa_aggregator_node(state, cast(RunnableConfig, _config(profile)))
 
         # (a) returned plan_path == the canonical path plan_validator_node re-resolves.
         canonical = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
@@ -158,7 +158,7 @@ class TestAggregatorNode:
             "amelia.pipelines.implementation.nodes.Aggregator",
             _make_stub_aggregator(captured),
         ):
-            result = await aggregator_node(state, cast(RunnableConfig, _config(profile)))
+            result = await advisory_moa_aggregator_node(state, cast(RunnableConfig, _config(profile)))
 
         canonical = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
         assert result["plan_path"] == canonical
@@ -182,7 +182,7 @@ class TestAggregatorNode:
             "amelia.pipelines.implementation.nodes.Aggregator",
             _make_stub_aggregator(captured),
         ):
-            result = await aggregator_node(state, cast(RunnableConfig, _config(profile)))
+            result = await advisory_moa_aggregator_node(state, cast(RunnableConfig, _config(profile)))
 
         # Fell back to the architect's config (model "sonnet"), did not raise.
         assert captured["construct_count"] == 1
@@ -200,4 +200,4 @@ class TestAggregatorNode:
             "amelia.pipelines.implementation.nodes.Aggregator",
             _make_stub_aggregator({}),
         ), pytest.raises(ValueError):
-            await aggregator_node(state, cast(RunnableConfig, _config(profile)))
+            await advisory_moa_aggregator_node(state, cast(RunnableConfig, _config(profile)))

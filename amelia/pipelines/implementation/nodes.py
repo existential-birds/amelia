@@ -423,13 +423,13 @@ def _indexed_plan_pattern(base_pattern: str, index: int) -> str:
     to a distinct file while leaving only ``{date}``/``{issue_key}`` as format
     placeholders. A ``{proposer}`` placeholder is deliberately NOT used because
     ``resolve_plan_path`` only substitutes ``{date}``/``{issue_key}`` and would
-    raise ``KeyError`` (Task 0 finding).
+    raise ``KeyError``.
     """
     p = Path(base_pattern)
     return str(p.with_name(f"{p.stem}-proposer{index}{p.suffix}"))
 
 
-async def moa_proposers_node(
+async def advisory_moa_proposers_node(
     state: ImplementationState,
     config: RunnableConfig | None = None,
 ) -> dict[str, Any]:
@@ -447,7 +447,7 @@ async def moa_proposers_node(
         config: Optional RunnableConfig with the node context in ``configurable``.
 
     Returns:
-        Partial state dict ``{"moa_proposer_plans": [...]}`` listing the resolved
+        Partial state dict ``{"advisory_moa_proposer_plans": [...]}`` listing the resolved
         (repo-root-relative) plan paths of the surviving proposers.
 
     Raises:
@@ -552,17 +552,17 @@ async def moa_proposers_node(
         survivors=len(survivors),
         failed=len(failures),
     )
-    return {"moa_proposer_plans": survivors}
+    return {"advisory_moa_proposer_plans": survivors}
 
 
-async def aggregator_node(
+async def advisory_moa_aggregator_node(
     state: ImplementationState,
     config: RunnableConfig | None = None,
 ) -> dict[str, Any]:
     """Synthesize the canonical plan from MoA proposer candidates (advisory MoA mode).
 
-    Reads ``state.moa_proposer_plans`` (repo-root-relative paths written by
-    ``moa_proposers_node``) and produces the single canonical plan file that
+    Reads ``state.advisory_moa_proposer_plans`` (repo-root-relative paths written by
+    ``advisory_moa_proposers_node``) and produces the single canonical plan file that
     ``plan_validator_node`` reads:
 
     - Exactly 1 survivor -> PROMOTE it: copy its content to the canonical plan
@@ -573,7 +573,7 @@ async def aggregator_node(
       canonical plan via the ``write_plan`` tool, mirroring ``call_architect_node``.
 
     Args:
-        state: Current execution state with ``moa_proposer_plans`` populated.
+        state: Current execution state with ``advisory_moa_proposer_plans`` populated.
         config: Optional RunnableConfig with the node context in ``configurable``.
 
     Returns:
@@ -582,16 +582,16 @@ async def aggregator_node(
         ``architect_error``, ``tool_calls``, ``tool_results``.
 
     Raises:
-        ValueError: If no issue is in state or ``moa_proposer_plans`` is empty.
+        ValueError: If no issue is in state or ``advisory_moa_proposer_plans`` is empty.
     """
     if state.issue is None:
         raise ValueError("Cannot aggregate plans: no issue provided in state.")
 
     nc = extract_node_config(config)
 
-    candidate_rel_paths = list(state.moa_proposer_plans)
+    candidate_rel_paths = list(state.advisory_moa_proposer_plans)
     if not candidate_rel_paths:
-        # moa_proposers_node already raises on zero survivors; guard defensively.
+        # advisory_moa_proposers_node already raises on zero survivors; guard defensively.
         raise ValueError("Cannot aggregate plans: no proposer plans in state.")
 
     working_dir = Path(nc.profile.repo_root)
@@ -627,7 +627,7 @@ async def aggregator_node(
         )
 
     # Aggregator is optional; fall back to the architect config (mirrors the
-    # task_reviewer -> reviewer fallback at pipelines/nodes.py:206-208).
+    # task_reviewer -> reviewer fallback in pipelines/nodes.py).
     try:
         agent_config = nc.profile.get_agent_config("aggregator")
     except ValueError:

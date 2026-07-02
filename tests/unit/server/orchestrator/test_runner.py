@@ -626,8 +626,8 @@ class TestServerGraphThreadsProfile:
         """A MoA-enabled profile produces the proposers/aggregator graph."""
         graph = runner.create_server_graph(profile=self._moa_profile())
         nodes = set(graph.nodes.keys())
-        assert "moa_proposers_node" in nodes
-        assert "aggregator_node" in nodes
+        assert "advisory_moa_proposers_node" in nodes
+        assert "advisory_moa_aggregator_node" in nodes
         assert "architect_node" not in nodes
 
     def test_plain_profile_yields_single_architect_graph(
@@ -637,15 +637,15 @@ class TestServerGraphThreadsProfile:
         graph = runner.create_server_graph(profile=self._plain_profile())
         nodes = set(graph.nodes.keys())
         assert "architect_node" in nodes
-        assert "moa_proposers_node" not in nodes
-        assert "aggregator_node" not in nodes
+        assert "advisory_moa_proposers_node" not in nodes
+        assert "advisory_moa_aggregator_node" not in nodes
 
     def test_no_profile_is_byte_for_byte_default(self, runner: GraphRunner) -> None:
         """Omitting the profile keeps the legacy single-architect default."""
         graph = runner.create_server_graph()
         nodes = set(graph.nodes.keys())
         assert "architect_node" in nodes
-        assert "moa_proposers_node" not in nodes
+        assert "advisory_moa_proposers_node" not in nodes
 
     async def test_run_workflow_threads_resolved_profile_into_graph(
         self, runner: GraphRunner

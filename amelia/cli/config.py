@@ -170,7 +170,7 @@ def _build_default_agents(
         ``server/routes/settings.py``), so legacy profiles without it stay valid.
     """
     driver_type = DriverType(driver)
-    # REQUIRED_AGENTS plus the optional aggregator; aggregator_node still falls
+    # REQUIRED_AGENTS plus the optional aggregator; advisory_moa_aggregator_node still falls
     # back to the architect config for profiles that predate this seed.
     agent_names = REQUIRED_AGENTS | {"aggregator"}
     return {

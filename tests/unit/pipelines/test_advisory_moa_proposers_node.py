@@ -11,7 +11,7 @@ from langchain_core.runnables.config import RunnableConfig
 
 from amelia.core.constants import resolve_plan_path
 from amelia.core.types import AgentConfig, Issue
-from amelia.pipelines.implementation.nodes import moa_proposers_node
+from amelia.pipelines.implementation.nodes import advisory_moa_proposers_node
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
@@ -23,10 +23,10 @@ rebuild_implementation_state()
 
 
 class TestMoAProposerPlansField:
-    """Tests for the moa_proposer_plans state field."""
+    """Tests for the advisory_moa_proposer_plans state field."""
 
     def test_default_empty(self):
-        """moa_proposer_plans should default to an empty list."""
+        """advisory_moa_proposer_plans should default to an empty list."""
         state = ImplementationState(
             workflow_id=uuid4(),
             pipeline_type="implementation",
@@ -34,19 +34,19 @@ class TestMoAProposerPlansField:
             created_at=datetime.now(tz=UTC),
             status="pending",
         )
-        assert state.moa_proposer_plans == []
+        assert state.advisory_moa_proposer_plans == []
 
     def test_accepts_list_of_paths(self):
-        """moa_proposer_plans should accept and round-trip a list of plan paths."""
+        """advisory_moa_proposer_plans should accept and round-trip a list of plan paths."""
         state = ImplementationState(
             workflow_id=uuid4(),
             pipeline_type="implementation",
             profile_id="prof-1",
             created_at=datetime.now(tz=UTC),
             status="pending",
-            moa_proposer_plans=["a.md", "b.md"],
+            advisory_moa_proposer_plans=["a.md", "b.md"],
         )
-        assert state.moa_proposer_plans == ["a.md", "b.md"]
+        assert state.advisory_moa_proposer_plans == ["a.md", "b.md"]
 
 
 def _make_stub_architect(fail_markers: tuple[str, ...] = ()) -> type:
@@ -126,9 +126,9 @@ class TestMoAProposersNode:
             "amelia.pipelines.implementation.nodes.Architect",
             _make_stub_architect(),
         ):
-            result = await moa_proposers_node(state, cast(RunnableConfig, config))
+            result = await advisory_moa_proposers_node(state, cast(RunnableConfig, config))
 
-        plans = result["moa_proposer_plans"]
+        plans = result["advisory_moa_proposer_plans"]
         assert len(plans) == 3
         assert len(set(plans)) == 3, "proposer paths must be distinct"
         for rel in plans:
@@ -147,9 +147,9 @@ class TestMoAProposersNode:
             "amelia.pipelines.implementation.nodes.Architect",
             _make_stub_architect(),
         ):
-            result = await moa_proposers_node(state, cast(RunnableConfig, config))
+            result = await advisory_moa_proposers_node(state, cast(RunnableConfig, config))
 
-        plans = result["moa_proposer_plans"]
+        plans = result["advisory_moa_proposer_plans"]
         assert len(plans) == 1
         assert (Path(profile.repo_root) / plans[0]).exists()
 
@@ -163,9 +163,9 @@ class TestMoAProposersNode:
             "amelia.pipelines.implementation.nodes.Architect",
             _make_stub_architect(fail_markers=("proposer1",)),
         ):
-            result = await moa_proposers_node(state, cast(RunnableConfig, config))
+            result = await advisory_moa_proposers_node(state, cast(RunnableConfig, config))
 
-        plans = result["moa_proposer_plans"]
+        plans = result["advisory_moa_proposer_plans"]
         assert len(plans) == 2
         assert all("proposer1" not in rel for rel in plans)
         for rel in plans:
@@ -185,11 +185,11 @@ class TestMoAProposersNode:
             "amelia.pipelines.implementation.nodes.Architect",
             _make_stub_architect(),
         ):
-            result = await moa_proposers_node(state, cast(RunnableConfig, config))
+            result = await advisory_moa_proposers_node(state, cast(RunnableConfig, config))
 
         models = {
             (Path(profile.repo_root) / rel).read_text().splitlines()[1]
-            for rel in result["moa_proposer_plans"]
+            for rel in result["advisory_moa_proposer_plans"]
         }
         assert models == {"model=m-a", "model=m-b", "model=sonnet"}
 
@@ -203,4 +203,4 @@ class TestMoAProposersNode:
             "amelia.pipelines.implementation.nodes.Architect",
             _make_stub_architect(fail_markers=("proposer",)),
         ), pytest.raises(RuntimeError):
-            await moa_proposers_node(state, cast(RunnableConfig, config))
+            await advisory_moa_proposers_node(state, cast(RunnableConfig, config))

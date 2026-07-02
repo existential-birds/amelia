@@ -30,8 +30,8 @@ class TestMoADisabledGraph:
         graph = create_implementation_graph()
         nodes = _nodes(graph)
         assert "architect_node" in nodes
-        assert "moa_proposers_node" not in nodes
-        assert "aggregator_node" not in nodes
+        assert "advisory_moa_proposers_node" not in nodes
+        assert "advisory_moa_aggregator_node" not in nodes
 
     def test_single_architect_when_moa_absent_in_profile(
         self, mock_profile_factory: Any
@@ -40,8 +40,8 @@ class TestMoADisabledGraph:
         graph = create_implementation_graph(profile=profile)
         nodes = _nodes(graph)
         assert "architect_node" in nodes
-        assert "moa_proposers_node" not in nodes
-        assert "aggregator_node" not in nodes
+        assert "advisory_moa_proposers_node" not in nodes
+        assert "advisory_moa_aggregator_node" not in nodes
 
 
 class TestMoAEnabledGraph:
@@ -64,8 +64,8 @@ class TestMoAEnabledGraph:
     ) -> None:
         graph = create_implementation_graph(profile=self._enabled_profile(mock_profile_factory))
         nodes = _nodes(graph)
-        assert "moa_proposers_node" in nodes
-        assert "aggregator_node" in nodes
+        assert "advisory_moa_proposers_node" in nodes
+        assert "advisory_moa_aggregator_node" in nodes
         assert "architect_node" not in nodes
 
     def test_start_routes_to_proposers_not_architect(
@@ -73,15 +73,15 @@ class TestMoAEnabledGraph:
     ) -> None:
         graph = create_implementation_graph(profile=self._enabled_profile(mock_profile_factory))
         start_targets = _targets_from(graph, "__start__")
-        assert "moa_proposers_node" in start_targets
+        assert "advisory_moa_proposers_node" in start_targets
         assert "architect_node" not in start_targets
 
     def test_proposers_flow_into_aggregator_then_validator(
         self, mock_profile_factory: Any
     ) -> None:
         graph = create_implementation_graph(profile=self._enabled_profile(mock_profile_factory))
-        assert "aggregator_node" in _targets_from(graph, "moa_proposers_node")
-        assert "plan_validator_node" in _targets_from(graph, "aggregator_node")
+        assert "advisory_moa_aggregator_node" in _targets_from(graph, "advisory_moa_proposers_node")
+        assert "plan_validator_node" in _targets_from(graph, "advisory_moa_aggregator_node")
 
     def test_revise_branch_targets_proposers(
         self, mock_profile_factory: Any
@@ -89,5 +89,5 @@ class TestMoAEnabledGraph:
         graph = create_implementation_graph(profile=self._enabled_profile(mock_profile_factory))
         validator_targets = _targets_from(graph, "plan_validator_node")
         # The "revise" branch (formerly -> architect_node) now loops to proposers.
-        assert "moa_proposers_node" in validator_targets
+        assert "advisory_moa_proposers_node" in validator_targets
         assert "architect_node" not in validator_targets

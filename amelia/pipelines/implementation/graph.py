@@ -16,10 +16,10 @@ from amelia.pipelines.implementation.moa import (
     generative_moa_proposers_node,
 )
 from amelia.pipelines.implementation.nodes import (
-    aggregator_node,
+    advisory_moa_aggregator_node,
+    advisory_moa_proposers_node,
     call_architect_node,
     human_approval_node,
-    moa_proposers_node,
     next_task_node,
     plan_validator_node,
 )
@@ -94,9 +94,9 @@ def _route_after_review_or_task(
 def _moa_enabled(profile: Profile | None) -> bool:
     """Derive advisory-MoA enablement from a profile's architect agent config.
 
-    MoA is a construct-time *mode* of the implementation pipeline, so the
-    decision is read from the architect agent's ``options['moa']`` on the
-    profile supplied at graph-build time. Absent profile, absent architect, or
+    Advisory MoA swaps the planning nodes at graph-build time, so the decision
+    is read from the architect agent's ``options['moa']`` on the profile
+    supplied at construction. Absent profile, absent architect, or
     ``enabled=False`` all yield the default single-architect path.
 
     Args:
@@ -122,7 +122,7 @@ def create_implementation_graph(
     START -> [conditional: external_plan?]
           -> (external_plan=True) plan_validator_node -> human_approval_node
           -> (external_plan=False) architect_node -> plan_validator_node -> human_approval_node
-          -> [conditional: MoA enabled?]
+          -> [conditional: generative MoA enabled?]
                -> (moa=True)  generative_moa_proposers_node
                               -> generative_moa_aggregator_node -> reviewer_node
                -> (moa=False) developer_node -> reviewer_node
@@ -131,8 +131,12 @@ def create_implementation_graph(
 
     When advisory MoA is enabled on the profile's architect agent
     (``options['moa']['enabled']``), the single ``architect_node`` is replaced
-    by a ``moa_proposers_node`` -> ``aggregator_node`` pair that feeds the same
-    ``plan_validator_node``; everything downstream is unchanged.
+    at build time by an ``advisory_moa_proposers_node`` ->
+    ``advisory_moa_aggregator_node`` pair that feeds the same
+    ``plan_validator_node``; everything downstream is unchanged. Generative MoA
+    (``options['moa']`` on the developer agent) is instead routed at runtime
+    after human approval, so its nodes are always wired. The two stages are
+    independent and compose.
 
     Args:
         checkpointer: Optional checkpoint saver for state persistence.
@@ -149,13 +153,13 @@ def create_implementation_graph(
     moa_enabled = _moa_enabled(profile)
     # The plan node that START's "architect" branch and the validator's
     # "revise" branch target: the single architect, or the MoA proposers.
-    plan_entry = "moa_proposers_node" if moa_enabled else "architect_node"
+    plan_entry = "advisory_moa_proposers_node" if moa_enabled else "architect_node"
 
     workflow = StateGraph(ImplementationState)
 
     if moa_enabled:
-        workflow.add_node("moa_proposers_node", moa_proposers_node)
-        workflow.add_node("aggregator_node", aggregator_node)
+        workflow.add_node("advisory_moa_proposers_node", advisory_moa_proposers_node)
+        workflow.add_node("advisory_moa_aggregator_node", advisory_moa_aggregator_node)
     else:
         workflow.add_node("architect_node", call_architect_node)
     workflow.add_node("plan_validator_node", plan_validator_node)
@@ -177,8 +181,8 @@ def create_implementation_graph(
     )
 
     if moa_enabled:
-        workflow.add_edge("moa_proposers_node", "aggregator_node")
-        workflow.add_edge("aggregator_node", "plan_validator_node")
+        workflow.add_edge("advisory_moa_proposers_node", "advisory_moa_aggregator_node")
+        workflow.add_edge("advisory_moa_aggregator_node", "plan_validator_node")
     else:
         workflow.add_edge("architect_node", "plan_validator_node")
     workflow.add_conditional_edges(

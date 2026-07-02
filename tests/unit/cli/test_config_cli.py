@@ -33,13 +33,13 @@ class TestBuildDefaultAgents:
         assert agents["aggregator"].options == options
 
     def test_aggregator_is_not_a_required_agent(self) -> None:
-        """Seeding must not promote aggregator into REQUIRED_AGENTS (enforced at
-        settings.py:68); existing profiles without it must remain valid."""
+        """Seeding must not promote aggregator into REQUIRED_AGENTS;
+        existing profiles without it must remain valid."""
         assert "aggregator" not in REQUIRED_AGENTS
 
     def test_resolver_falls_back_to_architect_when_aggregator_absent(self) -> None:
         """When a profile predates the seed (no aggregator entry), the resolver
-        used by aggregator_node must fall back to the architect config rather
+        used by advisory_moa_aggregator_node must fall back to the architect config rather
         than raise — the path that keeps MoA working on legacy profiles."""
         profile = Profile(
             name="legacy",
@@ -52,7 +52,7 @@ class TestBuildDefaultAgents:
         )
         assert "aggregator" not in profile.agents
 
-        # Mirror aggregator_node's try/except fallback (nodes.py:613-616).
+        # Mirror advisory_moa_aggregator_node's try/except fallback.
         try:
             resolved = profile.get_agent_config("aggregator")
         except ValueError:
