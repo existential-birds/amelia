@@ -95,6 +95,9 @@ class ImplementationState(BasePipelineState):
     plan_path: Path | None = None
     key_files: list[str] = Field(default_factory=list)
 
+    moa_proposer_plans: list[str] = Field(default_factory=list)
+    """Candidate plan file paths written by MoA proposers (last-write-wins)."""
+
     human_approved: bool | None = None
     human_feedback: str | None = None
 

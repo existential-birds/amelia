@@ -10,13 +10,16 @@ from langchain_core.runnables.config import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from amelia.core.types import MoAConfig, Profile
 from amelia.pipelines.implementation.moa import (
     generative_moa_aggregator_node,
     generative_moa_proposers_node,
 )
 from amelia.pipelines.implementation.nodes import (
+    aggregator_node,
     call_architect_node,
     human_approval_node,
+    moa_proposers_node,
     next_task_node,
     plan_validator_node,
 )
@@ -88,9 +91,30 @@ def _route_after_review_or_task(
     return route_after_task_review(state, profile)
 
 
+def _moa_enabled(profile: Profile | None) -> bool:
+    """Derive advisory-MoA enablement from a profile's architect agent config.
+
+    MoA is a construct-time *mode* of the implementation pipeline, so the
+    decision is read from the architect agent's ``options['moa']`` on the
+    profile supplied at graph-build time. Absent profile, absent architect, or
+    ``enabled=False`` all yield the default single-architect path.
+
+    Args:
+        profile: The profile the graph is being built for, or None.
+
+    Returns:
+        True if advisory MoA planning is enabled for the architect agent.
+    """
+    if profile is None or "architect" not in profile.agents:
+        return False
+    return MoAConfig.from_options(profile.get_agent_config("architect").options).enabled
+
+
 def create_implementation_graph(
     checkpointer: "BaseCheckpointSaver[Any] | None" = None,
     interrupt_before: list[str] | None = None,
+    *,
+    profile: Profile | None = None,
 ) -> CompiledStateGraph[Any]:
     """Creates and compiles the LangGraph state machine for implementation.
 
@@ -105,18 +129,35 @@ def create_implementation_graph(
           -> next_task_node -> developer_node
           (loops for each task until all complete or max iterations reached)
 
+    When advisory MoA is enabled on the profile's architect agent
+    (``options['moa']['enabled']``), the single ``architect_node`` is replaced
+    by a ``moa_proposers_node`` -> ``aggregator_node`` pair that feeds the same
+    ``plan_validator_node``; everything downstream is unchanged.
+
     Args:
         checkpointer: Optional checkpoint saver for state persistence.
         interrupt_before: List of node names to interrupt before executing.
             If None and checkpointer is provided, defaults to:
             ["human_approval_node"] for server-mode human-in-the-loop.
+        profile: Profile the graph is built for; its architect agent config
+            decides whether advisory MoA wiring is used. None -> single
+            architect (default).
 
     Returns:
         Compiled StateGraph ready for execution.
     """
+    moa_enabled = _moa_enabled(profile)
+    # The plan node that START's "architect" branch and the validator's
+    # "revise" branch target: the single architect, or the MoA proposers.
+    plan_entry = "moa_proposers_node" if moa_enabled else "architect_node"
+
     workflow = StateGraph(ImplementationState)
 
-    workflow.add_node("architect_node", call_architect_node)
+    if moa_enabled:
+        workflow.add_node("moa_proposers_node", moa_proposers_node)
+        workflow.add_node("aggregator_node", aggregator_node)
+    else:
+        workflow.add_node("architect_node", call_architect_node)
     workflow.add_node("plan_validator_node", plan_validator_node)
     workflow.add_node("human_approval_node", human_approval_node)
     workflow.add_node("developer_node", call_developer_node)
@@ -130,18 +171,22 @@ def create_implementation_graph(
         START,
         route_after_start,
         {
-            "architect": "architect_node",
+            "architect": plan_entry,
             "plan_validator": "plan_validator_node",
         }
     )
 
-    workflow.add_edge("architect_node", "plan_validator_node")
+    if moa_enabled:
+        workflow.add_edge("moa_proposers_node", "aggregator_node")
+        workflow.add_edge("aggregator_node", "plan_validator_node")
+    else:
+        workflow.add_edge("architect_node", "plan_validator_node")
     workflow.add_conditional_edges(
         "plan_validator_node",
         _route_after_plan_validation,
         {
             "approved": "human_approval_node",
-            "revise": "architect_node",
+            "revise": plan_entry,
             "escalate": "human_approval_node",
         }
     )
