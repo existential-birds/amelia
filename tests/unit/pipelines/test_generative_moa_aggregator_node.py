@@ -15,7 +15,10 @@ import pytest
 from langchain_core.runnables.config import RunnableConfig
 
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
-from amelia.pipelines.implementation.moa import generative_moa_aggregator_node
+from amelia.pipelines.implementation.moa import (
+    _commit_scratch_worktree,
+    generative_moa_aggregator_node,
+)
 from amelia.pipelines.implementation.state import (
     GenerativeMoACandidate,
     GenerativeMoAFailedCandidate,
@@ -165,6 +168,25 @@ async def test_failed_three_way_candidate_does_not_dirty_fallback(
 
     assert result["generative_moa_selected"].proposer_id == 1
     assert (git_repo / "code.txt").read_text() == "line1 by p1\n"
+    assert _git_out(git_repo, "status", "--porcelain") == ""
+
+
+@pytest.mark.asyncio
+async def test_commit_scratch_worktree_retries_after_hook_rewrite(git_repo: Path) -> None:
+    hook = git_repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text(
+        "#!/bin/sh\n"
+        "grep -q hooked code.txt && exit 0\n"
+        "echo hooked >> code.txt\n"
+        "exit 1\n"
+    )
+    hook.chmod(0o755)
+    (git_repo / "code.txt").write_text("line1 edited\n")
+
+    sha = await _commit_scratch_worktree(git_repo, "commit with rewriting hook")
+
+    assert sha == _git_out(git_repo, "rev-parse", "HEAD").strip()
+    assert (git_repo / "code.txt").read_text() == "line1 edited\nhooked\n"
     assert _git_out(git_repo, "status", "--porcelain") == ""
 
 

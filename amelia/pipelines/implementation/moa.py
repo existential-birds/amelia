@@ -166,6 +166,19 @@ async def _commit_scratch_worktree(worktree: Path, commit_message: str) -> str |
         check=False,
     )
     if rc != 0:
+        unstaged_rc, _, _ = await _run_git(worktree, "diff", "--quiet", check=False)
+        if unstaged_rc == 1:
+            # Unstaged changes after a failed commit mean hooks rewrote files;
+            # re-stage and retry once, mirroring commit_task_changes().
+            await _run_git(worktree, "add", "-A")
+            rc, _, err = await _run_git(
+                worktree,
+                "commit",
+                "-m",
+                commit_message,
+                check=False,
+            )
+    if rc != 0:
         logger.debug(
             "git commit failed in scratch worktree",
             stderr=err.strip()[:300],

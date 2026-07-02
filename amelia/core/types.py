@@ -338,7 +338,7 @@ class MoAConfig(BaseModel):
     distinct plan files and need no workspace isolation.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     enabled: bool = False
     proposer_count: int = Field(default=2, ge=1, description="Number of concurrent proposers")

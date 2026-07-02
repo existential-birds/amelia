@@ -21,6 +21,7 @@ from amelia.core.types import Issue, Profile
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.nodes import next_task_node
+from amelia.pipelines.implementation.state import GenerativeMoASucceededCandidate
 from amelia.pipelines.nodes import call_developer_node, call_reviewer_node
 from tests.conftest import create_mock_execute_agentic
 from tests.integration.conftest import (
@@ -421,6 +422,122 @@ class TestNextTaskNodeTransition:
         commits = result.stdout.strip().split("\n")
         assert len(commits) == 2  # Initial + task commit
         assert "complete task 1" in commits[0].lower()
+
+
+@pytest.mark.integration
+class TestGenerativeMoAStateClearing:
+    """A MoA selection must only skip the commit the aggregator already made.
+
+    Once the flow returns to the developer path (reviewer retry or next task),
+    the selection must be cleared so commit_task_changes commits for real.
+    """
+
+    @staticmethod
+    def _moa_candidate() -> GenerativeMoASucceededCandidate:
+        return GenerativeMoASucceededCandidate(
+            proposer_id=0, model="sonnet", diff="diff --git a/f b/f",
+        )
+
+    async def test_reviewer_retry_after_moa_commits_for_real(
+        self,
+        git_repo: Path,
+        git_repo_profile: Profile,
+        integration_issue: Issue,
+        multi_task_plan_content: str,
+    ) -> None:
+        """Developer retry after a rejected MoA task must commit its changes.
+
+        Real components: call_developer_node, next_task_node, commit_task_changes
+        Mock boundary: ApiDriver.execute_agentic
+        """
+        candidate = self._moa_candidate()
+        state = make_execution_state(
+            profile=git_repo_profile,
+            issue=integration_issue,
+            goal="Implement feature",
+            plan_markdown=multi_task_plan_content,
+            total_tasks=3,
+            current_task_index=0,
+            generative_moa_selected=candidate,
+            generative_moa_candidates=[candidate],
+        )
+        config = make_config(thread_id=str(uuid4()), profile=git_repo_profile)
+
+        # Reviewer rejection routes back to the developer for a retry
+        with patch.object(
+            ApiDriver,
+            "execute_agentic",
+            create_mock_execute_agentic(_create_developer_mock_messages(0)),
+        ):
+            update = await call_developer_node(state, cast(RunnableConfig, config))
+        state = state.model_copy(update=update)
+
+        assert state.generative_moa_selected is None
+
+        # The retry produced new changes; approval then reaches next_task_node
+        (git_repo / "retry_fix.py").write_text("# retry fix")
+        await next_task_node(state, cast(RunnableConfig, config))
+
+        result = subprocess.run(
+            ["git", "log", "--oneline"],
+            cwd=git_repo,
+            capture_output=True,
+            text=True,
+        )
+        commits = result.stdout.strip().split("\n")
+        assert len(commits) == 2  # Initial + retry commit
+        assert "complete task 1" in commits[0].lower()
+
+    async def test_task_after_moa_commits_its_own_changes(
+        self,
+        git_repo: Path,
+        git_repo_profile: Profile,
+        integration_issue: Issue,
+        multi_task_plan_content: str,
+    ) -> None:
+        """Task N+1 after a MoA task must not inherit the commit skip.
+
+        Real components: next_task_node, call_developer_node, commit_task_changes
+        Mock boundary: ApiDriver.execute_agentic
+        """
+        candidate = self._moa_candidate()
+        state = make_execution_state(
+            profile=git_repo_profile,
+            issue=integration_issue,
+            goal="Implement feature",
+            plan_markdown=multi_task_plan_content,
+            total_tasks=3,
+            current_task_index=0,
+            generative_moa_selected=candidate,
+            generative_moa_candidates=[candidate],
+        )
+        config = make_config(thread_id=str(uuid4()), profile=git_repo_profile)
+
+        # Task 1 was committed by the MoA aggregator: next_task_node skips it
+        update = await next_task_node(state, cast(RunnableConfig, config))
+        state = state.model_copy(update=update)
+
+        # Task 2 runs through the normal developer path
+        with patch.object(
+            ApiDriver,
+            "execute_agentic",
+            create_mock_execute_agentic(_create_developer_mock_messages(1)),
+        ):
+            update = await call_developer_node(state, cast(RunnableConfig, config))
+        state = state.model_copy(update=update)
+
+        (git_repo / "task_2.py").write_text("# task 2 code")
+        await next_task_node(state, cast(RunnableConfig, config))
+
+        result = subprocess.run(
+            ["git", "log", "--oneline"],
+            cwd=git_repo,
+            capture_output=True,
+            text=True,
+        )
+        commits = result.stdout.strip().split("\n")
+        assert len(commits) == 2  # Initial + task 2 commit
+        assert "complete task 2" in commits[0].lower()
 
 
 @pytest.mark.integration

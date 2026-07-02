@@ -92,3 +92,7 @@ class TestFromOptions:
     def test_invalid_type_raises(self) -> None:
         with pytest.raises(ValueError, match="Invalid 'moa' option type"):
             MoAConfig.from_options({"moa": "enabled"})
+
+    def test_unknown_key_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            MoAConfig.from_options({"moa": {"enabeld": True}})
