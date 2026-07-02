@@ -4,7 +4,7 @@
 DB_PORT := $(or $(AMELIA_DB_PORT),5434)
 DATABASE_URL := postgresql://amelia:amelia@localhost:$(DB_PORT)/amelia_test
 
-.PHONY: db db-stop test test-db test-integration test-all lint type-check check dev help
+.PHONY: db db-stop test test-db test-integration test-all lint type-check check lock-check dev help
 
 ## Database
 db:                    ## Start postgres (detached)
@@ -33,8 +33,11 @@ lint:                  ## Lint and auto-fix
 type-check:            ## Type check
 	uv run mypy amelia
 
-check:                 ## Run all checks (lint + types + unit tests)
-	$(MAKE) lint type-check test
+lock-check:            ## Fail if uv.lock has drifted from pyproject.toml
+	uv lock --check
+
+check:                 ## Run all checks (lock + lint + types + unit tests)
+	$(MAKE) lock-check lint type-check test
 
 ## Dev
 dev:                   ## Start full stack (API + dashboard)

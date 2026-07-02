@@ -41,8 +41,11 @@ Run `/gen-release-notes ${PREV_TAG}` to:
 3. Determine the next version number
 4. Update `CHANGELOG.md` with the new version section
 5. Update `pyproject.toml` with the new version
+6. Regenerate `uv.lock` (`uv lock`) so its editable-root `amelia` entry tracks the new version
 
-**Do not proceed** until CHANGELOG.md and pyproject.toml are updated.
+Bumping `pyproject.toml` invalidates `uv.lock`'s own entry (`name = "amelia"`, `source = { editable = "." }`), whose `version` still points at the previous release. `uv lock --check` runs first in `make check`, the pre-push hook, and CI (before any `uv run`/`uv sync` can silently re-lock), and FAILS on a drifted lock — so a stale lock can never merge.
+
+**Do not proceed** until CHANGELOG.md, pyproject.toml, and uv.lock are updated.
 
 ## Step 2: Create Release Branch
 
@@ -62,7 +65,7 @@ git checkout -b "chore/release-${VERSION}"
 Commit all updated version files:
 
 ```bash
-git add CHANGELOG.md pyproject.toml amelia/__init__.py dashboard/package.json
+git add CHANGELOG.md pyproject.toml amelia/__init__.py dashboard/package.json uv.lock
 git commit -m "chore(release): bump version to ${VERSION}"
 ```
 
