@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-07-03
+
+### Added
+
+- **impl:** Mixture-of-agents modes — generative and advisory MoA patterns for implementation runs ([#669](https://github.com/existential-birds/amelia/pull/669))
+- **tools:** Unified tool registry with ToolSpec and ToolPolicyMiddleware veto ([#658](https://github.com/existential-birds/amelia/pull/658), [#660](https://github.com/existential-birds/amelia/pull/660))
+- **tools:** Wire `allowed_tools`, tool profiles, and new agent tools ([#659](https://github.com/existential-birds/amelia/pull/659))
+- **tools:** Enforce readonly tool policies ([#663](https://github.com/existential-birds/amelia/pull/663))
+- **tools:** Add security guardrail policies ([#662](https://github.com/existential-birds/amelia/pull/662))
+- **context:** Track context window utilization ([#661](https://github.com/existential-birds/amelia/pull/661))
+- **qa:** Automated end-to-end QA harness with cassette replay and live DeepSeek validation ([#665](https://github.com/existential-birds/amelia/pull/665))
+
+### Changed
+
+- **sandbox:** Reuse Daytona session per sandbox and drop per-call cleanup ([#655](https://github.com/existential-birds/amelia/pull/655))
+- **sandbox:** Long-lived worker to eliminate per-step cold-start ([#650](https://github.com/existential-birds/amelia/pull/650))
+- **pipelines:** Parallelize reviewer passes with `asyncio.gather` ([#647](https://github.com/existential-birds/amelia/pull/647))
+- **git:** Collapse and async-wrap synchronous git subprocesses ([#651](https://github.com/existential-birds/amelia/pull/651))
+- **reviewer:** Hoist and async-wrap `load_skills` + diff writes ([#654](https://github.com/existential-birds/amelia/pull/654))
+- **trackers:** Move blocking tracker calls off the event loop ([#653](https://github.com/existential-birds/amelia/pull/653))
+- **pr-autofix:** Parallelize per-comment reply/resolve ([#652](https://github.com/existential-birds/amelia/pull/652))
+- **agents:** Stop re-sending developer preamble per task ([#648](https://github.com/existential-birds/amelia/pull/648))
+- **drivers:** Cache ApiDriver chat model + HTTP client ([#649](https://github.com/existential-birds/amelia/pull/649))
+- **deps:** Bump langchain 1.3.11, langgraph 1.2.6, deepagents 0.6.12 ([#666](https://github.com/existential-birds/amelia/pull/666))
+
+### Fixed
+
+- **orchestrator:** Validate `reject_workflow` status inside the approval lock — prevents rejecting a workflow that has already transitioned to a terminal state ([#632](https://github.com/existential-birds/amelia/pull/632))
+
+### Security
+
+- **deps:** Resolve 13 Dependabot security alerts ([#637](https://github.com/existential-birds/amelia/pull/637))
+
 ## [0.23.0] - 2026-06-10
 
 ### Changed
@@ -598,7 +631,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/existential-birds/amelia/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/existential-birds/amelia/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/existential-birds/amelia/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/existential-birds/amelia/compare/v0.20.1...v0.21.0
