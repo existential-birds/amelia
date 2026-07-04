@@ -129,3 +129,25 @@ class TestImplementationState:
         )
         with pytest.raises(ValidationError):
             state.status = "running"
+
+    @pytest.mark.parametrize(
+        "candidate",
+        [
+            {"proposer_id": 0, "status": "succeeded", "model": "m0", "error": "boom"},
+            {"proposer_id": 1, "status": "failed", "model": "m1", "diff": "diff"},
+        ],
+    )
+    def test_generative_moa_candidate_requires_status_specific_fields(
+        self, candidate: dict[str, object]
+    ) -> None:
+        """MoA candidates should encode success and failure invariants."""
+        with pytest.raises(ValidationError):
+            ImplementationState.model_validate(
+                {
+                    "workflow_id": uuid4(),
+                    "profile_id": "default",
+                    "created_at": datetime.now(UTC),
+                    "status": "running",
+                    "generative_moa_candidates": [candidate],
+                }
+            )

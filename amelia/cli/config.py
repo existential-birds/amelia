@@ -9,10 +9,18 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+from pydantic import ValidationError
 from rich.console import Console
 from rich.table import Table
 
-from amelia.core.types import REQUIRED_AGENTS, AgentConfig, DriverType, Profile, TrackerType
+from amelia.core.types import (
+    REQUIRED_AGENTS,
+    AgentConfig,
+    DriverType,
+    MoAConfig,
+    Profile,
+    TrackerType,
+)
 from amelia.drivers.providers import PROVIDER_PRESETS
 from amelia.server.config import ServerConfig
 from amelia.server.database import (
@@ -163,12 +171,19 @@ def _build_default_agents(
             empty options dict, preserving prior behavior.
 
     Returns:
-        Dict mapping agent names to AgentConfig.
+        Dict mapping agent names to AgentConfig. Includes an optional
+        ``"aggregator"`` agent (same driver/model defaults as the others) so
+        advisory MoA planning works out-of-the-box; ``"aggregator"`` is
+        deliberately NOT part of ``REQUIRED_AGENTS`` (enforced at
+        ``server/routes/settings.py``), so legacy profiles without it stay valid.
     """
     driver_type = DriverType(driver)
+    # REQUIRED_AGENTS plus the optional aggregator; advisory_moa_aggregator_node still falls
+    # back to the architect config for profiles that predate this seed.
+    agent_names = REQUIRED_AGENTS | {"aggregator"}
     return {
         name: AgentConfig(driver=driver_type, model=model, options=options or {})
-        for name in REQUIRED_AGENTS
+        for name in agent_names
     }
 
 
@@ -441,6 +456,106 @@ def profile_activate(
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
             raise typer.Exit(code=1) from None
+        finally:
+            await db.close()
+
+    asyncio.run(_run())
+
+
+@profile_app.command("update")
+def profile_update(
+    name: Annotated[str, typer.Argument(help="Profile name to update")],
+    agent: Annotated[
+        str,
+        typer.Option("--agent", help="Agent to update (e.g. developer, architect)"),
+    ],
+    moa_enabled: Annotated[
+        bool | None,
+        typer.Option("--moa-enabled/--no-moa-enabled", help="Enable Mixture-of-Agents"),
+    ] = None,
+    moa_proposer_count: Annotated[
+        int | None,
+        typer.Option("--moa-proposer-count", help="Number of proposer agents (1-10)"),
+    ] = None,
+    moa_proposer_models: Annotated[
+        str | None,
+        typer.Option("--moa-proposer-models", help="Comma-separated proposer models"),
+    ] = None,
+    moa_isolation: Annotated[
+        bool | None,
+        typer.Option(
+            "--moa-isolation/--no-moa-isolation",
+            help="Run proposers in isolated workspaces",
+        ),
+    ] = None,
+    clear_options: Annotated[
+        bool,
+        typer.Option("--clear-options", help="Clear the agent's entire options dict"),
+    ] = False,
+) -> None:
+    """Update an agent's options (Mixture-of-Agents config) on a profile."""
+
+    async def _run() -> None:
+        db, repo = await _get_profile_repository()
+        try:
+            profile = await repo.get_profile(name)
+            if profile is None:
+                console.print(f"[red]Profile '{name}' not found.[/red]")
+                raise typer.Exit(code=1)
+
+            if agent not in profile.agents:
+                raise typer.BadParameter(
+                    f"Agent '{agent}' not configured in profile '{name}'. "
+                    f"Available agents: {sorted(profile.agents.keys())}",
+                    param_hint="--agent",
+                )
+
+            target = profile.agents[agent]
+            new_options: dict[str, Any] = dict(target.options)
+
+            if clear_options:
+                new_options = {}
+            else:
+                moa_dict: dict[str, Any] = dict(new_options.get("moa", {}))
+                if moa_enabled is not None:
+                    moa_dict["enabled"] = moa_enabled
+                if moa_proposer_count is not None:
+                    moa_dict["proposer_count"] = moa_proposer_count
+                if moa_proposer_models is not None:
+                    moa_dict["proposer_models"] = [
+                        m.strip() for m in moa_proposer_models.split(",") if m.strip()
+                    ]
+                if moa_isolation is not None and moa_isolation:
+                    moa_dict["isolation"] = "worktree"
+
+                moa_flags = any(
+                    v is not None
+                    for v in (
+                        moa_enabled,
+                        moa_proposer_count,
+                        moa_proposer_models,
+                        moa_isolation,
+                    )
+                )
+                if moa_flags:
+                    try:
+                        validated = MoAConfig(**moa_dict)
+                    except ValidationError as e:
+                        raise typer.BadParameter(str(e)) from None
+
+                    new_options["moa"] = validated.model_dump()
+
+            updated_agent = target.model_copy(update={"options": new_options})
+            agents = dict(profile.agents)
+            agents[agent] = updated_agent
+            agents_data = {
+                agent_name: config.model_dump() for agent_name, config in agents.items()
+            }
+
+            await repo.update_profile(name, {"agents": agents_data})
+            console.print(
+                f"[green]Updated options for agent '{agent}' on profile '{name}'.[/green]"
+            )
         finally:
             await db.close()
 

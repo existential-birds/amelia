@@ -9,7 +9,10 @@ from langchain_core.runnables.config import RunnableConfig
 
 from amelia.core.types import AgentConfig, DriverType, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
-from amelia.pipelines.implementation.state import ImplementationState
+from amelia.pipelines.implementation.state import (
+    GenerativeMoASucceededCandidate,
+    ImplementationState,
+)
 from amelia.pipelines.nodes import call_developer_node
 from tests.conftest import AsyncIteratorMock
 
@@ -162,6 +165,26 @@ async def test_call_developer_node_updates_base_commit(
         state, config, resolve_commit_return=current_head,
     )
     assert result["base_commit"] == current_head
+
+
+@pytest.mark.asyncio
+async def test_call_developer_node_clears_generative_moa_state(
+    mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    mock_profile_factory: Callable[..., Profile],
+) -> None:
+    """Developer node should clear MoA selection so later commits are not skipped."""
+    state, config = _make_state_and_config(
+        mock_execution_state_factory, mock_profile_factory,
+    )
+    candidate = GenerativeMoASucceededCandidate(proposer_id=0, model="sonnet", diff="")
+    state = state.model_copy(update={
+        "generative_moa_selected": candidate,
+        "generative_moa_candidates": [candidate],
+    })
+    result, _, _ = await _run_developer_node(state, config)
+
+    assert result["generative_moa_selected"] is None
+    assert result["generative_moa_candidates"] == []
 
 
 @pytest.mark.asyncio

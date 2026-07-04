@@ -4,7 +4,6 @@ from importlib import resources
 
 from loguru import logger
 
-from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 from amelia.server.database.connection import Database
 
 
@@ -62,6 +61,12 @@ class Migrator:
 
     async def initialize_prompts(self) -> None:
         """Seed prompts table from defaults. Idempotent."""
+        # Imported lazily: the database layer must not import the agents layer at
+        # module scope. Doing so creates a circular import
+        # (database -> agents -> tools -> knowledge -> database) that breaks tool
+        # discovery on startup.
+        from amelia.agents.prompts.defaults import PROMPT_DEFAULTS  # noqa: PLC0415
+
         for prompt_id, default in PROMPT_DEFAULTS.items():
             existing = await self._db.fetch_one(
                 "SELECT 1 FROM prompts WHERE id = $1", prompt_id

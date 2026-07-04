@@ -5,8 +5,60 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.cli.config import _build_default_agents
+from amelia.core.types import REQUIRED_AGENTS, AgentConfig, DriverType, Profile
 from amelia.main import app
+
+
+class TestBuildDefaultAgents:
+    """_build_default_agents seeds an optional aggregator so advisory MoA works
+    out-of-the-box, without making aggregator a required agent."""
+
+    def test_seeds_aggregator_matching_architect_defaults(self) -> None:
+        """A freshly built profile carries an aggregator with the same driver and
+        model as the architect, so MoA needs no extra configuration to run."""
+        agents = _build_default_agents(DriverType.CLAUDE, "sonnet")
+
+        assert "aggregator" in agents
+        architect = agents["architect"]
+        aggregator = agents["aggregator"]
+        assert aggregator.driver == architect.driver
+        assert aggregator.model == architect.model
+
+    def test_aggregator_inherits_provider_options(self) -> None:
+        """Provider options applied to every agent also reach the aggregator."""
+        options = {"provider": "openrouter"}
+        agents = _build_default_agents(DriverType.API, "some-model", options)
+
+        assert agents["aggregator"].options == options
+
+    def test_aggregator_is_not_a_required_agent(self) -> None:
+        """Seeding must not promote aggregator into REQUIRED_AGENTS;
+        existing profiles without it must remain valid."""
+        assert "aggregator" not in REQUIRED_AGENTS
+
+    def test_resolver_falls_back_to_architect_when_aggregator_absent(self) -> None:
+        """When a profile predates the seed (no aggregator entry), the resolver
+        used by advisory_moa_aggregator_node must fall back to the architect config rather
+        than raise — the path that keeps MoA working on legacy profiles."""
+        profile = Profile(
+            name="legacy",
+            tracker="noop",
+            repo_root="/tmp/legacy",
+            agents={
+                name: AgentConfig(driver=DriverType.CLAUDE, model="sonnet")
+                for name in REQUIRED_AGENTS
+            },
+        )
+        assert "aggregator" not in profile.agents
+
+        # Mirror advisory_moa_aggregator_node's try/except fallback.
+        try:
+            resolved = profile.get_agent_config("aggregator")
+        except ValueError:
+            resolved = profile.get_agent_config("architect")
+
+        assert resolved.model == profile.get_agent_config("architect").model
 
 
 @pytest.fixture

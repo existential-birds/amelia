@@ -406,6 +406,15 @@ async def commit_task_changes(state: ImplementationState, config: RunnableConfig
     # Disable git prompts to prevent hangs in headless/server contexts
     git_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
 
+    # MoA aggregator already committed for this task using the same message.
+    # Skip the entire commit dance — there is nothing left to stage or commit.
+    if state.generative_moa_selected is not None:
+        logger.info(
+            "Skipping commit: MoA aggregator already committed for task",
+            task=task_number,
+        )
+        return True
+
     try:
         await _run_git(["add", "-A"], cwd=working_dir, env=git_env)
     except TimeoutError:

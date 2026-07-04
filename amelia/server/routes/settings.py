@@ -14,6 +14,7 @@ from amelia.core.types import (
     REQUIRED_AGENTS,
     AgentConfig,
     DriverType,
+    MoAConfig,
     PRAutoFixConfig,
     Profile,
     SandboxConfig,
@@ -124,6 +125,19 @@ class AgentConfigCreate(BaseModel):
     driver: DriverType
     model: str
     options: dict[str, Any] = {}
+
+    @field_validator("options", mode="after")
+    @classmethod
+    def _validate_moa_options(cls, v: dict[str, Any]) -> dict[str, Any]:
+        """Validate the ``moa`` sub-config through :class:`MoAConfig`, if present."""
+        if "moa" in v:
+            moa_raw = dict(v["moa"])
+            if moa_raw.get("isolation") is True:
+                moa_raw["isolation"] = "worktree"
+            elif moa_raw.get("isolation") is False:
+                moa_raw.pop("isolation", None)
+            return {**v, "moa": MoAConfig(**moa_raw).model_dump()}
+        return v
 
 
 class ProfileCreate(BaseModel):

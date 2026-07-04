@@ -173,6 +173,11 @@ async def call_developer_node(
         "error": final_state.error,
         "driver_session_id": final_state.driver_session_id,
         "base_commit": pre_dev_commit or state.base_commit,
+        # A MoA selection only covers the aggregator's own commit; once the
+        # flow returns to the developer path (reviewer retry or next task),
+        # clear it so commit_task_changes does not skip the next commit.
+        "generative_moa_candidates": [],
+        "generative_moa_selected": None,
     }
 
 

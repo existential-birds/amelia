@@ -8,7 +8,7 @@ from typing import Literal
 
 from loguru import logger
 
-from amelia.core.types import Profile
+from amelia.core.types import MoAConfig, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 
 
@@ -27,17 +27,46 @@ def route_after_start(state: ImplementationState) -> Literal["architect", "plan_
     return "architect"
 
 
-def route_approval(state: ImplementationState) -> Literal["approve", "reject"]:
-    """Route based on human approval status.
+def resolve_moa_config(profile: Profile) -> MoAConfig:
+    """Resolve the generative MoA config from a profile's Developer agent options.
+
+    Generative MoA is configured on the developer agent (advisory MoA lives on
+    the architect agent and is resolved at graph-build time). Returns a
+    disabled default when the developer agent is not configured or has no
+    ``moa`` option, so non-MoA profiles route through the normal path.
 
     Args:
-        state: Current execution state containing human_approved flag.
+        profile: Active execution profile.
 
     Returns:
-        'approve' if approved (continue to developer).
-        'reject' if not approved.
+        The resolved MoAConfig (disabled by default).
     """
-    return "approve" if state.human_approved else "reject"
+    dev = profile.agents.get("developer")
+    if dev is None:
+        return MoAConfig()
+    return MoAConfig.from_options(dev.options)
+
+
+def route_approval_with_moa(
+    state: ImplementationState,
+    profile: Profile,
+) -> Literal["developer", "moa", "reject"]:
+    """Route after human approval, accounting for generative MoA.
+
+    Args:
+        state: Current state with the human_approved flag.
+        profile: Active profile used to resolve the MoA config.
+
+    Returns:
+        "reject" if not approved.
+        "moa" if approved and generative MoA is enabled on the developer agent.
+        "developer" otherwise.
+    """
+    if not state.human_approved:
+        return "reject"
+    if resolve_moa_config(profile).enabled:
+        return "moa"
+    return "developer"
 
 
 def route_after_task_review(

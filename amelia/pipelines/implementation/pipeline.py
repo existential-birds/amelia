@@ -13,6 +13,8 @@ from amelia.pipelines.mixins import ImplementationStateMixin
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
+    from amelia.core.types import Profile
+
 
 class ImplementationPipeline(ImplementationStateMixin, Pipeline[ImplementationState]):
     """Pipeline for implementing features from issues.
@@ -32,6 +34,14 @@ class ImplementationPipeline(ImplementationStateMixin, Pipeline[ImplementationSt
     def create_graph(
         self,
         checkpointer: "BaseCheckpointSaver[Any] | None" = None,
+        *,
+        profile: "Profile | None" = None,
     ) -> CompiledStateGraph[Any]:
-        """Create and compile the LangGraph state machine."""
-        return create_implementation_graph(checkpointer=checkpointer)
+        """Create and compile the LangGraph state machine.
+
+        Args:
+            checkpointer: Optional checkpoint saver for state persistence.
+            profile: Profile the graph is built for; its architect agent
+                config decides whether advisory MoA wiring is used.
+        """
+        return create_implementation_graph(checkpointer=checkpointer, profile=profile)

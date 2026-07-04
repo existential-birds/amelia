@@ -17,8 +17,10 @@ from langchain_core.runnables.config import RunnableConfig
 from loguru import logger
 from pydantic import ValidationError
 
+from amelia.agents.aggregator import Aggregator
 from amelia.agents.architect import Architect
 from amelia.core.constants import ToolName, resolve_plan_path
+from amelia.core.types import MoAConfig
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.implementation.utils import (
     _extract_goal_from_plan,
@@ -411,6 +413,274 @@ async def call_architect_node(
         "architect_error": final_state.architect_error,
         "tool_calls": list(final_state.tool_calls),
         "tool_results": list(final_state.tool_results),
+    }
+
+
+def _indexed_plan_pattern(base_pattern: str, index: int) -> str:
+    """Bake a literal proposer index into a plan-path pattern.
+
+    Inserts ``-proposer{index}`` before the extension so each proposer resolves
+    to a distinct file while leaving only ``{date}``/``{issue_key}`` as format
+    placeholders. A ``{proposer}`` placeholder is deliberately NOT used because
+    ``resolve_plan_path`` only substitutes ``{date}``/``{issue_key}`` and would
+    raise ``KeyError``.
+    """
+    p = Path(base_pattern)
+    return str(p.with_name(f"{p.stem}-proposer{index}{p.suffix}"))
+
+
+async def advisory_moa_proposers_node(
+    state: ImplementationState,
+    config: RunnableConfig | None = None,
+) -> dict[str, Any]:
+    """Best-effort fan-out of N Architect proposers (advisory MoA mode).
+
+    Each proposer plans the same issue concurrently, writing to its own distinct
+    plan file (derived by baking ``-proposer{i}`` into ``profile.plan_path_pattern``)
+    using its resolved per-proposer model. Mirrors the ``call_reviewer_node``
+    ``create_task`` + cancel/drain shape, but gathers with ``return_exceptions=True``
+    because MoA is best-effort: the run proceeds as long as at least one proposer
+    survives. Only a total wipe-out (zero survivors) raises.
+
+    Args:
+        state: Current execution state containing the issue and profile.
+        config: Optional RunnableConfig with the node context in ``configurable``.
+
+    Returns:
+        Partial state dict ``{"advisory_moa_proposer_plans": [...]}`` listing the resolved
+        (repo-root-relative) plan paths of the surviving proposers.
+
+    Raises:
+        ValueError: If no issue is provided in the state.
+        RuntimeError: If every proposer failed (no survivors).
+    """
+    if state.issue is None:
+        raise ValueError("Cannot run MoA proposers: no issue provided in state.")
+
+    nc = extract_node_config(config)
+
+    agent_config = nc.profile.get_agent_config("architect")
+    moa = MoAConfig.from_options(agent_config.options)
+    models = moa.resolve_models(agent_config.model)
+    patterns = [_indexed_plan_pattern(nc.profile.plan_path_pattern, i) for i in range(moa.proposer_count)]
+    working_dir = Path(nc.profile.repo_root)
+    issue_id = state.issue.id
+
+    logger.info(
+        "Orchestrator: Calling MoA proposers",
+        issue_id=issue_id,
+        proposer_count=moa.proposer_count,
+    )
+
+    async def _run_proposer(index: int) -> str:
+        pattern = patterns[index]
+        proposer_name = f"architect:proposer{index}"
+        proposer_config = agent_config.model_copy(update={"model": models[index]})
+        proposer_profile = nc.profile.model_copy(update={"plan_path_pattern": pattern})
+
+        architect = Architect(
+            proposer_config,
+            prompts=nc.prompts,
+            sandbox_provider=nc.sandbox_provider,
+        )
+        apply_driver_override(architect, nc.driver_override, proposer_name)
+        wrap_with_recording(architect, nc.recorder, proposer_name, proposer_config.model)
+
+        plan_rel_path = resolve_plan_path(pattern, issue_id)
+        plan_path = working_dir / plan_rel_path
+        await asyncio.to_thread(plan_path.parent.mkdir, parents=True, exist_ok=True)
+
+        final_state = state
+        async for new_state, event in architect.plan(
+            state=state,
+            profile=proposer_profile,
+            workflow_id=nc.workflow_id,
+        ):
+            final_state = new_state
+            if nc.event_bus:
+                nc.event_bus.emit(event)
+
+        # Persist the plan from the proposer's tool calls if the driver did not
+        # already land it on disk, mirroring call_architect_node's contract so
+        # the aggregator can read every survivor's file. A proposer that produced
+        # no usable plan is treated as a failure (raises) so it is filtered out.
+        if not plan_path.exists():
+            written = await _resolve_plan_from_tool_calls(
+                tool_calls=final_state.tool_calls,
+                plan_path=plan_path,
+                working_dir=working_dir,
+                raw_output=final_state.architect_raw_output,
+            )
+            if not written:
+                raise RuntimeError(
+                    f"proposer {index} produced no plan file at {plan_rel_path}"
+                )
+
+        # Re-resolve so the node reports the exact path the proposer wrote.
+        return resolve_plan_path(pattern, issue_id)
+
+    tasks = [asyncio.create_task(_run_proposer(i)) for i in range(moa.proposer_count)]
+    try:
+        # Deliberate departure from call_reviewer_node's plain gather: MoA is
+        # best-effort, so individual proposer failures are captured, not raised.
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+    except BaseException:
+        # BaseException (incl. CancelledError) drains in-flight siblings before
+        # propagating, mirroring call_reviewer_node's cancel/drain.
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
+
+    survivors: list[str] = []
+    failures: list[BaseException] = []
+    for index, result in enumerate(results):
+        if isinstance(result, BaseException):
+            failures.append(result)
+            logger.warning("moa proposer failed", proposer=index, error=str(result))
+        else:
+            survivors.append(result)
+
+    if not survivors:
+        raise RuntimeError(
+            f"All {moa.proposer_count} MoA proposers failed; no candidate plans produced."
+        ) from (failures[0] if failures else None)
+
+    logger.info(
+        "MoA proposers completed",
+        issue_id=issue_id,
+        survivors=len(survivors),
+        failed=len(failures),
+    )
+    return {"advisory_moa_proposer_plans": survivors}
+
+
+async def advisory_moa_aggregator_node(
+    state: ImplementationState,
+    config: RunnableConfig | None = None,
+) -> dict[str, Any]:
+    """Synthesize the canonical plan from MoA proposer candidates (advisory MoA mode).
+
+    Reads ``state.advisory_moa_proposer_plans`` (repo-root-relative paths written by
+    ``advisory_moa_proposers_node``) and produces the single canonical plan file that
+    ``plan_validator_node`` reads:
+
+    - Exactly 1 survivor -> PROMOTE it: copy its content to the canonical plan
+      path. The ``Aggregator`` is bypassed (no synthesis needed for one plan).
+    - 2+ survivors -> read each candidate's file CONTENTS and run the
+      ``Aggregator`` (config via ``get_agent_config("aggregator")`` with a
+      ``try/except ValueError`` fallback to ``"architect"``), which writes the
+      canonical plan via the ``write_plan`` tool, mirroring ``call_architect_node``.
+
+    Args:
+        state: Current execution state with ``advisory_moa_proposer_plans`` populated.
+        config: Optional RunnableConfig with the node context in ``configurable``.
+
+    Returns:
+        Partial state dict mirroring ``call_architect_node``: ``plan_path`` (the
+        canonical relative path the validator re-resolves), ``architect_raw_output``,
+        ``architect_error``, ``tool_calls``, ``tool_results``.
+
+    Raises:
+        ValueError: If no issue is in state or ``advisory_moa_proposer_plans`` is empty.
+    """
+    if state.issue is None:
+        raise ValueError("Cannot aggregate plans: no issue provided in state.")
+
+    nc = extract_node_config(config)
+
+    candidate_rel_paths = list(state.advisory_moa_proposer_plans)
+    if not candidate_rel_paths:
+        # advisory_moa_proposers_node already raises on zero survivors; guard defensively.
+        raise ValueError("Cannot aggregate plans: no proposer plans in state.")
+
+    working_dir = Path(nc.profile.repo_root)
+    canonical_rel = resolve_plan_path(nc.profile.plan_path_pattern, state.issue.id)
+    canonical_path = working_dir / canonical_rel
+    await asyncio.to_thread(canonical_path.parent.mkdir, parents=True, exist_ok=True)
+
+    # Single survivor: promote directly, no synthesis.
+    if len(candidate_rel_paths) == 1:
+        survivor_path = working_dir / candidate_rel_paths[0]
+        content = await asyncio.to_thread(survivor_path.read_text, encoding="utf-8")
+        await asyncio.to_thread(canonical_path.write_text, content, encoding="utf-8")
+        logger.info(
+            "MoA: single survivor promoted to canonical plan",
+            survivor=candidate_rel_paths[0],
+            plan_path=canonical_rel,
+            workflow_id=nc.workflow_id,
+        )
+        return {
+            "plan_path": canonical_rel,
+            "architect_raw_output": f"Promoted single MoA proposer survivor to {canonical_rel}",
+            "architect_error": None,
+            "tool_calls": [],
+            "tool_results": [],
+        }
+
+    # 2+ survivors: read candidate CONTENTS and synthesize via the Aggregator.
+    candidate_contents: list[str] = []
+    for rel in candidate_rel_paths:
+        candidate_path = working_dir / rel
+        candidate_contents.append(
+            await asyncio.to_thread(candidate_path.read_text, encoding="utf-8")
+        )
+
+    # Aggregator is optional; fall back to the architect config (mirrors the
+    # task_reviewer -> reviewer fallback in pipelines/nodes.py).
+    try:
+        agent_config = nc.profile.get_agent_config("aggregator")
+    except ValueError:
+        agent_config = nc.profile.get_agent_config("architect")
+
+    aggregator = Aggregator(agent_config, prompts=nc.prompts, sandbox_provider=nc.sandbox_provider)
+    apply_driver_override(aggregator, nc.driver_override, "aggregator")
+    wrap_with_recording(aggregator, nc.recorder, "aggregator", agent_config.model)
+
+    logger.info(
+        "Orchestrator: Calling Aggregator",
+        issue_id=state.issue.id,
+        candidates=len(candidate_contents),
+        plan_path=canonical_rel,
+        workflow_id=nc.workflow_id,
+    )
+
+    final_result = None
+    async for agg_result, event in aggregator.aggregate(
+        candidate_plans=candidate_contents,
+        profile=nc.profile,
+        issue_id=state.issue.id,
+        workflow_id=nc.workflow_id,
+    ):
+        final_result = agg_result
+        if nc.event_bus:
+            nc.event_bus.emit(event)
+
+    # Persist the synthesized plan from the aggregator's tool calls if the driver
+    # did not already land it on disk, mirroring call_architect_node so
+    # plan_validator_node finds the canonical file regardless of driver.
+    tool_calls = final_result.tool_calls if final_result is not None else []
+    raw_output = final_result.raw_output if final_result is not None else ""
+    architect_error = final_result.error if final_result is not None else None
+    tool_results = final_result.tool_results if final_result is not None else []
+    if not canonical_path.exists():
+        written = await _resolve_plan_from_tool_calls(
+            tool_calls=tool_calls,
+            plan_path=canonical_path,
+            working_dir=working_dir,
+            raw_output=raw_output,
+        )
+        if not written:
+            raise RuntimeError(
+                f"aggregator produced no canonical plan at {canonical_rel}"
+            )
+
+    return {
+        "plan_path": canonical_rel,
+        "architect_raw_output": raw_output,
+        "architect_error": architect_error,
+        "tool_calls": list(tool_calls),
+        "tool_results": list(tool_results),
     }
 
 
