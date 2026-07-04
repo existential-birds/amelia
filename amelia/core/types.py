@@ -118,26 +118,6 @@ class SandboxConfig(BaseModel):
         return self
 
 
-class MoAConfig(BaseModel):
-    """Mixture-of-Agents configuration for an agent's options.
-
-    Stored under the ``"moa"`` key of :attr:`AgentConfig.options`.
-
-    Attributes:
-        enabled: Whether the Mixture-of-Agents pipeline is active.
-        proposer_count: Number of proposer agents (1--10).
-        proposer_models: Explicit model list for proposers (empty = use agent model).
-        isolation: Whether to run proposers in isolated workspaces.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    enabled: bool = False
-    proposer_count: int = Field(default=3, ge=1, le=10)
-    proposer_models: list[str] = Field(default_factory=list)
-    isolation: bool = False
-
-
 class AgentConfig(BaseModel):
     """Per-agent driver and model configuration."""
 

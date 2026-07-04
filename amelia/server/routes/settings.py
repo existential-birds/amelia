@@ -131,7 +131,12 @@ class AgentConfigCreate(BaseModel):
     def _validate_moa_options(cls, v: dict[str, Any]) -> dict[str, Any]:
         """Validate the ``moa`` sub-config through :class:`MoAConfig`, if present."""
         if "moa" in v:
-            return {**v, "moa": MoAConfig(**v["moa"]).model_dump()}
+            moa_raw = dict(v["moa"])
+            if moa_raw.get("isolation") is True:
+                moa_raw["isolation"] = "worktree"
+            elif moa_raw.get("isolation") is False:
+                moa_raw.pop("isolation", None)
+            return {**v, "moa": MoAConfig(**moa_raw).model_dump()}
         return v
 
 

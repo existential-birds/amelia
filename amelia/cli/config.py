@@ -525,8 +525,8 @@ def profile_update(
                     moa_dict["proposer_models"] = [
                         m.strip() for m in moa_proposer_models.split(",") if m.strip()
                     ]
-                if moa_isolation is not None:
-                    moa_dict["isolation"] = moa_isolation
+                if moa_isolation is not None and moa_isolation:
+                    moa_dict["isolation"] = "worktree"
 
                 moa_flags = any(
                     v is not None
