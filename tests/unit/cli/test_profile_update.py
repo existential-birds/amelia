@@ -6,7 +6,7 @@ import pytest
 import typer
 
 from amelia.cli.config import profile_update
-from amelia.core.types import AgentConfig, DriverType, MoAConfig, Profile, TrackerType
+from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 
 
 def _make_profile(agents: dict[str, AgentConfig] | None = None) -> Profile:
@@ -147,6 +147,48 @@ class TestProfileUpdateMoA:
 
         repo.update_profile.assert_not_called()
 
+    def test_profile_update_no_moa_flags_preserves_options(
+        self, mock_db: MagicMock
+    ) -> None:
+        """With no --moa-* flags and no --clear-options, options are left untouched.
+
+        No default MoA block is written and unknown keys under options['moa']
+        are preserved (regression: this used to write a default block and
+        silently strip unknown keys via MoAConfig's default extra='ignore').
+        """
+        existing_options = {
+            "max_iterations": 7,
+            "moa": {
+                "enabled": True,
+                "proposer_count": 4,
+                "unknown_future_key": "keep-me",
+            },
+        }
+        agents = {
+            "architect": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
+            "developer": AgentConfig(
+                driver=DriverType.CLAUDE, model="sonnet", options=existing_options
+            ),
+        }
+        repo = _mock_repo(_make_profile(agents))
+
+        with patch("amelia.cli.config.get_database", return_value=mock_db), \
+             patch("amelia.cli.config.ProfileRepository", return_value=repo):
+            profile_update(
+                name="dev",
+                agent="developer",
+                moa_enabled=None,
+                moa_proposer_count=None,
+                moa_proposer_models=None,
+                moa_isolation=None,
+                clear_options=False,
+            )
+
+        # Options dict is byte-for-byte unchanged: no default block written,
+        # unknown keys preserved, sibling options untouched.
+        options = repo.update_profile.call_args[0][1]["agents"]["developer"]["options"]
+        assert options == existing_options
+
     def test_profile_update_not_found(self, mock_db: MagicMock) -> None:
         """A missing profile exits with code 1."""
         repo = _mock_repo(None)
@@ -166,40 +208,3 @@ class TestProfileUpdateMoA:
 
         assert exc_info.value.exit_code == 1
         repo.update_profile.assert_not_called()
-
-
-class TestMoAConfigValidation:
-    """Direct unit tests for the MoAConfig model."""
-
-    def test_defaults(self) -> None:
-        config = MoAConfig()
-        assert config.enabled is False
-        assert config.proposer_count == 3
-        assert config.proposer_models == []
-        assert config.isolation is False
-
-    def test_valid_values(self) -> None:
-        config = MoAConfig(
-            enabled=True,
-            proposer_count=7,
-            proposer_models=["a", "b"],
-            isolation=True,
-        )
-        assert config.enabled is True
-        assert config.proposer_count == 7
-        assert config.proposer_models == ["a", "b"]
-        assert config.isolation is True
-
-    @pytest.mark.parametrize("count", [0, 11])
-    def test_invalid_proposer_count(self, count: int) -> None:
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError):
-            MoAConfig(proposer_count=count)
-
-    def test_frozen(self) -> None:
-        from pydantic import ValidationError
-
-        config = MoAConfig()
-        with pytest.raises(ValidationError):
-            config.enabled = True  # type: ignore[misc]

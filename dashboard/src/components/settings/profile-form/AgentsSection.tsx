@@ -6,7 +6,7 @@
  * three-column grid (name / driver-select / model-select) so all ten rows
  * align identically — replacing the old AgentCard flex/fixed-width layout.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -58,6 +58,14 @@ function MoaOptions({ agentKey, config, onOption }: MoaOptionsProps) {
   const setMoa = (patch: Partial<MoaConfig>) => onOption('moa', { ...moa, ...patch });
   const countId = `moa-count-${agentKey}`;
 
+  // Local string state lets the user clear or partially type the number without
+  // immediately snapping to the default. The parent form state is updated with
+  // a validated number only on blur.
+  const [countStr, setCountStr] = useState(String(moa.proposer_count));
+  useEffect(() => {
+    setCountStr(String(moa.proposer_count));
+  }, [moa.proposer_count]);
+
   return (
     <div className="space-y-3 rounded-md border border-border/30 bg-background/30 p-3">
       <div className="flex items-center justify-between">
@@ -77,8 +85,14 @@ function MoaOptions({ agentKey, config, onOption }: MoaOptionsProps) {
           type="number"
           min={1}
           max={10}
-          value={moa.proposer_count}
-          onChange={(e) => setMoa({ proposer_count: Number(e.target.value) })}
+          value={countStr}
+          onChange={(e) => setCountStr(e.target.value)}
+          onBlur={() => {
+            const n = parseInt(countStr);
+            const v = isNaN(n) || n < 1 ? MOA_DEFAULTS.proposer_count : n > 10 ? 10 : n;
+            setCountStr(String(v));
+            setMoa({ proposer_count: v });
+          }}
           aria-label="Proposer Count"
           className="h-7 w-20 text-xs"
         />

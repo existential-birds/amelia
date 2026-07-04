@@ -216,6 +216,40 @@ export interface UseProfileForm {
  * spurious array-reorder false positives on network_allowed_hosts /
  * ignore_authors.
  */
+/**
+ * Deep structural equality for the free-form `options` dicts that honors the
+ * JSON.stringify pitfalls documented on `isProfileFormDataEqual`: it is
+ * insensitive to object key-insertion order, treats `undefined` the same as a
+ * missing key, and compares arrays (e.g. moa.proposer_models) without spurious
+ * reorder false positives.
+ */
+function isOptionsEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return a == null && b == null;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    const remaining = [...b];
+    for (const item of a) {
+      const idx = remaining.findIndex((candidate) => isOptionsEqual(item, candidate));
+      if (idx === -1) return false;
+      remaining.splice(idx, 1);
+    }
+    return true;
+  }
+  if (typeof a === 'object' && typeof b === 'object') {
+    const aObj = a as Record<string, unknown>;
+    const bObj = b as Record<string, unknown>;
+    const aKeys = Object.keys(aObj).filter((k) => aObj[k] !== undefined);
+    const bKeys = Object.keys(bObj).filter((k) => bObj[k] !== undefined);
+    if (aKeys.length !== bKeys.length) return false;
+    for (const k of aKeys) {
+      if (bObj[k] === undefined || !isOptionsEqual(aObj[k], bObj[k])) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
 function isProfileFormDataEqual(a: ProfileFormData, b: ProfileFormData): boolean {
   if (
     a.id !== b.id ||
@@ -236,7 +270,7 @@ function isProfileFormDataEqual(a: ProfileFormData, b: ProfileFormData): boolean
     if (!aAgent || !bAgent || aAgent.driver !== bAgent.driver || aAgent.model !== bAgent.model) {
       return false;
     }
-    if (JSON.stringify(aAgent.options ?? {}) !== JSON.stringify(bAgent.options ?? {})) {
+    if (!isOptionsEqual(aAgent.options, bAgent.options)) {
       return false;
     }
   }

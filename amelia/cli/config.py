@@ -521,12 +521,22 @@ def profile_update(
                 if moa_isolation is not None:
                     moa_dict["isolation"] = moa_isolation
 
-                try:
-                    validated = MoAConfig(**moa_dict)
-                except ValidationError as e:
-                    raise typer.BadParameter(str(e)) from None
+                moa_flags = any(
+                    v is not None
+                    for v in (
+                        moa_enabled,
+                        moa_proposer_count,
+                        moa_proposer_models,
+                        moa_isolation,
+                    )
+                )
+                if moa_flags:
+                    try:
+                        validated = MoAConfig(**moa_dict)
+                    except ValidationError as e:
+                        raise typer.BadParameter(str(e)) from None
 
-                new_options["moa"] = validated.model_dump()
+                    new_options["moa"] = validated.model_dump()
 
             updated_agent = target.model_copy(update={"options": new_options})
             agents = dict(profile.agents)
