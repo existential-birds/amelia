@@ -57,8 +57,8 @@ class TestProfileUpdateMoA:
         moa = updates["agents"]["developer"]["options"]["moa"]
         assert moa["enabled"] is True
         assert moa["proposer_count"] == 5
-        assert moa["proposer_models"] == ["a", "b"]
-        assert moa["isolation"] is False
+        assert moa["proposer_models"] == ("a", "b")
+        assert moa["isolation"] == "worktree"
 
     def test_profile_update_clears_options(self, mock_db: MagicMock) -> None:
         """--clear-options empties the agent's options dict."""

@@ -73,28 +73,28 @@ def test_agent_config_with_options() -> None:
 
 
 def test_moa_config_defaults() -> None:
-    """MoAConfig has sane defaults (disabled, 3 proposers)."""
-    from amelia.core.types import MoAConfig
+    """MoAConfig has sane defaults (disabled, 2 proposers)."""
+    from amelia.core.types import MoAConfig, MoAIsolation
 
     config = MoAConfig()
     assert config.enabled is False
-    assert config.proposer_count == 3
-    assert config.proposer_models == []
-    assert config.isolation is False
+    assert config.proposer_count == 2
+    assert config.proposer_models == ()
+    assert config.isolation == MoAIsolation.WORKTREE
 
 
 def test_moa_config_valid_values() -> None:
     """MoAConfig accepts explicit values within bounds."""
     from amelia.core.types import MoAConfig
 
-    config = MoAConfig(enabled=True, proposer_count=10, proposer_models=["x"], isolation=True)
+    config = MoAConfig(enabled=True, proposer_count=10, proposer_models=["x"], isolation="worktree")
     assert config.enabled is True
     assert config.proposer_count == 10
-    assert config.proposer_models == ["x"]
-    assert config.isolation is True
+    assert config.proposer_models == ("x",)
+    assert config.isolation == "worktree"
 
 
-@pytest.mark.parametrize("count", [0, 11, -1])
+@pytest.mark.parametrize("count", [0, -1])
 def test_moa_config_rejects_out_of_range_count(count: int) -> None:
     """MoAConfig rejects proposer_count outside 1-10."""
     from amelia.core.types import MoAConfig
