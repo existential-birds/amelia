@@ -1,22 +1,31 @@
-import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useRecentModels } from '../useRecentModels';
 import { RECENT_MODELS_KEY, MAX_RECENT_MODELS } from '@/components/model-picker/constants';
 
 describe('useRecentModels', () => {
-  let store: Record<string, string> = {};
-  let getItemSpy: MockInstance<(key: string) => string | null>;
-  let setItemSpy: MockInstance<(key: string, value: string) => void>;
+  let store: Record<string, string>;
+  let getItemSpy: ReturnType<typeof vi.fn<(key: string) => string | null>>;
+  let setItemSpy: ReturnType<typeof vi.fn<(key: string, value: string) => void>>;
 
   beforeEach(() => {
     store = {};
-    getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key: string) => store[key] ?? null);
-    setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key: string, value: string) => {
+    getItemSpy = vi.fn<(key: string) => string | null>((key) => store[key] ?? null);
+    setItemSpy = vi.fn<(key: string, value: string) => void>((key, value) => {
       store[key] = value;
     });
+    vi.stubGlobal('localStorage', {
+      getItem: getItemSpy,
+      setItem: setItemSpy,
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+      key: vi.fn(),
+      length: 0,
+    } satisfies Storage);
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 

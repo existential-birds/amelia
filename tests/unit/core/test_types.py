@@ -72,6 +72,46 @@ def test_agent_config_with_options() -> None:
     assert config.options["temperature"] == 0.7
 
 
+def test_moa_config_defaults() -> None:
+    """MoAConfig has sane defaults (disabled, 3 proposers)."""
+    from amelia.core.types import MoAConfig
+
+    config = MoAConfig()
+    assert config.enabled is False
+    assert config.proposer_count == 3
+    assert config.proposer_models == []
+    assert config.isolation is False
+
+
+def test_moa_config_valid_values() -> None:
+    """MoAConfig accepts explicit values within bounds."""
+    from amelia.core.types import MoAConfig
+
+    config = MoAConfig(enabled=True, proposer_count=10, proposer_models=["x"], isolation=True)
+    assert config.enabled is True
+    assert config.proposer_count == 10
+    assert config.proposer_models == ["x"]
+    assert config.isolation is True
+
+
+@pytest.mark.parametrize("count", [0, 11, -1])
+def test_moa_config_rejects_out_of_range_count(count: int) -> None:
+    """MoAConfig rejects proposer_count outside 1-10."""
+    from amelia.core.types import MoAConfig
+
+    with pytest.raises(ValidationError):
+        MoAConfig(proposer_count=count)
+
+
+def test_moa_config_frozen() -> None:
+    """MoAConfig is immutable."""
+    from amelia.core.types import MoAConfig
+
+    config = MoAConfig()
+    with pytest.raises(ValidationError):
+        config.enabled = True  # type: ignore[misc]
+
+
 def test_profile_with_agents_dict() -> None:
     """Profile should accept agents dict configuration."""
     from amelia.core.types import AgentConfig, Profile

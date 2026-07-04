@@ -8,10 +8,11 @@
  */
 import type { PRAutoFixConfig } from '@/api/settings';
 
-/** Driver/model selection for a single agent. */
+/** Driver/model selection for a single agent, plus free-form options (e.g. MoA). */
 export interface AgentFormData {
   driver: string;
   model: string;
+  options: Record<string, unknown>;
 }
 
 /** Nested sandbox configuration form state. */
