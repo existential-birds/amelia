@@ -16,13 +16,13 @@ vi.mock('@/hooks/useRecentModels', () => ({
 }));
 
 const defaultAgents: Record<string, AgentFormData> = {
-  architect: { driver: 'claude', model: 'opus' },
-  developer: { driver: 'claude', model: 'opus' },
-  reviewer: { driver: 'claude', model: 'sonnet' },
-  plan_validator: { driver: 'claude', model: 'haiku' },
-  task_reviewer: { driver: 'claude', model: 'haiku' },
-  evaluator: { driver: 'claude', model: 'haiku' },
-  brainstormer: { driver: 'claude', model: 'haiku' },
+  architect: { driver: 'claude', model: 'opus', options: {} },
+  developer: { driver: 'claude', model: 'opus', options: {} },
+  reviewer: { driver: 'claude', model: 'sonnet', options: {} },
+  plan_validator: { driver: 'claude', model: 'haiku', options: {} },
+  task_reviewer: { driver: 'claude', model: 'haiku', options: {} },
+  evaluator: { driver: 'claude', model: 'haiku', options: {} },
+  brainstormer: { driver: 'claude', model: 'haiku', options: {} },
 };
 
 describe('AgentsSection', () => {
@@ -37,6 +37,7 @@ describe('AgentsSection', () => {
         agents={defaultAgents}
         errors={{}}
         onAgentChange={vi.fn()}
+        onAgentOption={vi.fn()}
         onBulkApply={vi.fn()}
       />
     );
@@ -55,6 +56,7 @@ describe('AgentsSection', () => {
         agents={defaultAgents}
         errors={{}}
         onAgentChange={onAgentChange}
+        onAgentOption={vi.fn()}
         onBulkApply={vi.fn()}
       />
     );
@@ -71,6 +73,7 @@ describe('AgentsSection', () => {
         agents={defaultAgents}
         errors={{}}
         onAgentChange={vi.fn()}
+        onAgentOption={vi.fn()}
         onBulkApply={vi.fn()}
       />
     );
@@ -78,5 +81,58 @@ describe('AgentsSection', () => {
     expect(screen.getByText(/4 configured/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /utility agents/i }));
     expect(screen.getByText(/brainstormer/i)).toBeInTheDocument();
+  });
+
+  it('renders an options expand button per agent row', () => {
+    render(
+      <AgentsSection
+        agents={defaultAgents}
+        errors={{}}
+        onAgentChange={vi.fn()}
+        onAgentOption={vi.fn()}
+        onBulkApply={vi.fn()}
+      />
+    );
+    // One options button per primary agent (architect, developer, reviewer).
+    expect(screen.getAllByRole('button', { name: /options for/i }).length).toBe(3);
+  });
+
+  it('expanding options shows MoA controls', async () => {
+    const user = userEvent.setup();
+    render(
+      <AgentsSection
+        agents={defaultAgents}
+        errors={{}}
+        onAgentChange={vi.fn()}
+        onAgentOption={vi.fn()}
+        onBulkApply={vi.fn()}
+      />
+    );
+    await user.click(screen.getAllByRole('button', { name: /options for/i })[0]!);
+    expect(screen.getByLabelText('MoA Enabled')).toBeInTheDocument();
+    expect(screen.getByLabelText('Proposer Count')).toBeInTheDocument();
+    expect(screen.getByLabelText('Proposer Models')).toBeInTheDocument();
+    expect(screen.getByLabelText('Isolation')).toBeInTheDocument();
+  });
+
+  it('changing MoA enabled calls onAgentOption', async () => {
+    const user = userEvent.setup();
+    const onAgentOption = vi.fn();
+    render(
+      <AgentsSection
+        agents={defaultAgents}
+        errors={{}}
+        onAgentChange={vi.fn()}
+        onAgentOption={onAgentOption}
+        onBulkApply={vi.fn()}
+      />
+    );
+    await user.click(screen.getAllByRole('button', { name: /options for/i })[0]!);
+    await user.click(screen.getByLabelText('MoA Enabled'));
+    expect(onAgentOption).toHaveBeenCalledWith(
+      'architect',
+      'moa',
+      expect.objectContaining({ enabled: true })
+    );
   });
 });

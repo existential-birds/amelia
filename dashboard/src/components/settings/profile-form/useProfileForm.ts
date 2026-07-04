@@ -36,6 +36,7 @@ const buildDefaultAgents = (): Record<string, AgentFormData> => {
     agents[agent.key] = {
       driver: 'claude',
       model: agent.defaultModel,
+      options: {},
     };
   }
   return agents;
@@ -132,6 +133,7 @@ const profileToFormData = (profile: Profile): ProfileFormData => {
     agents[agent.key] = {
       driver: profile.agents?.[agent.key]?.driver ?? 'claude',
       model: profile.agents?.[agent.key]?.model ?? agent.defaultModel,
+      options: profile.agents?.[agent.key]?.options ?? {},
     };
   }
 
@@ -192,6 +194,7 @@ export interface UseProfileForm {
   sectionErrors: Record<SectionId, boolean>;
   setField: (key: keyof ProfileFormData, value: string | number | boolean) => void;
   setAgent: (key: string, field: 'driver' | 'model', value: string) => void;
+  setAgentOption: (agentKey: string, optionKey: string, value: unknown) => void;
   bulkApplyAgents: (
     driver: string,
     model: string,
@@ -213,6 +216,40 @@ export interface UseProfileForm {
  * spurious array-reorder false positives on network_allowed_hosts /
  * ignore_authors.
  */
+/**
+ * Deep structural equality for the free-form `options` dicts that honors the
+ * JSON.stringify pitfalls documented on `isProfileFormDataEqual`: it is
+ * insensitive to object key-insertion order, treats `undefined` the same as a
+ * missing key, and compares arrays (e.g. moa.proposer_models) without spurious
+ * reorder false positives.
+ */
+function isOptionsEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return a == null && b == null;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    const remaining = [...b];
+    for (const item of a) {
+      const idx = remaining.findIndex((candidate) => isOptionsEqual(item, candidate));
+      if (idx === -1) return false;
+      remaining.splice(idx, 1);
+    }
+    return true;
+  }
+  if (typeof a === 'object' && typeof b === 'object') {
+    const aObj = a as Record<string, unknown>;
+    const bObj = b as Record<string, unknown>;
+    const aKeys = Object.keys(aObj).filter((k) => aObj[k] !== undefined);
+    const bKeys = Object.keys(bObj).filter((k) => bObj[k] !== undefined);
+    if (aKeys.length !== bKeys.length) return false;
+    for (const k of aKeys) {
+      if (bObj[k] === undefined || !isOptionsEqual(aObj[k], bObj[k])) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
 function isProfileFormDataEqual(a: ProfileFormData, b: ProfileFormData): boolean {
   if (
     a.id !== b.id ||
@@ -231,6 +268,9 @@ function isProfileFormDataEqual(a: ProfileFormData, b: ProfileFormData): boolean
     const aAgent = a.agents[key];
     const bAgent = b.agents[key];
     if (!aAgent || !bAgent || aAgent.driver !== bAgent.driver || aAgent.model !== bAgent.model) {
+      return false;
+    }
+    if (!isOptionsEqual(aAgent.options, bAgent.options)) {
       return false;
     }
   }
@@ -328,7 +368,11 @@ export function useProfileForm(profile: Profile | null): UseProfileForm {
     (agentKey: string, field: 'driver' | 'model', value: string) => {
       setFormData((prev) => {
         const nextAgents = { ...prev.agents };
-        const currentAgent = nextAgents[agentKey] ?? { driver: 'claude', model: 'opus' };
+        const currentAgent = nextAgents[agentKey] ?? {
+          driver: 'claude',
+          model: 'opus',
+          options: {},
+        };
 
         if (field === 'driver') {
           // Reset model on driver change (same logic as the modal).
@@ -341,11 +385,31 @@ export function useProfileForm(profile: Profile | null): UseProfileForm {
               ? currentAgent.model
               : models[0] ?? '';
           }
-          nextAgents[agentKey] = { driver: value, model: newModel };
+          // Preserve existing options across driver/model changes.
+          nextAgents[agentKey] = { ...currentAgent, driver: value, model: newModel };
         } else {
           nextAgents[agentKey] = { ...currentAgent, model: value };
         }
 
+        return { ...prev, agents: nextAgents };
+      });
+    },
+    []
+  );
+
+  const setAgentOption = useCallback(
+    (agentKey: string, optionKey: string, value: unknown) => {
+      setFormData((prev) => {
+        const nextAgents = { ...prev.agents };
+        const currentAgent = nextAgents[agentKey] ?? {
+          driver: 'claude',
+          model: 'opus',
+          options: {},
+        };
+        nextAgents[agentKey] = {
+          ...currentAgent,
+          options: { ...currentAgent.options, [optionKey]: value },
+        };
         return { ...prev, agents: nextAgents };
       });
     },
@@ -364,7 +428,12 @@ export function useProfileForm(profile: Profile | null): UseProfileForm {
               : UTILITY_AGENTS;
 
         for (const agent of targetAgents) {
-          nextAgents[agent.key] = { driver, model };
+          nextAgents[agent.key] = {
+            ...nextAgents[agent.key],
+            driver,
+            model,
+            options: nextAgents[agent.key]?.options ?? {},
+          };
         }
         return { ...prev, agents: nextAgents };
       });
@@ -449,12 +518,16 @@ export function useProfileForm(profile: Profile | null): UseProfileForm {
   }, [formData, isEditMode]);
 
   const formAgentsToApi = useCallback(() => {
-    const agents: Record<string, { driver: string; model: string }> = {};
+    const agents: Record<
+      string,
+      { driver: string; model: string; options: Record<string, unknown> }
+    > = {};
     for (const key of ALL_AGENT_KEYS) {
       const agentConfig = formData.agents[key];
       agents[key] = {
         driver: agentConfig?.driver ?? 'claude',
         model: agentConfig?.model ?? '',
+        options: agentConfig?.options ?? {},
       };
     }
     return agents;
@@ -524,6 +597,7 @@ export function useProfileForm(profile: Profile | null): UseProfileForm {
     sectionErrors,
     setField,
     setAgent,
+    setAgentOption,
     bulkApplyAgents,
     setSandboxField,
     setHosts,

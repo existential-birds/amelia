@@ -203,6 +203,7 @@ export default function ProfileDetailPage() {
               agents={form.formData.agents}
               errors={form.errors}
               onAgentChange={form.setAgent}
+              onAgentOption={form.setAgentOption}
               onBulkApply={form.bulkApplyAgents}
             />
           )}
