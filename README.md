@@ -1,5 +1,10 @@
 # Amelia: Agentic Orchestrator
 
+> [!WARNING]
+> **This repository is no longer actively maintained.**
+>
+> We recommend switching to [Hermes Agent](https://hermes-agent.nousresearch.com/) and using its [Kanban functionality](https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban).
+
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/existential-birds/amelia)
 
 [Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is multi-agent orchestration for software development with human-in-the-loop approval gates and end-to-end observability.
